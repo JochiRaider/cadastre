@@ -14,11 +14,11 @@ generated_on: 2026-05-17
 
 `domain.md` must not add, widen, narrow, or replace runtime behavior. It may state domain interpretation rules and route implementers to the owner spec that owns behavior.
 
-`TODO: Cadastre root domain authority unresolved. The supplied Cadastre Spec Index does not list a root domain document. Add `domain.md` to the source-of-truth map, assign a status, and define whether it is an active NLSpec, companion reference, or generated migration artifact before it may become implementation authority.`
+'TODO: Cadastre root domain authority unresolved. The supplied Cadastre Spec Index does not list a root domain document. Add `domain.md` to the source-of-truth map, assign a status, and define whether it is an active NLSpec, companion reference, or generated migration artifact before it may become implementation authority.'
 
 Cadastre source authority is governed by the supplied source-of-truth map and status vocabulary. The supplied index states that active Cadastre NLSpecs are currently `migration_active`, that documents marked `authoritative` may drive implementation, and that research reports are supporting evidence only, never runtime authority. Until the index marks a document `authoritative`, the original PRD remains the upstream intent container and generated NLSpecs are migration evidence.
 
-`TODO: PRD status contradiction unresolved. The uploaded PRD front matter states `status: archived`, while the supplied source-of-truth map states that the original PRD remains upstream intent until the NLSpec set becomes authoritative and that archival occurs after migration acceptance. This document must not resolve that conflict by inference.`
+'TODO: PRD status contradiction unresolved. The uploaded PRD front matter states `status: archived`, while the supplied source-of-truth map states that the original PRD remains upstream intent until the NLSpec set becomes authoritative and that archival occurs after migration acceptance. This document must not resolve that conflict by inference.'
 
 If `domain.md` conflicts with a primary owner spec, the owner spec governs the behavior it owns. The conflict is documentation drift and must be reported in Section 25. If two owner specs conflict, the contradiction is a corpus defect. `domain.md` must not silently choose a side.
 

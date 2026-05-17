@@ -2,7 +2,7 @@
 doc_id: PRD-000
 project: Cadastre
 title: Cadastre Temporal Asset Intelligence Graph Platform Product Requirements Document
-status: archived
+status: revised-draft
 ---
 
 ## 1. Product Summary

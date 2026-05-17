@@ -8,8 +8,6 @@ source_prd: PRD-Cadastre.md
 source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
 ---
 
-# Processing DAG, Lifecycle, and Versioning
-
 ## Authority
 
 This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.

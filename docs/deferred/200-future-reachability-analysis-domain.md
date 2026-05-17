@@ -8,8 +8,6 @@ source_prd: PRD-Cadastre.md
 source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
 ---
 
-# Future Reachability Analysis Domain
-
 ## Authority
 
 This document is inactive. It preserves future reachability contract material and has no MVP implementation effect. No active Cadastre spec may emit theoretical reachability facts, graph edges, graph properties, or unqualified reachability claims from this document.
