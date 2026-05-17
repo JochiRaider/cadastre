@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-050
 title: Normalization, External Schema, and Mapping
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -113,6 +113,89 @@ ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
 
 CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must define input record classes, field mapping rows, lossy fields, unsupported fields, redaction, default values, and `ProjectionLossManifest` output. CIM success must not imply no source information was lost.
 
+## Migration finalization contracts
+
+### ExternalSchemaArtifactRef field table
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `schema_name` | Yes | External schema family, default `OCSF` for MVP mapped observations. |
+| `version` | Yes | Exact external schema version. |
+| `source_tag` | Yes | Immutable tag or release identifier. |
+| `source_commit` | Yes | Exact source commit when available. |
+| `compiler_id`, `compiler_version`, `compiler_checksum` | Yes | Required before production validation. |
+| `validator_id`, `validator_version`, `validator_checksum` | Yes | Required before production validation. |
+| `compiled_artifact_checksum` | Yes | SHA-256 over compiled artifact bytes. |
+| `profile_set` | Yes | Declared profiles only. |
+| `extension_set` | Yes | Declared extensions only; empty set is explicit. |
+| `class_allowlist` | Yes | Every active observation mapping must use an allowed class. |
+| `expiration` | Yes | Non-expired for production activation. |
+
+### Observation-to-OCSF mapping matrix
+
+The following rows define the active MVP mapping scope at migration-finalization time. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
+
+| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | allowed only by mapping row |
+
+### OCSFBaseEventFieldPolicy
+
+| Base-event field | Default | Required behavior |
+| --- | --- | --- |
+| `raw_data` | disabled | Raw payload remains in `RawRecord`; enabling requires explicit bounded policy and redaction rows. |
+| `raw_data_hash` | disabled | Payload hash authority remains Cadastre-owned; mapping may preserve as non-authoritative metadata only. |
+| `unmapped` | disabled | Unknown fields must use declared source extension fields or fail. |
+| `observables` | non-authoritative | Extraction hints only; no graph node or identity authority. |
+| `enrichments` | non-authoritative | Context only; `130` governs enrichment. |
+| `severity`, `status`, `confidence` | non-authoritative | Must not become Cadastre assertion, compliance, or risk authority by default. |
+| `metadata`, `message`, timezone fields | allowed as normalized metadata only | Must not override Cadastre timestamps or evidence refs. |
+
+### ExternalEnumMappingRule
+
+| Case | Required behavior | Validation failure code |
+| --- | --- | --- |
+| Enum ID/name sibling present and known | Emit both values exactly as compiled artifact permits. | none |
+| Raw value unknown | Preserve raw value in declared extension or diagnostic; do not invent ID. | `EXTERNAL_ENUM_UNKNOWN` when production mapping lacks policy. |
+| `Other` exists | Use only when active rule permits and raw value is preserved. | `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` |
+| Deprecated enum | Reject unless non-expired waiver exists. | `EXTERNAL_ENUM_DEPRECATED` |
+| Name/ID mismatch | Reject. | `EXTERNAL_ENUM_SIBLING_MISMATCH` |
+
+### Source extension field matrix
+
+| Namespace | Field path | Type | Bounds | Redaction | Collision policy | Secret-scan behavior | OCSF-reserved-name behavior | Owner | Validation fixture |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | TODO | reject collision by default | reject secret-like value by default | reject by default | `050` | TODO |
+
+### MappingValidationRule severity defaults
+
+| Rule class | Default severity | Production demotion constraint |
+| --- | --- | --- |
+| undeclared source extension | `error` | Blocks active and canary. |
+| unknown OCSF enum | `error` | Blocks active. |
+| deprecated OCSF field | `error` | Blocks unless waiver active. |
+| OCSF artifact mismatch | `error` | Blocks all production output. |
+| CIM projection loss without manifest | `error` | Blocks export. |
+| documentation-only schema evidence | `error` | Blocks production mapping. |
+
+External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts cannot authorize production mappings.
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `050-PATCH-AC-001` | Every active MVP observation mapping has an exact row or an explicit unresolved blocker. |
+| `050-PATCH-AC-002` | OCSF-aligned observations validate against one exact compiled artifact. |
+| `050-PATCH-AC-003` | Undeclared source extension fields fail before production output. |
+| `050-PATCH-AC-004` | CIM projection records loss and cannot become authoritative input. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -127,26 +210,26 @@ CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must def
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `CadastreSilverObservation` | lines 1806-1886 |
-| PRD-Cadastre.md | `SourceExtensionFieldRule` | lines 1887-1952 |
-| PRD-Cadastre.md | `ExternalSchemaProfile` | lines 3907-4007 |
-| PRD-Cadastre.md | `SemanticOverlayArtifact` | lines 4008-4071 |
-| PRD-Cadastre.md | `SourceSchemaImportProfile` | lines 4072-4141 |
-| PRD-Cadastre.md | `CIMProjectionProfile` | lines 4142-4164 |
-| PRD-Cadastre.md | `ExternalSchemaArtifactRef` | lines 5955-5983 |
-| PRD-Cadastre.md | `ProfileResolutionManifest` | lines 5984-6016 |
-| PRD-Cadastre.md | `ExternalEnumMappingRule` | lines 6065-6087 |
-| PRD-Cadastre.md | `OCSFProfileUpgradeReport` | lines 6088-6120 |
-| PRD-Cadastre.md | `OCSFBaseEventFieldPolicy` | lines 6121-6151 |
-| PRD-Cadastre.md | `MappingValidationRule` | lines 6968-7024 |
-| PRD-Cadastre.md | `MappingProjectManifest` | lines 8434-8469 |
-| PRD-Cadastre.md | `ToolchainDependencyReview` | lines 8470-8502 |
-| PRD-Cadastre.md | `ExternalToolCapabilityEvidence` | lines 8503-8534 |
-| PRD-Cadastre.md | `ValidationScenario` | lines 8535-8613 |
-| PRD-Cadastre.md | `CanonicalValidationOutput` | lines 8614-8665 |
-| PRD-Cadastre.md | `Source Categories and Normalization` | lines 10647-11031 |
-| PRD-Cadastre.md | `Parser Interface` | lines 9234-9257 |
-| PRD-Cadastre.md | `Normalization Mapping Interface` | lines 9258-9396 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CadastreSilverObservation` | lines 1806-1886 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `SourceExtensionFieldRule` | lines 1887-1952 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalSchemaProfile` | lines 3907-4007 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `SemanticOverlayArtifact` | lines 4008-4071 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `SourceSchemaImportProfile` | lines 4072-4141 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CIMProjectionProfile` | lines 4142-4164 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalSchemaArtifactRef` | lines 5955-5983 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ProfileResolutionManifest` | lines 5984-6016 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalEnumMappingRule` | lines 6065-6087 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `OCSFProfileUpgradeReport` | lines 6088-6120 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `OCSFBaseEventFieldPolicy` | lines 6121-6151 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `MappingValidationRule` | lines 6968-7024 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `MappingProjectManifest` | lines 8434-8469 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ToolchainDependencyReview` | lines 8470-8502 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalToolCapabilityEvidence` | lines 8503-8534 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ValidationScenario` | lines 8535-8613 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalValidationOutput` | lines 8614-8665 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Source Categories and Normalization` | lines 10647-11031 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Parser Interface` | lines 9234-9257 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Normalization Mapping Interface` | lines 9258-9396 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

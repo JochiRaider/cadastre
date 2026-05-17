@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-130
 title: Analysis, Enrichment, and Registry Governance
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -89,6 +89,79 @@ They must not become identity, source completeness, source authority, gold fact,
 
 `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, and `RegistryClassificationPolicy` manage owners, domains, classifications, glossary labels, policies, approval, lifecycle, custom properties, and checksums. Registry metadata must not define Cadastre fact authority, source authority, graph edge semantics, evidence refs, source completeness, or production approval by itself.
 
+## Migration finalization contracts
+
+### RiskScoringBoundary
+
+Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores may become authoritative only after a future accepted scoring policy defines formula, bounds, inputs, defaults, calibration, authority, and validation rows. Until then, risk and exposure outputs are analysis metrics only.
+
+### AnalysisMutationProhibitionMatrix
+
+| Target state | Mutation by analysis/enrichment/registry | Default result |
+| --- | --- | --- |
+| raw | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| silver | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| identity | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| gold | forbidden unless routed through `080` derivation interface | error/no-op |
+| graph-delta | forbidden unless routed through `090` projection interface | error/no-op |
+| graph-serving | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| completeness | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| watermarks | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| package state | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+| source authority | forbidden | `ANALYSIS_MUTATION_FORBIDDEN` |
+
+### LineageFacetMappingPolicy
+
+| Facet namespace | Schema URL immutability | Schema bytes | Checksum | Collision behavior | Raw-facet storage | Mapped fields | Rejection behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | required immutable | required | SHA-256 required | reject by default | raw facet may be stored as non-authoritative metadata | TODO | reject with lineage error |
+
+### ArtifactClassPolicy substitution matrix
+
+| Artifact class | Must not substitute for |
+| --- | --- |
+| static DAG artifact | executed run, validation, freshness, table snapshot, graph rebuild |
+| executed run artifact | static DAG, source completeness, validation, table snapshot |
+| freshness artifact | completeness, absence, authority, table snapshot |
+| semantic artifact | identity, gold, graph, source authority |
+| validation artifact | production evidence, source evidence, source completeness |
+| lineage artifact | evidence, completeness, table snapshot, graph rebuild |
+| table snapshot artifact | fact time, source time, graph rebuild correctness by itself |
+| table commit artifact | fact time, source authority, source completeness by itself |
+| graph rebuild artifact | source truth, identity truth, completeness, validation by itself |
+
+### RegistryActivationPolicy
+
+Registry governance artifacts may become active only when owner, domain, classification, glossary labels, lifecycle, checksum, approval, custom-property schema, and validation rows are present. Registry metadata remains governance metadata unless another active spec grants authority.
+
+### Analysis output authority table
+
+| Output class | Default authority | Permitted downstream use | Prohibited mutations | Owner of exception | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| `AnalysisFinding` | non-authoritative | UI, audit, workflow context | raw, silver, identity, gold, graph, completeness, watermark | future accepted spec | TODO |
+| `AnalysisMetric` | non-authoritative | dashboards and reports | facts, risk authority, package state | future scoring contract | TODO |
+| `RiskAcceptanceRecord` | workflow metadata | audit and workflow | remediation, retraction, risk reduction proof | future workflow spec | TODO |
+| `ThreatIntelEnrichmentRecord` | enrichment context | context, filtering, analysis | identity, source authority, graph edge | future owner spec | TODO |
+| `RegistryArtifactGovernance` | governance metadata | ownership, approval, labels | fact, graph, source authority | owner spec | TODO |
+
+### External lineage facet table
+
+| External facet | Cadastre placement | Authority class | Required checksum | Rejected conditions |
+| --- | --- | --- | --- | --- |
+| run/job/dataset facet | `RunDatasetIOContract` metadata | non-authoritative lineage | schema bytes and facet bytes | mutable schema URL, missing bytes, checksum mismatch |
+| custom facet | raw facet storage or mapped diagnostic field | non-authoritative metadata | schema and raw facet | namespace collision, missing policy row |
+| schema facet | schema diagnostic only unless owner maps | non-authoritative metadata | schema bytes | mismatch, stale, missing owner |
+| freshness facet | freshness diagnostic only | non-authoritative | facet bytes | use as completeness proof |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `130-PATCH-AC-001` | Analysis rules cannot mutate authoritative or graph-serving state. |
+| `130-PATCH-AC-002` | Risk/exposure scores are either explicitly non-authoritative or governed by an accepted scoring contract. |
+| `130-PATCH-AC-003` | External lineage facets with mutable schema URLs, missing schema bytes, checksum mismatches, or namespace collisions are rejected. |
+| `130-PATCH-AC-004` | Registry metadata remains governance metadata unless another active spec grants authority. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -103,20 +176,20 @@ They must not become identity, source completeness, source authority, gold fact,
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `RunDatasetIOContract` | lines 3630-3652 |
-| PRD-Cadastre.md | `LineageFacetMappingPolicy` | lines 3653-3696 |
-| PRD-Cadastre.md | `ArtifactClassPolicy` | lines 3697-3906 |
-| PRD-Cadastre.md | `GraphPropertyEvidencePolicy` | lines 5651-5678 |
-| PRD-Cadastre.md | `ThreatIntelEnrichmentProfile, ThreatIntelEnrichmentRecord, ThreatIntelDistributionMappingPolicy, and ThreatIntelArtifactRef` | lines 5679-5779 |
-| PRD-Cadastre.md | `AnalysisRuleBundle, DerivationRuleBundle, and RuleGraphCompatibilityMatrix` | lines 8204-8389 |
-| PRD-Cadastre.md | `AnalysisFinding, AnalysisMetric, and RiskAcceptanceRecord` | lines 8296-8359 |
-| PRD-Cadastre.md | `DerivedGraphEdgeRule` | lines 8360-8389 |
-| PRD-Cadastre.md | `RegistryArtifactGovernance, RegistryCustomPropertySchema, and RegistryClassificationPolicy` | lines 8666-8751 |
-| PRD-Cadastre.md | `Analysis and Derivation Rule Interfaces` | lines 9991-10039 |
-| PRD-Cadastre.md | `Analysis Output, Query Import, and Risk Acceptance Interfaces` | lines 10022-10039 |
-| PRD-Cadastre.md | `Threat-Intel Enrichment Interface` | lines 10194-10214 |
-| PRD-Cadastre.md | `Registry Governance Interface` | lines 10215-10231 |
-| PRD-Cadastre.md | `Normalization, Enrichment, Lineage, and Registry Governance Defaults` | lines 10571-10596 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `RunDatasetIOContract` | lines 3630-3652 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `LineageFacetMappingPolicy` | lines 3653-3696 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ArtifactClassPolicy` | lines 3697-3906 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphPropertyEvidencePolicy` | lines 5651-5678 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ThreatIntelEnrichmentProfile, ThreatIntelEnrichmentRecord, ThreatIntelDistributionMappingPolicy, and ThreatIntelArtifactRef` | lines 5679-5779 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `AnalysisRuleBundle, DerivationRuleBundle, and RuleGraphCompatibilityMatrix` | lines 8204-8389 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `AnalysisFinding, AnalysisMetric, and RiskAcceptanceRecord` | lines 8296-8359 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `DerivedGraphEdgeRule` | lines 8360-8389 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `RegistryArtifactGovernance, RegistryCustomPropertySchema, and RegistryClassificationPolicy` | lines 8666-8751 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Analysis and Derivation Rule Interfaces` | lines 9991-10039 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Analysis Output, Query Import, and Risk Acceptance Interfaces` | lines 10022-10039 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Threat-Intel Enrichment Interface` | lines 10194-10214 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Registry Governance Interface` | lines 10215-10231 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Normalization, Enrichment, Lineage, and Registry Governance Defaults` | lines 10571-10596 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

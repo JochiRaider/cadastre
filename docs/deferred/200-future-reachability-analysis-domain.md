@@ -4,8 +4,8 @@ title: Future Reachability Analysis Domain
 status: inactive_deferred
 doc_type: deferred-nlspec-candidate
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -68,6 +68,39 @@ This document may become active only after a new accepted NLSpec promotion updat
 - Unqualified `reachable` or `not reachable` wording.
 - Any graph property that implies packet, session, service, or identity-conditioned access.
 
+## Migration finalization contracts
+
+### ReachabilityDeferredValidationPointer
+
+`120` must include negative validation rows proving that active MVP specs fail or no-op for the following prohibited outputs.
+
+| Prohibited output | Required active-spec validation pointer | Expected result |
+| --- | --- | --- |
+| `has_theoretical_reachability` edge | `090` and `120` negative graph projection row | fail or no-op |
+| `modeled_reachability_fact` | `080`, `090`, and `120` negative derivation/projection row | fail or no-op |
+| Boolean reachability property | `090`, `110`, and `120` API/projection row | fail or no-op |
+| unqualified `reachable` or `not reachable` wording | `110` API wording row | reject wording or qualify as unsupported/deferred |
+
+### Future activation owner-decision placeholders
+
+| Decision area | Required future owner decision |
+| --- | --- |
+| source authority | Define reachability-specific source authority and absence authority rows. |
+| completeness | Define topology, route, policy, NAT, workload, endpoint, and identity completeness dimensions. |
+| solver capability | Define capability matrix and unsupported-component behavior. |
+| result semantics | Define claim kinds, result states, conditions, limitations, and negative-claim scope. |
+| graph effect | Define graph node, edge, property, traversal, and non-implication rows. |
+| API wording | Define qualified user-facing language and forbidden claims. |
+| validation fixtures | Define positive, negative, unknown, unsupported, conditional, and permission-limited fixtures. |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `200-PATCH-AC-001` | The document remains `inactive_deferred`. |
+| `200-PATCH-AC-002` | Active graph and gold specs contain prohibition validation rows. |
+| `200-PATCH-AC-003` | Future activation still requires index promotion, owners, open-decision resolution, and passing validation. |
+
 ## Definition of Done for Future Activation
 
 | ID | Criterion |
@@ -81,8 +114,8 @@ This document may become active only after a new accepted NLSpec promotion updat
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `Future Non-MVP Reachability Analysis Domain` | lines 8752-9160 |
-| PRD-Cadastre.md | `Future Reachability Analysis Interface` | lines 10232-10279 |
-| PRD-Cadastre.md | `Future Reachability Configuration Defaults` | lines 10597-10619 |
-| PRD-Cadastre.md | `Future Reachability Boundary Acceptance` | lines 13506-13537 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Future Non-MVP Reachability Analysis Domain` | lines 8752-9160 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Analysis Interface` | lines 10232-10279 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Configuration Defaults` | lines 10597-10619 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Boundary Acceptance` | lines 13506-13537 |
 | Decomposition plan | Current user prompt | Deferred reachability target and activation boundary. |

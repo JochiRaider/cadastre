@@ -1,17 +1,13 @@
 # Artifact Manifest
 
+The manifest defines the final documentation artifact set for the migration-active Cadastre NLSpec development stream.
+
+Every path must be repository-relative, normalized, unique, and must not contain absolute path prefixes, backslashes, empty segments, `.`, or `..` segments.
+
 | Path |
 | --- |
 | `docs/README.md` |
-| `docs/adr/ADR-0001-lakehouse-fed-boundary.md` |
-| `docs/adr/ADR-0002-graph-as-derived-projection.md` |
-| `docs/adr/ADR-0003-ocsf-as-silver-profile.md` |
-| `docs/adr/ADR-0004-package-set-activation.md` |
-| `docs/archive/PRD-Cadastre.revised-draft.md` |
-| `docs/deferred/200-future-reachability-analysis-domain.md` |
-| `docs/migration/PRD-to-NLSpec-ledger.md` |
-| `docs/migration/gap-and-ambiguity-ledger.md` |
-| `docs/migration/open-decision-ledger.md` |
+| `docs/nlspec/domain.md` |
 | `docs/nlspec/000-cadastre-spec-index.md` |
 | `docs/nlspec/010-system-boundary-and-authority.md` |
 | `docs/nlspec/020-lakehouse-feeds-and-table-state.md` |
@@ -26,7 +22,13 @@
 | `docs/nlspec/110-api-ux-health-errors-and-security.md` |
 | `docs/nlspec/120-validation-fixtures-and-acceptance.md` |
 | `docs/nlspec/130-analysis-enrichment-and-registry-governance.md` |
-| `docs/reference/glossary.md` |
+| `docs/deferred/200-future-reachability-analysis-domain.md` |
+| `docs/migration/PRD-to-NLSpec-ledger.md` |
+| `docs/adr/ADR-0001-lakehouse-fed-boundary.md` |
+| `docs/adr/ADR-0002-graph-as-derived-projection.md` |
+| `docs/adr/ADR-0003-ocsf-as-silver-profile.md` |
+| `docs/adr/ADR-0004-package-set-activation.md` |
+| `docs/reference/standards/nlspec-spec.md` |
 | `docs/reference/research/RES-001-cartography.md` |
 | `docs/reference/research/RES-002-jupiterone.md` |
 | `docs/reference/research/RES-003-taxi-lang.md` |
@@ -41,6 +43,4 @@
 | `docs/reference/research/RES-012-graph-backend-comparison.md` |
 | `docs/reference/research/RES-013-extension-package-supply-chain.md` |
 | `docs/reference/research/RES-014-source-authority-staleness-coverage-absence.md` |
-| `docs/reference/research-index.md` |
-| `docs/reference/source-inventory.md` |
-| `docs/reference/standards/nlspec-spec.md` |
+| `docs/archive/PRD-Cadastre.revised-draft.md` |

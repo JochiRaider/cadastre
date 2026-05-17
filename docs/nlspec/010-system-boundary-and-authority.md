@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-010
 title: System Boundary and Authority
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -99,6 +99,50 @@ The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor
 | `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 
+## Migration finalization contracts
+
+### PrivateBindingLeakValidationRule
+
+Public artifacts must be scanned before publication, API response emission, export, and validation-report materialization.
+
+| Rejected artifact class | Rejected field or value pattern | Error precedence | Required behavior |
+| --- | --- | --- | --- |
+| Public NLSpec or README | Concrete enterprise source name, private route, credential material, tenant-specific binding, private inventory entry | `PRIVATE_BINDING_LEAK` before generic validation errors | Reject the artifact and record the owner spec. |
+| Public API response | Inaccessible asset identifier, private source route, raw credential, unredacted raw payload | `AUTHORIZATION_ERROR` before `PRIVATE_BINDING_LEAK` when caller access is the root cause | Return redacted or fail closed as `110` defines. |
+| Export artifact | Private source binding, environment-specific host list, private golden corpus sample | `PRIVATE_BINDING_LEAK` | Reject export before write. |
+| Validation report | Private fixture bytes or unreduced corpus contents | `PRIVATE_BINDING_LEAK` | Store only redacted fixture refs and checksums. |
+
+### SourceOfRecordRule
+
+| Output class | Authority class | Runtime owner | Default if owner row missing |
+| --- | --- | --- | --- |
+| `RawRecord`, `CadastreSilverObservation`, `IdentityDecision`, `GoldFact` | `system_of_record` | `040`, `070`, `080` | Fail with `UNDECLARED_AUTHORITY_CLASS`. |
+| `GraphDeltaSet`, `GraphApplyResult`, graph read model, CIM output, OCSF export | `derived_projection` | `090`, `050`, `110` | Fail or no-op as owner specifies. |
+| `UpstreamCompletenessEvidence`, lineage, diagnostics, supplier metadata | `supporting_evidence` | `020`, `060`, `130` | Diagnostic only. |
+| `AnalysisFinding`, `AnalysisMetric`, enrichment, registry metadata | `non_authoritative_analysis` | `130` | No mutation authority. |
+| Reachability candidate contracts | `inactive_future_domain` | `200` | No MVP effect. |
+
+### ValidationOnlySourceExplorationBoundary
+
+`source_exploration` and validation-only probe modes may emit only `SourceExplorationResult`, `ProbeDiagnosticRecord`, validation diagnostics, or redacted fixture candidates. They must not satisfy production raw, completeness, silver, identity, gold, graph, health, watermark, manifest, or acceptance-report contracts.
+
+### Error ownership export
+
+| Error code | Owning spec | Shared registry owner |
+| --- | --- | --- |
+| `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | `110` |
+| `PROJECTION_AUTHORITY_VIOLATION` | `010` | `110` |
+| `PRIVATE_BINDING_LEAK` | `010` | `110` |
+| `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `010-PATCH-AC-001` | Every output class has one authority class. |
+| `010-PATCH-AC-002` | Private binding leakage has deterministic detection and error behavior. |
+| `010-PATCH-AC-003` | Validation-only source exploration cannot satisfy raw, completeness, silver, identity, gold, graph, health, watermark, or manifest contracts. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -112,11 +156,11 @@ The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `Product Summary` | lines 23-68 |
-| PRD-Cadastre.md | `Lakehouse-Fed Boundary Amendment` | lines 101-277 |
-| PRD-Cadastre.md | `Scope and Non-Scope` | lines 289-769 |
-| PRD-Cadastre.md | `Design Boundary` | lines 634-769 |
-| PRD-Cadastre.md | `Canonical Architecture Requirements` | lines 1534-1579 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Product Summary` | lines 23-68 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Lakehouse-Fed Boundary Amendment` | lines 101-277 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Scope and Non-Scope` | lines 289-769 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Design Boundary` | lines 634-769 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Canonical Architecture Requirements` | lines 1534-1579 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-030
 title: Processing DAG, Lifecycle, and Versioning
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -117,6 +117,80 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 7. Release locks only after commit refs and lifecycle results are persisted.
 ```
 
+## Migration finalization contracts
+
+### StageStateKindRegistry
+
+| State kind | Required ref fields | Used by | Replay requirement |
+| --- | --- | --- | --- |
+| `feed_read_checkpoint` | feed profile, target ref, checkpoint checksum | `020`, `030` | Included in `VersionManifest`. |
+| `object_checkpoint` | object ref, byte range, checksum | `020` | Included when object batch affects output. |
+| `partition_checkpoint` | partition key, bounds, schema ref | `020` | Included when partition set affects output. |
+| `cdc_offset` | source event metadata, offset value, schema-history ref | `020`, `080` | Included and non-authoritative for fact time. |
+| `schema_history_ref` | schema-history artifact ref and checksum | `020`, `080` | Required for CDC replay sufficiency. |
+| `deterministic_side_effect` | side-effect record ref and checksum | `080` | Replay from recorded value only. |
+| `graph_apply_checkpoint` | delta-set checksum, applied batch IDs, backend evidence refs | `090` | Required for resume. |
+| `watermark_checkpoint` | watermark kind, attempted value, commit record | `060`, `080`, `090` | Required before advancement. |
+| `package_activation_ref` | package-set manifest and deployment revision | `100` | Required for production output. |
+| `replay_ref` | replay input set, equivalence checksum, result | `080`, `120` | Required for replay output. |
+
+### LifecycleStateMachineDefinition row schema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `states` | Yes | Closed enum. |
+| `events` | Yes | Closed enum. |
+| `guards` | Yes | Deterministic ordered list. |
+| `transition_table` | Yes | Total for every state/event pair unless pure deterministic algorithm is declared. |
+| `illegal_transition_behavior` | Yes | Must emit owner-specific error and no state mutation. |
+| `idempotency_rule` | Yes | Replayed transition must produce identical result or explicit no-op. |
+| `artifact_derived_state_rule` | Yes | Defines which artifacts determine state. |
+| `observability_fields` | Yes | Includes lifecycle ID, prior state, event, guard, result, error, checksums. |
+| `parent_child_composition` | Yes | Parent must not depend on child in-memory state. |
+| `validation_rows` | Yes | Must reference `120` rows. |
+
+Lifecycle diagrams are representational unless generated from a declared lifecycle table.
+
+### VersionManifestCompletenessMatrix
+
+| Output class | Required refs |
+| --- | --- |
+| Raw import output | feed profile, read policy, raw feed manifest, raw import package, table/object refs, state records. |
+| Silver output | raw refs, parser package, mapping bundle, external schema profile, validation output. |
+| Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
+| Gold output | temporal policy, source authority, coverage, correction policy, source refs, snapshot refs. |
+| Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, apply result. |
+| API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
+| Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs. |
+
+### RunLockKeyDerivation
+
+```text
+RunLockKeyDerivation(scope):
+1. Build an ordered tuple of source/feed scope, completeness scope, coverage scope, projection scope, graph apply target, package set, and requested output class.
+2. Serialize the tuple with `040.CanonicalJSON`.
+3. Hash with SHA-256 and prefix with `runlock_`.
+4. If two non-identical tuples produce the same lock key, fail with `RUN_LOCK_COLLISION`.
+```
+
+### DeclaredDAGSubsetProfile matrix
+
+| Subset mode | Allowed outputs | Forbidden outputs | Absence behavior | Cleanup behavior | Projection behavior | Watermark behavior | Validation requirement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `validation_only` | validation reports, diagnostics | production records | forbidden | forbidden | forbidden | forbidden | negative authority rows |
+| `feed_replay` | raw records and receipts | silver/gold/graph/API | no absence | no cleanup | no projection | no advancement | feed replay rows |
+| `graph_rebuild` | graph rebuild manifest and graph apply result | raw/silver/gold mutation | no absence | no source cleanup | allowed from persisted deltas | projection only if `060` permits | rebuild equivalence rows |
+| `package_canary` | canary output and activation evidence | current production output | no absence | no cleanup | canary only | no production advancement | package canary rows |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `030-PATCH-AC-001` | Every stage class has a closed permitted-output set and forbidden-output error. |
+| `030-PATCH-AC-002` | Every production-affecting lifecycle has a total transition table or is explicitly a pure deterministic algorithm. |
+| `030-PATCH-AC-003` | Every production output has a complete immutable `VersionManifest` before external visibility. |
+| `030-PATCH-AC-004` | Declared subsets cannot authorize absence, cleanup, projection, or watermark behavior unless the subset profile explicitly permits it. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -131,17 +205,17 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `ProcessingStageDAG` | lines 4265-4306 |
-| PRD-Cadastre.md | `StageStateRecord` | lines 7083-7181 |
-| PRD-Cadastre.md | `LifecycleStateMachineDefinition` | lines 7182-7315 |
-| PRD-Cadastre.md | `Required MVP Lifecycle Machines` | lines 7316-7337 |
-| PRD-Cadastre.md | `ProcessingStageLifecycleResult` | lines 7338-7374 |
-| PRD-Cadastre.md | `RunLockSet` | lines 7668-7704 |
-| PRD-Cadastre.md | `DeclaredDAGSubsetProfile` | lines 7705-7737 |
-| PRD-Cadastre.md | `VersionManifest` | lines 2978-3108 |
-| PRD-Cadastre.md | `Feed Stage DAG Execution Interface` | lines 9884-9948 |
-| PRD-Cadastre.md | `Lifecycle State Machine Validation Interface` | lines 10056-10113 |
-| PRD-Cadastre.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ProcessingStageDAG` | lines 4265-4306 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `StageStateRecord` | lines 7083-7181 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `LifecycleStateMachineDefinition` | lines 7182-7315 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Required MVP Lifecycle Machines` | lines 7316-7337 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ProcessingStageLifecycleResult` | lines 7338-7374 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `RunLockSet` | lines 7668-7704 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `DeclaredDAGSubsetProfile` | lines 7705-7737 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `VersionManifest` | lines 2978-3108 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Feed Stage DAG Execution Interface` | lines 9884-9948 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Lifecycle State Machine Validation Interface` | lines 10056-10113 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

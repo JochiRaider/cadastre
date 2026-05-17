@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-090
 title: Graph Projection, Serving, and Backends
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -134,6 +134,85 @@ Every graph-serving response using graph read-model state must include or refere
 
 `GraphReadModelDriftCheck` is non-authoritative operational health only. A drift check that attempts repair, graph mutation, graph delta emission, authoritative record mutation, or watermark advancement must fail with `GRAPH_DRIFT_REPAIR_FORBIDDEN`.
 
+## Migration finalization contracts
+
+### GraphEdgeSemanticsRegistry
+
+| Edge type | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op | Validation rows | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | owner policy | explicit class only | does not imply theoretical reachability | no edge when flow role missing | TODO | blocking until exact row complete |
+| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | reachability negative rows | inactive_deferred |
+| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | blocking |
+
+### GraphObjectOutputEligibilityRow
+
+| Object class | Search | Neighbor expansion | Pathfinding | Analysis finding | Metrics | Identity influence |
+| --- | --- | --- | --- | --- | --- | --- |
+| projected canonical node | profile-defined | profile-defined | traversal-class-defined | read-only | allowed if profile permits | no direct identity mutation |
+| projected edge | profile-defined | profile-defined | traversal-class-defined | read-only | allowed if profile permits | no identity authority |
+| synthetic structural object | disabled by default | disabled by default | disabled by default | disabled by default | disabled by default | none |
+| generic external graph payload | disabled by default | disabled by default | disabled by default | disabled by default | disabled by default | none |
+
+### GraphDeltaIdempotencyKey inputs
+
+| Input order | Input | Required | Rule |
+| ---: | --- | ---: | --- |
+| 1 | `graph_delta_set_checksum` | Yes | SHA-256 lowercase hex. |
+| 2 | `graph_apply_profile_id` | Yes | Active profile. |
+| 3 | `backend_profile_id` | Yes | Active profile. |
+| 4 | `backend_schema_fingerprint` | Yes | Current and non-stale. |
+| 5 | `package_set_manifest_checksum` | Yes | Immutable package set. |
+| 6 | `target_graph_scope` | Yes | Canonical JSON scope. |
+
+### ResumeGraphApply semantics
+
+| Prior state | Required behavior |
+| --- | --- |
+| no prior apply | apply all batches in canonical order. |
+| prior identical success | return idempotent no-op result. |
+| prior failed before commit | reapply from first batch. |
+| prior partial with committed batch evidence | resume after last committed compatible batch. |
+| prior partial without committed-batch proof | fail with `GRAPH_APPLY_RESUME_UNSAFE`. |
+| idempotency key conflict | fail with `GRAPH_DELTA_IDEMPOTENCY_CONFLICT`. |
+
+### GraphBackendProfile activation fixture matrix
+
+| Backend fixture area | Required evidence | Activation effect |
+| --- | --- | --- |
+| backend and driver | exact backend, driver, version, dialect | blocks backend-specific activation if missing |
+| topology and storage mode | writer routing, HA/storage mode, failover semantics | blocks mutation if unsupported |
+| raw-write bypass | proof backend console/admin/import bypass is blocked or detected | blocks activation if unsafe |
+| schema profile | constraints, indexes, selector indexes, evidence indexes | blocks mutation/query if stale |
+| query translation | ordering, pagination, timeout, authorization, redaction | blocks query serving if missing |
+| rebuild/import | rebuild manifest, import evidence, index consistency | blocks promotion if missing |
+
+### GraphRebuildEquivalencePolicy boundary
+
+`080` owns checksum rules for replay equivalence. This spec imports `GraphRebuildEquivalencePolicy` by name and defines graph-specific use: rebuild promotion must compare graph-serving output, schema fingerprint, index consistency, delta input set, projection profile, and derived-view state using the imported policy.
+
+### CurrentRecentGraphServingPolicy
+
+MVP graph serving covers current-state and recent-history graph queries. Full historical reconstruction defaults to lakehouse-backed reconstruction outside the graph backend unless a future authoritative graph historical serving policy exists.
+
+### Backend preflight table
+
+| Check | Required evidence | Failure code | Retryability | Activation effect | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| backend profile active | profile checksum | `GRAPH_BACKEND_PROFILE_MISSING` | no | block | missing profile |
+| schema fingerprint current | fingerprint checksum and timestamp | `GRAPH_SCHEMA_FINGERPRINT_STALE` | yes after refresh | block mutation/query | stale fingerprint |
+| raw-write bypass controls | audit/control evidence | `GRAPH_RAW_WRITE_BYPASS` | no | block | bypass attempt |
+| query translation parity | expected result checksums | `GRAPH_QUERY_TRANSLATION_ERROR` | no | block query serving | parity fixture |
+| rebuild equivalence | rebuild checksums and index consistency | `GRAPH_REBUILD_EQUIVALENCE_FAILED` | yes after rebuild | block promotion | rebuild mismatch |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `090-PATCH-AC-001` | Every active edge type has exactly one edge-semantics row. |
+| `090-PATCH-AC-002` | Graph query ordering is Cadastre-defined and never backend-natural. |
+| `090-PATCH-AC-003` | Graph rebuild promotion fails if rebuild equivalence or index consistency fails. |
+| `090-PATCH-AC-004` | Theoretical reachability edges and properties fail/no-op in MVP. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -148,32 +227,32 @@ Every graph-serving response using graph read-model state must include or refere
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `GraphNodeDelta` | lines 2928-2947 |
-| PRD-Cadastre.md | `GraphEdgeDelta` | lines 2948-2977 |
-| PRD-Cadastre.md | `GraphProjectionProfile` | lines 4728-4921 |
-| PRD-Cadastre.md | `GraphDeltaSet` | lines 4922-4999 |
-| PRD-Cadastre.md | `GraphDeltaIdempotencyKey` | lines 4977-4999 |
-| PRD-Cadastre.md | `StructuralGlobalNode` | lines 5000-5031 |
-| PRD-Cadastre.md | `GraphPropertyEvidencePolicy` | lines 5651-5678 |
-| PRD-Cadastre.md | `GraphEdgeSemantics` | lines 6638-6762 |
-| PRD-Cadastre.md | `GraphTraversalClass` | lines 6708-6762 |
-| PRD-Cadastre.md | `GraphTaxonomyTranslationPolicy` | lines 6763-6826 |
-| PRD-Cadastre.md | `StructuralGlobalNodeAliasPolicy` | lines 6827-6866 |
-| PRD-Cadastre.md | `GraphBackendProfile and GraphBackendPreflightResult` | lines 7738-7818 |
-| PRD-Cadastre.md | `BackendSchemaFingerprint` | lines 7819-7886 |
-| PRD-Cadastre.md | `GraphBackendTaxonomyMappingProfile` | lines 7887-7931 |
-| PRD-Cadastre.md | `GraphQueryTranslationProfile` | lines 7932-7991 |
-| PRD-Cadastre.md | `GraphReadModelSchemaProfile` | lines 7992-8043 |
-| PRD-Cadastre.md | `GraphApplyProfile and GraphApplyResult` | lines 8044-8203 |
-| PRD-Cadastre.md | `GraphReadModelDriftCheck` | lines 8390-8433 |
-| PRD-Cadastre.md | `Projection Interface` | lines 9730-9760 |
-| PRD-Cadastre.md | `Graph Apply Interface` | lines 9761-9778 |
-| PRD-Cadastre.md | `Graph Backend Adapter Interface` | lines 9779-9803 |
-| PRD-Cadastre.md | `Query API Interface` | lines 9845-9883 |
-| PRD-Cadastre.md | `Graph Rebuild Interface` | lines 10153-10173 |
-| PRD-Cadastre.md | `Incremental Projection Requirements` | lines 11318-11582 |
-| PRD-Cadastre.md | `Graph Query` | lines 1108-1261 |
-| PRD-Cadastre.md | `Future Non-MVP Reachability Analysis Domain` | lines 8752-9160 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphNodeDelta` | lines 2928-2947 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphEdgeDelta` | lines 2948-2977 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphProjectionProfile` | lines 4728-4921 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphDeltaSet` | lines 4922-4999 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphDeltaIdempotencyKey` | lines 4977-4999 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `StructuralGlobalNode` | lines 5000-5031 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphPropertyEvidencePolicy` | lines 5651-5678 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphEdgeSemantics` | lines 6638-6762 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphTraversalClass` | lines 6708-6762 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphTaxonomyTranslationPolicy` | lines 6763-6826 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `StructuralGlobalNodeAliasPolicy` | lines 6827-6866 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphBackendProfile and GraphBackendPreflightResult` | lines 7738-7818 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `BackendSchemaFingerprint` | lines 7819-7886 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphBackendTaxonomyMappingProfile` | lines 7887-7931 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphQueryTranslationProfile` | lines 7932-7991 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphReadModelSchemaProfile` | lines 7992-8043 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphApplyProfile and GraphApplyResult` | lines 8044-8203 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphReadModelDriftCheck` | lines 8390-8433 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Projection Interface` | lines 9730-9760 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Graph Apply Interface` | lines 9761-9778 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Graph Backend Adapter Interface` | lines 9779-9803 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Query API Interface` | lines 9845-9883 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Graph Rebuild Interface` | lines 10153-10173 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Incremental Projection Requirements` | lines 11318-11582 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Graph Query` | lines 1108-1261 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Future Non-MVP Reachability Analysis Domain` | lines 8752-9160 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

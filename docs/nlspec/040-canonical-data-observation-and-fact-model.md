@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-040
 title: Canonical Data, Observation, and Fact Model
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -110,6 +110,75 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 
 This spec owns only the primitive record shape of `GraphNodeDelta` and `GraphEdgeDelta`. Projection rules, graph apply, backend mapping, traversal, and query behavior are owned by `090`.
 
+## Migration finalization contracts
+
+### CanonicalChecksumPolicy
+
+| Field | Rule |
+| --- | --- |
+| Hash algorithm | `sha256` for MVP. |
+| Digest encoding | lowercase hexadecimal. |
+| Byte input | UTF-8 bytes of `CanonicalJSON` unless the record declares a binary payload hash. |
+| Field inclusion | Include every output-affecting field listed by the record identity policy. |
+| Volatile-field exclusion | Exclude processing timestamps, diagnostics ordering artifacts, and correlation IDs unless the owner declares them output-affecting. |
+| Extension-field handling | Include declared extension maps in lexical key order; reject undeclared unknown fields. |
+| Versioning | Prefix checksum policy version in records whose checksum can affect replay or activation. |
+
+### CanonicalIdPolicy
+
+| Field | Rule |
+| --- | --- |
+| ID namespace | Each record type declares a stable prefix. |
+| Input order | Each owner table declares ordered inputs. |
+| Serialization | Inputs serialize as an ordered array using `CanonicalJSON`. |
+| Digest truncation | Forbidden for MVP unless the owner table explicitly permits a longer collision check. |
+| Collision behavior | Different input bytes with same ID emit owner-specific collision error and commit no record. |
+| Version prefix | Include identity policy version when changing input order or normalization. |
+
+### CanonicalSortKey
+
+Arrays whose order affects IDs, checksums, replay equivalence, graph deltas, or validation output must declare a canonical sort key. Arrays without a declared sort key preserve input order and the input order becomes output-affecting.
+
+### UnknownFieldPolicy
+
+Unknown fields are rejected unless the owning record declares an extension map. `050` owns runtime activation rules for source extension fields; this spec owns the primitive unknown-field rule.
+
+### Record identity policy table
+
+| Record | Owning ID inputs | Required or optional | Canonicalization | Missing behavior | Additional constraint owner |
+| --- | --- | --- | --- | --- | --- |
+| `RawRecord` | feed profile, target kind, dataset, scope, supplier identity, native ID, payload hash, import profile | mixed | `CanonicalJSON` ordered array | optional native ID materializes null | `020` |
+| `CadastreSilverObservation` | raw refs, observation type, mapping bundle, source scope, normalized payload checksum | required | lexical refs and canonical checksum | reject | `050` |
+| `CanonicalEntity` | entity type, resolver decision, policy version | required | canonical string and refs | reject | `070` |
+| `SourceAsset` | source scope, source-native identity, validity interval | mixed | scope-key canonical JSON | reject if scope absent | `070` |
+| `Identifier` | identifier type, normalized value, source scope, validity interval | required | canonical string and interval | reject | `070` |
+| `GoldFact` | subject, predicate, object/value, valid interval, assertion state, authority profile, evidence set | required | canonical ordered tuple | reject | `080` |
+| `EvidenceRef` | artifact class, artifact ID, role, checksum | required | canonical ordered tuple | reject | `040` |
+| `GraphNodeDeltaShape` and `GraphEdgeDeltaShape` | owner-provided graph delta inputs | required | shape only; runtime ID owner imports policy | reject | `090` |
+
+### Omission-state crosswalk
+
+| Omission state | Allowed owners | API label import | Source authority effect | Graph projection effect | Compliance export effect |
+| --- | --- | --- | --- | --- | --- |
+| `observed_present` | `040`, owner facts | `110` | may support authority if `060` permits | may project if `090` permits | may export if owner permits |
+| `observed_empty` | `040`, owner facts | `110` | no absence by itself | owner-defined | owner-defined |
+| `not_provided` | `040`, `060` | `110` | unknown by default | no negative edge | unknown/not checked |
+| `not_applicable` | `040`, `060`, `110` | `110` | no absence unless policy says | no edge by default | not applicable |
+| `permission_limited` | `040`, `060`, `110` | `110` | blocks absence | no negative edge | permission limited |
+| `source_unavailable` | `040`, `060`, `110` | `110` | blocks absence | no negative edge | error/unknown |
+| `unsupported` | `040`, owner spec | `110` | no authority | no edge unless explicit | unsupported/unknown |
+| `malformed` | `040`, `050` | `110` | no authority | no edge | error |
+| `redacted` | `040`, `110` | `110` | hidden from caller only | redaction policy | redacted |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `040-PATCH-AC-001` | Two implementations compute the same IDs and checksums for the same canonical records. |
+| `040-PATCH-AC-002` | Unknown fields are rejected unless the owning record declares an extension map. |
+| `040-PATCH-AC-003` | Omitted, null, empty, redacted, permission-limited, unknown, and unsupported remain distinguishable in serialized output. |
+| `040-PATCH-AC-004` | Other specs import canonical ID and checksum rules rather than redefining them. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -124,17 +193,17 @@ This spec owns only the primitive record shape of `GraphNodeDelta` and `GraphEdg
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `Scalar Types` | lines 1582-1599 |
-| PRD-Cadastre.md | `Omission Semantics` | lines 1621-1690 |
-| PRD-Cadastre.md | `RawRecord` | lines 1691-1805 |
-| PRD-Cadastre.md | `CadastreSilverObservation` | lines 1806-1886 |
-| PRD-Cadastre.md | `CanonicalEntity` | lines 2124-2155 |
-| PRD-Cadastre.md | `SourceAsset` | lines 2156-2170 |
-| PRD-Cadastre.md | `Identifier` | lines 2171-2213 |
-| PRD-Cadastre.md | `GoldFact` | lines 2719-2800 |
-| PRD-Cadastre.md | `EvidenceRef` | lines 2914-2927 |
-| PRD-Cadastre.md | `GraphNodeDelta` | lines 2928-2947 |
-| PRD-Cadastre.md | `GraphEdgeDelta` | lines 2948-2977 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Scalar Types` | lines 1582-1599 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Omission Semantics` | lines 1621-1690 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `RawRecord` | lines 1691-1805 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CadastreSilverObservation` | lines 1806-1886 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalEntity` | lines 2124-2155 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `SourceAsset` | lines 2156-2170 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Identifier` | lines 2171-2213 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFact` | lines 2719-2800 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `EvidenceRef` | lines 2914-2927 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphNodeDelta` | lines 2928-2947 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphEdgeDelta` | lines 2948-2977 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

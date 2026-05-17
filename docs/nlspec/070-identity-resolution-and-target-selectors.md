@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-070
 title: Identity Resolution and Target Selectors
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -124,6 +124,106 @@ Manual review must not mutate canonical identity directly. `IdentityReviewCase` 
 
 OpenGraph-style property matching, name matching, source-kind matching, environment-scoped matching, cross-source reference matching, or mapped-target matching must not create canonical identity without a qualifying identity decision. Deprecated name matching is forbidden in production.
 
+## Migration finalization contracts
+
+### ResolverProfileCoverageMatrix
+
+| Entity type | Run mode | Source scopes | Evidence classes | Lifecycle boundary types | Decision output classes | Validation scenarios |
+| --- | --- | --- | --- | --- | --- | --- |
+| `host` | `production` | provider/account/tenant/site/cluster as applicable | durable IDs plus weak evidence classes | reimage, clone, VDI, reinstall, delete/recreate, reuse | auto_merged, candidate, rejected, split, conflicted, no_decision | weak evidence rejection, hard blocker, split handoff |
+| `user` | `production` | directory tenant/domain/source | directory IDs plus names and memberships | delete/recreate, reenrollment | candidate, rejected, conflicted, no_decision unless profile permits merge | permission-limited and hidden-membership cases |
+| `service_account` | `production` | provider/account/tenant | durable provider IDs and directory IDs | delete/recreate, rekey | candidate, rejected, no_decision | scope mismatch cases |
+| TODO | TODO | TODO | TODO | TODO | TODO | blocking until owner row exists |
+
+### IdentifierScope canonicalization
+
+| Source class | Identifier class | Required scope keys | Normalization | Uncovered-scope behavior |
+| --- | --- | --- | --- | --- |
+| cloud provider | provider resource ID | provider, account/project/subscription, region when applicable | provider-lowercase, exact ID string | reject as under-scoped |
+| endpoint agent | agent durable ID | vendor-neutral enrollment scope, tenant, deployment | exact ID string | reject as under-scoped |
+| Kubernetes | UID | cluster, namespace, resource kind, generation where applicable | exact UID | source-object identity only by default |
+| network | IP address | address family, observed time, source scope | canonical textual IP | weak evidence only |
+| DNS | name/PTR | zone/source scope, observed time | lowercase FQDN with trailing-dot normalization | weak evidence only |
+| graph | backend key | backend profile and graph object scope | exact string | selector only, no identity |
+
+### IdentifierEvidenceClass registry
+
+| Evidence class | Durability | Scope | Reuse risk | Default role | Auto-merge authority | Negative evidence effect | Review routing |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| durable provider ID | high | provider-scoped | medium after delete/recreate | positive evidence | profile-defined | lifecycle blocker can override | no review unless conflict |
+| endpoint agent ID | high | enrollment-scoped | medium after reinstall | positive evidence | profile-defined | reinstall can block | review on conflict |
+| hostname | low | source/time-scoped | high | candidate hint | never | reuse can block weak merge | review candidate only |
+| IP address | low | time-scoped | high | candidate hint | never | reuse can block weak merge | review candidate only |
+| DNS/PTR | low | zone/time-scoped | high | candidate hint | never | conflicting resolution blocks weak merge | review candidate only |
+| flow ID | low | sensor-scoped | high | correlation hint | never | none by itself | no_decision |
+| graph key | low | backend-scoped | high | selector | never | none by itself | no_decision |
+| source-native merge history | medium | source-scoped | medium | lineage only | never | may become blocker if contradicting | review candidate |
+
+### Resolver decision matrix
+
+| Decision | Required condition | Output behavior |
+| --- | --- | --- |
+| `auto_merged` | Profile row permits, hard blockers absent, evidence class sufficient, confidence band satisfied | Emit terminal `IdentityDecision`. |
+| `candidate` | Evidence suggests match but authority insufficient or review required | Emit `IdentityDecision` plus `IdentityReviewCase`. |
+| `rejected` | Candidate fails rule or blocker fires | Emit rejection with explanation. |
+| `split` | Prior merge invalidated by split evidence | Emit split decision and `GraphCorrectionHandoff`. |
+| `conflicted` | Concurrent evidence prevents deterministic resolution | Emit conflicted decision and review case when permitted. |
+| `no_decision` | Evidence is uncovered, weak, selector-only, or out of profile scope | Emit no decision; no identity mutation. |
+
+### IdentityReviewCase state machine
+
+| Current state | Event | Next state | Illegal transition behavior |
+| --- | --- | --- | --- |
+| `opened` | reviewer assigns | `in_review` | `IDENTITY_REVIEW_TRANSITION_INVALID` |
+| `opened` | expires | `expired` | same |
+| `in_review` | approve merge | `terminal_decision_emitted` | same |
+| `in_review` | reject merge | `terminal_decision_emitted` | same |
+| `in_review` | request more evidence | `blocked` | same |
+| `blocked` | evidence supplied | `in_review` | same |
+| any terminal state | any mutation event | unchanged | same and no mutation |
+
+Manual review must never mutate canonical identity outside terminal `IdentityDecision` records.
+
+### ResolverActivationReport requirements
+
+| Requirement | Default |
+| --- | --- |
+| scenario pass/fail | required for every evidence class and blocker class |
+| shadow run | required before canary |
+| canary | required before active production unless owner explicitly defers |
+| blocker coverage | every hard blocker has positive and negative fixture |
+| deterministic output checksums | required for decisions and explanations |
+| promotion eligibility | blocked while any required scenario fails or is missing |
+
+### Hard blocker matrix
+
+| Boundary | Evidence trigger | Default effect | Override allowance | Required validation rows |
+| --- | --- | --- | --- | --- |
+| reimage | source or temporal evidence crosses generation | block auto-merge | profile row only | blocker override rejection |
+| clone or VDI reuse | repeated agent/image evidence | block auto-merge | profile row with split-aware continuation | clone rejection |
+| agent reinstall | new enrollment generation | block unless durable external evidence repairs | profile row | reinstall case |
+| delete/recreate | provider object generation changes | block cross-generation merge | profile row | delete/recreate case |
+| hostname/IP reuse | reused weak value | block weak merge | none for weak-only | weak evidence no-merge |
+| Kubernetes recreate | same name, different UID | block name-based identity | UID/generation evidence only | recreate case |
+
+### Selector safety matrix
+
+| Selector mechanism | Maximum resolution state | Evidence required | Auto-merge allowed | Graph projection effect | Error/no-op behavior |
+| --- | --- | --- | ---: | --- | --- |
+| mapped target | `UnresolvedTargetReference` | selector source and scope | No | hint only | no-op if unresolved |
+| OpenGraph property matching | `UnresolvedTargetReference` | active selector policy | No | no projection unless owner permits | reject deprecated name matching |
+| graph key | selector only | graph profile and owner row | No | no identity influence | no-op |
+| hostname/IP/DNS selector | candidate hint | temporal source scope | No | no graph edge by itself | candidate or no_decision |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `070-PATCH-AC-001` | Same evidence, profile, scopes, blockers, and manifest produce identical identity decisions and explanations. |
+| `070-PATCH-AC-002` | Weak evidence classes never auto-merge. |
+| `070-PATCH-AC-003` | Hard blockers override confidence scores and reviewer notes. |
+| `070-PATCH-AC-004` | Every identity split affecting gold or graph output emits `GraphCorrectionHandoff`. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -138,24 +238,24 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `CanonicalEntity` | lines 2124-2155 |
-| PRD-Cadastre.md | `SourceAsset` | lines 2156-2170 |
-| PRD-Cadastre.md | `Identifier` | lines 2171-2213 |
-| PRD-Cadastre.md | `IdentifierScope` | lines 2214-2273 |
-| PRD-Cadastre.md | `IdentityDecision` | lines 2274-2338 |
-| PRD-Cadastre.md | `IdentifierEvidenceClass` | lines 2339-2385 |
-| PRD-Cadastre.md | `IdentityEvidenceItem` | lines 2386-2418 |
-| PRD-Cadastre.md | `ResolverProfile` | lines 2419-2478 |
-| PRD-Cadastre.md | `CandidateGenerationProfile` | lines 2479-2504 |
-| PRD-Cadastre.md | `AssetGenerationBoundary` | lines 2505-2551 |
-| PRD-Cadastre.md | `IdentityReviewCase` | lines 2552-2608 |
-| PRD-Cadastre.md | `ResolverActivationReport` | lines 2609-2631 |
-| PRD-Cadastre.md | `ResolverShadowRun` | lines 2632-2653 |
-| PRD-Cadastre.md | `ResolverExplanation` | lines 2654-2692 |
-| PRD-Cadastre.md | `GraphCorrectionHandoff` | lines 2693-2718 |
-| PRD-Cadastre.md | `UnresolvedTargetReference` | lines 4672-4727 |
-| PRD-Cadastre.md | `TargetSelectorSafetyPolicy` | lines 6562-6637 |
-| PRD-Cadastre.md | `Identity Resolution Requirements` | lines 11032-11317 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalEntity` | lines 2124-2155 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `SourceAsset` | lines 2156-2170 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Identifier` | lines 2171-2213 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `IdentifierScope` | lines 2214-2273 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityDecision` | lines 2274-2338 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `IdentifierEvidenceClass` | lines 2339-2385 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityEvidenceItem` | lines 2386-2418 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverProfile` | lines 2419-2478 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CandidateGenerationProfile` | lines 2479-2504 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `AssetGenerationBoundary` | lines 2505-2551 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityReviewCase` | lines 2552-2608 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverActivationReport` | lines 2609-2631 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverShadowRun` | lines 2632-2653 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverExplanation` | lines 2654-2692 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphCorrectionHandoff` | lines 2693-2718 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `UnresolvedTargetReference` | lines 4672-4727 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `TargetSelectorSafetyPolicy` | lines 6562-6637 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Identity Resolution Requirements` | lines 11032-11317 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions

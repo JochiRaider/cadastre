@@ -1,11 +1,11 @@
 ---
 doc_id: CADASTRE-NLSPEC-080
 title: Temporal Corrections, Replay, and Gold Derivation
-doc_type: authoritative-nlspec
+doc_type: candidate-nlspec
 status: migration_active
 generated_on: 2026-05-17
-source_prd: PRD-Cadastre.md
-source_prd_sha256: b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748
+source_prd: docs/archive/PRD-Cadastre.revised-draft.md
+source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -84,7 +84,7 @@ Implicit current-time fallback is forbidden.
 
 Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must close prior `known_to` intervals and emit new facts, interval splits, explicit retractions, conflicts, no-ops, or deterministic errors.
 
-`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. `TODO: finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class.`
+`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The migration-finalization table below defines default correction classes and records remaining source-specific blocker rows.
 
 ## Assertion-State Transition Matrix
 
@@ -98,11 +98,109 @@ Late evidence must be routed through `EvaluateLateArrival` using late-arrival po
 
 Production replay must run `ReplayInputSufficiencyCheck`, `ReplayEquivalencePolicy`, `DecideReplayMode`, and `ComputeReplayEquivalenceChecksum` before any replay output is written.
 
-`ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. `TODO: finalize replay equivalence policy catalog.`
+`ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. The migration-finalization table below defines active draft output classes and explicit remaining blocker rows.
 
 ## Deterministic Side Effects
 
 Runtime randomness, wall-clock reads, generated IDs, unordered iteration, external calls, or backend-discovered values must not affect production output unless a declared `DeterministicSideEffectRecord` captures the value and replay behavior.
+
+## Migration finalization contracts
+
+### TemporalSemanticsPolicy catalog
+
+| Source dataset | Observation type | Fact type | Valid-time inputs | Fallback allowance | Malformed behavior | Ambiguous behavior | Error code | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | forbidden by default | deterministic temporal error | deterministic temporal error | `TEMPORAL_POLICY_UNRESOLVED` | blocking |
+
+### KnowledgeTimeImportPolicy
+
+| Mode | Required behavior |
+| --- | --- |
+| `current_import` | `known_from` is Cadastre import knowledge time from persisted evidence. |
+| `historical_import` | Historical valid time may be imported, but historical known time is not reconstructed. |
+| `reconstructed_source_known_time` | Allowed only when policy names source-known-time evidence and validation rows pass. |
+| `rejected_reconstruction` | Default when source-known-time evidence is missing, stale, ambiguous, or untrusted. |
+
+### BitemporalQueryMode catalog
+
+| Query mode | Default valid time | Default known time | Assertion-state visibility | Page-token scope | Ordering | Audit behavior |
+| --- | --- | --- | --- | --- | --- | --- |
+| `current` | current platform time | current platform time | active and policy-visible stale | query checksum plus auth context | owner-defined canonical sort | audit optional by API class |
+| `valid_at` | supplied | current platform time | active/stale/conflicted per policy | includes valid time | canonical sort | audit required for auditor |
+| `known_at` | current platform time | supplied | as-known facts only | includes known time | canonical sort | audit required |
+| `corrected_history` | supplied or interval | supplied or current | includes superseded/retracted when requested | includes both times and assertion filter | canonical sort | audit required |
+
+### GoldFactCorrectionPolicy
+
+| Fact type/predicate | Comparable keys | Overlap behavior | Interval split | Confidence-only change | Delete evidence | Conflict behavior | Stale behavior | No-op behavior | Sort keys | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | emit explicit no-op | TODO | blocking |
+
+### CorrectionSnapshotRefPolicy
+
+| Correction class | Old snapshot role | New snapshot role | Table-set checksum | Retention protection | Mutable-ref behavior | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `fact_replacement` | required prior fact snapshot | required candidate fact snapshot | required | both protected | reject | blocking until fact rows exist |
+| `fact_retraction` | required prior fact snapshot | required retraction evidence snapshot | required | both protected | reject | blocking until source-specific rows exist |
+| `interval_split` | required prior interval snapshot | required split candidate snapshot | required | both protected | reject | blocking until fact rows exist |
+| `confidence_only_change` | required prior confidence snapshot | required new evidence snapshot | required | both protected | reject | blocking until fact rows exist |
+
+### LateArrivalPolicy
+
+| Dataset | Source authority class | Fact type | Allowed lateness | Route | Correction behavior | Quarantine behavior | Watermark effect | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| TODO | TODO | TODO | TODO | evaluate through policy | append-only correction when permitted | quarantine when unresolved | no advancement unless `060` permits | blocking |
+
+### ReplayEquivalencePolicy
+
+| Output class | Included fields | Excluded volatile fields | Hash algorithm | Canonical ordering | Failure precedence | Shadow-output rules | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| raw | manifest refs, raw IDs, payload hashes, import profile | run correlation ID | `sha256` | canonical record ID | missing refs before checksum mismatch | compare only | active draft |
+| silver | raw refs, mapping bundle, schema profile, normalized checksum | diagnostics correlation ID | `sha256` | observation ID | schema mismatch before output mismatch | compare only | active draft |
+| identity | evidence refs, resolver profile, decision, explanation checksum | reviewer display labels | `sha256` | decision ID | blocker mismatch before output mismatch | compare only | active draft |
+| gold | temporal resolution, authority, evidence, fact bytes, correction policy | processing timestamp | `sha256` | fact ID and known interval | authority mismatch before output mismatch | compare only | active draft |
+| graph delta/apply/rebuild | projection profile, delta set, idempotency, backend evidence, rebuild manifest | backend transient IDs | `sha256` | delta ID and path order | schema mismatch before output mismatch | compare only | active draft |
+| projections/API/analysis | owner refs, labels, authorization/redaction policy, output checksum | request correlation ID | `sha256` | owner-defined | authorization mismatch before output mismatch | compare only | TODO rows required |
+
+### DeterministicSideEffectPolicy
+
+| Side-effect kind | Default |
+| --- | --- |
+| runtime randomness | rejected unless recorded |
+| wall-clock read | rejected unless policy names clock field and records value |
+| generated ID | rejected unless derived by `040.CanonicalIdPolicy` |
+| unordered iteration | rejected |
+| external call | rejected in production unless explicitly validation-only |
+| backend-discovered value | replay from recorded value only when owner permits |
+
+### Assertion-state transition matrix
+
+| Prior state | Candidate state | Evidence class | Authority requirement | Output | Error/no-op | Graph handoff effect |
+| --- | --- | --- | --- | --- | --- | --- |
+| `active` | `superseded` | stronger correction evidence | source authority row | close prior known interval and emit new fact | error if policy missing | graph correction handoff |
+| `active` | `retracted` | authorized delete/retraction evidence | authority plus completeness | close prior and emit retraction | no-op if evidence duplicate | graph retraction handoff |
+| `stale` | `active` | current authoritative evidence | authority plus staleness policy | emit new active fact | no-op if same evidence | graph update handoff |
+| `conflicted` | `active` | conflict resolution evidence | authority plus correction policy | emit resolved fact | error if unresolved | graph update handoff |
+| any | TODO | TODO | TODO | TODO | `GOLD_CORRECTION_TRANSITION_UNDEFINED` | no mutation |
+
+### Replay input sufficiency matrix
+
+| Output class | Required refs | Failure code | Mutable-ref behavior | Retention-ineligible behavior | Schema mismatch behavior |
+| --- | --- | --- | --- | --- | --- |
+| raw | feed profile, manifest, object/table refs, import profile | `REPLAY_INPUT_MISSING` | reject | reject | reject |
+| silver | raw refs, parser/mapping, external schema artifact | `REPLAY_SCHEMA_MISMATCH` | reject | reject | reject |
+| identity | resolver profile, evidence refs, version manifest | `REPLAY_AUTHORITY_MISMATCH` | reject | reject | reject |
+| gold/correction | temporal, authority, correction, snapshot refs | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
+| graph | projection, delta, apply, rebuild, schema refs | `REPLAY_GRAPH_MISMATCH` | reject | reject | reject |
+
+### Patch acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `080-PATCH-AC-001` | Every gold candidate has one temporal resolution row or deterministic temporal error. |
+| `080-PATCH-AC-002` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, or checksum-mismatched inputs before writing output. |
+| `080-PATCH-AC-003` | Corrections never mutate existing facts in place. |
+| `080-PATCH-AC-004` | Event-sequence validation covers temporal resolution, late arrival, correction, replay, side effects, and graph rebuild equivalence. |
 
 ## Definition of Done
 
@@ -118,25 +216,25 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 
 | Source | Section or artifact | Location |
 | --- | --- | --- |
-| PRD-Cadastre.md | `TemporalSemanticsPolicy` | lines 1953-1983 |
-| PRD-Cadastre.md | `KnowledgeTimeImportPolicy` | lines 1984-2010 |
-| PRD-Cadastre.md | `TemporalObservationTimeResolution` | lines 2011-2058 |
-| PRD-Cadastre.md | `LateArrivalPolicy` | lines 2059-2087 |
-| PRD-Cadastre.md | `BitemporalQueryMode` | lines 2088-2123 |
-| PRD-Cadastre.md | `GoldFact` | lines 2719-2800 |
-| PRD-Cadastre.md | `GoldFactCorrectionPolicy` | lines 2801-2831 |
-| PRD-Cadastre.md | `GoldFactChangeSet` | lines 2832-2871 |
-| PRD-Cadastre.md | `CorrectionSnapshotRefPolicy` | lines 2872-2897 |
-| PRD-Cadastre.md | `Gold Correction Assertion-State Transition Matrix` | lines 2898-2913 |
-| PRD-Cadastre.md | `ReplayEquivalencePolicy` | lines 3781-3806 |
-| PRD-Cadastre.md | `ReplayInputSufficiencyCheck` | lines 3807-3853 |
-| PRD-Cadastre.md | `DeterministicSideEffectRecord` | lines 3854-3879 |
-| PRD-Cadastre.md | `GraphRebuildEquivalencePolicy` | lines 3880-3906 |
-| PRD-Cadastre.md | `Gold Fact Derivation Interface` | lines 9612-9729 |
-| PRD-Cadastre.md | `Temporal Resolution, Late Arrival, and Correction Interfaces` | lines 9645-9692 |
-| PRD-Cadastre.md | `Replay, Side-Effect, Graph Resume, and Watermark Interfaces` | lines 9693-9729 |
-| PRD-Cadastre.md | `Temporal, Correction, Replay, Watermark, CDC, and Idempotency Acceptance` | lines 13538-13574 |
-| PRD-Cadastre.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `TemporalSemanticsPolicy` | lines 1953-1983 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `KnowledgeTimeImportPolicy` | lines 1984-2010 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `TemporalObservationTimeResolution` | lines 2011-2058 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `LateArrivalPolicy` | lines 2059-2087 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `BitemporalQueryMode` | lines 2088-2123 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFact` | lines 2719-2800 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFactCorrectionPolicy` | lines 2801-2831 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFactChangeSet` | lines 2832-2871 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `CorrectionSnapshotRefPolicy` | lines 2872-2897 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Gold Correction Assertion-State Transition Matrix` | lines 2898-2913 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ReplayEquivalencePolicy` | lines 3781-3806 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `ReplayInputSufficiencyCheck` | lines 3807-3853 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `DeterministicSideEffectRecord` | lines 3854-3879 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `GraphRebuildEquivalencePolicy` | lines 3880-3906 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Gold Fact Derivation Interface` | lines 9612-9729 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Temporal Resolution, Late Arrival, and Correction Interfaces` | lines 9645-9692 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Replay, Side-Effect, Graph Resume, and Watermark Interfaces` | lines 9693-9729 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Temporal, Correction, Replay, Watermark, CDC, and Idempotency Acceptance` | lines 13538-13574 |
+| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
 | Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
