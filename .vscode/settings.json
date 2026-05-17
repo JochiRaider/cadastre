@@ -1,0 +1,12 @@
+// .vscode/settings.json
+{
+  "[markdown]": {
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false
+  },
+  "[mdx]": {
+    "editor.formatOnSave": false,
+    "editor.formatOnPaste": false
+  },
+  "markdown.extension.tableFormatter.enabled": false
+}

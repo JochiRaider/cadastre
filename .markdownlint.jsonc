@@ -1,0 +1,10 @@
+// .markdownlint.jsonc
+{
+  "MD060": {
+    "style": "compact",
+    "aligned_delimiter": false
+  },
+  "MD055": {
+    "style": "leading_and_trailing"
+  }
+}
