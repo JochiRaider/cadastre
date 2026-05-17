@@ -29,6 +29,10 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `GoldFactChangeSet`
 - `PackageStageBinding`
 
+- `GraphNodeDeltaShape`
+- `GraphEdgeDeltaShape`
+- `EvidenceRef`
+- `CoreRecordValidationAlgorithm`
 ## Exports
 
 - `GraphProjectionProfile`
@@ -64,11 +68,13 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 
 Graph state is a derived read model. It must be rebuildable from authoritative lakehouse records, persisted graph deltas, and active projection/apply/schema profiles.
 
+`GraphNodeDelta` and `GraphEdgeDelta` are concrete 090 records that must conform to `040.GraphNodeDeltaShape` and `040.GraphEdgeDeltaShape` before apply. `090` owns projection/apply semantics and runtime graph delta ID input policies.
+
 A graph backend must not create authoritative facts, infer identity, decide source completeness, decide fact retraction, define bitemporal semantics, repair drift by itself, or expose backend internal IDs as Cadastre IDs.
 
 ## Graph Delta Identity
 
-Every graph node and edge must have a Cadastre-owned deterministic ID. Backend-generated node, edge, relationship, vertex, document, element, transaction, shard, or native cursor IDs are forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity.
+Every graph node and edge must have a Cadastre-owned deterministic ID. Backend-generated node, edge, relationship, vertex, document, element, transaction, shard, or native cursor IDs are forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity and must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response, evidence ref generation, replay, or pagination.
 
 ## Edge Semantics and Traversal
 
@@ -84,14 +90,16 @@ A `GraphBackendProfile` must be active before graph mutation, query, rebuild imp
 
 ```text
 ApplyGraphDelta(delta_set, apply_profile):
-1. Verify delta_set checksum and GraphDeltaIdempotencyKey.
-2. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
-3. Reject when backend schema is missing, stale, or fingerprint-mismatched.
-4. Sort deltas by apply_profile canonical order.
-5. Apply batches only at declared transaction boundaries.
-6. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
-7. On failure, record committed batch IDs or prove no committed writes.
-8. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, and derived view state update eligibility.
+1. Validate every node and edge delta against `040.GraphNodeDeltaShape`, `040.GraphEdgeDeltaShape`, and `040.ValidateCoreRecord`.
+2. Reject backend-generated IDs and raw payload leakage before backend execution.
+3. Verify delta_set checksum and GraphDeltaIdempotencyKey.
+4. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
+5. Reject when backend schema is missing, stale, or fingerprint-mismatched.
+6. Sort deltas by apply_profile canonical order.
+7. Apply batches only at declared transaction boundaries.
+8. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
+9. On failure, record committed batch IDs or prove no committed writes.
+10. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, and derived view state update eligibility.
 ```
 
 ## QueryGraph Contract
@@ -130,6 +138,17 @@ Every graph-serving response using graph read-model state must include or refere
 `GraphReadModelDriftCheck` is non-authoritative operational health only. A drift check that attempts repair, graph mutation, graph delta emission, authoritative record mutation, or watermark advancement must fail with `GRAPH_DRIFT_REPAIR_FORBIDDEN`.
 
 ## Graph Projection Contract Details
+
+### GraphNodeDeltaIdPolicy and GraphEdgeDeltaIdPolicy
+
+`GraphNodeDeltaIdPolicy` and `GraphEdgeDeltaIdPolicy` are owned by `090` because graph runtime identity inputs depend on projection and apply semantics. The policies must use `040.CanonicalJSON`, must not include backend-generated IDs, and must produce byte-identical IDs across replay for the same `GraphDeltaSet`.
+
+| Policy | Required inputs | Forbidden inputs | Missing behavior | Collision behavior |
+| --- | --- | --- | --- | --- |
+| `GraphNodeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_node_id`, `node_type`, `source_object_ref`, valid/known interval, assertion state | backend node ID, element ID, storage ID, cursor ID | reject before apply | TODO: owner-specific graph node delta collision code required before authoritative promotion |
+| `GraphEdgeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_edge_id`, `edge_type`, endpoint graph node IDs, direction rule, valid/known interval, assertion state | backend relationship ID, edge storage ID, cursor ID | reject before apply | TODO: owner-specific graph edge delta collision code required before authoritative promotion |
+
+`properties` defaults to `{}`. Every property path must pass `GraphPropertyEvidencePolicy`, redaction checks, and raw payload leakage checks. Non-`no_op` deltas must have evidence refs unless an active graph profile explicitly permits structural synthetic output. `observed_connection` direction must derive from `FlowRoleEvidence`, not OCSF endpoint field order or backend edge convention. `has_theoretical_reachability` remains inactive and fail/no-op in MVP.
 
 ### GraphEdgeSemanticsRegistry
 
@@ -207,6 +226,10 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-CLEANUP-AC-002` | Graph state remains a derived read model. |
 | `090-CLEANUP-AC-003` | Backend-generated IDs remain forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity. |
 | `090-CLEANUP-AC-004` | The default MVP graph profile still cannot emit theoretical reachability output. |
+| `090-SCHEMA-PATCH-AC-001` | Every graph node delta and edge delta conforms to the corresponding 040 primitive shape before apply. |
+| `090-SCHEMA-PATCH-AC-002` | Backend-generated IDs fail with `GRAPH_BACKEND_ID_FORBIDDEN`. |
+| `090-SCHEMA-PATCH-AC-003` | Graph properties with undeclared provenance or raw payload leakage fail before graph apply. |
+| `090-SCHEMA-PATCH-AC-004` | MVP graph profiles still cannot emit theoretical reachability output. |
 
 ## Definition of Done
 

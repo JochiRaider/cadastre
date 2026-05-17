@@ -26,6 +26,9 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `DirectSourceProhibition`
 - `AuthorityClass`
 
+- `RawRecord`
+- `ComputeRawRecordId`
+- `CoreRecordValidationAlgorithm`
 ## Exports
 
 - `RawSupplierProfile`
@@ -63,9 +66,9 @@ A production feed read must start from an active `LakehouseFeedProfile`. The pro
 
 ## Raw Import Contract
 
-`RawRecordImportRun` must import lakehouse raw feed rows or objects into deterministic `RawRecord` identities. The import run must record feed profile ID, read policy ID, feed manifest ID, source dataset, scope keys, payload hash algorithm, import package artifact, and input table or object refs.
+`RawRecordImportRun` must supply every field required by `040.RawRecordSchema` and must import lakehouse raw feed rows or objects into deterministic `RawRecord` records that pass `040.ValidateCoreRecord` before commit. The import run must record feed profile ID, read policy ID, feed manifest ID, source dataset, scope keys, payload hash algorithm, import package artifact, input table or object refs, and every input required by `040.ComputeRawRecordId`.
 
-Deterministic raw record identity must be computed by `ComputeRawRecordId` using the `Raw record ID input order` table in this document and `040.CanonicalJSON`.
+RawRecord ID computation is owned by `040.ComputeRawRecordId`. `020` supplies feed, target, manifest, source dataset, scope, supplier identity, payload hash, and import profile inputs. `020` must not define a competing raw ID input order or collision policy and must import `RAW_RECORD_ID_COLLISION` from `040.CoreRecordErrorCodeSet`.
 
 ## Completeness Receipt Contract
 
@@ -110,7 +113,7 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 5. Read only declared table snapshots, dataset versions, objects, partitions, or manifests.
 6. Persist read checkpoints as StageStateRecord when output-affecting.
 7. Persist RawRecordImportRun inputs.
-8. Persist RawRecord rows or deterministic import errors.
+8. Persist only `RawRecord` rows that pass `040.ValidateCoreRecord`, or persist deterministic import errors.
 9. Persist LakehouseReadCompletenessReceipt.
 10. Persist VersionManifest refs for every output-affecting profile, policy, target, schema, state, and manifest.
 ```
@@ -148,6 +151,16 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 | `partition_set` | `RawFeedManifest.partition_refs` | partition keys, schema, bounds, manifest checksum | `600s` | retry partition read 3 times | emit `read_partial_known_gap` | emit `read_partial_known_gap` | raw rows, receipt | partition refs retained |
 | `manifest_list` | `RawFeedManifest` | manifest bytes, schema refs, object/partition refs | `120s` | retry manifest read 3 times | `manifest_invalid` | `manifest_invalid` | manifest validation, receipt | manifest retained |
 
+### LakehouseReadPolicy payload limits
+
+| Field | Required behavior | Default | Bounds |
+| --- | --- | --- | --- |
+| `max_payload_byte_length` | Maximum raw payload bytes a read/import step may accept for one `RawRecord`. | `104857600` bytes | Minimum `1`; maximum `1073741824`; feed profile may set a lower bound. |
+| `raw_byte_canonicalization_mode` | Byte handling before `canonical_payload_hash` computation. | `none` | Closed enum: `none`; future modes require new schema version and fixtures. |
+| `payload_ref` | Must reference declared table, object, partition, manifest, or dataset inputs. | none | Must not contain credentials, concrete private routes, or raw payload bytes. |
+
+Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists bounded metadata, refs, byte lengths, checksums, visibility state, and lineage only.
+
 ### RawFeedManifest schema
 
 | Field | Type | Required | Default | Rule |
@@ -167,30 +180,16 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 | `hash_algorithm` | enum | Yes | `sha256` | Only `sha256` is active for MVP. |
 | `manifest_checksum` | string | Yes | none | SHA-256 over canonical manifest bytes excluding this field. |
 
-### Raw record ID input order
+### RawRecord identity import
 
-| Order | Input name | Required | Normalization | Missing-value behavior | Collision handling |
-| ---: | --- | ---: | --- | --- | --- |
-| 1 | `feed_profile_id` | Yes | canonical string | reject | reject duplicate candidate |
-| 2 | `read_target_kind` | Yes | enum token | reject | reject duplicate candidate |
-| 3 | `source_dataset` | Yes | canonical string | reject | reject duplicate candidate |
-| 4 | `scope_key_set` | Yes | canonical JSON sorted by key | reject | reject duplicate candidate |
-| 5 | `supplier_batch_or_object_identity` | Yes | canonical JSON | reject | reject duplicate candidate |
-| 6 | `source_native_record_identity` | No | canonical JSON | materialize `null` sentinel | use payload hash tiebreak |
-| 7 | `canonical_payload_hash` | Yes | lowercase SHA-256 hex | reject | collision emits `RAW_RECORD_ID_COLLISION` |
-| 8 | `import_profile_version` | Yes | canonical string | reject | reject duplicate candidate |
+`020` imports `040.RawRecordSchema`, `040.ComputeRawRecordId`, and `040.CoreRecordValidationAlgorithm`. The former `020` raw ID input-order table is consolidated into `040.CoreRecordIdPolicy`. Raw import fixtures in `120` must compute expected raw IDs through `040.ComputeRawRecordId`.
 
-### ComputeRawRecordId
-
-```text
-ComputeRawRecordId(inputs):
-1. Validate all required inputs from the raw record ID input order table.
-2. Materialize the optional source-native identity as JSON null when absent.
-3. Serialize the ordered input array using `040.CanonicalJSON`.
-4. Compute SHA-256 over the UTF-8 canonical bytes.
-5. Return `raw_` plus the lowercase hex digest.
-6. If two different canonical input arrays produce the same ID, emit `RAW_RECORD_ID_COLLISION` and commit no raw record.
-```
+| Import concern | Required behavior |
+| --- | --- |
+| ID input source | `RawRecordImportRun` supplies only the inputs named by `040.ComputeRawRecordId`. |
+| Validation order | Schema validation and ID/checksum validation happen before raw persistence, absence evaluation, cleanup, or watermark decisions. |
+| Collision behavior | `RAW_RECORD_ID_COLLISION` is imported from `040`; `020` must not define a local collision code. |
+| Private binding | `payload_ref` and supplier metadata must fail with `PRIVATE_BINDING_LEAK` when they expose private routes, credentials, or tenant host lists. |
 
 ### LakehouseFeedAvailabilityFreshnessPolicy
 
@@ -233,6 +232,10 @@ ComputeRawRecordId(inputs):
 | `020-CLEANUP-AC-002` | `LakehouseReadCompletenessReceipt` remains necessary but not sufficient for source-level absence, retraction, cleanup, graph expiry, or watermark advancement. |
 | `020-CLEANUP-AC-003` | Table maintenance remains governed by `ReplayRetentionPolicy`, `TableMaintenancePolicy`, and `ReplayRetentionDecision`. |
 | `020-CLEANUP-AC-004` | No direct enterprise source-call behavior is introduced. |
+| `020-SCHEMA-PATCH-AC-001` | `020` contains no normative duplicate of `RawRecord` field schema or ID input order. |
+| `020-SCHEMA-PATCH-AC-002` | Raw import produces only records that pass `040.ValidateCoreRecord`. |
+| `020-SCHEMA-PATCH-AC-003` | `LakehouseReadPolicy` declares max payload byte length and raw byte canonicalization mode. |
+| `020-SCHEMA-PATCH-AC-004` | Raw payload refs cannot expose private routes, credentials, or raw payload bytes in public artifacts. |
 
 ## Definition of Done
 

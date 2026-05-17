@@ -28,6 +28,8 @@ Define how parsed raw records become silver observations and how external schema
 - `PackageStageBinding`
 - `ValidationMatrix`
 
+- `CoreRecordValidationAlgorithm`
+- `CadastreSilverObservationSchema`
 ## Exports
 
 - `ParseRawBatch`
@@ -65,9 +67,11 @@ Parser output must classify each raw record as exactly one of:
 
 ## Silver Normalization Contract
 
-`NormalizeObservation(parse_result, mapping_bundle, external_schema_profile) -> CadastreSilverObservation | MappingDiagnostic` must emit a Cadastre silver envelope. `normalized_fields` must align to the active OCSF profile unless the observation type is declared `cadastre_only` by an active mapping row.
+`NormalizeObservation(parse_result, mapping_bundle, external_schema_profile) -> CadastreSilverObservation | MappingDiagnostic` must emit a Cadastre silver envelope that passes `040.CadastreSilverObservationSchema` and `040.ValidateCoreRecord` before persistence. `normalized_fields` must align to the active OCSF profile unless the observation type is declared `cadastre_only` by an active mapping row.
 
-Cadastre-owned fields for omission, lineage, source identity, confidence, temporal semantics, identity inputs, and flow-role evidence must remain outside OCSF `normalized_fields`.
+`normalized_payload_checksum` must be computed from canonical OCSF class metadata plus `normalized_fields` canonical bytes. `external_schema_profile_id` may be null only when `observation_type` is declared `cadastre_only`. `source_extension_fields` defaults to `{}` and every path must have an active `SourceExtensionFieldRule`. `field_quality` must contain rows for any field with omission, redaction, parser quality, or source-quality state.
+
+Cadastre-owned fields for omission, lineage, source identity, confidence, temporal semantics, identity inputs, and flow-role evidence must remain outside OCSF `normalized_fields`. OCSF fields must not override `040` omission states, `070` identity evidence, `080` temporal resolution, or `090` graph direction.
 
 ## External Schema Profile Contract
 
@@ -90,6 +94,8 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 
 Every `source_extension_fields` path must have an active `SourceExtensionFieldRule` before a production mapping bundle may emit it. The rule must define namespace, field path, type, bounds, redaction, collision policy, secret scan behavior, and OCSF-reserved-name collision behavior.
 
+Undeclared `source_extension_fields` must fail before production output with the owner-specific mapping error and the `040` schema extension-map validation result.
+
 ## Mapping Compiler Pipeline
 
 ```text
@@ -109,6 +115,19 @@ ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
 CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must define input record classes, field mapping rows, lossy fields, unsupported fields, redaction, default values, and `ProjectionLossManifest` output. CIM success must not imply no source information was lost.
 
 ## Mapping Activation Contract Details
+
+### CadastreSilverObservation envelope field ownership matrix
+
+| Envelope field | Field owner | Runtime owner |
+| --- | --- | --- |
+| `normalized_fields` | `040` shape, `050` OCSF validation | `050` |
+| `source_extension_fields` | `040` shape, `050` activation | `050` |
+| `observed_at` and `observed_time_quality` | `040` shape | `080` resolves fact time |
+| `identity_inputs` | `040` shape | `070` turns inputs into identity evidence |
+| `flow_role_evidence` | `040` shape | `090` consumes for graph direction when allowed |
+| `redaction_summary` | `040` shape | `110` exposes or redacts |
+
+OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`, and `confidence` remain non-authoritative unless an active policy grants a bounded use.
 
 ### ExternalSchemaArtifactRef field table
 
@@ -189,6 +208,10 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-CLEANUP-AC-001` | No banned reference class remains. |
 | `050-CLEANUP-AC-002` | `normalized_fields` remains governed by active OCSF profile unless an observation type is declared `cadastre_only`. |
 | `050-CLEANUP-AC-003` | OCSF raw, unmapped, observable, enrichment, status, severity, and confidence fields remain non-authoritative unless explicitly governed by policy. |
+| `050-SCHEMA-PATCH-AC-001` | Every normalized output validates against `040.CadastreSilverObservationSchema`. |
+| `050-SCHEMA-PATCH-AC-002` | Undeclared `source_extension_fields` fail before production output. |
+| `050-SCHEMA-PATCH-AC-003` | `cadastre_only` observations are the only silver observations allowed to have null `external_schema_profile_id`. |
+| `050-SCHEMA-PATCH-AC-004` | OCSF fields cannot create identity, gold, graph, authority, or omission semantics outside the owning specs. |
 | `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
 
 ## Definition of Done

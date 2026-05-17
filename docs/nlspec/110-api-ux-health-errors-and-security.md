@@ -30,6 +30,9 @@ Define observable API behavior, user-facing states, health, shared error records
 - `GoldFact`
 - `PackageActivationFailureEvent`
 
+- `CoreRecordErrorCodeSet`
+- `EvidenceRef`
+- `CommonRecordHeader`
 ## Exports
 
 - `GraphQueryRequest`
@@ -92,7 +95,7 @@ These labels must not be rendered as authorized negative facts or compliance pas
 
 ## Error Model
 
-`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, source artifact refs, affected record IDs, correlation ID, and redaction state. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry.
+`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, correlation ID, redaction state, and source artifact refs. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
 
 Generic error codes must not be used when a more specific domain code exists.
 
@@ -112,6 +115,10 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 
 ## Security and Redaction
 
+- `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` is non-retryable until the payload is removed or reclassified.
+- `GRAPH_BACKEND_ID_FORBIDDEN` is non-retryable for the submitted record and must not leak backend-native ID values to unauthorized callers.
+- Schema validation errors must not be collapsed into `unknown`, `not_checked`, or compliance pass/fail.
+- Audit events for rejected schema records must include input checksum and redaction summary.
 - Raw payload exposure requires explicit raw-evidence permission.
 - Graph properties derived from raw payloads must pass `GraphPropertyEvidencePolicy` and redaction policy.
 - API responses must not leak existence of an inaccessible asset through partial detail responses.
@@ -122,12 +129,34 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 
 ### ErrorCodeOwnershipMatrix
 
+The generated error registry must include every code exported by `040.CoreRecordErrorCodeSet`. The rows below define required observable handling for core schema errors.
+
+| Error code | Owner | Severity | Retryability | Redaction |
+| --- | --- | --- | --- | --- |
+| `CORE_UNKNOWN_FIELD` | `040` | error | no, until schema or input changes | field path allowed, value redacted |
+| `CORE_REQUIRED_FIELD_MISSING` | `040` | error | no, until input changes | field path allowed |
+| `CORE_NULL_FORBIDDEN` | `040` | error | no, until input changes | field path allowed |
+| `CORE_FIELD_TYPE_INVALID` | `040` | error | no, until input changes | value redacted |
+| `CORE_FIELD_BOUNDS_INVALID` | `040` | error | no, until input changes | value redacted |
+| `CORE_RECORD_ID_MISMATCH` | `040` | error | no, until input changes | computed ID may be logged only in secure audit |
+| `CORE_RECORD_CHECKSUM_MISMATCH` | `040` | error | no, until input changes | checksum visible |
+| `CORE_SCHEMA_VERSION_UNSUPPORTED` | `040` | error | no, until schema activation changes | schema version visible |
+| `RAW_RECORD_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `SILVER_OBSERVATION_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `CANONICAL_ENTITY_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `SOURCE_ASSET_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `IDENTIFIER_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `GOLD_FACT_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `EVIDENCE_REF_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
+| `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | security error | no | payload redacted |
+| `GRAPH_BACKEND_ID_FORBIDDEN` | `040`/`090` | security error | no | backend ID redacted unless admin audit permits |
+
 | Owner spec | Error prefix or namespace | Shared shape fields | Owner-specific codes | Retryability owner | Redaction owner | Validation fixture |
 | --- | --- | --- | --- | --- | --- | --- |
 | `010` | boundary/authority | `ErrorRecord` | `DIRECT_SOURCE_CALL_FORBIDDEN`, `PROJECTION_AUTHORITY_VIOLATION`, `PRIVATE_BINDING_LEAK`, `UNDECLARED_AUTHORITY_CLASS` | owner row | `110` | boundary negative rows |
 | `020` | feed/table | `ErrorRecord` | feed read, manifest, raw identity, availability, maintenance errors | owner row | `110` | feed fixture rows |
 | `030` | dag/lifecycle | `ErrorRecord` | `FORBIDDEN_STAGE_OUTPUT`, lifecycle, run-lock, manifest errors | owner row | `110` | DAG negative rows |
-| `040` | canonical data | `ErrorRecord` | unknown field, checksum, ID collision errors | owner row | `110` | canonical rows |
+| `040` | canonical data | `ErrorRecord` | `CORE_UNKNOWN_FIELD`, `CORE_REQUIRED_FIELD_MISSING`, `CORE_NULL_FORBIDDEN`, `CORE_FIELD_TYPE_INVALID`, `CORE_FIELD_BOUNDS_INVALID`, `CORE_RECORD_ID_MISMATCH`, `CORE_RECORD_CHECKSUM_MISMATCH`, `CORE_SCHEMA_VERSION_UNSUPPORTED`, record collision errors, `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`, `GRAPH_BACKEND_ID_FORBIDDEN` | owner row | `110` | core schema rows |
 | `050` | mapping/schema | `ErrorRecord` | OCSF, enum, extension, CIM errors | owner row | `110` | mapping rows |
 | `060` | authority/completeness | `ErrorRecord` | authority, coverage, progress, watermark errors | owner row | `110` | absence rows |
 | `070` | identity | `ErrorRecord` | resolver, review, selector errors | owner row | `110` | identity rows |
@@ -206,6 +235,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-CLEANUP-AC-002` | API and UI state labels remain distinct and cannot imply authorized negative facts unless the owning domain spec emitted the authoritative output. |
 | `110-CLEANUP-AC-003` | Raw payload exposure remains false by default and requires raw-evidence permission. |
 | `110-CLEANUP-AC-004` | Generic error codes remain forbidden when a more specific owner error code exists. |
+| `110-SCHEMA-PATCH-AC-001` | Every 040 error code appears in the generated error registry with owner, severity, retryability, and redaction behavior. |
+| `110-SCHEMA-PATCH-AC-002` | Raw payload leakage through `EvidenceRef` or graph properties fails closed and produces a redacted audit event. |
+| `110-SCHEMA-PATCH-AC-003` | Backend-native IDs are never returned as Cadastre identity, evidence identity, pagination identity, or drillback identity. |
 
 ## Definition of Done
 

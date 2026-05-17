@@ -27,6 +27,9 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `DatasetVersionRef`
 - `LakehouseCommitRef`
 
+- `CoreRecordSchema`
+- `CoreRecordValidationAlgorithm`
+- `CoreRecordChecksumPolicy`
 ## Exports
 
 - `ProcessingStageDAG`
@@ -63,6 +66,8 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 
 Any stage emitting a record class outside its permitted set must fail with `FORBIDDEN_STAGE_OUTPUT` before the output is committed.
 
+Every production stage output whose record class is imported from `040.CoreRecordSchema` must pass `040.ValidateCoreRecord` before commit and before external visibility. Schema validation failure must occur before source authority, identity, gold derivation, graph projection, API, export, or analysis behavior can consume the record. A package, parser, resolver, or projector must not bypass `040` by emitting package-local DTOs as production records.
+
 ## Lifecycle Contract
 
 `LifecycleStateMachineDefinition` must define closed states, closed events, total transition coverage, deterministic guard precedence, artifact-derived state, illegal-transition behavior, idempotency rules, observability requirements, parent/child boundaries, and conformance tests.
@@ -88,6 +93,8 @@ Any stage emitting a record class outside its permitted set must fail with `FORB
 `VersionManifest` must include every output-affecting profile, policy, package artifact, package-set manifest, source/feed config hash, stage state hash, lakehouse ref, completeness receipt, coverage assertion, schema artifact, temporal policy, resolver profile, graph profile, graph apply result, and acceptance report that can affect output or replay.
 
 A production output without a complete immutable `VersionManifest` must fail with `VERSION_MANIFEST_INCOMPLETE`.
+
+When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
 
 ## Declared Subset Contract
 
@@ -151,6 +158,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Output class | Required refs |
 | --- | --- |
 | Raw import output | feed profile, read policy, raw feed manifest, raw import package, table/object refs, state records. |
+| Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | Silver output | raw refs, parser package, mapping bundle, external schema profile, validation output. |
 | Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
 | Gold output | temporal policy, source authority, coverage, correction policy, source refs, snapshot refs. |
@@ -185,6 +193,9 @@ RunLockKeyDerivation(scope):
 | `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |
 | `030-CLEANUP-AC-003` | Any stage emitting a forbidden record class still fails before commit. |
 | `030-CLEANUP-AC-004` | `VersionManifest` remains the output-affecting reproducibility record. |
+| `030-SCHEMA-PATCH-AC-001` | Every production output class owned by `040` is schema-validated before commit. |
+| `030-SCHEMA-PATCH-AC-002` | `VersionManifest` records the active core schema registry checksum for every output-affecting run. |
+| `030-SCHEMA-PATCH-AC-003` | A forbidden or malformed core record fails before downstream domain algorithms execute. |
 
 ## Definition of Done
 

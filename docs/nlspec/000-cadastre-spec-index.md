@@ -138,7 +138,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | 120 | open |
 | Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | 120 | open |
 | DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | 120 | open |
-| Canonical serialization and IDs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | 120 | open |
+| Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | 120 | open until all core schema TODO rows and 120 fixtures close |
 | External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | 120 | open |
 | Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | 120 | open |
 | Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | 120 | open |
@@ -156,15 +156,35 @@ A spec may depend on another spec only through a named record, named interface, 
 
 A spec must not restate an imported contract except for a one-sentence reference and the exact imported name.
 
+### Core schema dependency map
+
+| Importing spec | Required 040 imports |
+| --- | --- |
+| `020` | `RawRecordSchema`, `ComputeRawRecordId`, `ValidateCoreRecord`. |
+| `030` | `CoreRecordSchema`, `CoreRecordValidationAlgorithm`, `CoreRecordChecksumPolicy`. |
+| `050` | `CadastreSilverObservationSchema`, `ValidateCoreRecord`. |
+| `060` | `GoldFactSchema`, `FactAbsenceOutcome`, `EvidenceRef`. |
+| `070` | `CanonicalEntitySchema`, `SourceAssetSchema`, `IdentifierSchema`. |
+| `080` | `GoldFactSchema`, `ComputeGoldFactKeyId`, `ComputeGoldFactId`. |
+| `090` | `GraphNodeDeltaShape`, `GraphEdgeDeltaShape`, `EvidenceRef`. |
+| `110` | `CoreRecordErrorCodeSet`, `EvidenceRef`, `CommonRecordHeader`. |
+| `120` | All exported record schemas and validation algorithms. |
+| `docs/nlspec/domain.md` | Vocabulary and owner routing only. |
+
+
 ## Document Registry Consistency Rule
 
 Every registry row must reference a normalized repository-relative path or explicit glob. A registry path must not contain an absolute prefix, backslash, empty segment, `.` segment, or `..` segment.
 
 Every target file in the NLSpec set must have exactly one registry row. Duplicate rows for the same target path are invalid. A manifest path outside the NLSpec set may be represented by an explicit reference, rationale, archive, or navigation row.
 
+No non-040 file may define a field schema for a core record exported by `040`. A downstream spec may import an exact schema name and define behavior for its own stage, but it must not restate field paths, defaults, nullability, ID inputs, checksum inputs, or extension policy for the 040-owned record.
+
 ## Registry and Acceptance Control
 
 No document may be marked `authoritative` when it has unresolved owner `TODO:` rows, duplicate runtime ownership, missing validation evidence, or a missing registry entry.
+
+Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMatrix` rows for every `040` exported record in `SpecSetVersion.validation_matrix_refs`. Unresolved owner `TODO:` rows in core schemas, owner error codes, fixture checksums, expected output checksums, or downstream cross-references remain implementation exclusions.
 
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
 
@@ -185,6 +205,9 @@ Archived documents are historical reference only and never implementation author
 | `000-CLEANUP-AC-003` | No export name contains a banned reference class. |
 | `000-CLEANUP-AC-004` | The registry has one row for each target file and no row for decomposition-control artifacts. |
 | `000-CLEANUP-AC-005` | Promotion to `authoritative` depends only on registry state, owner review, and passing validation evidence. |
+| `000-SCHEMA-PATCH-AC-001` | The owner registry names `040` as the sole owner of exported core record schemas. |
+| `000-SCHEMA-PATCH-AC-002` | No downstream spec is registered as owner of a 040 core record field schema. |
+| `000-SCHEMA-PATCH-AC-003` | Promotion to `authoritative` depends on passing 040 schema validation rows in `120`. |
 
 ## Open Questions
 

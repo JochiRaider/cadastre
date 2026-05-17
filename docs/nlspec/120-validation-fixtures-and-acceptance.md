@@ -23,6 +23,8 @@ Define fixtures, validation matrices, golden corpus, shadow execution, replay va
 
 - `All active domain specs`
 
+- `All exported 040 core record schemas`
+- `CoreRecordValidationAlgorithm`
 ## Exports
 
 - `ValidationMatrix`
@@ -86,6 +88,39 @@ Every active domain spec must include at least one negative validation case for 
 
 ## Validation Contract Details
 
+### CoreRecordSchemaValidationMatrix
+
+| Row class | Required coverage |
+| --- | --- |
+| `040-schema-success` | Minimal valid record for every 040 exported record emits expected canonical bytes and checksum. |
+| `040-required-field-rejection` | Missing required field fails with owner-specific missing-field code. |
+| `040-null-rejection` | Explicit null in a non-nullable field fails with `CORE_NULL_FORBIDDEN`. |
+| `040-unknown-field-rejection` | Unknown field outside extension maps fails with `CORE_UNKNOWN_FIELD`. |
+| `040-default-materialization` | Required default `[]`, `{}`, enum, or null is materialized exactly as specified. |
+| `040-array-sort` | Arrays with declared sort keys produce byte-identical output regardless of input order. |
+| `040-id-collision` | Simulated collision fails with owner collision error and commits no record. |
+| `040-checksum-replay` | Same record input produces same checksum across replay. |
+| `040-raw-payload-boundary` | `EvidenceRef` and graph deltas cannot inline raw payload bytes. |
+| `040-backend-id-rejection` | Backend-generated graph IDs fail. |
+| `040-gold-fact-key-id-separation` | Comparable semantic fact key remains stable while immutable fact record ID changes across knowledge versions. |
+| `040-two-independent-implementers` | Two implementations produce byte-identical IDs and checksums for every core record fixture. |
+
+### CoreRecordSchema fixture families
+
+| Fixture ID family | Records |
+| --- | --- |
+| `core-minimal-valid-*` | One minimal valid fixture per exported record. |
+| `core-required-missing-*` | One missing-field fixture per record. |
+| `core-null-forbidden-*` | One null-forbidden fixture per nullable or non-null boundary class. |
+| `core-unknown-field-*` | Unknown field outside extension map. |
+| `core-extension-map-*` | Declared extension allowed; undeclared extension rejected. |
+| `core-array-sort-*` | Lexical and ID sort validation. |
+| `core-checksum-*` | Checksum inclusion/exclusion validation. |
+| `core-id-collision-*` | Collision simulation fixture. |
+| `core-evidence-raw-payload-*` | Raw payload leak rejection. |
+| `core-graph-backend-id-*` | Backend ID rejection. |
+| `core-goldfact-correction-*` | Key ID versus immutable ID replay sequence. |
+
 ### ValidationMatrixRow schema
 
 | Field | Required | Rule |
@@ -131,6 +166,7 @@ Every active domain spec must include at least one negative validation case for 
 | output equivalence | Byte-identical canonical records or deterministic equivalent observable outputs. |
 | failure classification | spec ambiguity, implementation defect, fixture defect, or deferred issue. |
 | acceptance threshold | All non-deferred authoritative rows pass. |
+| core record fixture coverage | Raw, silver, canonical entity, source asset, identifier, gold, evidence, and graph delta fixtures exported by `040`. |
 
 ### RecreatabilityCheck
 
@@ -173,6 +209,13 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-CLEANUP-AC-001` | No banned reference class remains. |
 | `120-CLEANUP-AC-002` | `SPECSET-AC-*` rows cover ownership, imports/exports, define-once, lakehouse boundary, negative tests, deferred reachability, and recreatability. |
 | `120-CLEANUP-AC-003` | `RunValidationMatrix` output remains deterministic and includes row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref. |
+| `120-SCHEMA-PATCH-AC-001` | Every 040 exported core record has at least one success fixture and one required-field rejection fixture. |
+| `120-SCHEMA-PATCH-AC-002` | Every nullable field has a null acceptance or null rejection fixture matching its 040 schema row. |
+| `120-SCHEMA-PATCH-AC-003` | Every declared default has a materialization fixture. |
+| `120-SCHEMA-PATCH-AC-004` | Every record ID algorithm has a replay fixture and collision fixture. |
+| `120-SCHEMA-PATCH-AC-005` | Every record checksum policy has a replay-equivalence fixture. |
+| `120-SCHEMA-PATCH-AC-006` | The two-independent-implementer check covers raw, silver, canonical entity, source asset, identifier, gold, evidence, and graph delta fixtures. |
+| `120-SCHEMA-PATCH-AC-007` | The aggregate `AcceptanceReport` cannot pass while any 040 schema row, fixture checksum, expected output checksum, or owner error code remains `TODO:`. |
 | `120-CLEANUP-AC-004` | Required negative tests by owner remain present and do not depend on external product drafts, decomposition-control artifacts, private binding indexes, or promotion-readiness gates. |
 
 ## Definition of Done

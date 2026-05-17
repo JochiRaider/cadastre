@@ -64,6 +64,8 @@ Graph state, Splunk CIM output, OCSF export output, metadata graphs, lineage gra
 
 The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor names, private source binding artifacts, routes, credentials, and environment-specific bindings must live in private implementation artifacts and must not appear in public canonical records.
 
+Core schemas may name vendor-neutral source categories and redacted refs only. A public `RawRecord`, `EvidenceRef`, graph delta, API response, validation report, or export artifact that exposes a private source binding must fail with `PRIVATE_BINDING_LEAK` before publication or persistence.
+
 | Artifact | Public canonical model status |
 | --- | --- |
 | `RawSupplierProfile` | Public, vendor-neutral. |
@@ -110,9 +112,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 
 | Output class | Authority class | Runtime owner | Default if owner row missing |
 | --- | --- | --- | --- |
-| `RawRecord`, `CadastreSilverObservation`, `IdentityDecision`, `GoldFact` | `system_of_record` | `040`, `070`, `080` | Fail with `UNDECLARED_AUTHORITY_CLASS`. |
-| `GraphDeltaSet`, `GraphApplyResult`, graph read model, CIM output, OCSF export | `derived_projection` | `090`, `050`, `110` | Fail or no-op as owner specifies. |
-| `UpstreamCompletenessEvidence`, lineage, diagnostics, supplier metadata | `supporting_evidence` | `020`, `060`, `130` | Diagnostic only. |
+| `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `IdentityDecision`, `GoldFact` | `system_of_record` | `040`, `070`, `080` as applicable | Fail with `UNDECLARED_AUTHORITY_CLASS`. |
+| `EvidenceRef`, supplier metadata, lineage, diagnostics, upstream completeness evidence | `supporting_evidence` | `020`, `040`, `060`, `110`, `130` as applicable | Diagnostic or pointer only unless owner profile consumes it. |
+| `GraphNodeDeltaShape`, `GraphEdgeDeltaShape`, `GraphDeltaSet`, `GraphApplyResult`, graph read model, CIM output, OCSF export | `derived_projection` | `040`, `050`, `090`, `110` | Fail or no-op as owner specifies. |
 | `AnalysisFinding`, `AnalysisMetric`, enrichment, registry metadata | `non_authoritative_analysis` | `130` | No mutation authority. |
 | Reachability candidate contracts | `inactive_future_domain` | `200` | No MVP effect. |
 
@@ -137,6 +139,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-CLEANUP-AC-002` | Direct source calls still fail before output with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | `010-CLEANUP-AC-003` | Private binding leakage validation still rejects public artifacts that expose private source binding artifacts. |
 | `010-CLEANUP-AC-004` | Every output class still maps to exactly one authority class. |
+| `010-SCHEMA-PATCH-AC-001` | Every 040 exported record maps to exactly one authority class. |
+| `010-SCHEMA-PATCH-AC-002` | `EvidenceRef` remains supporting evidence and cannot become raw payload storage or fact authority by itself. |
+| `010-SCHEMA-PATCH-AC-003` | Graph delta primitive shapes remain derived projection records. |
 
 ## Definition of Done
 

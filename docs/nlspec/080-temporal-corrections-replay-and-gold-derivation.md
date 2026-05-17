@@ -31,6 +31,10 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `VersionManifest`
 - `IdentityDecision`
 
+- `GoldFactSchema`
+- `ComputeGoldFactKeyId`
+- `ComputeGoldFactId`
+- `CoreRecordValidationAlgorithm`
 ## Exports
 
 - `TemporalSemanticsPolicy`
@@ -73,13 +77,13 @@ Implicit current-time fallback is forbidden.
 
 ## Gold Derivation
 
-`DeriveFacts` must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, and active derivation profiles. It must emit `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error. It must not mutate existing `GoldFact` rows in place.
+`DeriveFacts` must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, and active derivation profiles. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error, and every emitted `GoldFact` must pass `040.GoldFactSchema`. It must not mutate existing `GoldFact` rows in place.
 
 ## Correction Contract
 
-Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must close prior `known_to` intervals and emit new facts, interval splits, explicit retractions, conflicts, no-ops, or deterministic errors.
+Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must emit `GoldFactChangeSet` operations and must not mutate original `GoldFact` bytes. Effective `known_to` closure must be materialized from `GoldFactChangeSet` at read or replay time; base `GoldFact.known_to` remains the value written in the immutable record.
 
-`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The contract table below defines default correction classes and records remaining source-specific blocker rows.
+`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The contract table below defines default correction classes and records remaining source-specific blocker rows. Missing temporal resolution fails before gold ID computation. Missing authority row fails before fact creation. Schema validation fails before graph projection.
 
 ## Assertion-State Transition Matrix
 
@@ -129,7 +133,7 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 
 | Fact type/predicate | Comparable keys | Overlap behavior | Interval split | Confidence-only change | Delete evidence | Conflict behavior | Stale behavior | No-op behavior | Sort keys | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | emit explicit no-op | TODO | blocking |
+| TODO | `gold_fact_key_id` plus fact-type-specific semantic fields behind it | TODO | TODO | TODO | TODO | TODO | TODO | emit explicit no-op | TODO | blocking |
 
 ### CorrectionSnapshotRefPolicy
 
@@ -196,6 +200,10 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `080-CLEANUP-AC-002` | Source event time, observation time, supplier collection time, supplier delivery time, lakehouse commit time, table snapshot time, CDC time, graph apply time, replay time, and platform current time remain distinct. |
 | `080-CLEANUP-AC-003` | `ResolveFactTime` still rejects implicit current-time fallback. |
 | `080-CLEANUP-AC-004` | Corrections remain append-only knowledge transitions and must not mutate `GoldFact` rows in place. |
+| `080-SCHEMA-PATCH-AC-001` | Every emitted `GoldFact` passes `040.GoldFactSchema`. |
+| `080-SCHEMA-PATCH-AC-002` | `gold_fact_key_id` and `gold_fact_id` are both present and computed by the declared algorithms. |
+| `080-SCHEMA-PATCH-AC-003` | Corrections never mutate original `GoldFact` bytes. |
+| `080-SCHEMA-PATCH-AC-004` | Replay rejects gold output when any 040 schema, temporal, authority, evidence, or correction checksum mismatches. |
 
 ## Definition of Done
 

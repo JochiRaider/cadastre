@@ -29,6 +29,10 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `SourceAuthorityProfile`
 - `VersionManifest`
 
+- `CanonicalEntitySchema`
+- `SourceAssetSchema`
+- `IdentifierSchema`
+- `CoreRecordValidationAlgorithm`
 ## Exports
 
 - `ResolverProfile`
@@ -52,6 +56,8 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 `ResolverProfile` is the sole production authority for identity resolution. A resolver run must fail when no active profile covers resolver run mode, entity type, source scopes, evidence classes, and lifecycle boundary types.
 
 Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before candidate generation, blocker evaluation, review routing, merge, split, reject, conflict, or no-decision output.
+
+A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier` records only by emitting records that pass the corresponding `040` schema and `040.ValidateCoreRecord`. `creation_identity_decision_id`, `resolver_profile_id`, and `identity_policy_version` must be present when a `CanonicalEntity` is created. `SourceAsset.source_scope`, `SourceAsset.source_native_identity`, and `SourceAsset.source_asset_type` must be sufficient for `040.SourceAssetSchema`; under-scoped source identity fails before candidate generation. `Identifier` outputs must include typed scope, quality, validity, known time, and evidence refs. `ResolverExplanation` must reference core record IDs and checksums rather than duplicate core fields.
 
 ## Evidence Roles
 
@@ -218,6 +224,9 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | `070-CLEANUP-AC-002` | Identity resolution still fails when no active `ResolverProfile` covers the run mode, entity type, source scopes, evidence classes, and lifecycle boundary types. |
 | `070-CLEANUP-AC-003` | Hard blockers and lifecycle boundaries still run before confidence computation and decision matrix selection. |
 | `070-CLEANUP-AC-004` | Target selectors still cannot create canonical identity by themselves. |
+| `070-SCHEMA-PATCH-AC-001` | Every emitted `CanonicalEntity`, `SourceAsset`, and `Identifier` passes `040.ValidateCoreRecord`. |
+| `070-SCHEMA-PATCH-AC-002` | `070` does not restate core record fields except by exact schema name reference. |
+| `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity or identifier merge by bypassing the `040` and `070` validation sequence. |
 
 ## Definition of Done
 
