@@ -1,0 +1,46 @@
+# Artifact Manifest
+
+| Path | Size bytes | SHA-256 |
+| --- | ---: | --- |
+| `docs/README.md` | 2900 | `a6cf797be36344f93fe4a47086992897408a3544aeaa05fa3c0f85db907e8b67` |
+| `docs/adr/ADR-0001-lakehouse-fed-boundary.md` | 747 | `597877ce2d5a0f91ba9bd53efa7a40a7e155904c88957472d327804e506cdc48` |
+| `docs/adr/ADR-0002-graph-as-derived-projection.md` | 709 | `e1349649e4808190f5b24692b32f1333a395e79b8efe5e43ca23c1cfe29b14d9` |
+| `docs/adr/ADR-0003-ocsf-as-silver-profile.md` | 787 | `2226ede7243b342f9373329776de844c44506fa45537a172beb7c8757ba9e9c8` |
+| `docs/adr/ADR-0004-package-set-activation.md` | 757 | `674c39f757fc17aae46dd1e0b4f43b2a61deb70ea2aea526363992a79a82365e` |
+| `docs/archive/PRD-Cadastre.revised-draft.md` | 1225052 | `b17ac5d44618c43a57efe8ebd9b6c6e0bd8debc949b513368383c515c07f9748` |
+| `docs/deferred/200-future-reachability-analysis-domain.md` | 4638 | `bfb860abb892a10168b5ea1501a46d8197529c91395d8e573c8ac72f3163431d` |
+| `docs/migration/PRD-to-NLSpec-ledger.md` | 7001 | `44f6cea9f497142072058921d4c02f1213aed8ca5408ddfa6559063a153f8d0f` |
+| `docs/migration/gap-and-ambiguity-ledger.md` | 5495 | `cbaeadcddd8a904a93f43eba2d372f55fb42cdbaeb8c4094baf819e1c61226ec` |
+| `docs/migration/open-decision-ledger.md` | 9001 | `6f2116bae67527f6070dba4efaecdb128b075796a1fc8f6cf91a7c03fc079cb0` |
+| `docs/nlspec/000-cadastre-spec-index.md` | 9608 | `949818ce43c8dedb72005dbb15ba9e0ce70de7b42ebf0ce7848ec734ed30135c` |
+| `docs/nlspec/010-system-boundary-and-authority.md` | 6684 | `a53c6616a202314aa38c8c44b522b86a423b81bd1751b2c9f430dcaf365033ea` |
+| `docs/nlspec/020-lakehouse-feeds-and-table-state.md` | 8263 | `de095740b5549c02488c786162db7a3ce75a554495dd221732770c8106683612` |
+| `docs/nlspec/030-processing-dag-lifecycle-and-versioning.md` | 7743 | `f4bbed976c573f38f50a443b2fe9940c8181294c17af4a69c44be0c669880adf` |
+| `docs/nlspec/040-canonical-data-observation-and-fact-model.md` | 7602 | `401c1ec814d7eeea668782388f4666e15fceaa017f08da270b3ceb6f79f21ea9` |
+| `docs/nlspec/050-normalization-external-schema-and-mapping.md` | 7831 | `e71dcf4a74c4a5abe48291f0222afb95b9a29b2b3f90d12f1fce1fb11e8e3b96` |
+| `docs/nlspec/060-source-authority-completeness-coverage-and-absence.md` | 8083 | `ca99386fe441ba80bab26e84e452f035d0365c4b5801926a25c63e6b106e09cd` |
+| `docs/nlspec/070-identity-resolution-and-target-selectors.md` | 8227 | `53c664202215839101a0386c391ce9237d7cf03d8eac92cb9dcfb2eb995f9bc8` |
+| `docs/nlspec/080-temporal-corrections-replay-and-gold-derivation.md` | 7391 | `5918a01b6159dbfde8a53a5b5c98f494c7fae4290f0c38f1b412802449c019d5` |
+| `docs/nlspec/090-graph-projection-serving-and-backends.md` | 8541 | `1dcc711308c65bce4223deee9726fd2ff96fda930d3e08b1090dcd088aa858be` |
+| `docs/nlspec/100-packages-supply-chain-and-activation.md` | 8410 | `efd0c7c1efbbb4f0455c533fddef11dc2c0a7a2b9f2a918eb6bed5ef87f402d1` |
+| `docs/nlspec/110-api-ux-health-errors-and-security.md` | 6251 | `b9d2aa8d7af3f2dd287b6b67fb31753ce6fdba89ba6fcf617f0912e6213a2063` |
+| `docs/nlspec/120-validation-fixtures-and-acceptance.md` | 6959 | `4da4742a54fa85b49cb0c6b257d99bbd4198891d5e1d40f99015bb589afa0f74` |
+| `docs/nlspec/130-analysis-enrichment-and-registry-governance.md` | 6897 | `7cad58a72f722cd0594fbb6ade9c9aed9f628ce2857ea155b0f16863f812e4f5` |
+| `docs/reference/glossary.md` | 1662 | `25a2f4f21beb540c6ed109189bf76856cc4a8068d622da2ff569d258359c3e3c` |
+| `docs/reference/research/RES-001-cartography.md` | 70297 | `f86031dbf0ee15eb8ab4d88efa5ed761ffab1fe52d26801a2143e1c93ce39a1e` |
+| `docs/reference/research/RES-002-jupiterone.md` | 114687 | `6652bcc836fa3b069cdc2f91755279187138e39ef4a2cf2789841f35e7195928` |
+| `docs/reference/research/RES-003-taxi-lang.md` | 70901 | `ec5d66cc05a1136c84388334282e556209a2cc8f3391e88af46ceb0435b05efd` |
+| `docs/reference/research/RES-004-ocsf-schema.md` | 66087 | `f492715f83f154077d59b9551df907ea91fa20f1338e58713011ce23afd957f2` |
+| `docs/reference/research/RES-005-Lakehouse-Derived-Graph-Architecture.md` | 117405 | `64d8ccdf37b1ed08225ada742fea3d4ef16624396122855c33f0ddea2c8bdb33` |
+| `docs/reference/research/RES-006-source-adapter-ingestion-patterns.md` | 142109 | `0158ecdf5f8d996f3365019664cfb8e96183430dd0ef998d5c0e843f1bd10a96` |
+| `docs/reference/research/RES-007-normalization-and-schema-standards.md` | 122045 | `fa16df43447a40d93cc31c6b95e798ac1f513475d2fbbeb1e8dccc59a9c0bf66` |
+| `docs/reference/research/RES-008-identity-graph-attack-paths.md` | 61478 | `aab5db916d9d6cb265216d557ae9d957c590d92908978ab5cc8ffbc0107323c8` |
+| `docs/reference/research/RES-009-identity-resolution-governance.md` | 122763 | `db2decb57da437180167b5051bca661287cb38eb9de9e0b6dacbd9164b4794d3` |
+| `docs/reference/research/RES-010-theoretical-reachability-network-context.md` | 126575 | `8911c8d8f142f03964b028baeaed8b240d14f995c58fc4ebf9d1268483758543` |
+| `docs/reference/research/RES-011-temporal-semantics.md` | 177021 | `b279af13a5b7353ad0d8d95d1f9e851912ffed3b5b87434df391065f5271f39b` |
+| `docs/reference/research/RES-012-graph-backend-comparison.md` | 118783 | `e2359644a6dd8002848e1ab9ff54eae79a105a5f9598aa1197fdc0963059ed1c` |
+| `docs/reference/research/RES-013-extension-package-supply-chain.md` | 190355 | `b7e63cba890a579ff2181b93a1a0a0a371626e85addb7f829e9ae3ca1d8df32a` |
+| `docs/reference/research/RES-014-source-authority-staleness-coverage-absence.md` | 124170 | `14eeea3ba0b7a67f12f39ba0fa0712d46b8be3c642f589d40b70cd02844bf7c1` |
+| `docs/reference/research-index.md` | 3543 | `09ea04c2bb257110b5f35b70dbfae997bb7b8af10abb09fd1db383473d057f7e` |
+| `docs/reference/source-inventory.md` | 2698 | `af3512b8fb4c381a42eaca9acf8c67d80239101b37a8d33a8f237a68cca16c05` |
+| `docs/reference/standards/nlspec-spec.md` | 39870 | `60d2ed603e7a988d48a9f1a09e34034ba1fdac3a26388f99d38d6f722fd450e8` |
