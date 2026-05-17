@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-070
 title: Identity Resolution and Target Selectors
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -124,7 +119,7 @@ Manual review must not mutate canonical identity directly. `IdentityReviewCase` 
 
 OpenGraph-style property matching, name matching, source-kind matching, environment-scoped matching, cross-source reference matching, or mapped-target matching must not create canonical identity without a qualifying identity decision. Deprecated name matching is forbidden in production.
 
-## Migration finalization contracts
+## Identity Resolution Contract Details
 
 ### ResolverProfileCoverageMatrix
 
@@ -215,14 +210,14 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | graph key | selector only | graph profile and owner row | No | no identity influence | no-op |
 | hostname/IP/DNS selector | candidate hint | temporal source scope | No | no graph edge by itself | candidate or no_decision |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `070-PATCH-AC-001` | Same evidence, profile, scopes, blockers, and manifest produce identical identity decisions and explanations. |
-| `070-PATCH-AC-002` | Weak evidence classes never auto-merge. |
-| `070-PATCH-AC-003` | Hard blockers override confidence scores and reviewer notes. |
-| `070-PATCH-AC-004` | Every identity split affecting gold or graph output emits `GraphCorrectionHandoff`. |
+| `070-CLEANUP-AC-001` | No banned reference class remains. |
+| `070-CLEANUP-AC-002` | Identity resolution still fails when no active `ResolverProfile` covers the run mode, entity type, source scopes, evidence classes, and lifecycle boundary types. |
+| `070-CLEANUP-AC-003` | Hard blockers and lifecycle boundaries still run before confidence computation and decision matrix selection. |
+| `070-CLEANUP-AC-004` | Target selectors still cannot create canonical identity by themselves. |
 
 ## Definition of Done
 
@@ -234,29 +229,6 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | `070-AC-004` | Manual review cannot mutate identity without terminal `IdentityDecision`, `IdentityReviewCase`, `ResolverExplanation`, and `VersionManifest` refs. |
 | `070-AC-005` | Every identity split that affects gold or graph output emits `GraphCorrectionHandoff`. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalEntity` | lines 2124-2155 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceAsset` | lines 2156-2170 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Identifier` | lines 2171-2213 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `IdentifierScope` | lines 2214-2273 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityDecision` | lines 2274-2338 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `IdentifierEvidenceClass` | lines 2339-2385 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityEvidenceItem` | lines 2386-2418 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverProfile` | lines 2419-2478 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CandidateGenerationProfile` | lines 2479-2504 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `AssetGenerationBoundary` | lines 2505-2551 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `IdentityReviewCase` | lines 2552-2608 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverActivationReport` | lines 2609-2631 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverShadowRun` | lines 2632-2653 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ResolverExplanation` | lines 2654-2692 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GraphCorrectionHandoff` | lines 2693-2718 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `UnresolvedTargetReference` | lines 4672-4727 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `TargetSelectorSafetyPolicy` | lines 6562-6637 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Identity Resolution Requirements` | lines 11032-11317 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

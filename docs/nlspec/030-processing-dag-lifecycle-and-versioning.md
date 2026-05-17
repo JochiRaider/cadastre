@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-030
 title: Processing DAG, Lifecycle, and Versioning
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -117,7 +112,7 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 7. Release locks only after commit refs and lifecycle results are persisted.
 ```
 
-## Migration finalization contracts
+## DAG, Lifecycle, and Versioning Contract Details
 
 ### StageStateKindRegistry
 
@@ -182,14 +177,14 @@ RunLockKeyDerivation(scope):
 | `graph_rebuild` | graph rebuild manifest and graph apply result | raw/silver/gold mutation | no absence | no source cleanup | allowed from persisted deltas | projection only if `060` permits | rebuild equivalence rows |
 | `package_canary` | canary output and activation evidence | current production output | no absence | no cleanup | canary only | no production advancement | package canary rows |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `030-PATCH-AC-001` | Every stage class has a closed permitted-output set and forbidden-output error. |
-| `030-PATCH-AC-002` | Every production-affecting lifecycle has a total transition table or is explicitly a pure deterministic algorithm. |
-| `030-PATCH-AC-003` | Every production output has a complete immutable `VersionManifest` before external visibility. |
-| `030-PATCH-AC-004` | Declared subsets cannot authorize absence, cleanup, projection, or watermark behavior unless the subset profile explicitly permits it. |
+| `030-CLEANUP-AC-001` | No banned reference class remains. |
+| `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |
+| `030-CLEANUP-AC-003` | Any stage emitting a forbidden record class still fails before commit. |
+| `030-CLEANUP-AC-004` | `VersionManifest` remains the output-affecting reproducibility record. |
 
 ## Definition of Done
 
@@ -201,22 +196,6 @@ RunLockKeyDerivation(scope):
 | `030-AC-004` | Every output-affecting state record is hashable, replayable, and included in `VersionManifest`. |
 | `030-AC-005` | Production replay rejects missing, mutable-only, checksum-mismatched, or retention-ineligible manifest refs before writing output. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProcessingStageDAG` | lines 4265-4306 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `StageStateRecord` | lines 7083-7181 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LifecycleStateMachineDefinition` | lines 7182-7315 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required MVP Lifecycle Machines` | lines 7316-7337 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProcessingStageLifecycleResult` | lines 7338-7374 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `RunLockSet` | lines 7668-7704 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `DeclaredDAGSubsetProfile` | lines 7705-7737 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `VersionManifest` | lines 2978-3108 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Feed Stage DAG Execution Interface` | lines 9884-9948 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Lifecycle State Machine Validation Interface` | lines 10056-10113 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

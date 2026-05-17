@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-120
 title: Validation, Fixtures, and Acceptance
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -77,22 +72,19 @@ Every active domain spec must include at least one negative validation case for 
 
 `RunValidationMatrix` must produce a deterministic `AcceptanceReport` containing row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref.
 
-## Migration Acceptance Criteria
+## Spec Set Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `MIG-AC-001` | Every PRD top-level section has a final disposition row in the migration ledger. |
-| `MIG-AC-002` | Every PRD Section 10 model, Section 11 interface, Section 12 default, Section 17 error family, Section 18 edge case, Section 23 acceptance criterion, and Section 24 decision has an owner or explicit deferred/archive disposition. |
-| `MIG-AC-003` | The NLSpec index identifies exactly one owner for every model, interface, algorithm, default, error code, mapping table, lifecycle state, and acceptance criterion. |
-| `MIG-AC-004` | No active NLSpec restates another active NLSpec requirement except by exact named reference. |
-| `MIG-AC-005` | Every active NLSpec declares dependencies, exported contracts, imported contracts, explicit non-scope, and Definition of Done. |
-| `MIG-AC-006` | Every production input path remains lakehouse-fed and has no direct enterprise source-call behavior. |
-| `MIG-AC-007` | Every domain spec has binary acceptance criteria and at least one required negative validation case for each forbidden authority boundary. |
-| `MIG-AC-008` | The deferred reachability document is inactive and no active MVP graph or gold spec can emit theoretical reachability output. |
-| `MIG-AC-009` | The archived PRD is marked superseded and implementation authority comes from the NLSpec set after cutover. |
-| `MIG-AC-010` | The recreatability test passes without using the original PRD. |
+| `SPECSET-AC-001` | Every implementation-relevant contract has exactly one owning spec. |
+| `SPECSET-AC-002` | Every active spec declares imports, exports, dependencies, explicit non-scope, and Definition of Done. |
+| `SPECSET-AC-003` | No active NLSpec restates another active NLSpec requirement except by exact named reference. |
+| `SPECSET-AC-004` | Every production input path remains lakehouse-fed and has no direct enterprise source-call behavior. |
+| `SPECSET-AC-005` | Every domain spec has binary acceptance criteria and at least one negative validation case for each forbidden authority boundary it declares. |
+| `SPECSET-AC-006` | The deferred reachability document is inactive and no active MVP graph or gold spec can emit theoretical reachability output. |
+| `SPECSET-AC-007` | The recreatability test passes using only active NLSpecs, deferred NLSpecs where explicitly referenced, and accepted standards. |
 
-## Migration finalization contracts
+## Validation Contract Details
 
 ### ValidationMatrixRow schema
 
@@ -129,20 +121,6 @@ Every active domain spec must include at least one negative validation case for 
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability |
 
-### MigrationCutoverChecklist
-
-| Criterion | Required evidence artifact | Owner | Status | Failure code | Cutover effect |
-| --- | --- | --- | --- | --- | --- |
-| `MIG-AC-001` | PRD ledger final rows | `000` | `blocked` | `MIG_PRD_LEDGER_INCOMPLETE` | block cutover |
-| `MIG-AC-002` | model/interface/default/error/edge/decision disposition rows | `000` | `blocked` | `MIG_DISPOSITION_INCOMPLETE` | block cutover |
-| `MIG-AC-003` | owner registry | `000` | `blocked` | `MIG_OWNER_AMBIGUOUS` | block cutover |
-| `MIG-AC-004` | duplicate/restatement review | `000` | `blocked` | `MIG_DEFINE_ONCE_VIOLATION` | block cutover |
-| `MIG-AC-005` | per-spec imports/exports/DoD validation | `120` | `blocked` | `MIG_SPEC_SHAPE_INCOMPLETE` | block cutover |
-| `MIG-AC-006` | direct-source negative tests | `010`, `020`, `120` | `blocked` | `MIG_DIRECT_SOURCE_BOUNDARY_FAIL` | block cutover |
-| `MIG-AC-007` | negative authority-boundary matrix | `120` | `blocked` | `MIG_NEGATIVE_TESTS_INCOMPLETE` | block cutover |
-| `MIG-AC-008` | deferred reachability negative rows | `200`, `090`, `120` | `blocked` | `MIG_REACHABILITY_ACTIVE` | block cutover |
-| `MIG-AC-009` | PRD archive acceptance report | `000`, `120` | `blocked` | `MIG_PRD_ARCHIVE_NOT_ACCEPTED` | block cutover |
-| `MIG-AC-010` | recreatability report | `120` | `blocked` | `MIG_RECREATABILITY_FAIL` | block cutover |
 
 ### TwoIndependentImplementersCheck
 
@@ -156,7 +134,10 @@ Every active domain spec must include at least one negative validation case for 
 
 ### RecreatabilityCheck
 
-The recreatability check passes only when the intended behavior can be derived from NLSpecs without the PRD except for explicitly deferred or archive-trace issues. Any required PRD lookup after cutover is a failure unless the lookup is trace-only.
+The recreatability check passes only when the intended behavior can be derived from active NLSpecs, accepted standards, and explicitly deferred documents where referenced.
+
+Any required lookup outside those inputs is a failure unless the lookup is trace-only and does not determine behavior.
+
 
 ### AcceptanceReport statuses
 
@@ -171,28 +152,28 @@ The recreatability check passes only when the intended behavior can be derived f
 
 | Owner spec | Forbidden boundary | Fixture ID | Expected error/no-op | Acceptance criterion | Blocking status |
 | --- | --- | --- | --- | --- | --- |
-| `010` | direct source call | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010-PATCH-AC-003` | blocking |
-| `020` | CDC metadata as authority | TODO | no-op | `020-PATCH-AC-004` | blocking |
-| `030` | forbidden stage output | TODO | `FORBIDDEN_STAGE_OUTPUT` | `030-PATCH-AC-001` | blocking |
-| `040` | unknown field | TODO | owner error | `040-PATCH-AC-002` | blocking |
-| `050` | undeclared extension | TODO | mapping error | `050-PATCH-AC-003` | blocking |
-| `060` | weak progress absence | TODO | no-op/unknown | `060-PATCH-AC-002` | blocking |
-| `070` | weak evidence auto-merge | TODO | no_decision | `070-PATCH-AC-002` | blocking |
-| `080` | current-time fallback | TODO | temporal error | `080-PATCH-AC-001` | blocking |
-| `090` | theoretical reachability edge | TODO | reachability scope error/no-op | `090-PATCH-AC-004` | blocking |
-| `100` | unauthorized signer | TODO | activation failure | `100-PATCH-AC-001` | blocking |
-| `110` | state-label collapse | TODO | reject/non-collapse | `110-PATCH-AC-004` | blocking |
-| `130` | analysis mutation | TODO | analysis mutation error | `130-PATCH-AC-001` | blocking |
-| `200` | active reachability output | TODO | no-op/rejected | `200-PATCH-AC-001` | blocking |
+| `010` | direct source call | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010-CLEANUP-AC-002` | blocking |
+| `020` | CDC metadata as authority | TODO | no-op | `020-CLEANUP-AC-004` | blocking |
+| `030` | forbidden stage output | TODO | `FORBIDDEN_STAGE_OUTPUT` | `030-CLEANUP-AC-003` | blocking |
+| `040` | unknown field | TODO | owner error | `040-CLEANUP-AC-002` | blocking |
+| `050` | undeclared extension | TODO | mapping error | `050-CLEANUP-AC-002` | blocking |
+| `060` | weak progress absence | TODO | no-op/unknown | `060-CLEANUP-AC-003` | blocking |
+| `070` | weak evidence auto-merge | TODO | no_decision | `070-CLEANUP-AC-002` | blocking |
+| `080` | current-time fallback | TODO | temporal error | `080-CLEANUP-AC-003` | blocking |
+| `090` | theoretical reachability edge | TODO | reachability scope error/no-op | `090-CLEANUP-AC-004` | blocking |
+| `100` | unauthorized signer | TODO | activation failure | `100-CLEANUP-AC-003` | blocking |
+| `110` | state-label collapse | TODO | reject/non-collapse | `110-CLEANUP-AC-002` | blocking |
+| `130` | analysis mutation | TODO | analysis mutation error | `130-CLEANUP-AC-003` | blocking |
+| `200` | active reachability output | TODO | no-op/rejected | `200-CLEANUP-AC-003` | blocking |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `120-PATCH-AC-001` | Every active domain spec has validation rows for success, rejection, no-op, and edge behavior. |
-| `120-PATCH-AC-002` | Every forbidden authority boundary has at least one executable negative case. |
-| `120-PATCH-AC-003` | Acceptance reports are sufficient to decide whether NLSpecs supersede the PRD. |
-| `120-PATCH-AC-004` | The two-independent-implementers and recreatability checks are explicit and binary. |
+| `120-CLEANUP-AC-001` | No banned reference class remains. |
+| `120-CLEANUP-AC-002` | `SPECSET-AC-*` rows cover ownership, imports/exports, define-once, lakehouse boundary, negative tests, deferred reachability, and recreatability. |
+| `120-CLEANUP-AC-003` | `RunValidationMatrix` output remains deterministic and includes row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref. |
+| `120-CLEANUP-AC-004` | Required negative tests by owner remain present and do not depend on external product drafts, decomposition-control artifacts, private binding indexes, or promotion-readiness gates. |
 
 ## Definition of Done
 
@@ -202,22 +183,8 @@ The recreatability check passes only when the intended behavior can be derived f
 | `120-AC-002` | Every required negative authority-boundary case is executable and produces the expected owner-specific error code. |
 | `120-AC-003` | Golden corpus replay produces byte-identical expected outputs or deterministic failure records. |
 | `120-AC-004` | Validation artifacts are redacted, checksummed, and replayable. |
-| `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can supersede the PRD. |
+| `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can be promoted to `authoritative`. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ValidationMatrix` | lines 5780-5954 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LakehouseFeedFixture` | lines 7450-7491 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ValidationScenario` | lines 8535-8613 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `EventSequenceValidationCorpus` | lines 8568-8613 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Golden Corpus` | lines 12488-12696 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Shadow Execution` | lines 12697-12749 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Replay` | lines 3311-3335 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Acceptance Criteria` | lines 12869-13634 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

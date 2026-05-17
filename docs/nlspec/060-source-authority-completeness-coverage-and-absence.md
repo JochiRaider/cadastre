@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-060
 title: Source Authority, Completeness, Coverage, and Absence
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -95,7 +90,7 @@ Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derive
 
 Coverage-sensitive facts require `CoverageDimensionProfile` and a current `CoverageAssertion` before absence, pass/fail/unknown, no-change, or negative claims may be emitted.
 
-Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions; source-specific unresolved rows remain blocking until closed in the gap ledger and validation matrix.
+Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions; source-specific unresolved rows remain blocking until closed in the gap artifact and validation matrix.
 
 ## DeriveAbsenceOrUnknown Algorithm
 
@@ -115,7 +110,7 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 
 Every attempted production source, projection, graph-apply, or presence-only watermark change must be evaluated through `ProjectionWatermarkPolicy` and persisted as exactly one `WatermarkCommitRecord`. Failed, partial, aborted, schema-preflight-failed, or completeness-blocked runs must not advance watermarks.
 
-## Migration finalization contracts
+## Source Authority Contract Details
 
 ### CoverageDimensionProfile catalog
 
@@ -210,14 +205,14 @@ Weak progress signals must not combine into stronger authority.
 | `not_authoritative_for_absence` | forbidden | forbidden | forbidden | forbidden | forbidden | unknown | `060` |
 | `not_applicable` | no absence claim | forbidden | forbidden | forbidden | forbidden | not_applicable | `060` |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `060-PATCH-AC-001` | Every coverage-sensitive negative or absence claim requires a current coverage assertion. |
-| `060-PATCH-AC-002` | Every progress signal has one default interpretation and cannot authorize absence unless a policy row says so. |
-| `060-PATCH-AC-003` | Source staleness and derived-view lag remain separate states. |
-| `060-PATCH-AC-004` | Every watermark attempt emits exactly one `WatermarkCommitRecord`. |
+| `060-CLEANUP-AC-001` | No banned reference class remains. |
+| `060-CLEANUP-AC-002` | Broad source-category ranking still cannot act as fallback authority when the exact `SourceAuthorityProfileRow` is missing. |
+| `060-CLEANUP-AC-003` | Progress, liveness, lineage, freshness, acknowledgment, CDC, graph-derived, and live-probe signals remain non-authoritative by default. |
+| `060-CLEANUP-AC-004` | Missing rows, stale states, partial states, and permission-limited states still cannot authorize absence unless an active policy permits it. |
 
 ## Definition of Done
 
@@ -229,26 +224,6 @@ Weak progress signals must not combine into stronger authority.
 | `060-AC-004` | Source staleness and derived-view lag are exposed as distinct states. |
 | `060-AC-005` | Every watermark attempt emits exactly one `WatermarkCommitRecord`. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceAuthorityProfile` | lines 4307-4671 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceStalenessPolicy` | lines 4413-4477 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SupplierCollectionVisibilityProfile` | lines 4478-4520 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ControlResultMappingRow` | lines 4521-4563 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceHistoryRetentionProfile` | lines 4564-4595 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `DeriveAbsenceOrUnknown` | lines 4596-4671 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LakehouseFeedCompletenessProfile` | lines 6330-6522 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProgressSignalInterpretationPolicy` | lines 6406-6472 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProjectionWatermarkPolicy` | lines 6473-6498 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `WatermarkCommitRecord` | lines 6499-6522 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CoverageDimensionProfile and CoverageAssertion` | lines 7492-7636 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source Authority Profiles` | lines 10678-10707 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source Completeness Acceptance` | lines 13149-13160 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source Authority Acceptance` | lines 13161-13171 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source Authority, Staleness, Coverage, Progress, and Absence Acceptance` | lines 13610-13634 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

@@ -1,12 +1,13 @@
 # Artifact Manifest
 
-The manifest defines the final documentation artifact set for the migration-active Cadastre NLSpec development stream.
+The manifest defines the current documents for the Cadasre project.
+
+If a file is not currently uploaded, it can be added to the context on request.
 
 Every path must be repository-relative, normalized, unique, and must not contain absolute path prefixes, backslashes, empty segments, `.`, or `..` segments.
 
 | Path |
 | --- |
-| `docs/README.md` |
 | `docs/nlspec/domain.md` |
 | `docs/nlspec/000-cadastre-spec-index.md` |
 | `docs/nlspec/010-system-boundary-and-authority.md` |
@@ -23,7 +24,8 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/nlspec/120-validation-fixtures-and-acceptance.md` |
 | `docs/nlspec/130-analysis-enrichment-and-registry-governance.md` |
 | `docs/deferred/200-future-reachability-analysis-domain.md` |
-| `docs/migration/PRD-to-NLSpec-ledger.md` |
+| `docs/doc_clean-up/MarkdownLint-Rules.md` |
+| `docs/doc_clean-up/markdownlint-cleanup-reference.md` |
 | `docs/adr/ADR-0001-lakehouse-fed-boundary.md` |
 | `docs/adr/ADR-0002-graph-as-derived-projection.md` |
 | `docs/adr/ADR-0003-ocsf-as-silver-profile.md` |

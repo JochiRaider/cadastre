@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-010
 title: System Boundary and Authority
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -27,8 +22,7 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 
 ## Imports
 
-- `SpecStatus`
-- `SourceOfTruthRow`
+- None.
 
 ## Exports
 
@@ -68,7 +62,7 @@ Graph state, Splunk CIM output, OCSF export output, metadata graphs, lineage gra
 
 ## Public and Private Source Binding
 
-The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor names, private source inventories, routes, credentials, and environment-specific bindings must live in private implementation artifacts and must not appear in public canonical records.
+The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor names, private source binding artifacts, routes, credentials, and environment-specific bindings must live in private implementation artifacts and must not appear in public canonical records.
 
 | Artifact | Public canonical model status |
 | --- | --- |
@@ -99,7 +93,7 @@ The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor
 | `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 
-## Migration finalization contracts
+## Authority Validation Contracts
 
 ### PrivateBindingLeakValidationRule
 
@@ -135,13 +129,14 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `PRIVATE_BINDING_LEAK` | `010` | `110` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `010-PATCH-AC-001` | Every output class has one authority class. |
-| `010-PATCH-AC-002` | Private binding leakage has deterministic detection and error behavior. |
-| `010-PATCH-AC-003` | Validation-only source exploration cannot satisfy raw, completeness, silver, identity, gold, graph, health, watermark, or manifest contracts. |
+| `010-CLEANUP-AC-001` | No banned reference class remains. |
+| `010-CLEANUP-AC-002` | Direct source calls still fail before output with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
+| `010-CLEANUP-AC-003` | Private binding leakage validation still rejects public artifacts that expose private source binding artifacts. |
+| `010-CLEANUP-AC-004` | Every output class still maps to exactly one authority class. |
 
 ## Definition of Done
 
@@ -150,18 +145,8 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-AC-001` | A production run attempting an enterprise source API call fails before any output write with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | `010-AC-002` | Every output class is classified as `system_of_record`, `derived_projection`, `supporting_evidence`, `non_authoritative_analysis`, or `inactive_future_domain`. |
 | `010-AC-003` | No active spec permits graph, CIM, OCSF export, analysis, enrichment, lineage, registry, or package tooling output to become authoritative without an imported named authority contract. |
-| `010-AC-004` | Public artifacts fail validation when they contain private source inventories, route names, credential fields, or environment-specific source target lists. |
+| `010-AC-004` | Public artifacts fail validation when they contain private source binding artifacts, route names, credential fields, or environment-specific source target lists. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Product Summary` | lines 23-68 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Lakehouse-Fed Boundary Amendment` | lines 101-277 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Scope and Non-Scope` | lines 289-769 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Design Boundary` | lines 634-769 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Canonical Architecture Requirements` | lines 1534-1579 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

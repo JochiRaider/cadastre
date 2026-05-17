@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-020
 title: Lakehouse Feeds and Table State
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -120,7 +115,7 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 10. Persist VersionManifest refs for every output-affecting profile, policy, target, schema, state, and manifest.
 ```
 
-## Migration finalization contracts
+## Feed and Table State Contract Details
 
 ### LakehouseFeedFeasibilityAssessment
 
@@ -230,14 +225,14 @@ ComputeRawRecordId(inputs):
 | CDC tombstone | `120` CDC non-authority row |
 | no direct source call | `120` direct-source negative row |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `020-PATCH-AC-001` | Raw record IDs are byte-identical across two implementations for the same feed input. |
-| `020-PATCH-AC-002` | Every read target kind has explicit timeout, checksum, retry, failed-object, omitted-object, and replay behavior. |
-| `020-PATCH-AC-003` | Feed activation fails if feasibility, supplier profile, read policy, manifest schema, or fixture coverage is missing. |
-| `020-PATCH-AC-004` | CDC-shaped metadata cannot become fact time, completeness, retraction, cleanup, or watermark authority without `060` and `080` policies. |
+| `020-CLEANUP-AC-001` | No banned reference class remains. |
+| `020-CLEANUP-AC-002` | `LakehouseReadCompletenessReceipt` remains necessary but not sufficient for source-level absence, retraction, cleanup, graph expiry, or watermark advancement. |
+| `020-CLEANUP-AC-003` | Table maintenance remains governed by `ReplayRetentionPolicy`, `TableMaintenancePolicy`, and `ReplayRetentionDecision`. |
+| `020-CLEANUP-AC-004` | No direct enterprise source-call behavior is introduced. |
 
 ## Definition of Done
 
@@ -249,19 +244,6 @@ ComputeRawRecordId(inputs):
 | `020-AC-004` | Destructive maintenance is refused when any protected manifest, snapshot, replay window, or legal hold would be invalidated. |
 | `020-AC-005` | Feed profile activation fails while feed feasibility, raw supplier profiles, read policy catalog, raw manifest schema, or feed fixture coverage is `TODO:` for the target feed. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Lakehouse-Fed Boundary Amendment` | lines 101-277 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Lakehouse Feed Corpus Contracts` | lines 6152-6329 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LakehouseFeedCompletenessProfile` | lines 6330-6522 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LakehouseReadPolicy` | lines 7637-7667 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Lakehouse Table State Interface` | lines 10114-10134 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Table Maintenance and Replay Retention Interface` | lines 10135-10152 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Configuration, Defaults, and Bounds` | lines 10280-10646 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

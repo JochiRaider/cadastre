@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-100
 title: Packages, Supply Chain, and Activation
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -118,7 +113,7 @@ Rollback target must be an immutable verified `ProductionPackageSetManifest` che
 
 Emergency override may quarantine, retire, abort candidate activation, roll back to verified last-known-good, or extend deprecation windows. Emergency override must not bypass signature, trust policy, repository metadata, freshness, transparency, or anti-rollback verification for a new production activation.
 
-## Migration finalization contracts
+## Package Activation Contract Details
 
 ### PackageRepositoryModel catalog
 
@@ -197,14 +192,14 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | validation matrix failure | same | keep current | write no production output | yes after candidate changes | unchanged |
 | post-activation health failure | same | keep activated only if policy permits, otherwise rollback plan | no new candidate output | policy-defined | do not mark last-known-good |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `100-PATCH-AC-001` | No package set activates unless immutable artifact, trust, freshness, anti-rollback, compatibility, validation, and package-set evidence pass. |
-| `100-PATCH-AC-002` | Candidate activation failure preserves current active package set and writes no candidate production output. |
-| `100-PATCH-AC-003` | Rollback targets immutable verified package-set manifests only. |
-| `100-PATCH-AC-004` | Package supply-chain validation fixtures cover positive and negative package-set activation cases. |
+| `100-CLEANUP-AC-001` | No banned reference class remains. |
+| `100-CLEANUP-AC-002` | Production activation still targets immutable package sets, not individual package artifacts or scalar signature summaries. |
+| `100-CLEANUP-AC-003` | Unauthorized signer with a cryptographically valid signature still fails closed. |
+| `100-CLEANUP-AC-004` | Emergency override still cannot bypass signature or trust verification for a new production activation. |
 
 ## Definition of Done
 
@@ -216,30 +211,6 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | `100-AC-004` | Emergency override cannot bypass trust verification for new production activation. |
 | `100-AC-005` | Package repository model, trust root governance, SBOM/provenance policy, compatibility matrix, and cohesion group catalogs have exact catalog rows or explicit blocking rows before authoritative status. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageArtifact` | lines 5032-5144 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageReleaseManifest` | lines 5145-5188 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProductionPackageSetManifest` | lines 5189-5220 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageCohesionGroup` | lines 5221-5244 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageTrustPolicy` | lines 5245-5283 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Package Repository Evidence` | lines 5284-5343 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageSignatureVerificationResult` | lines 5344-5376 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageAttestationSet, PackageBuildProvenance, and PackageSBOMRef` | lines 5377-5431 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageCompatibilityMatrix` | lines 5432-5507 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackagePromotionRecord and PackageActivationFailureEvent` | lines 5508-5545 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageDeploymentRevision, LastKnownGoodPackageSet, PackageRollbackPlan, and PackageRollbackResult` | lines 5546-5566 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageQuarantineRecord and EmergencyPackageOverrideRecord` | lines 5567-5618 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Package Supply-Chain Authority Boundary` | lines 5619-5650 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageStageBinding` | lines 6523-6561 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `PackageDeveloperContract` | lines 7388-7412 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Extension Package Lifecycle` | lines 11583-11872 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Package Artifact Acceptance` | lines 13206-13219 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Package Supply-Chain Acceptance` | lines 13575-13609 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

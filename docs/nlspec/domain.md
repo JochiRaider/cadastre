@@ -1,12 +1,11 @@
 ---
 doc_id: domain
 title: Cadastre Domain Vocabulary and Boundaries
-doc_type: domain vocabulary and boundary document
-status: migration_active
-generated_on: 2026-05-17
+doc_type: domain-vocabulary
+status: candidate
 ---
 
-## 1. Status and authority
+## 1. Status and Authority
 
 `domain.md` is the root Cadastre domain vocabulary and boundary document. It owns repository-wide domain interpretation, canonical term selection, forbidden substitutions, high-risk distinction tables, bounded-context routing, and the domain-level owner map for Cadastre concepts.
 
@@ -14,17 +13,15 @@ generated_on: 2026-05-17
 
 `domain.md` must not add, widen, narrow, or replace runtime behavior. It may state domain interpretation rules and route implementers to the owner spec that owns behavior.
 
-`domain.md` is listed by `docs/nlspec/000-cadastre-spec-index.md` as a `candidate_spec` with `migration_active` status. It may route vocabulary and owner lookup during migration, but it must not drive implementation until `000` promotes it.
+`domain.md` is listed by `docs/nlspec/000-cadastre-spec-index.md` as a `candidate_spec` with `candidate` status. It may route vocabulary and owner lookup during review, but it must not drive implementation until `000` promotes it to `authoritative`.
 
-Cadastre source authority is governed by the supplied source-of-truth map and status vocabulary. The supplied index states that active Cadastre NLSpecs are currently `migration_active`, that documents marked `authoritative` may drive implementation, and that research reports are supporting evidence only, never runtime authority. Until the index marks a document `authoritative`, the original PRD remains the upstream intent container and generated NLSpecs are migration evidence.
+Cadastre source authority is governed by the supplied source-of-truth map and status vocabulary. The supplied index states that candidate Cadastre NLSpecs may not drive implementation, that documents marked `authoritative` may drive implementation for owned contracts, and that research reports are supporting evidence only, never runtime authority.
 
-The uploaded PRD front matter states `status: revised-draft`. The canonical target path for that uploaded source is `docs/archive/PRD-Cadastre.revised-draft.md`. Before cutover, the PRD remains upstream intent. After `120` records passing `MIG-AC-009` evidence and `000` accepts cutover, the PRD is archive trace only.
-
-If `domain.md` conflicts with a primary owner spec, the owner spec governs the behavior it owns. The conflict is documentation drift and must be reported in Section 25. If two owner specs conflict, the contradiction is a corpus defect. `domain.md` must not silently choose a side.
+If `domain.md` conflicts with a primary owner spec, the owner spec governs the behavior it owns. The conflict must be recorded as an owner-spec `TODO:` or a validation failure in `120`. If two owner specs conflict, the contradiction is a corpus defect. `domain.md` must not silently choose a side.
 
 The normative words `must`, `must not`, `may`, and `default` in this document govern vocabulary use, domain interpretation, owner lookup, review discipline, and coding-agent context only. This document does not use `should` as a runtime norm.
 
-Research reports, examples, the uploaded template, implementation modules, generated drafts, external repositories, backend products, package registries, UI labels, and storage artifacts are not Cadastre domain authority unless an active Cadastre owner spec explicitly grants that authority.
+Research reports, examples, the uploaded template, implementation modules, candidate drafts, external repositories, backend products, package registries, UI labels, and storage artifacts are not Cadastre domain authority unless an active Cadastre owner spec explicitly grants that authority.
 
 Content excluded from the uploaded template: Cartulary-specific product terms, workbook-native incident workspace framing, workbook surfaces, built-in tabs, saved views, parties, artifacts, notes, timeline rows, task requests, decisions, object blobs, import sessions, snapshots, releases, `view_schema_id`, `record_id`, `party_id`, and `cartulary.*` identifiers are not Cadastre requirements and are not imported into this document.
 
@@ -37,7 +34,7 @@ This document must:
 - define canonical Cadastre domain terms and forbidden substitutions;
 - map domain concepts to primary owner specs or owner sections;
 - distinguish domain concepts from implementation modules, storage artifacts, UI labels, graph backend labels, package names, route names, and external-system terms;
-- preserve the Cadastre authority model and current migration status limits;
+- preserve Cadastre authority boundaries and owner routing;
 - provide stable context for implementers, reviewers, specification authors, and coding agents;
 - provide binary acceptance criteria for the root domain document.
 
@@ -75,10 +72,10 @@ This document is not an API reference, schema reference, persistence spec, graph
 | Graph projection, graph deltas, edge semantics, traversal, backend profiles, graph apply, graph query, rebuild, drift | `090-graph-projection-serving-and-backends.md` |
 | Package artifact identity, package release manifests, package-set activation, trust, compatibility, rollback, quarantine | `100-packages-supply-chain-and-activation.md` |
 | API behavior, UX states, operational health, shared errors, redaction, authorization, audit | `110-api-ux-health-errors-and-security.md` |
-| Fixtures, validation matrices, golden corpus, acceptance reports, migration acceptance | `120-validation-fixtures-and-acceptance.md` |
+| Fixtures, validation matrices, golden corpus, acceptance reports, validation acceptance | `120-validation-fixtures-and-acceptance.md` |
 | Analysis rules, enrichment, lineage mapping, artifact-class boundaries, registry governance | `130-analysis-enrichment-and-registry-governance.md` |
 | Future theoretical reachability candidate contracts | `200-future-reachability-analysis-domain.md`, inactive until promoted |
-| Implementation code structure, package/module names, route names, database schemas, CSS classes, local config, private source inventory | Implementation repository and private artifacts; not domain authority by default |
+| Implementation code structure, package/module names, route names, database schemas, CSS classes, local config, private source binding artifacts | Implementation repository and private artifacts; not domain authority by default |
 
 ## 4. Domain overview
 
@@ -99,7 +96,7 @@ Consequences:
 | Artifact or spec | Owns | `domain.md` role | Must not be used for |
 | --- | --- | --- | --- |
 | `domain.md` | Root vocabulary, domain boundaries, owner lookup, high-risk distinctions, reviewer/coding-agent domain rules. | Defines canonical language and routes behavior to owner specs. | Runtime algorithms, schemas, persistence, APIs, graph backend selection, package activation, validation harnesses. |
-| `000-cadastre-spec-index.md` | Documentation governance, source-of-truth map, status vocabulary, dependency policy, migration ledger pointers, archival rules. | Must follow its status and owner map; must surface unresolved root-domain map gaps. | Product runtime behavior or domain record fields. |
+| `000-cadastre-spec-index.md` | Documentation governance, source-of-truth map, status vocabulary, dependency policy, promotion gates, archival rules. | Must follow its status and owner map; must surface unresolved root-domain map gaps. | Product runtime behavior or domain record fields. |
 | `010-system-boundary-and-authority.md` | Cadastre product boundary, authority classes, forbidden production inputs, projection authority, public/private boundary. | Imports authority vocabulary and global non-authority rules. | Lakehouse table fields, graph algorithms, identity decisions. |
 | `020-lakehouse-feeds-and-table-state.md` | Lakehouse feeds, raw imports, read policies, completeness receipts, table-state refs, maintenance and retention. | Uses its terms for lakehouse-fed input and table-state domain boundaries. | Source absence interpretation, gold truth, identity resolution, graph apply. |
 | `030-processing-dag-lifecycle-and-versioning.md` | Processing stage DAG, output permissions, lifecycle machines, run locks, version manifests, stage state. | Uses its lifecycle and stage vocabulary for domain routing. | Parser/gold/identity/graph/package-specific behavior. |
@@ -114,7 +111,6 @@ Consequences:
 | `120-validation-fixtures-and-acceptance.md` | Fixtures, validation matrices, golden corpus, shadow execution, replay validation, acceptance reports. | Uses validation terms for Definition of Done and acceptance criteria. | New behavioral requirements not owned by domain specs. |
 | `130-analysis-enrichment-and-registry-governance.md` | Analysis rules, findings, metrics, enrichment, lineage facet mapping, artifact-class policy, registry governance. | Routes non-authoritative analysis/enrichment/registry vocabulary. | Fact, identity, graph, completeness, package, or watermark authority. |
 | `200-future-reachability-analysis-domain.md` | Inactive future reachability candidate contracts. | Labels reachability as deferred and blocks active MVP reachability claims. | Active MVP behavior, solver selection, negative reachability facts, graph reachability edges. |
-| `docs/archive/PRD-Cadastre.revised-draft.md` | Upstream product intent and source PRD material; status conflict unresolved. | Provides domain thesis, baseline product boundary, and archived/upstream intent evidence subject to Section 1 TODO. | Direct implementation authority after NLSpec cutover; resolving conflicts without owner decision. |
 | `nlspec-spec.md` | Specification-quality standard: behavioral completeness, unambiguous interfaces, explicit defaults, mapping tables, binary acceptance criteria. | Governs writing quality and acceptance posture. | Cadastre product behavior. |
 | Uploaded `domain.md` template | Structure, voice, and pattern examples only. | Provides non-authoritative structural pattern for root-domain writing. | Any Cadastre terminology, workflow, identifiers, entity model, owner model, lifecycle, acceptance criteria, or product thesis. |
 | `RES-001-cartography.md` | Research report on Cartography. | Supporting evidence for graph-source boundary risks only when adopted by owner specs. | Runtime authority or Cadastre graph model. |
@@ -159,8 +155,8 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 
 | Issue | Canonical Cadastre interpretation | Forbidden interpretation | Primary owner | Source evidence | Status |
 | --- | --- | --- | --- | --- | --- |
-| Cadastre product boundary | Cadastre consumes lakehouse-resident feeds, interprets, normalizes, resolves, derives, and projects. | Cadastre as default enterprise source collector, scanner, syslog receiver, API poller, or CDC connector. | `010`, `020` | PRD Product Summary; `010` Boundary Contract | Resolved. |
-| System of record versus projection | Authoritative Cadastre records live in the lakehouse-backed record flow. Graph, CIM, OCSF export, metadata, lineage, and analysis outputs are projections or non-authoritative artifacts unless owner spec grants authority. | Graph backend, CIM output, OCSF export, metadata graph, lineage graph, or analysis output as source of truth. | `010`, `040`, `090`, `130` | PRD Product Summary; `010` Authority Classes; `090` Projection Authority | Resolved. |
+| Cadastre product boundary | Cadastre consumes lakehouse-resident feeds, interprets, normalizes, resolves, derives, and projects. | Cadastre as default enterprise source collector, scanner, syslog receiver, API poller, or CDC connector. | `010`, `020` | `010` Boundary Contract | Resolved. |
+| System of record versus projection | Authoritative Cadastre records live in the lakehouse-backed record flow. Graph, CIM, OCSF export, metadata, lineage, and analysis outputs are projections or non-authoritative artifacts unless owner spec grants authority. | Graph backend, CIM output, OCSF export, metadata graph, lineage graph, or analysis output as source of truth. | `010`, `040`, `090`, `130` | `010` Authority Classes; `090` Projection Authority | Resolved. |
 | Raw evidence versus source completeness | Raw evidence and feed read receipts can support completeness decisions only through active profiles. | Missing rows or successful feed reads as source absence by themselves. | `020`, `060` | `020` Completeness Receipt Contract; `060` Completeness Contract | Resolved. |
 | Raw observation versus normalized observation | `RawRecord` preserves source-native evidence; `CadastreSilverObservation` is a normalized Cadastre silver envelope. | Parser output or external schema fields as canonical truth. | `040`, `050` | `040` Core Records; `050` Parser and Silver Normalization Contracts | Resolved. |
 | Silver observation versus gold fact | Silver observations preserve normalized evidence and Cadastre-owned metadata; `GoldFact` is a canonical bitemporal assertion derived through authority and temporal policies. | Treating every silver observation as a canonical fact. | `040`, `060`, `080` | `040` Core Records; `060` Source Authority Contract; `080` Gold Derivation | Resolved. |
@@ -175,8 +171,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Analysis finding versus fact | `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are analysis or workflow outputs. | Analysis output as remediation, risk reduction, fact retraction, graph edge removal, or source completeness. | `130` | `130` Analysis Rules and Non-Authority Rule | Resolved. |
 | Package artifact versus package activation | A package artifact is immutable release material; production activation occurs only through a `ProductionPackageSetManifest`. | Single artifact, version string, signature status, SBOM, provenance, dependency lock, or validation run as activation authority. | `100` | `100` Activation Unit and Package Set Manifest | Resolved. |
 | Lifecycle status versus lifecycle machine | `LifecycleStatus` names shared states; runtime lifecycle behavior comes from a declared machine or pure deterministic algorithm authority. | Inferring transitions from diagrams, process status, logs, caches, or names. | `030` | `030` Lifecycle Contract | Resolved. |
-| `docs/nlspec/domain.md` authority | Root domain document authority is not yet listed in the supplied source-of-truth map. | Treating this generated document as implementation authority without index status. | `000` plus TODO owner decision | `000` Source-of-Truth Map lacks root `docs/nlspec/domain.md` row. | `TODO:` unresolved. |
-| PRD status | Uploaded PRD says `archived`; source-of-truth map says original PRD remains upstream intent until NLSpec set authoritative. | Treating the conflict as resolved by this document. | `000` plus owner decision | PRD front matter and `000` Authoritative Source Rule. | `TODO:` unresolved. |
+| `docs/nlspec/domain.md` authority | Root domain document authority is `candidate` until `000` marks it `authoritative`. | Treating this candidate document as implementation authority without registry status. | `000` | `000` Document Registry. | Resolved. |
 
 ## 8. Core distinctions
 
@@ -202,7 +197,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 
 | Bounded context | Owns domain language for | Must not own | Primary owner |
 | --- | --- | --- | --- |
-| Documentation governance | Spec status, source-of-truth rows, dependencies, migration state, archival policy. | Product runtime behavior. | `000` |
+| Documentation governance | Spec status, source-of-truth rows, dependencies, promotion state, archival policy. | Product runtime behavior. | `000` |
 | System boundary and authority | Product boundary, authority classes, projection authority, public/private source binding boundary. | Data schemas, identity algorithms, graph algorithms. | `010` |
 | Lakehouse feed and table state | Feed profiles, raw feed manifests, read policies, completeness receipts, table snapshot/commit/dataset refs, maintenance safety. | Source absence authority, identity, graph projection. | `020` |
 | Processing and versioning | Stage classes, permitted outputs, lifecycle status, lifecycle machines, run locks, version manifests, stage state. | Domain-specific semantics for parser/identity/gold/graph/package. | `030` |
@@ -214,7 +209,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Graph projection and serving | Graph projection profiles, graph deltas, graph edge semantics, traversal, graph backend profiles, query, apply, rebuild, drift. | Fact existence, identity decisions, source completeness. | `090` |
 | Package activation | Package artifacts, release manifests, package-set activation, trust, compatibility, rollback, quarantine, emergency behavior. | Business behavior outside activation and execution permissions. | `100` |
 | API, UX, health, error, security | API request/response contracts, state labels, health, errors, redaction, authorization, audit. | Domain-specific behavior owned by source, identity, temporal, graph, or package specs. | `110` |
-| Validation and acceptance | Validation matrices, fixtures, golden corpus, acceptance reports, migration acceptance. | New behavioral requirements not owned by a domain spec. | `120` |
+| Validation and acceptance | Validation matrices, fixtures, golden corpus, acceptance reports, validation acceptance. | New behavioral requirements not owned by a domain spec. | `120` |
 | Analysis, enrichment, lineage, registry | Read-only analysis, findings, metrics, enrichment records, lineage mapping, artifact-class policy, registry governance. | Fact, identity, graph, completeness, package, or watermark authority. | `130` |
 | Future reachability | Deferred reachability claim kinds, result states, model capability, analysis artifacts, claim policy. | Active MVP graph/gold behavior, solver selection, negative reachability facts. | `200`, inactive |
 
@@ -222,7 +217,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 
 | Term | Definition | Not this | Canonical identifiers or tokens | Primary owner | Status |
 | --- | --- | --- | --- | --- | --- |
-| Cadastre | A lakehouse-fed interpretation, normalization, identity, fact, and projection system for temporal asset intelligence. | Enterprise source collector, SIEM replacement, graph-first sync engine. | `Cadastre` | `010`, PRD | Resolved. |
+| Cadastre | A lakehouse-fed interpretation, normalization, identity, fact, and projection system for temporal asset intelligence. | Enterprise source collector, SIEM replacement, graph-first sync engine. | `Cadastre` | `010` | Resolved. |
 | Enterprise source system | External operational system that supplies or originates security, identity, endpoint, vulnerability, configuration, network, DNS, DHCP, IPAM, or related observations. | Cadastre production component. | None defined in public model. | `010`, `020` | Resolved as external. |
 | External raw supplier | External pipeline, tool, team, or supplier class that delivers raw feeds into the lakehouse. | Cadastre production collector. | `RawSupplierProfile` | `020` | Resolved. |
 | Lakehouse | Authoritative storage substrate for Cadastre raw/bronze, silver, identity, gold, graph-delta, health, and related record classes. | Graph backend, metadata graph, source system. | `LakehouseTableProfile`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef` | `020`, `010` | Resolved. |
@@ -265,7 +260,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Threat-intel enrichment | Enrichment context for indicators, sightings, taxonomies, galaxies, object templates, confidence labels, distribution controls. | Identity, source authority, gold fact, graph edge, absence, cleanup, retraction, coverage, or watermark authority. | `ThreatIntelEnrichmentRecord`, `ThreatIntelEnrichmentProfile` | `130` | Resolved. |
 | Registry governance artifact | Governance metadata for owners, domains, classifications, glossary labels, policies, lifecycle, custom properties, checksums. | Cadastre fact or graph authority. | `RegistryArtifactGovernance` | `130` | Resolved. |
 | Future reachability | Inactive future analysis domain for modeled packet/session/service/identity-conditioned access. | Active MVP graph edge, boolean reachability property, or negative reachability fact. | `ReachabilityResult`, `ReachabilityClaimPolicy`; inactive. | `200`, `090` | Inactive deferred. |
-| Private source binding | Private implementation mapping from concrete vendor/product/source route to public vendor-neutral feed contract. | Public canonical domain concept. | `PrivateSourceFeedBinding` | `010`, PRD | Resolved as private-only. |
+| Private source binding | Private implementation mapping from concrete vendor/product/source route to public vendor-neutral feed contract. | Public canonical domain concept. | `PrivateSourceFeedBinding` | `010` | Resolved as private-only. |
 
 ## 10A. DomainTermRegistry
 
@@ -273,12 +268,12 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 
 | Term | Canonical meaning | Forbidden substitution | Owner spec | Runtime owner | Validation owner | Glossary status |
 | --- | --- | --- | --- | --- | --- | --- |
-| `source_of_truth` | The document-status and ownership decision made by `000`. | README, manifest, glossary, ADR, research, source inventory, or PRD after cutover. | `000` | `000` governance only. | `120` | canonical |
+| `source_of_truth` | The document-status and ownership decision made by `000`. | README, manifest, glossary, ADR, research, private binding artifact, or archive. | `000` | `000` governance only. | `120` | canonical |
 | `domain_term` | A vocabulary item routed by `domain.md`. | Runtime field, API label, backend label, package name, route name. | `domain` | Owning behavior spec named in this table. | `120` | canonical |
-| `runtime_behavior` | Observable behavior owned by exactly one active NLSpec. | Rationale, research, ledger evidence, glossary prose. | owner spec | Owner spec named by `000`. | `120` | canonical |
+| `runtime_behavior` | Observable behavior owned by exactly one active NLSpec. | Rationale, research evidence, glossary prose. | owner spec | Owner spec named by `000`. | `120` | canonical |
 | `source_authority` | Permission to treat source evidence as truth for a fact, predicate, scope, and absence class. | Feed-read success, freshness, graph state, lineage, scanner state. | `060` | `060` | `120` | canonical |
 | `canonical_serialization` | Byte-stable serialization used for IDs, checksums, replay, validation, graph deltas, audit, and package gates. | Backend natural order, language JSON defaults, unordered maps. | `040` | `040` | `120` | canonical |
-| `raw_feed_manifest` | Feed batch, object, partition, schema, lineage, time-bound, checksum, and completeness-reference record. | Supplier delivery summary or source inventory. | `020` | `020` | `120` | canonical |
+| `raw_feed_manifest` | Feed batch, object, partition, schema, lineage, time-bound, checksum, and completeness-reference record. | Supplier delivery summary or private binding artifact. | `020` | `020` | `120` | canonical |
 | `resolver_profile` | Sole production authority for identity resolution behavior. | Confidence score, graph key, source-native merge history, selector. | `070` | `070` | `120` | canonical |
 | `replay_equivalence` | Deterministic equality rule for replay outputs and required refs. | Ad hoc checksum or current-state comparison. | `080` | `080` | `120` | canonical |
 | `graph_backend_profile` | Activation profile for a graph serving backend and its preflight requirements. | Backend selection, backend docs, benchmark result. | `090` | `090` | `120` | canonical |
@@ -288,7 +283,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 
 ## 10B. RootDomainConflictRule
 
-If `docs/nlspec/domain.md` conflicts with an owner spec for runtime behavior, the owner spec controls the behavior and the conflict must be recorded as a gap-ledger row. If two owner specs conflict, the conflict is a corpus defect. `domain.md` must not choose a side unless the affected behavior is caller-equivalent.
+If `docs/nlspec/domain.md` conflicts with an owner spec for runtime behavior, the owner spec controls the behavior and the conflict must be recorded as a owner-spec `TODO:` or validation failure in `120`. If two owner specs conflict, the conflict is a corpus defect. `domain.md` must not choose a side unless the affected behavior is caller-equivalent.
 
 ## 10C. TermPromotionRule
 
@@ -376,7 +371,7 @@ Lifecycle concepts in root `domain.md` identify the domain meaning and owner of 
 
 | Lifecycle concept | Applies to | State vocabulary owner | Domain meaning | Must not imply |
 | --- | --- | --- | --- | --- |
-| Spec status | Cadastre documentation artifacts. | `000` | Whether a document may drive implementation or is draft/migration/deferred/archive material. | Runtime behavior unless status is `authoritative` and owner spec grants behavior. |
+| Spec status | Cadastre documentation artifacts. | `000` | Whether a document may drive implementation or is draft/candidate/deferred/archive material. | Runtime behavior unless status is `authoritative` and owner spec grants behavior. |
 | Lifecycle status | Packages, profiles, policies, lifecycle machines, validation artifacts, activation-controlled records. | `030`, `100`, specific owner specs. | Production eligibility state shared across activation-controlled artifacts. | Transition behavior without lifecycle machine. |
 | Gold fact assertion state | `GoldFact` rows. | `040`, corrections in `080`. | Current assertion meaning of a bitemporal fact. | UI state, graph state, source completeness, identity decision. |
 | Lakehouse read receipt state | `LakehouseReadCompletenessReceipt`. | `020`. | Whether Cadastre read a declared lakehouse feed target completely or failed/partially read it. | Source absence or source completeness by itself. |
@@ -386,12 +381,11 @@ Lifecycle concepts in root `domain.md` identify the domain meaning and owner of 
 
 | State token | Applies to | Meaning | Terminal | Default transition authority | Owner |
 | --- | --- | --- | --- | --- | --- |
-| `draft` | Spec status | Authoring text not migration-complete. | No. | Index/migration process. | `000` |
-| `migration_active` | Spec status | Generated or migrated text under active decomposition; not implementation authority except as migration evidence. | No. | Index/migration process. | `000` |
-| `candidate_authoritative` | Spec status | Reviewed candidate with owned PRD rows dispositioned; controlled spikes only. | No. | Index/migration process. | `000` |
-| `authoritative` | Spec status | Acceptance criteria pass and index marks active. | No. | Index/migration process. | `000` |
-| `superseded` | Spec status | Replaced by newer document or version. | Yes for replaced version. | Index/migration process. | `000` |
-| `archived` | Spec status | Historical traceability only. | Yes. | Index/migration process. | `000` |
+| `draft` | Spec status | Authoring text that is not review-complete. | No. | Index promotion process. | `000` |
+| `candidate` | Spec status | Candidate NLSpec text that may be reviewed and validated. | No. | Index promotion process. | `000` |
+| `authoritative` | Spec status | Accepted NLSpec text whose validation criteria pass and whose registry row marks it active. | Yes for owned contracts. | Index promotion process. | `000` |
+| `superseded` | Spec status | Replaced by newer document or version. | Yes for replaced version. | Index promotion process. | `000` |
+| `archived` | Spec status | Historical reference only. | Yes. | Index promotion process. | `000` |
 | `inactive_deferred` | Spec status | Future-domain candidate with no active MVP effect. | No active effect. | Promotion process. | `000`, `200` |
 | `draft` | Lifecycle status | Cannot affect production output. | No. | Declared lifecycle machine. | `030` |
 | `validated` | Lifecycle status | May be used only in validation or canary gates. | No. | Declared lifecycle machine. | `030` |
@@ -487,7 +481,7 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 
 | Domain area | Default or omitted-case behavior | Owner | If omitted source evidence is missing |
 | --- | --- | --- | --- |
-| Root domain authority | Default: `docs/nlspec/domain.md` is a generated root-domain candidate and may not drive implementation until listed and statused by the source-of-truth map. | `000`, `docs/nlspec/domain.md` | `TODO:` blocking authority decision. |
+| Root domain authority | Default: `docs/nlspec/domain.md` is a candidate vocabulary document and may not drive implementation until marked `authoritative` by `000`. | `000`, `docs/nlspec/domain.md` | Use for vocabulary routing only while candidate. |
 | Production input boundary | Default: enterprise source calls are forbidden; production reads declared lakehouse feeds and supplier metadata only. | `010`, `020` | Fail before output with owner-specific error. |
 | Source evidence absence | Default: missing lakehouse row, source field, object, partition, or feed item means no stronger interpretation than unknown/not-provided unless owner profile grants more. | `020`, `040`, `060` | Emit explicit unknown/not-provided/unsafe state, not absence. |
 | Source completeness receipt | Default: read completeness receipt is necessary but not sufficient for source absence, cleanup, retraction, graph expiry, or watermark advancement. | `020`, `060` | Absence/retraction/cleanup/watermark forbidden. |
@@ -542,7 +536,7 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 
 | Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
 | --- | --- | --- | --- |
-| Validation/fixtures | Validation matrices, fixtures, golden corpus, acceptance reports, migration acceptance. | Binary root-domain acceptance criteria. | Treating test fixture shape as domain behavior owner or using validation artifact to invent behavior. |
+| Validation/fixtures | Validation matrices, fixtures, golden corpus, acceptance reports, validation acceptance. | Binary root-domain acceptance criteria. | Treating test fixture shape as domain behavior owner or using validation artifact to invent behavior. |
 
 ### 18.7 Domain model versus package and implementation details
 
@@ -613,7 +607,7 @@ This section defines cross-representation mappings not already defined in Sectio
 
 | Lifecycle family | State tokens | Domain mapping | Owner | Status |
 | --- | --- | --- | --- | --- |
-| Spec status | `draft`, `migration_active`, `candidate_authoritative`, `authoritative`, `superseded`, `archived`, `inactive_deferred` | Documentation authority and implementation eligibility. | `000` | Resolved with PRD status contradiction TODO. |
+| Spec status | `draft`, `candidate`, `authoritative`, `superseded`, `archived`, `inactive_deferred`, `active_standard` | Documentation authority and implementation eligibility. | `000` | Resolved. |
 | Activation lifecycle | `draft`, `validated`, `canary`, `active`, `deprecated`, `retired`, `quarantined` | Production eligibility of activation-controlled records. | `030`, `100` | Resolved as shared vocabulary. |
 | Gold assertion | `active`, `stale`, `retracted`, `superseded`, `conflicted`, `unknown`, `no_op` | Fact assertion meaning. | `040`, `080` | Resolved. |
 | Future reachability result | `reachable_within_model`, `not_reachable_within_complete_model`, `unknown_partial`, `unsupported`, `ambiguous`, `conditional`, `diagnostic_only` | Inactive future result state. | `200` | Inactive deferred. |
@@ -657,7 +651,7 @@ This section defines cross-representation mappings not already defined in Sectio
 | Implementation modules/functions/routes | Implementation details unless owner spec makes them observable. | “module implements domain term.” | “module name defines domain term.” |
 | Storage artifacts/object keys | Implementation/persistence realization. | “storage key maps to artifact ref when owner permits.” | “object-store key is evidence identity by default.” |
 | Research reports | Supporting evidence only. | “research report informed owner spec.” | “research report grants active behavior.” |
-| Generated drafts | Migration evidence until statused. | “generated draft pending owner review.” | “draft is authoritative.” |
+| Candidate drafts | Candidate text until statused. | “candidate pending owner review.” | “candidate is authoritative.” |
 | Future reachability analyzers | Deferred analysis evidence only. | “inactive future reachability candidate.” | “reachable,” “not reachable,” “has theoretical reachability” in MVP. |
 
 ## 21. Normative requirements
@@ -671,7 +665,7 @@ Root-domain-owned requirements only:
 | `DOM-REQ-003` | `domain.md` must not add runtime behavior outside vocabulary interpretation, boundary rules, and owner lookup. | `domain.md`, `000` | Diff review against owner specs. |
 | `DOM-REQ-004` | `domain.md` must treat implementation modules, storage artifacts, UI labels, graph backend labels, package names, route names, and external-system terms as mappings, not definitions. | `domain.md` | Boundary tables in Sections 18 and 20. |
 | `DOM-REQ-005` | `domain.md` must surface unresolved contradictions and missing owner decisions as `TODO:` entries. | `domain.md` | Section 25 contains each blocking ambiguity. |
-| `DOM-REQ-006` | `domain.md` must preserve the Cadastre source-of-truth map and must not silently promote migration-active specs, research, or drafts into implementation authority. | `domain.md`, `000` | Sections 1 and 5 state status limits. |
+| `DOM-REQ-006` | `domain.md` must preserve the Cadastre source-of-truth map and must not silently promote candidate specs, research, or drafts into implementation authority. | `domain.md`, `000` | Sections 1 and 5 state status limits. |
 | `DOM-REQ-007` | `domain.md` must define graph-domain concepts without making graph state authoritative. | `domain.md`, `090` | Section 13 and graph boundary checks. |
 | `DOM-REQ-008` | `domain.md` must define identity naming classes without permitting weak evidence to auto-merge. | `domain.md`, `070` | Section 15 matches resolver boundaries. |
 | `DOM-REQ-009` | `domain.md` must define external-system boundaries without allowing external schema, taxonomy, lineage, registry, package, or analyzer terms to become Cadastre authority by default. | `domain.md` | Section 20 table. |
@@ -681,7 +675,7 @@ Root-domain-owned requirements only:
 
 | Area | Latitude granted | Boundary | Reason it is caller-equivalent |
 | --- | --- | --- | --- |
-| Markdown file placement before index update | Implementers may place the generated root document in any repo path for review. | It must not claim source-of-truth status until `000` maps it. | Path does not affect domain semantics before authority assignment. |
+| Markdown file placement before index update | Implementers may place the candidate root document in any repo path for review. | It must not claim source-of-truth status until `000` maps it. | Path does not affect domain semantics before authority assignment. |
 | Internal formatting of implementation maps | Implementers may maintain local module-to-domain mapping files. | They must not redefine domain terms or owners. | Caller-visible domain behavior depends on owner specs, not local formatting. |
 | Graph backend product | Implementers may evaluate different graph backends. | Active backend profile and graph contracts must preserve Cadastre IDs, ordering, and non-authority rules. | Backend choice is caller-equivalent only through `090` contract conformance. |
 | UI display names | Implementers may choose labels, localization, or layout. | Labels must map to stable domain terms and must not act as IDs. | Users see different text but domain/API behavior remains stable. |
@@ -700,10 +694,10 @@ Reviewers, agents, and specification authors must:
 - use stable identifiers instead of labels, route names, module names, graph backend IDs, storage keys, package names, or external-system identifiers;
 - treat implementation modules and storage artifacts as mappings, not definitions;
 - use `TODO:` for unresolved owner decisions, contradictions, missing source evidence, or missing mapping rows;
-- reject generated text that defines high-risk terms without owners;
+- reject candidate text that defines high-risk terms without owners;
 - reject text that imports template-specific concepts, workflows, identifiers, entity models, lifecycle states, or acceptance criteria;
 - reject text that creates synonyms for exact Cadastre tokens unless an owner spec defines the synonym and canonical replacement;
-- reject text that turns future, deferred, research, external, generated, draft, or implementation content into active domain authority;
+- reject text that turns future, deferred, research, external, candidate, draft, or implementation content into active domain authority;
 - reject graph, CIM, OCSF, lineage, metadata, analysis, package, or UI wording that implies authority not granted by an owner spec;
 - reject source absence, identity merge, graph traversal, reachability, package activation, or lifecycle claims that lack the required owner profile or state machine.
 
@@ -730,7 +724,7 @@ Drift-control rules:
 - Copied exact token lists must identify their owner and must be updated when the owner changes.
 - New glossary entries must include definition, forbidden interpretation when ambiguity is plausible, canonical identifiers when applicable, owner reference, and status.
 - Future-only or deferred terms must be labeled and must not appear as active behavior.
-- Deprecated terms must name canonical replacements and migration owner.
+- Deprecated terms must name canonical replacements and change owner.
 - Near-duplicate terms are defects unless the distinction is explicit in Section 8 or Section 10.
 - Research report language must be translated through owner specs before it appears as active Cadastre language.
 - External product names must remain external references unless an owner spec declares a vendor-neutral contract mapping.
@@ -740,9 +734,6 @@ Drift-control rules:
 
 | ID | Question | Blocking scope | Required source or owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `DOM-TODO-001` | Resolved by `000`: `docs/nlspec/domain.md` is a migration-active candidate root-domain spec. | Root domain authority. | `000` document registry. | Use for vocabulary routing only until promoted. |
-| `DOM-TODO-002` | Resolved correction: uploaded PRD front matter says `status: revised-draft`; archive-only status applies only after accepted cutover. | Authority and migration status. | `000`, `120`, and source inventory. | Treat the PRD as upstream intent before cutover and archive trace after cutover. |
-| `DOM-TODO-003` | TODO: Confirm whether active `migration_active` NLSpec files may be used as owner specs for generated root-domain vocabulary before authoritative cutover. | Owner lookup strength. | `000` and `120` acceptance decision. | Use them as migration evidence and owner candidates; do not claim implementation authority. |
 | `DOM-TODO-004` | TODO: Finalize exact raw feed manifest schema and raw record identity input ordering. | Raw record identity and replay. | `020` owner decision. | Raw identity basis remains conceptually defined but exact ordering is blocking. |
 | `DOM-TODO-005` | TODO: Complete source-category-specific coverage dimension catalog. | Coverage-sensitive absence and negative claims. | `060` owner decision. | Coverage-dependent negative claims remain blocked where dimensions are unresolved. |
 | `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | Affected correction classes remain blocked. |
@@ -751,7 +742,6 @@ Drift-control rules:
 | `DOM-TODO-009` | TODO: Provide exhaustive active graph edge family registry and edge semantics rows for the MVP graph profile. | Relationship-family and graph mapping completeness. | `090` owner decision. | Graph edge mapping remains only concept-level; missing edge rows block activation. |
 | `DOM-TODO-010` | TODO: Confirm lifecycle transition tables for every production-affecting lifecycle machine. | Lifecycle behavior. | `030` plus package/profile owner decisions. | `LifecycleStatus` tokens remain shared names only. |
 | `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | Treat `domain.md` as no-runtime-export vocabulary reference. |
-| `DOM-TODO-012` | Resolved by migration path architecture: canonical root-domain path is `docs/nlspec/domain.md`. | Repository placement and citations. | `000` and `MANIFEST.md`. | Use `docs/nlspec/domain.md` as the canonical target path. |
 
 A downstream implementation must not resolve a `TODO:` by inference.
 
@@ -777,46 +767,11 @@ A downstream implementation must not resolve a `TODO:` by inference.
 | `DOM-AC-016` | The document passes the two-independent-implementers test for domain vocabulary, owner lookup, entity interpretation, relationship interpretation, and boundary decisions. |
 | `DOM-AC-017` | The document passes the recreatability test for the root Cadastre domain model and owner map without relying on the uploaded template. |
 | `DOM-AC-018` | The document is small enough for prompt context but complete enough to prevent semantic drift at root-domain level. |
-| `DOM-AC-019` | Every source in the source traceability table was inspected, and no unseen text is claimed as read or verified. |
-| `DOM-AC-020` | The root-domain owner map includes every supplied Cadastre source-of-truth or adjacent artifact inspected for this generation. |
-| `DOMAIN-PATCH-AC-001` | Section 1 has no unresolved authority TODO about whether `domain.md` is indexed. |
-| `DOMAIN-PATCH-AC-002` | Every domain concept has exactly one owner spec or an explicit unresolved/deferred row. |
-| `DOMAIN-PATCH-AC-003` | The domain owner map matches the `000` owner registry. |
-| `DOMAIN-PATCH-AC-004` | The document contains no runtime behavior that is not routed to an owner spec. |
+| `DOM-AC-019` | No external-draft evidence table remains in this document. |
+| `DOM-AC-020` | The root-domain owner map uses owner specs and exported contract names only. |
+| `DOMAIN-CLEANUP-AC-001` | The document contains no banned reference class. |
+| `DOMAIN-CLEANUP-AC-002` | Every owner-routing table uses the cleaned status vocabulary from `000`. |
+| `DOMAIN-CLEANUP-AC-003` | Conflict handling uses local `TODO:` rows or validation failure. |
+| `DOMAIN-CLEANUP-AC-004` | No external-draft evidence table remains. |
+| `DOMAIN-CLEANUP-AC-005` | Private implementation artifacts are described without deprecated artifact-index wording. |
 
-## Source traceability
-
-| Source | Section or heading | Used for | Limits |
-| --- | --- | --- | --- |
-| `docs/archive/PRD-Cadastre.revised-draft.md` | Product Summary, lines 8-52; Document Status, lines 54-104 | Domain thesis, lakehouse-fed boundary, projection non-authority, research non-authority boundary, public/private feed concepts. | Uploaded file name has double dot; front matter says `status: revised-draft`. The canonical target path is `docs/archive/PRD-Cadastre.revised-draft.md`; archive-only status applies after accepted cutover. |
-| `000-cadastre-spec-index.md` | Authority, lines 13-17; Purpose, lines 19-21; Document Status Vocabulary, lines 41-51; Authoritative Source Rule, lines 53-63; Source-of-Truth Map, lines 65-83; Dependency Matrix, lines 91-109 | Authority model, owner map, status vocabulary, migration limits, research non-authority. | Does not list root `domain.md`; this is reported as `TODO:`. |
-| `010-system-boundary-and-authority.md` | Boundary Contract, lines 43-55; Authority Classes, lines 57-68; Projection Authority Rule, lines 70-74; Public and Private Source Binding, lines 76-87; Cross-Domain Invariants, lines 89-97 | Product boundary, authority classes, projection boundary, private/public source binding, invariants. | Migration-active candidate, not marked authoritative in supplied index. |
-| `020-lakehouse-feeds-and-table-state.md` | Purpose, lines 19-21; Exports, lines 36-55; Feed Read Contract, lines 57-70; Completeness Receipt Contract, lines 79-94; Table State Contract, lines 96-109; Maintenance Safety, lines 111-118 | Lakehouse feed terms, raw import, completeness receipt, table-state refs, maintenance and retention boundaries. | Contains unresolved raw record identity ordering TODO. |
-| `030-processing-dag-lifecycle-and-versioning.md` | Stage Graph Contract, lines 56-71; Lifecycle Contract, lines 73-87; Run Locks, lines 89-91; Version Manifest Contract, lines 93-97; Execution Algorithm, lines 103-119 | Processing stage, lifecycle, version manifest, run lock, output permission vocabulary. | Full lifecycle transition tables are owner-specific and not copied. |
-| `040-canonical-data-observation-and-fact-model.md` | Canonical Serialization, lines 53-67; Omission Semantics, lines 69-83; Core Records, lines 85-95; Assertion States, lines 97-109; Graph Delta Primitive Shapes, lines 111-113 | Core records, entity definitions, omission states, assertion states, graph delta primitive boundary. | Field schemas are not duplicated; behavior remains owned by this spec. |
-| `050-normalization-external-schema-and-mapping.md` | Parser Contract, lines 59-71; Silver Normalization Contract, lines 73-77; External Schema Profile Contract, lines 79-83; OCSF Mapping Requirements, lines 85-94; Source Extension Fields, lines 96-98; CIM Projection Contract, lines 114-116 | Parser/silver/external schema/OCSF/CIM/source extension vocabulary and boundaries. | Exact MVP OCSF mapping rows are not supplied in this root doc. |
-| `060-source-authority-completeness-coverage-and-absence.md` | Source Authority Contract, lines 58-62; Completeness Contract, lines 64-80; Progress Signal Interpretation, lines 82-94; Coverage Contract, lines 96-100; DeriveAbsenceOrUnknown, lines 102-114; Watermarks, lines 116-118 | Source authority, completeness, progress signal, coverage, absence, watermark vocabulary and non-implication rules. | Coverage dimension catalog has an explicit TODO in source. |
-| `070-identity-resolution-and-target-selectors.md` | Resolver Authority, lines 57-61; Evidence Roles, lines 63-79; Candidate Generation, lines 81-83; Hard Blocker Precedence, lines 85-99; ResolveIdentity, lines 101-117; Review Contract, lines 119-121; Target Selector Safety, lines 123-127 | Identity evidence, resolver authority, weak-evidence defaults, hard blockers, review, target selector boundaries. | Does not define all concrete resolver matrix rows in root doc. |
-| `080-temporal-corrections-replay-and-gold-derivation.md` | Temporal Axes, ResolveFactTime, Gold Derivation, Correction, Late Arrival, Replay, Deterministic Side Effects, lines 57-107 | Temporal/gold/correction/replay concepts, current-time fallback prohibition, append-only correction boundary. | Contains TODOs for correction snapshot roles and replay equivalence catalog. |
-| `090-graph-projection-serving-and-backends.md` | Projection Authority, lines 70-74; Graph Delta Identity, lines 76-78; Edge Semantics and Traversal, lines 80-84; Backend Preflight, lines 86-88; QueryGraph Contract, lines 104-125; Derived View Lag, lines 127-129; Graph Rebuild, lines 131-133; Drift Check Boundary, lines 135-137 | Graph concepts, graph non-authority, graph ID, edge semantics, traversal, backend, query, lag, rebuild, drift boundaries. | Active edge-type registry is not reproduced; missing exhaustive edge mapping remains TODO. |
-| `100-packages-supply-chain-and-activation.md` | Activation Unit, Package Release Manifest, Package Set Manifest, Trust Verification, Activation Algorithm, Rollback and Emergency Behavior, lines 65-121 | Package artifact versus activation, package-set authority, trust verification, fail-closed activation, rollback boundaries. | Registry/product choices and package policies remain owner-specific. |
-| `110-api-ux-health-errors-and-security.md` | Roles, API Bounds, Source and Export State Labels, Error Model, Evidence Drillback, Security and Redaction, lines 58-126 | User-facing state labels, API/UI label boundary, errors, evidence drillback, redaction. | API shapes are not duplicated beyond domain-level terms. |
-| `120-validation-fixtures-and-acceptance.md` | Validation Ownership Rule, Validation Artifact Model, Required Negative Test Classes, Acceptance Aggregation, Migration Acceptance Criteria, lines 57-95; Definition of Done, lines 97-105 | Validation/acceptance vocabulary, binary acceptance criteria, migration acceptance, negative test classes. | Test implementation mechanics are not included. |
-| `130-analysis-enrichment-and-registry-governance.md` | Non-Authority Rule, lines 64-66; Analysis Rules, lines 68-72; Derivation Rule Boundary, lines 74-76; Threat-Intel Enrichment, lines 78-82; Lineage and Artifact Boundary, lines 84-88; Registry Governance, lines 90-92 | Analysis, enrichment, lineage, artifact class, registry governance boundaries. | Does not grant authority beyond owner-specified interfaces. |
-| `200-future-reachability-analysis-domain.md` | Authority, lines 13-19; Explicit Non-Scope, lines 21-29; Preserved Contract Candidates, lines 31-42; Claim Kinds, lines 44-52; Result States, lines 54-63; Prohibited MVP Outputs, lines 65-71 | Inactive future reachability domain, result-state vocabulary, prohibited MVP reachability outputs. | Inactive deferred candidate; no active MVP implementation effect. |
-| `nlspec-spec.md` | Nature of Artifact, lines 11-25; Why NLSpecs Work, lines 28-72; What an NLSpec Is Not, lines 75-89 | NLSpec quality bar: prescriptive language, two-independent-implementers test, interfaces, defaults, mapping tables, acceptance criteria. | Specification-quality standard only; no Cadastre product behavior. |
-| Uploaded `domain.md` template | Status/authority and relationship-map pattern, lines 1-80 inspected | Structure, voice, and pattern source only. | Non-authoritative for Cadastre; template domain terms excluded. |
-| `RES-001-cartography.md` | Front matter and Metadata, lines 1-16 | Research-report status and graph-system adjacency row. | Not used to define Cadastre requirements. |
-| `RES-002-jupiterone.md` | Executive Summary, lines 1-18 | Research-report status and graph/identity adjacency row. | Not used to define Cadastre requirements. |
-| `RES-003-taxi-lang.md` | Executive verdict, lines 1-18 | Research-report status and semantic-overlay/tooling adjacency row. | Not used to define Cadastre requirements. |
-| `RES-004-ocsf-schema.md` | Executive summary, lines 1-18 | Research-report status and OCSF adjacency row. | Not used to define Cadastre requirements beyond owner-spec-adopted concepts. |
-| `RES-005-Lakehouse-Derived-Graph-Architecture.md` | Executive summary, lines 1-10 | Research-report status and lakehouse/derived graph adjacency row. | Not used to define Cadastre requirements. |
-| `RES-006-source-adapter-ingestion-patterns.md` | Front matter and Executive summary, lines 1-17 | Research-report status and ingestion-pattern adjacency row. | Not used to define Cadastre requirements; owner specs provide authoritative adopted terms. |
-| `RES-007-normalization-and-schema-standards.md` | Front matter and Executive verdict, lines 1-20 | Research-report status and normalization-schema adjacency row. | Not used to define Cadastre requirements; owner specs provide authoritative adopted terms. |
-| `RES-008-identity-graph-attack-paths.md` | Front matter and Executive verdict, lines 1-20 | Research-report status and attack-path/graph adjacency row. | Not used to define Cadastre requirements; owner specs provide authoritative adopted terms. |
-| `RES-009-identity-resolution-governance.md` | Front matter and Executive summary, lines 1-20 | Research-report status and identity-governance adjacency row. | Not used to define Cadastre requirements; owner specs provide authoritative adopted terms. |
-| `RES-010-theoretical-reachability-network-context.md` | Executive verdict, lines 1-18 | Research-report status and reachability adjacency row. | Not used as active behavior authority. |
-| `RES-011-temporal-semantics.md` | Source limits summary, lines 1-16 | Research-report status and temporal/replay adjacency row. | Not used as active behavior authority. |
-| `RES-012-graph-backend-comparison.md` | Executive verdict, lines 1-18 | Research-report status and graph-backend adjacency row. | Not used for backend selection. |
-| `RES-013-extension-package-supply-chain.md` | Executive Verdict, lines 1-18 | Research-report status and package-supply-chain adjacency row. | Not used for package registry or mechanism selection. |
-| `RES-014-source-authority-staleness-coverage-absence.md` | Executive summary, lines 1-18 | Research-report status and source-authority adjacency row. | Not used as direct authority. |

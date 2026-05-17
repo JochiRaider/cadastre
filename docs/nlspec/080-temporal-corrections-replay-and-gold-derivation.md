@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-080
 title: Temporal Corrections, Replay, and Gold Derivation
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -84,7 +79,7 @@ Implicit current-time fallback is forbidden.
 
 Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must close prior `known_to` intervals and emit new facts, interval splits, explicit retractions, conflicts, no-ops, or deterministic errors.
 
-`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The migration-finalization table below defines default correction classes and records remaining source-specific blocker rows.
+`CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The contract table below defines default correction classes and records remaining source-specific blocker rows.
 
 ## Assertion-State Transition Matrix
 
@@ -98,13 +93,13 @@ Late evidence must be routed through `EvaluateLateArrival` using late-arrival po
 
 Production replay must run `ReplayInputSufficiencyCheck`, `ReplayEquivalencePolicy`, `DecideReplayMode`, and `ComputeReplayEquivalenceChecksum` before any replay output is written.
 
-`ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. The migration-finalization table below defines active draft output classes and explicit remaining blocker rows.
+`ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. The contract table below defines active draft output classes and explicit remaining blocker rows.
 
 ## Deterministic Side Effects
 
 Runtime randomness, wall-clock reads, generated IDs, unordered iteration, external calls, or backend-discovered values must not affect production output unless a declared `DeterministicSideEffectRecord` captures the value and replay behavior.
 
-## Migration finalization contracts
+## Temporal and Replay Contract Details
 
 ### TemporalSemanticsPolicy catalog
 
@@ -193,14 +188,14 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | gold/correction | temporal, authority, correction, snapshot refs | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph | projection, delta, apply, rebuild, schema refs | `REPLAY_GRAPH_MISMATCH` | reject | reject | reject |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `080-PATCH-AC-001` | Every gold candidate has one temporal resolution row or deterministic temporal error. |
-| `080-PATCH-AC-002` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, or checksum-mismatched inputs before writing output. |
-| `080-PATCH-AC-003` | Corrections never mutate existing facts in place. |
-| `080-PATCH-AC-004` | Event-sequence validation covers temporal resolution, late arrival, correction, replay, side effects, and graph rebuild equivalence. |
+| `080-CLEANUP-AC-001` | No banned reference class remains. |
+| `080-CLEANUP-AC-002` | Source event time, observation time, supplier collection time, supplier delivery time, lakehouse commit time, table snapshot time, CDC time, graph apply time, replay time, and platform current time remain distinct. |
+| `080-CLEANUP-AC-003` | `ResolveFactTime` still rejects implicit current-time fallback. |
+| `080-CLEANUP-AC-004` | Corrections remain append-only knowledge transitions and must not mutate `GoldFact` rows in place. |
 
 ## Definition of Done
 
@@ -212,30 +207,6 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `080-AC-004` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, or checksum-mismatched inputs before writing output. |
 | `080-AC-005` | Event-sequence validation covers temporal resolution, late arrival, correction, replay, side effects, and graph rebuild equivalence. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `TemporalSemanticsPolicy` | lines 1953-1983 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `KnowledgeTimeImportPolicy` | lines 1984-2010 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `TemporalObservationTimeResolution` | lines 2011-2058 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `LateArrivalPolicy` | lines 2059-2087 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `BitemporalQueryMode` | lines 2088-2123 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFact` | lines 2719-2800 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFactCorrectionPolicy` | lines 2801-2831 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFactChangeSet` | lines 2832-2871 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CorrectionSnapshotRefPolicy` | lines 2872-2897 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Gold Correction Assertion-State Transition Matrix` | lines 2898-2913 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ReplayEquivalencePolicy` | lines 3781-3806 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ReplayInputSufficiencyCheck` | lines 3807-3853 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `DeterministicSideEffectRecord` | lines 3854-3879 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GraphRebuildEquivalencePolicy` | lines 3880-3906 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Gold Fact Derivation Interface` | lines 9612-9729 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Temporal Resolution, Late Arrival, and Correction Interfaces` | lines 9645-9692 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Replay, Side-Effect, Graph Resume, and Watermark Interfaces` | lines 9693-9729 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Temporal, Correction, Replay, Watermark, CDC, and Idempotency Acceptance` | lines 13538-13574 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Required Product Decisions Before Final NLSpec` | lines 13635-13681 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

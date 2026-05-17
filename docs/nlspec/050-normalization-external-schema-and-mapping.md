@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-050
 title: Normalization, External Schema, and Mapping
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -113,7 +108,7 @@ ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
 
 CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must define input record classes, field mapping rows, lossy fields, unsupported fields, redaction, default values, and `ProjectionLossManifest` output. CIM success must not imply no source information was lost.
 
-## Migration finalization contracts
+## Mapping Activation Contract Details
 
 ### ExternalSchemaArtifactRef field table
 
@@ -133,7 +128,7 @@ CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must def
 
 ### Observation-to-OCSF mapping matrix
 
-The following rows define the active MVP mapping scope at migration-finalization time. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
+The following rows define the active MVP mapping scope at MVP mapping scope. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
 
 | Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -187,14 +182,14 @@ The following rows define the active MVP mapping scope at migration-finalization
 
 External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts cannot authorize production mappings.
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `050-PATCH-AC-001` | Every active MVP observation mapping has an exact row or an explicit unresolved blocker. |
-| `050-PATCH-AC-002` | OCSF-aligned observations validate against one exact compiled artifact. |
-| `050-PATCH-AC-003` | Undeclared source extension fields fail before production output. |
-| `050-PATCH-AC-004` | CIM projection records loss and cannot become authoritative input. |
+| `050-CLEANUP-AC-001` | No banned reference class remains. |
+| `050-CLEANUP-AC-002` | `normalized_fields` remains governed by active OCSF profile unless an observation type is declared `cadastre_only`. |
+| `050-CLEANUP-AC-003` | OCSF raw, unmapped, observable, enrichment, status, severity, and confidence fields remain non-authoritative unless explicitly governed by policy. |
+| `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
 
 ## Definition of Done
 
@@ -206,31 +201,6 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-AC-004` | CIM projection records every lossy or unsupported mapping and never becomes authoritative input. |
 | `050-AC-005` | Every external mapping table is exhaustive for its declared MVP observation scope or carries a blocking `TODO:` row. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CadastreSilverObservation` | lines 1806-1886 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceExtensionFieldRule` | lines 1887-1952 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalSchemaProfile` | lines 3907-4007 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SemanticOverlayArtifact` | lines 4008-4071 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceSchemaImportProfile` | lines 4072-4141 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CIMProjectionProfile` | lines 4142-4164 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalSchemaArtifactRef` | lines 5955-5983 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ProfileResolutionManifest` | lines 5984-6016 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalEnumMappingRule` | lines 6065-6087 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `OCSFProfileUpgradeReport` | lines 6088-6120 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `OCSFBaseEventFieldPolicy` | lines 6121-6151 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `MappingValidationRule` | lines 6968-7024 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `MappingProjectManifest` | lines 8434-8469 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ToolchainDependencyReview` | lines 8470-8502 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ExternalToolCapabilityEvidence` | lines 8503-8534 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `ValidationScenario` | lines 8535-8613 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalValidationOutput` | lines 8614-8665 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source Categories and Normalization` | lines 10647-11031 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Parser Interface` | lines 9234-9257 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Normalization Mapping Interface` | lines 9258-9396 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

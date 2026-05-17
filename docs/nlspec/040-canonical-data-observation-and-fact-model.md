@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-040
 title: Canonical Data, Observation, and Fact Model
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -110,7 +105,7 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 
 This spec owns only the primitive record shape of `GraphNodeDelta` and `GraphEdgeDelta`. Projection rules, graph apply, backend mapping, traversal, and query behavior are owned by `090`.
 
-## Migration finalization contracts
+## Canonical Model Contract Details
 
 ### CanonicalChecksumPolicy
 
@@ -170,14 +165,13 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `malformed` | `040`, `050` | `110` | no authority | no edge | error |
 | `redacted` | `040`, `110` | `110` | hidden from caller only | redaction policy | redacted |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `040-PATCH-AC-001` | Two implementations compute the same IDs and checksums for the same canonical records. |
-| `040-PATCH-AC-002` | Unknown fields are rejected unless the owning record declares an extension map. |
-| `040-PATCH-AC-003` | Omitted, null, empty, redacted, permission-limited, unknown, and unsupported remain distinguishable in serialized output. |
-| `040-PATCH-AC-004` | Other specs import canonical ID and checksum rules rather than redefining them. |
+| `040-CLEANUP-AC-001` | No banned reference class remains. |
+| `040-CLEANUP-AC-002` | Canonical JSON remains deterministic for IDs, checksums, replay equivalence, package activation, validation output, graph delta identity, and audit evidence. |
+| `040-CLEANUP-AC-003` | Omission states remain explicit and cannot be inferred from optionality, nullability, OCSF absence, CIM absence, or source row absence alone. |
 
 ## Definition of Done
 
@@ -189,22 +183,6 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-AC-004` | Every `GoldFact` carries valid-time, known-time, assertion-state, evidence, confidence, and authority references. |
 | `040-AC-005` | Unknown fields are rejected unless declared through a namespaced extension field rule owned by `050`. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Scalar Types` | lines 1582-1599 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Omission Semantics` | lines 1621-1690 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `RawRecord` | lines 1691-1805 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CadastreSilverObservation` | lines 1806-1886 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `CanonicalEntity` | lines 2124-2155 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `SourceAsset` | lines 2156-2170 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Identifier` | lines 2171-2213 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GoldFact` | lines 2719-2800 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `EvidenceRef` | lines 2914-2927 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GraphNodeDelta` | lines 2928-2947 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `GraphEdgeDelta` | lines 2948-2977 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 

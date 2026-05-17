@@ -1,11 +1,8 @@
 ---
 doc_id: CADASTRE-DEFERRED-200
 title: Future Reachability Analysis Domain
+doc_type: deferred-nlspec
 status: inactive_deferred
-doc_type: deferred-nlspec-candidate
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
 ---
 
 ## Authority
@@ -68,7 +65,7 @@ This document may become active only after a new accepted NLSpec promotion updat
 - Unqualified `reachable` or `not reachable` wording.
 - Any graph property that implies packet, session, service, or identity-conditioned access.
 
-## Migration finalization contracts
+## Deferred Reachability Validation Contracts
 
 ### ReachabilityDeferredValidationPointer
 
@@ -81,7 +78,7 @@ This document may become active only after a new accepted NLSpec promotion updat
 | Boolean reachability property | `090`, `110`, and `120` API/projection row | fail or no-op |
 | unqualified `reachable` or `not reachable` wording | `110` API wording row | reject wording or qualify as unsupported/deferred |
 
-### Future activation owner-decision placeholders
+### Future Activation Required Decisions
 
 | Decision area | Required future owner decision |
 | --- | --- |
@@ -93,13 +90,14 @@ This document may become active only after a new accepted NLSpec promotion updat
 | API wording | Define qualified user-facing language and forbidden claims. |
 | validation fixtures | Define positive, negative, unknown, unsupported, conditional, and permission-limited fixtures. |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `200-PATCH-AC-001` | The document remains `inactive_deferred`. |
-| `200-PATCH-AC-002` | Active graph and gold specs contain prohibition validation rows. |
-| `200-PATCH-AC-003` | Future activation still requires index promotion, owners, open-decision resolution, and passing validation. |
+| `200-CLEANUP-AC-001` | No banned reference class remains. |
+| `200-CLEANUP-AC-002` | The document remains `inactive_deferred`. |
+| `200-CLEANUP-AC-003` | Active graph and gold specs still cannot emit theoretical reachability facts, graph edges, graph properties, or unqualified reachability claims from this document. |
+| `200-CLEANUP-AC-004` | Future activation still requires accepted NLSpec promotion, assigned owners, resolved future activation decisions, and passing validation fixtures. |
 
 ## Definition of Done for Future Activation
 
@@ -110,12 +108,3 @@ This document may become active only after a new accepted NLSpec promotion updat
 | `200-AC-003` | User-facing wording distinguishes observed traffic, modeled-within-scope analysis, representative paths, diagnostic probes, unknown partial evidence, and unsupported model components. |
 | `200-AC-004` | Graph and gold outputs remain disabled until `ReachabilityClaimPolicy` authorizes a narrower output and validation passes. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Future Non-MVP Reachability Analysis Domain` | lines 8752-9160 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Analysis Interface` | lines 10232-10279 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Configuration Defaults` | lines 10597-10619 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Future Reachability Boundary Acceptance` | lines 13506-13537 |
-| Decomposition plan | Current user prompt | Deferred reachability target and activation boundary. |

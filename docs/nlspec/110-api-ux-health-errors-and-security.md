@@ -1,18 +1,13 @@
 ---
 doc_id: CADASTRE-NLSPEC-110
 title: API, UX, Health, Errors, and Security
-doc_type: candidate-nlspec
-status: migration_active
-generated_on: 2026-05-17
-source_prd: docs/archive/PRD-Cadastre.revised-draft.md
-source_prd_sha256: 99437d5ec12d52752a0003577ac37f8a6c6f1221ac3ae3b7cce713b003aeae55
+doc_type: nlspec
+status: candidate
 ---
 
 ## Authority
 
-This document is a generated Cadastre NLSpec candidate. It is `migration_active` until the migration ledger marks its source rows complete and `docs/nlspec/120-validation-fixtures-and-acceptance.md` records passing acceptance evidence.
-
-This document owns the contracts listed in `Exports`. Other active Cadastre NLSpecs may import those contracts by exact name and must not restate them.
+This document owns the contracts listed in `Exports`. Other Cadastre NLSpecs may import those contracts by exact name and must not restate them. This document has implementation authority only after the document registry marks it `authoritative` and its acceptance criteria pass.
 
 ## Purpose
 
@@ -123,7 +118,7 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 - Public artifacts must not expose private source bindings, route names, credentials, or environment-specific inventories.
 - Audit events must record caller, authorization context checksum, operation, input checksum, output object classes, redaction summary, and error code when emitted.
 
-## Migration finalization contracts
+## API, UX, Health, Error, and Security Contract Details
 
 ### ErrorCodeOwnershipMatrix
 
@@ -203,14 +198,14 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | graph query | derived view stale and compliance/audit class | reject | `DERIVED_VIEW_LAG_ERROR` | applied | required | reject by default | owner label | canonical token | `090`, `110` |
 | export | private binding detected | none | `PRIVATE_BINDING_LEAK` | fail closed | export permission required | owner label | owner label | n/a | `010`, `110` |
 
-### Patch acceptance criteria
+### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
-| `110-PATCH-AC-001` | Every observable API outcome has deterministic success, empty, redaction, authorization, stale, partial, and error behavior. |
-| `110-PATCH-AC-002` | Error records use the most specific owner code and include owner spec. |
-| `110-PATCH-AC-003` | Public artifacts and API responses fail or redact private source bindings. |
-| `110-PATCH-AC-004` | Compliance and audit query classes reject stale graph-derived state by default. |
+| `110-CLEANUP-AC-001` | No banned reference class remains. |
+| `110-CLEANUP-AC-002` | API and UI state labels remain distinct and cannot imply authorized negative facts unless the owning domain spec emitted the authoritative output. |
+| `110-CLEANUP-AC-003` | Raw payload exposure remains false by default and requires raw-evidence permission. |
+| `110-CLEANUP-AC-004` | Generic error codes remain forbidden when a more specific owner error code exists. |
 
 ## Definition of Done
 
@@ -222,21 +217,6 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-AC-004` | Error records include owner spec and use the most specific available error code. |
 | `110-AC-005` | Compliance and audit query classes reject stale graph-derived state by default. |
 
-## Source Traceability
-
-| Source | Section or artifact | Location |
-| --- | --- | --- |
-| docs/archive/PRD-Cadastre.revised-draft.md | `User-Facing Behavior` | lines 1015-1533 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Operational Health` | lines 1313-1501 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Source State Labels and Export State Separation` | lines 1502-1533 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Error Model` | lines 11873-12315 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Edge Cases and Required Behavior` | lines 12316-12485 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Bounds and Limit Conditions` | lines 12796-12825 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Security Requirements` | lines 12826-12853 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Configuration and Bounds Acceptance` | lines 13053-13067 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Error and Edge-Case Acceptance` | lines 13068-13087 |
-| docs/archive/PRD-Cadastre.revised-draft.md | `Security Acceptance` | lines 13105-13121 |
-| Decomposition plan | Current user prompt | Domain decomposition, disposition matrix, dependency model, gap ledger, and migration acceptance criteria. |
 
 ## Open Questions
 
