@@ -722,6 +722,29 @@ This section defines cross-representation mappings not already defined in Sectio
 | Private completeness capabilities | `PrivateCompletenessEvidenceInventory` and `UpstreamCompletenessEvidence`. | Supplier evidence must carry authority limit; active public completeness and category closure rows decide effect. | `020`, `060` | Resolved. |
 | Private golden examples | Redacted `LakehouseFeedFixture` when public validation needs evidence. | Direct enterprise API recordings must not replace lakehouse fixtures. | `120`, `020` | Resolved. |
 
+### 19.8 API label and outcome owner routing
+
+These entries route vocabulary only. Runtime behavior remains owned by `110` and the source owner specs named in each row.
+
+| Domain term | Primary owner | Required domain interpretation | Must not be used for |
+| --- | --- | --- | --- |
+| API state label | `110` | Caller-visible rendering of owner state. | Source authority, fact truth, compliance pass/fail, graph cleanup, remediation. |
+| Export state label | `110` | Export-visible rendering of owner state. | Domain truth or owner-source outcome. |
+| Endpoint outcome | `110` | Observable API success, empty, denial, stale, partial, conflict, ambiguity, redaction, pagination, and error behavior. | Owner algorithm behavior. |
+| Response envelope | `110` | Common API response wrapper and checksum surface. | Core record schema or owner state semantics. |
+| Error registry row | `110` plus owner fragments | Generated caller-visible error metadata from owner codes. | Error cause ownership. |
+| Authorization decision | `110` | Runtime authorization result for an API/export operation. | Domain identity or source authority. |
+| Redaction context | `110` | Runtime data-class redaction decision for caller-visible and audit output. | Record existence, fact truth, or source completeness. |
+
+### 19.9 High-risk API state distinction table
+
+| Concept | Owner and producer | Domain distinction | Forbidden substitution |
+| --- | --- | --- | --- |
+| `FactAbsenceOutcome` | Owned by `040`; produced by `060`. | Fact-level absence outcome. | Must not be treated as a caller-visible label without `110` mapping. |
+| `GoldFact.assertion_state` | Owned by `040`; transitioned by `080`. | Assertion state of a core fact. | Must not be treated as source completeness or API state by itself. |
+| `SourceStateLabel` | Owned by `110`. | API/export label for owner state rendering. | Must not be treated as domain truth, compliance pass/fail, graph cleanup, retraction, watermark, or remediation. |
+| compliance pass/fail | Emitted only by the applicable owner output. | Owner-emitted result, not label-inferred. | Must not be inferred from `unknown`, `error`, `not_checked`, `not_applicable`, `conflicted`, or `ambiguous`. |
+
 ## 20. External-system and implementation boundaries
 
 | External or adjacent concern | Domain boundary | Required language | Forbidden language |

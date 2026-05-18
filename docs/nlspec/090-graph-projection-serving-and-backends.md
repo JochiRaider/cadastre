@@ -306,6 +306,18 @@ replay_same_event
 
 Failed, partial, aborted, or schema-preflight-failed graph apply must not advance derived-view or watermark state. Backend transaction behavior must be represented as persisted evidence; it must not become lifecycle authority.
 
+### GraphQueryResponseHandoffTo110
+
+`090` owns graph execution, graph result ordering, graph candidate limits, derived-view state, graph object visibility eligibility, and backend cursor rejection. `110` owns public API rendering. `090.QueryGraph` must emit an owner-level result that matches one row below so `110` can render without re-running graph logic or inferring backend semantics.
+
+| query_class | Required graph payload shape | Empty-result semantics | Partial-result permission | Derived-view stale behavior | Source-stale display eligibility | Conflicted graph-object visibility | Ambiguous graph-object behavior | Candidate-limit behavior | Required `110` error mapping |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `node_detail` | At most one graph node detail with graph profile context and evidence refs. | No visible node returns empty detail only when authorization permits existence disclosure; otherwise `AUTHORIZATION_ERROR`. | Forbidden. | Reject when current graph state is required; otherwise label `derived_view_stale`. | Allowed only when output eligibility row permits stale detail display. | Display only when eligibility row permits conflict detail. | More than one candidate for one Cadastre ID emits `GRAPH_QUERY_TRANSLATION_ERROR`; no mutation. | Candidate limit fixed at 1. | `110.GraphQueryResponse` with `error` or empty payload. |
+| `neighbor_expansion` | Center node plus ordered neighbor nodes and edges. | Empty neighbor set is success with empty arrays. | Allowed only when translation profile marks partial expansion safe. | Label or reject by `DerivedViewLagPolicy`. | Eligible stale neighbors may display with `source_stale`. | Eligible conflicted edges may display as `conflicted`; no pathfinding implication. | Ambiguous endpoint or edge state emits `ambiguous` or owner error; no graph mutation. | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`; no partial unless allowed. | `110.EndpointOutcomeMatrix.GraphQuery`. |
+| `bounded_path` | Ordered paths with path node ID sequence, edge refs, and traversal classes. | Empty traversal class returns no paths without backend traversal; no matching path returns empty paths. | Forbidden for compliance and audit; otherwise only when profile permits. | Reject stale derived view by default. | Stale edges path-visible only when eligibility permits. | Conflicted path objects excluded unless eligibility permits conflict-visible path detail. | Ambiguous traversal class, endpoint, or object state rejects or returns diagnostic without mutation. | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`; do not leak partial paths unless permitted. | `GRAPH_TRAVERSAL_CLASS_REQUIRED`, `DERIVED_VIEW_LAG_ERROR`, or candidate-limit row. |
+| `evidence_drillback` | Graph object refs mapped to gold/silver/raw evidence refs, no raw bytes. | Empty chain only when graph object is visible and has no evidence refs; missing required lineage maps to `LINEAGE_ERROR`. | Allowed for paged evidence metadata. | Preserve graph state ref separately from source state. | Display source-stale evidence metadata when permitted. | Preserve conflict context in evidence metadata. | Ambiguous evidence mapping emits `ambiguous` and no raw expansion. | Candidate limit blocks raw expansion. | `110.EvidenceDrillbackResponse`. |
+| `analysis_read_only` | Read-only graph result set and compatibility refs for `130`. | Empty analysis result is success. | Only when `130.RuleGraphCompatibilityMatrix` permits partial read-only output. | Reject or label according to `130` handoff and `DerivedViewLagPolicy`. | Preserved as analysis input state, not fact authority. | Preserved as non-authoritative analysis context. | Ambiguous graph result remains non-mutating and must not be promoted to finding authority. | Candidate limit emits owner error and no mutation. | `110.AnalysisReadOnly` endpoint outcome row. |
+
 ## QueryGraph Contract
 
 Graph query responses must be sorted by Cadastre-defined ordering, never backend natural order.
@@ -431,13 +443,13 @@ A delta operation not listed in this table fails with `CORE_FIELD_TYPE_INVALID` 
 
 | Token rule | Required behavior |
 | --- | --- |
-| Default TTL | `900` seconds. |
-| Minimum TTL | `60` seconds. |
-| Maximum TTL | `3600` seconds. |
-| Identity inputs | Query checksum, authorization context checksum, derived-view state, ordering keys, page boundary, expiry, graph projection profile ref, query translation profile ref, backend taxonomy mapping profile ref, output eligibility row-set checksum, and redaction context checksum. |
-| Expired token | Reject with `GRAPH_PAGE_TOKEN_EXPIRED` before backend query execution. |
-| Mismatched token | Reject with `GRAPH_PAGE_TOKEN_INVALID` before backend query execution when any identity input mismatches the current request context. |
-| Backend cursor | Reject with `GRAPH_PAGE_TOKEN_INVALID`; backend cursors and internal IDs are forbidden token identity. |
+| `110` handoff | TTL request-field behavior, default `900`, bounds `60..3600`, expired-token non-refresh, authorization mismatch, request checksum mismatch, redaction mismatch, and portability rules are owned by `110.PageTokenPolicy`. |
+| Identity inputs owned by `090` | Query checksum, authorization context checksum, derived-view state, ordering keys, page boundary, expiry, graph projection profile ref, query translation profile ref, backend taxonomy mapping profile ref, output eligibility row-set checksum, redaction context checksum, backend schema fingerprint ref, and graph query class. |
+| Expired token | Reject with `GRAPH_PAGE_TOKEN_EXPIRED` before backend query execution and before owner result materialization. |
+| Mismatched token | Reject with `GRAPH_PAGE_TOKEN_INVALID` before backend query execution when any graph-owned identity input mismatches the current request context. |
+| Backend cursor | Reject with `GRAPH_PAGE_TOKEN_INVALID`; backend cursors and backend-native IDs are forbidden token identity. |
+| Derived-view mismatch | Reject before backend query execution; use `DERIVED_VIEW_LAG_ERROR` only when current derived-view state is required by query class. |
+| Portability | Graph page tokens are not portable across callers, roles, graph profiles, query translation profiles, backend taxonomy mappings, output eligibility row sets, redaction contexts, derived-view states, or backend schema fingerprints. |
 
 ### GraphRebuildManifest schema
 
@@ -541,10 +553,45 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_PAGE_TOKEN_INVALID` | A graph page token identity input mismatches the request context or contains backend cursor identity. |
 | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | A bounded path query omits `allowed_traversal_classes`. |
 
+### GraphErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `GRAPH_ARTIFACT_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-missing` |
+| `GRAPH_ARTIFACT_INACTIVE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-inactive` |
+| `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-checksum-mismatch` |
+| `GRAPH_ARTIFACT_SCOPE_MISMATCH` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-scope-mismatch` |
+| `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-projection-core-override-forbidden` |
+| `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-flow-role-evidence-required` |
+| `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-expiry-source-authority-required` |
+| `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-handoff-effect-unsupported` |
+| `GRAPH_EDGE_SEMANTICS_ROW_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-edge-semantics-row-missing` |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-endpoint-identity-unresolved` |
+| `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-candidate-limit-reached` |
+| `GRAPH_PAGE_TOKEN_EXPIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-page-token-expired` |
+| `GRAPH_PAGE_TOKEN_INVALID` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-page-token-invalid` |
+| `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-traversal-class-required` |
+| `GRAPH_QUERY_TIMEOUT` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-timeout` |
+| `GRAPH_QUERY_TRANSLATION_ERROR` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-translation-error` |
+| `GRAPH_DELTA_IDEMPOTENCY_CONFLICT` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-delta-idempotency-conflict` |
+| `GRAPH_BACKEND_PROFILE_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-backend-profile-missing` |
+| `GRAPH_SCHEMA_FINGERPRINT_STALE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-schema-fingerprint-stale` |
+| `GRAPH_RAW_WRITE_BYPASS` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-raw-write-bypass` |
+| `GRAPH_DRIFT_REPAIR_FORBIDDEN` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-drift-repair-forbidden` |
+| `GRAPH_APPLY_RESUME_UNSAFE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-apply-resume-unsafe` |
+| `GRAPH_REBUILD_EQUIVALENCE_FAILED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-rebuild-equivalence-failed` |
+| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-theoretical-reachability-scope-error` |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
+| `090-GRAPH-QUERY-RESPONSE-HANDOFF-AC-001` | Every `query_class` in `GraphQueryResponseHandoffTo110` emits exactly one owner-level result shape consumed by `110` without backend inference. |
+| `090-GRAPH-CONFLICT-VISIBILITY-AC-001` | Conflicted graph objects are visible only when graph object output eligibility permits the query context and never authorize pathfinding, cleanup, or absence by default. |
+| `090-GRAPH-AMBIGUOUS-NONMUTATING-AC-001` | Ambiguous graph query states emit a non-mutating empty result, state label, or owner error and never mutate graph, identity, facts, or watermarks. |
+| `090-GRAPH-PAGE-TOKEN-TTL-HANDOFF-AC-001` | `090.GraphQueryPageTokenPolicy` imports TTL behavior from `110.PageTokenPolicy` while preserving graph-owned token identity inputs and backend cursor rejection. |
 | `090-CLEANUP-AC-001` | No banned reference class remains. |
 | `090-CLEANUP-AC-002` | Graph state remains a derived read model. |
 | `090-CLEANUP-AC-003` | Backend-generated IDs remain forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity. |

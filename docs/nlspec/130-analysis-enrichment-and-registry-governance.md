@@ -206,6 +206,21 @@ Registry governance artifacts require `030.ActivationControlledArtifactRef`. Reg
 | schema facet | schema diagnostic only unless owner maps | non-authoritative metadata | schema bytes | mismatch, stale, missing owner |
 | freshness facet | freshness diagnostic only | non-authoritative | facet bytes | use as completeness proof |
 
+### AnalysisApiHandoff
+
+Analysis output exposed through API surfaces must import `110.CommonApiResponseEnvelope`; `130` must not redefine the envelope. Analysis remains non-authoritative and read-only unless another owner spec grants a named mutation interface.
+
+| Analysis API condition | Required output or error | Required refs |
+| --- | --- | --- |
+| `analysis_read_only` success payload | Read-only result, finding preview, metric, or execution summary wrapped by `110.CommonApiResponseEnvelope`. | rule bundle, graph compatibility, authorization, redaction, version manifest, and derived-view refs when graph-backed. |
+| empty analysis result | Success with empty result and envelope; no finding authority. | rule bundle, query target, result checksum. |
+| stale derived view | Reject or label only as permitted by `090.GraphQueryResponseHandoffTo110` and `RuleGraphCompatibilityMatrix`. | derived-view state and compatibility refs. |
+| graph compatibility mismatch | Owner error; no analysis output promotion. | compatibility matrix row and failure refs. |
+| authorization or redaction mismatch | Owner or `110` authorization/redaction error; no result substitution. | authorization decision and redaction context refs. |
+| mutation attempt | `ANALYSIS_MUTATION_FORBIDDEN`. | mutation-prohibition fixture ref. |
+
+`AnalysisRuleBundle` execution summary output may reference `110.CommonApiResponseEnvelope` only by import.
+
 ### Analysis and lineage error codes
 
 | Error code | Emitted when |
@@ -218,6 +233,21 @@ Registry governance artifacts require `030.ActivationControlledArtifactRef`. Reg
 | `LINEAGE_FACET_CHECKSUM_MISMATCH` | Schema bytes or facet bytes do not match recorded checksum. |
 | `REGISTRY_AUTHORITY_FORBIDDEN` | Registry metadata attempts fact, graph, source authority, evidence, or production approval authority. |
 | `THREAT_INTEL_IDENTITY_FORBIDDEN` | Threat-intel indicator/enrichment attempts identity authority. |
+
+### AnalysisErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `REGISTRY_ARTIFACT_INACTIVE` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-artifact-inactive` |
+| `REGISTRY_ARTIFACT_OWNER_MISMATCH` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-artifact-owner-mismatch` |
+| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-volatility-boundary-violation` |
+| `ANALYSIS_MUTATION_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-analysis-mutation-forbidden` |
+| `LINEAGE_FACET_SCHEMA_MUTABLE` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-lineage-facet-schema-mutable` |
+| `LINEAGE_FACET_CHECKSUM_MISMATCH` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-lineage-facet-checksum-mismatch` |
+| `REGISTRY_AUTHORITY_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-authority-forbidden` |
+| `THREAT_INTEL_IDENTITY_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-threat-intel-identity-forbidden` |
 
 ### RuleGraphCompatibilityMatrix fixture expectations
 
@@ -253,6 +283,7 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 
 | ID | Criterion |
 | --- | --- |
+| `130-API-HANDOFF-AC-001` | Analysis API handoff fixtures cover analysis mutation rejection, graph compatibility mismatch, stale derived-view rejection or allowed stale display, empty read-only output, authorization/redaction mismatch, and lineage facet checksum mismatch. |
 | `130-CLEANUP-AC-001` | No banned reference class remains. |
 | `130-CLEANUP-AC-002` | Analysis, enrichment, lineage, and registry records still cannot mutate facts, graph state, completeness, watermarks, identity, package state, or source authority unless another active NLSpec grants a named interface. |
 | `130-CLEANUP-AC-003` | Analysis rules remain read-only unless routed through an owning derivation interface. |

@@ -491,6 +491,20 @@ Global replay failure precedence:
 | `conflict_visibility_update` | stale or conflicted assertion visibility changes without fact-key replacement | update visibility only when graph semantics and eligibility rows permit |
 | `identity_split_handoff` | `070.GraphCorrectionHandoff` validates split decision ref, split policy ref, retained and new canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and version manifest ref | route through `090.ProjectGraphDeltas` only when the active `090.GraphProjectionProfile` supports the handoff; unsupported profile handoff emits no graph delta and records the owner error; missing or checksum-mismatched handoff refs fail before correction/projection with no graph mutation |
 
+### TemporalApiHandoff
+
+Temporal, correction, no-op, and replay failures are owner errors with audit implications. They must not collapse into source unknowns, compliance pass/fail states, or absence outcomes.
+
+| Temporal or replay condition | Recommended `110` label or outcome | Required behavior |
+| --- | --- | --- |
+| temporal policy unresolved | `error` | Emit `TEMPORAL_POLICY_UNRESOLVED`; no gold candidate. |
+| source time not authorized | `error` | Emit `SOURCE_TIME_NOT_AUTHORIZED`; no current-time fallback. |
+| correction policy missing | `error` | Emit `CORRECTION_POLICY_MISSING`; no correction output. |
+| duplicate no-op correction | no output change plus audit evidence | Emit no graph or compliance mutation; audit the no-op evidence. |
+| replay input insufficient | replay/audit error, no source-state label | Emit `REPLAY_INPUT_INSUFFICIENT`; no production replay output. |
+| replay checksum mismatch | replay/audit error, no source-state label | Emit `REPLAY_CHECKSUM_MISMATCH`; no output substitution. |
+| stale known-state output | `source_stale` | Preserve source stale state and do not treat as derived-view lag. |
+
 ### Temporal artifact errors
 
 | Error code | Emitted when |
@@ -513,10 +527,35 @@ Global replay failure precedence:
 | `REPLAY_INPUT_INSUFFICIENT` | Required replay input, sufficiency check, snapshot ref, retention ref, manifest ref, or owner ref is absent. |
 | `REPLAY_CHECKSUM_MISMATCH` | Replay output checksum differs after all higher-precedence failures are excluded. |
 
+### TemporalErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `TEMPORAL_POLICY_UNRESOLVED` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-policy-unresolved` |
+| `TEMPORAL_INTERVAL_MODEL_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-interval-model-missing` |
+| `SOURCE_TIME_NOT_AUTHORIZED` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-source-time-not-authorized` |
+| `TEMPORAL_RESOLUTION_REQUIRED` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-resolution-required` |
+| `TEMPORAL_ARTIFACT_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-artifact-missing` |
+| `TEMPORAL_ARTIFACT_INACTIVE` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-artifact-inactive` |
+| `TEMPORAL_ARTIFACT_CHECKSUM_MISMATCH` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-temporal-artifact-checksum-mismatch` |
+| `LATE_ARRIVAL_POLICY_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-late-arrival-policy-missing` |
+| `LATE_ARRIVAL_DISCARD_FORBIDDEN` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-late-arrival-discard-forbidden` |
+| `CORRECTION_POLICY_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-correction-policy-missing` |
+| `GOLD_CORRECTION_TRANSITION_UNDEFINED` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-gold-correction-transition-undefined` |
+| `CORRECTION_SNAPSHOT_REF_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-correction-snapshot-ref-missing` |
+| `MUTABLE_BRANCH_REF_FOR_REPLAY` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-mutable-branch-ref-for-replay` |
+| `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-cdc-tombstone-retraction-unauthorized` |
+| `REPLAY_POLICY_ARTIFACT_MISSING` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-replay-policy-artifact-missing` |
+| `REPLAY_INPUT_INSUFFICIENT` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-replay-input-insufficient` |
+| `REPLAY_CHECKSUM_MISMATCH` | `080` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `080.TemporalErrorContext` | `temporal-error-replay-checksum-mismatch` |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
+| `080-API-HANDOFF-AC-001` | Temporal and replay handoff fixtures prove policy failures render as owner errors, duplicate no-op corrections render as no output change with audit evidence, replay failures do not become source-state labels, and stale known-state output renders as `source_stale`. |
 | `080-CLEANUP-AC-001` | No banned reference class remains. |
 | `080-CLEANUP-AC-002` | Source event time, observation time, supplier collection time, supplier delivery time, lakehouse commit time, table snapshot time, CDC time, graph apply time, replay time, and platform current time remain distinct. |
 | `080-CLEANUP-AC-003` | `ResolveFactTime` rejects implicit current-time fallback for absent, malformed, ambiguous, or non-authoritative time. |

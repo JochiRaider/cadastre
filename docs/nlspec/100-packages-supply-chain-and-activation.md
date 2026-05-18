@@ -634,6 +634,20 @@ A deprecated package must not be newly selected after its deprecation window exp
 
 TODO: Product governance must provide one active `PackageDeprecationWindowPolicyRow` for every confirmed `PackageType` token before authoritative package activation handoff.
 
+### PackageHealthApiHandoff
+
+Package activation, rollback, quarantine, emergency, and last-known-good states are observable through health, audit, admin API, and package activation output. They must use structured owner errors and must not leak private artifact payloads.
+
+| Package condition | Recommended API/health state | Required behavior |
+| --- | --- | --- |
+| candidate activation failure | `blocked` or `error` by failure code | Preserve current active package set and emit `PackageActivationFailureEvent`. |
+| active but not last-known-good | `blocked` | Active package may serve according to activation result, but it is not rollback-eligible as last-known-good. |
+| rollback blocked | `blocked` | Preserve current active set; emit rollback owner error. |
+| quarantine blocked | `blocked` | No package activation or artifact mutation. |
+| emergency trust bypass forbidden | `security_error` | New production activation must not bypass signature, trust, repository freshness, transparency, or anti-rollback verification. |
+
+Caller-visible outputs must not leak private artifact payloads, private repository paths, signer secrets, raw SBOM bytes, unauthorized package evidence, or private source bindings.
+
 ### Package activation failure codes
 
 | Error code | Emitted when |
@@ -683,6 +697,58 @@ TODO: Product governance must provide one active `PackageDeprecationWindowPolicy
 | `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | Deprecated artifact is selected after the applicable deprecation window without verified rollback authorization. |
 | `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | Emergency override attempts to bypass package signature, trust, repository metadata, freshness, transparency, or anti-rollback verification for new production activation. |
 | `PACKAGE_RETRY_NOT_ALLOWED` | Retry is requested for a non-retryable activation failure or changed candidate checksum. |
+
+### PackageErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PACKAGE_TYPE_UNKNOWN` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-type-unknown` |
+| `PACKAGE_TYPE_POLICY_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-type-policy-missing` |
+| `PACKAGE_TYPE_POLICY_AMBIGUOUS` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-type-policy-ambiguous` |
+| `PACKAGE_ACTIVATION_ARTIFACT_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-missing` |
+| `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-owner-mismatch` |
+| `PACKAGE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-checksum-mismatch` |
+| `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-scope-mismatch` |
+| `PACKAGE_ACTIVATION_ARTIFACT_VALIDATION_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-validation-missing` |
+| `PACKAGE_ACTIVATION_ARTIFACT_CORE_CONFLICT` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-artifact-core-conflict` |
+| `PACKAGE_SET_CHECKSUM_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-set-checksum-mismatch` |
+| `PACKAGE_COHESION_INCOMPLETE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-cohesion-incomplete` |
+| `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-repository-form-unsupported` |
+| `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-repository-rollback-detected` |
+| `PACKAGE_REPOSITORY_METADATA_EXPIRED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-repository-metadata-expired` |
+| `PACKAGE_SIGNER_UNAUTHORIZED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-signer-unauthorized` |
+| `PACKAGE_TRUST_ROOT_INACTIVE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-trust-root-inactive` |
+| `PACKAGE_SIGNATURE_THRESHOLD_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-signature-threshold-failed` |
+| `PACKAGE_TRANSPARENCY_EVIDENCE_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-transparency-evidence-missing` |
+| `PACKAGE_ATTESTATION_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-attestation-missing` |
+| `PACKAGE_ATTESTATION_SUBJECT_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-attestation-subject-mismatch` |
+| `PACKAGE_PROVENANCE_POLICY_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-provenance-policy-failed` |
+| `PACKAGE_SBOM_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-sbom-missing` |
+| `PACKAGE_SBOM_SUBJECT_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-sbom-subject-mismatch` |
+| `PACKAGE_SBOM_POLICY_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-sbom-policy-failed` |
+| `PACKAGE_DEPENDENCY_LOCK_MISSING` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-dependency-lock-missing` |
+| `PACKAGE_DEPENDENCY_LOCK_MISMATCH` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-dependency-lock-mismatch` |
+| `PACKAGE_DEPENDENCY_LIVE_RESOLUTION_FORBIDDEN` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-dependency-live-resolution-forbidden` |
+| `PACKAGE_COMPATIBILITY_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-compatibility-failed` |
+| `PACKAGE_VALIDATION_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-validation-failed` |
+| `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-version-manifest-incomplete` |
+| `PACKAGE_LKG_HEALTH_GATE_FAILED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-lkg-health-gate-failed` |
+| `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-lifecycle-illegal-transition` |
+| `PACKAGE_ACTIVATION_IDEMPOTENCY_CONFLICT` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-activation-idempotency-conflict` |
+| `PACKAGE_CANARY_OUTPUT_FORBIDDEN` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-canary-output-forbidden` |
+| `PACKAGE_SHADOW_OUTPUT_FORBIDDEN` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-shadow-output-forbidden` |
+| `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-target-unverified` |
+| `PACKAGE_ROLLBACK_STATE_INCOMPATIBLE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-state-incompatible` |
+| `PACKAGE_ROLLBACK_REPLAY_INPUT_INSUFFICIENT` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-replay-input-insufficient` |
+| `PACKAGE_ROLLBACK_GRAPH_INCOMPATIBLE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-graph-incompatible` |
+| `PACKAGE_ROLLBACK_TRUST_INCOMPATIBLE` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-trust-incompatible` |
+| `PACKAGE_ROLLBACK_QUARANTINE_BLOCKED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-rollback-quarantine-blocked` |
+| `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-quarantine-blocked-activation` |
+| `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-deprecation-window-expired` |
+| `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-emergency-package-bypass-forbidden` |
+| `PACKAGE_RETRY_NOT_ALLOWED` | `100` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `100.PackageErrorContext` | `package-error-package-retry-not-allowed` |
 
 ### ProductionPackageSetManifest schema
 

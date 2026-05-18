@@ -355,6 +355,32 @@ Stale-source output may create a stale known-state only when the active `SourceS
 
 CDC delete markers and tombstones are raw delete evidence only. They authorize retraction only when exact authority, completeness, coverage, staleness, source-history when applicable, and requested-effect gates pass. Unauthorized CDC tombstones must produce no retraction, cleanup, graph expiry, absence, or watermark advancement.
 
+### SourceAuthorityApiHandoff
+
+`060` owns source authority, completeness, coverage, staleness, progress-signal, control-result, and absence decisions. `110` owns caller-visible labels, error rendering, redaction, and audit output. A `060` result consumed by API, compliance export, audit export, graph query, health, or analysis output must select exactly one handoff row.
+
+`SourceAuthorityApiHandoffRow` fields are: owner result or error code, result state, blocking reason, requested effect, allowed effects, authorized-negative eligibility, required audit refs, caller diagnostics visibility, and recommended source label consumed by `110`.
+
+| Owner result or blocking reason | Result state | Requested effect | Allowed effects | Authorized-negative eligibility | Required audit refs | Caller diagnostics visibility | Recommended `110` label |
+| --- | --- | --- | --- | ---: | --- | --- | --- |
+| missing authority | blocked | any absence-sensitive effect | `[]` | No | authority selector, requested effect, manifest refs | owner context when authorized | `unknown` |
+| ambiguous authority | blocked | any absence-sensitive effect | `[]` | No | matching row refs when authorized | limited | `ambiguous` |
+| missing coverage | blocked | coverage-sensitive output | `[]` | No | coverage domain, assertion refs | limited | `partial_unknown_gap` or `unknown` by owner row |
+| source stale | blocked or stale output | any effect requiring fresh source | `[]` unless row explicitly permits stale display | No | staleness policy, selected time basis | visible label, redacted refs | `source_stale` |
+| permission limited | blocked | absence, cleanup, retraction, graph expiry, watermark | `[]` | No | visibility profile refs | visible label, private details redacted | `permission_limited` |
+| source unavailable | blocked | any source-dependent effect | `[]` | No | source/feed availability refs | visible label, private details redacted | `source_unavailable` |
+| scope unavailable | blocked | scope-dependent effect | `[]` | No | scope selector class, redacted refs | visible label, private details redacted | `scope_unavailable` |
+| partial known gap | blocked | absence-sensitive effect | `[]` | No | known gap refs | visible label when permitted | `partial_known_gap` |
+| partial unknown gap | blocked | absence-sensitive effect | `[]` | No | unknown gap refs | visible label when permitted | `partial_unknown_gap` |
+| not applicable | terminal non-negative | declared owner context | `[]` | No | applicability row refs | visible | `not_applicable` |
+| not checked | terminal non-negative | control or evaluation output | `[]` | No | control-result row refs | visible | `not_checked` |
+| ambiguous source-state mapping | blocked | any absence-sensitive effect | `[]` | No | source-state mapping refs | limited | `ambiguous` |
+| weak progress signal with no authority | blocked | any effect | `[]` | No | signal refs, requested effect | diagnostic only unless authorized | `unknown` |
+| watermark blocked | blocked | `watermark` | `[]` | No | watermark target, completeness and authority refs | health diagnostic only | `error` or `unknown` by health row |
+| authorized absence or not observed | terminal authorized | `absence` or predicate-specific negative output | exact row allowed effects | Yes only when `AbsenceDerivationResult.absence_authorized = true` | authority, completeness, coverage, staleness, effect refs | visible label; refs redacted by policy | `authorized_not_observed` |
+
+Every `060` result or blocking reason consumed by `110` must carry structured state and blocking reason refs. API and export layers must consume these refs and must not recompute source authority from missing rows, source staleness, progress signals, or completeness receipts.
+
 ### Authority, coverage, and absence error codes
 
 | Error/no-op code | Emitted when |
@@ -392,6 +418,48 @@ CDC delete markers and tombstones are raw delete evidence only. They authorize r
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | Watermark advancement is requested while completeness, upstream evidence, authority, coverage, or staleness gates block the effect. |
 | `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | CDC tombstone or delete marker attempts retraction without exact authority, completeness, coverage, staleness, and requested-effect authorization. |
 | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | A gold derivation, absence derivation, control-state output, cleanup, retraction, graph expiry, or watermark decision attempts to use external schema classification, status, severity, confidence, field presence, field absence, observable, enrichment, or endpoint order as authority without an active `060` row. |
+
+### SourceAuthorityErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `SOURCE_AUTHORITY_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-row-missing` |
+| `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-row-ambiguous` |
+| `SOURCE_STALENESS_POLICY_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-staleness-policy-row-missing` |
+| `SOURCE_STALENESS_POLICY_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-staleness-policy-row-ambiguous` |
+| `COVERAGE_DIMENSION_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-coverage-dimension-row-missing` |
+| `COVERAGE_DIMENSION_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-coverage-dimension-row-ambiguous` |
+| `CONTROL_RESULT_MAPPING_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-control-result-mapping-row-missing` |
+| `CONTROL_RESULT_MAPPING_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-control-result-mapping-row-ambiguous` |
+| `PROGRESS_SIGNAL_POLICY_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-progress-signal-policy-row-missing` |
+| `PROGRESS_SIGNAL_POLICY_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-progress-signal-policy-row-ambiguous` |
+| `SOURCE_HISTORY_RETENTION_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-history-retention-row-missing` |
+| `SOURCE_HISTORY_RETENTION_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-history-retention-row-ambiguous` |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-supplier-visibility-profile-row-missing` |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-supplier-visibility-profile-row-ambiguous` |
+| `SOURCE_STATE_MAPPING_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-state-mapping-row-missing` |
+| `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-closure-incomplete` |
+| `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-closure-ambiguous` |
+| `COVERAGE_ASSERTION_REQUIRED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-coverage-assertion-required` |
+| `COVERAGE_DIMENSION_UNRESOLVED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-coverage-dimension-unresolved` |
+| `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-weak-progress-signal-no-authority` |
+| `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-completeness-decision-unsafe-for-absence` |
+| `SOURCE_AUTHORITY_ARTIFACT_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-artifact-missing` |
+| `SOURCE_AUTHORITY_ARTIFACT_INACTIVE` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-artifact-inactive` |
+| `SOURCE_AUTHORITY_ARTIFACT_CHECKSUM_MISMATCH` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-artifact-checksum-mismatch` |
+| `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-source-authority-row-scope-mismatch` |
+| `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-lakehouse-feed-completeness-profile-row-missing` |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-upstream-completeness-evidence-insufficient` |
+| `COMPLETENESS_EFFECT_NOT_ALLOWED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-completeness-effect-not-allowed` |
+| `COMPLETENESS_BLOCKING_PRECEDENCE_APPLIED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-completeness-blocking-precedence-applied` |
+| `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-empty-scope-not-authorized-for-absence` |
+| `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-watermark-advancement-completeness-blocked` |
+| `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-cdc-tombstone-retraction-unauthorized` |
+| `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-external-schema-authority-forbidden` |
+| `GOLD_FACT_COVERAGE_REQUIRED` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-gold-fact-coverage-required` |
+| `GOLD_FACT_AUTHORITY_ROW_MISSING` | `060` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `060.SourceAuthorityErrorContext` | `source-authority-error-gold-fact-authority-row-missing` |
 
 ## Watermarks
 
@@ -613,6 +681,7 @@ Missing time input must never fall back to current platform time. A stale result
 
 | ID | Criterion |
 | --- | --- |
+| `060-API-HANDOFF-AC-001` | Every `060` result or blocking reason consumed by `110` has exactly one `SourceAuthorityApiHandoff` row and does not authorize negative output unless `AbsenceDerivationResult.absence_authorized = true`. |
 | `060-CLEANUP-AC-001` | No banned reference class remains. |
 | `060-CLEANUP-AC-002` | Broad source-category ranking still cannot act as fallback authority when the exact `SourceAuthorityProfileRow` is missing. |
 | `060-CLEANUP-AC-003` | Progress, liveness, lineage, freshness, acknowledgment, CDC, graph-derived, and live-probe signals remain non-authoritative by default. |

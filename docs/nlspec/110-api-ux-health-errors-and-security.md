@@ -37,12 +37,25 @@ Define observable API behavior, user-facing states, health, shared error records
 
 ## Exports
 
+- `CommonApiResponseEnvelope`
 - `GraphQueryRequest`
 - `GraphQueryResponse`
 - `AssetSearchRequest`
+- `AssetSearchResponse`
+- `AssetDetailRequest`
 - `AssetDetailResponse`
+- `EvidenceDrillbackRequest`
 - `EvidenceDrillbackResponse`
+- `OperationalHealthRequest`
 - `OperationalHealthStatus`
+- `ComplianceExportRequest`
+- `ComplianceExportResponse`
+- `AuditExportRequest`
+- `AuditExportResponse`
+- `EndpointOutcomeMatrix`
+- `AuthorizationPermissionMatrix`
+- `RedactionDataClassMatrix`
+- `ErrorCodeRegistryRow`
 - `SourceStateLabel`
 - `ExportStateLabel`
 - `ErrorRecord`
@@ -73,6 +86,155 @@ Define observable API behavior, user-facing states, health, shared error records
 | Graph page token TTL seconds | 900 | 60 through 3600. |
 | `include_raw_payload` | false | Raw payload returned only with raw-evidence permission. |
 
+### CommonApiResponseEnvelope schema
+
+Every public API, health, compliance export, and audit export response must wrap its endpoint-specific payload in `CommonApiResponseEnvelope`. Endpoint-specific response tables define only the `payload` member and payload-local fields. The envelope must be emitted for success, empty result, authorization denial, redaction-only response, owner error, and page-token error outcomes.
+
+| Field | Required | Default or omission behavior | Bounds and canonicalization | Error and checksum behavior |
+| --- | ---: | --- | --- | --- |
+| `api_contract_version` | Yes | Caller omission materializes to the active `110` API contract version selected by `030.SpecSetVersion`. | Lowercase version token or checksum ref. | Included in `request_checksum` and response checksum. |
+| `request_checksum` | Yes | Service computes after request defaults materialize; callers must not supply it as authority. | SHA-256 over canonical request object, endpoint name, caller-visible defaults, authorization request scope, and page-token TTL. | Missing or mismatched computed value fails with `API_BOUNDS_INVALID` before owner execution. |
+| `authorization_decision_ref` | Yes | None. | Ref to `AuthorizationDecision`; value may be redacted but ref presence is required. | Missing ref fails response materialization. |
+| `redaction_context_ref` | Yes | None. | Ref or checksum over applied `RedactionPolicy`, data classes, caller role, and output class. | Missing ref fails response materialization. |
+| `version_manifest_ref` | Yes for production-visible output | Validation-only responses may use null only when the validation row declares no production manifest. | Ref to `030.VersionManifest`. | Missing required API/export refs fail with `VERSION_MANIFEST_INCOMPLETE`. |
+| `state_summary` | Yes | Empty object only when no owner state was evaluated. | Object keys are `SourceStateLabel` tokens sorted lexically. | Unknown label fails with `API_BOUNDS_INVALID`. |
+| `errors` | Yes | `[]`. | Array of `ErrorRecord`; maximum 128 records per response. | Generic code rejected when owner-specific code covers the failure. |
+| `audit_event_ref` | Yes | None. | Ref to `AuditEventSchema`; caller may receive redacted ref only. | Missing audit event fails response materialization. |
+| `page_token` | No | null. | Cadastre token only; generated after authorization and redaction context are fixed. | Backend cursor or mismatched context fails before owner execution. |
+| `partial_result` | Yes | `false`. | Boolean. | `true` is permitted only when `EndpointOutcomeMatrix.partial_behavior` allows partial output for the endpoint and state class. |
+| `redaction_summary` | Yes | Counts default to zero. | Contains data-class counts and redaction reasons only; no raw bytes or private binding values. | Missing summary fails response materialization when any field was redacted. |
+
+### API request and response schemas
+
+The tables below close the public API surface. Unknown fields in any request fail with `API_BOUNDS_INVALID` before owner execution unless the endpoint explicitly declares an extension map. Request checksums are computed after defaults materialize.
+
+#### AssetSearchRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `query` | No | `""`; maximum 256 Unicode scalar values after normalization. | Out of range fails with `API_BOUNDS_INVALID`. |
+| `filters` | No | `{}`; keys must be declared asset-search filter tokens. | Unknown filter fails with `API_BOUNDS_INVALID`; private filter values are redacted in audit. |
+| `page_size` | No | `100`; range `1..1000`. | Out of range fails before owner execution. |
+| `page_token` | No | null. | Validated by `PageTokenPolicy`; invalid token does not reveal result existence. |
+| `page_token_ttl_seconds` | No | `900`; range `60..3600`. | Out of range fails with `API_BOUNDS_INVALID`; omitted value is included in checksum. |
+| `include_state_summary` | No | `true`. | `false` omits display detail but does not suppress envelope `state_summary` labels required for correctness. |
+
+#### AssetSearchResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Missing envelope fails response materialization. |
+| `assets` | Yes | `[]`; maximum `page_size` rows. | Unauthorized assets are omitted without existence leak. |
+| `result_count` | Yes | `0`; count of returned rows only, not total inaccessible matches. | Must not reveal inaccessible result counts. |
+| `state_summary` | Yes | Mirrors envelope state labels for returned rows. | State labels must use `SourceStateLabelMapping`. |
+
+#### AssetDetailRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `asset_ref` | Yes | None. | Inaccessible or unknown object returns `AUTHORIZATION_ERROR` with no existence leak when caller lacks visibility. |
+| `include_evidence` | No | `false`. | Evidence metadata requires normal detail permission; raw payload still requires raw permission. |
+| `include_raw_payload` | No | `false`. | `true` without raw permission returns redacted metadata or `RAW_PAYLOAD_PERMISSION_REQUIRED` where endpoint policy requires hard failure. |
+| `include_graph_context` | No | `false`. | `true` requires graph profile refs and derived-view state when graph-derived context is served. |
+
+#### AssetDetailResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required for success and denial. |
+| `asset` | Required on success | Null only for authorization denial or error. | Redacts inaccessible fields and private source bindings. |
+| `evidence_refs` | No | `[]`. | Raw payload bytes are never inlined. |
+| `graph_context` | No | null. | Requires `DerivedViewState` and graph profile refs; stale graph state labels as `derived_view_stale`. |
+
+#### EvidenceDrillbackRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `drillback_ref` | Yes | One of evidence ref, gold fact ref, silver observation ref, raw record ref, graph node ref, or graph edge ref. | Unknown or inaccessible refs use `AUTHORIZATION_ERROR` when disclosure would leak existence. |
+| `include_raw_payload` | No | `false`. | Raw bytes require raw-evidence permission. |
+| `page_size` | No | `100`; range `1..1000`. | Out of range fails before owner execution. |
+| `page_token` | No | null. | Validated by `PageTokenPolicy`. |
+| `page_token_ttl_seconds` | No | `900`; range `60..3600`. | Included in request checksum. |
+
+#### EvidenceDrillbackResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required. |
+| `chain` | Yes | `[]`; ordered graph/gold/silver/raw metadata chain. | Missing required lineage emits `LINEAGE_ERROR`. |
+| `raw_payload` | No | null. | Present only with raw-evidence permission and redaction policy allow. |
+| `redacted_payload_ref` | Required when raw exists but is hidden | null when no raw exists. | Must include hash/ref, not bytes. |
+
+#### GraphQueryResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required for empty, success, partial, stale, and error outcomes. |
+| `query_class` | Yes | Echo selected class. | Must match request checksum inputs. |
+| `nodes` | No | `[]`; sorted by Cadastre ordering. | Backend-native IDs are forbidden. |
+| `edges` | No | `[]`; sorted by Cadastre ordering. | Conflicted and stale visibility only when `090` handoff permits. |
+| `paths` | No | `[]`; deterministic path ordering from `090`. | Empty traversal class returns empty paths without backend traversal. |
+| `evidence` | No | `[]`. | Evidence metadata only unless raw permission and redaction allow. |
+| `derived_view_state_ref` | Yes when graph read model used | None. | Missing ref fails with `DERIVED_VIEW_LAG_ERROR` or `VERSION_MANIFEST_INCOMPLETE` by context. |
+| `graph_profile_context` | Yes when graph read model used | Profile refs for projection, query translation, backend taxonomy, output eligibility, and redaction. | Mismatch with request fails before owner execution. |
+
+#### OperationalHealthRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `health_scope` | No | `system`. Closed tokens: `system`, `feed`, `mapping`, `identity`, `source_authority`, `temporal`, `graph`, `package`, `analysis`, `api`. | Unknown token fails with `API_BOUNDS_INVALID`. |
+| `include_diagnostics` | No | `false`. | Diagnostic details are redacted by permission. |
+| `include_private_refs` | No | `false`. | Caller-visible responses must still redact private source bindings. |
+
+#### OperationalHealthStatus schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required. |
+| `status` | Yes | Closed token: `healthy`, `degraded`, `blocked`, `error`. | Must not collapse owner state labels. |
+| `components` | Yes | `[]`; one row per evaluated component. | Private refs redacted. |
+| `blocking_errors` | Yes | `[]`. | Must use generated `ErrorCodeRegistry`. |
+
+#### ComplianceExportRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `export_scope` | Yes | None. | Scope must be authorized before result enumeration. |
+| `as_of` | No | Current authorized query mode from owner policy; no wall-clock fallback for fact time. | Temporal failures surface as owner errors. |
+| `include_evidence_refs` | No | `false`. | Evidence refs redacted by permission. |
+| `page_size` | No | `100`; range `1..1000`. | Out of range fails. |
+| `page_token` | No | null. | Validated before export owner execution. |
+| `page_token_ttl_seconds` | No | `900`; range `60..3600`. | Included in request checksum. |
+
+#### ComplianceExportResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required. |
+| `rows` | Yes | `[]`; maximum `page_size`. | `unknown`, `error`, `not_checked`, `not_applicable`, `conflicted`, and `ambiguous` must not render as pass/fail by default. |
+| `export_checksum` | Yes | SHA-256 over canonical exported rows and envelope refs. | Missing checksum fails export visibility. |
+| `non_pass_fail_counts` | Yes | Counts for every non-pass/fail state label. | Counts must be nonnegative. |
+
+#### AuditExportRequest schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `audit_scope` | Yes | None. | Requires audit export permission. |
+| `time_range` | Yes | Half-open known-time or audit-event interval. | Missing bounds fail with `API_BOUNDS_INVALID`. |
+| `include_secure_diagnostics` | No | `false`. | Requires secure audit permission and still redacts private bindings when policy forbids display. |
+| `page_size` | No | `100`; range `1..1000`. | Out of range fails. |
+| `page_token` | No | null. | Validated before audit enumeration. |
+| `page_token_ttl_seconds` | No | `900`; range `60..3600`. | Included in request checksum. |
+
+#### AuditExportResponse schema
+
+| Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
+| --- | ---: | --- | --- |
+| `envelope` | Yes | `CommonApiResponseEnvelope`. | Required. |
+| `audit_events` | Yes | `[]`; maximum `page_size`. | Private source bindings and secure diagnostics redacted by permission. |
+| `audit_export_checksum` | Yes | SHA-256 over canonical audit rows and envelope refs. | Missing checksum fails export visibility. |
+| `redaction_summary` | Yes | Must include audit-specific redaction counts. | Raw payload bytes, signer secrets, private paths, and backend IDs must not appear. |
+
 ### GraphQueryRequest schema
 
 `GraphQueryRequest` must validate API bounds before calling `090.QueryGraph` or any backend adapter.
@@ -88,6 +250,7 @@ Define observable API behavior, user-facing states, health, shared error records
 | `page_size` | No | `100` | Bounds from API table. |
 | `timeout_seconds` | No | `30` | Bounds from API table. |
 | `page_token` | No | null | Must be a Cadastre page token; backend cursors are rejected. |
+| `page_token_ttl_seconds` | No | `900` | Bounds `60..3600`; omitted value is materialized before `request_checksum`. |
 | `include_evidence` | No | `false` | Evidence metadata only unless authorization permits more. |
 | `include_raw_payload` | No | `false` | Raw payload returned only with raw-evidence permission. |
 
@@ -168,6 +331,60 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 
 Generic error codes must not be used when a more specific domain code exists.
 
+### ErrorCodeRegistryRow schema
+
+`ErrorCodeRegistry` is generated from owner fragments and shared `110` rows. Owner specs own error causes and owner context. `110` owns the caller-visible registry shape, final severity, final retry class, redaction behavior, and generic-code precedence.
+
+Closed `severity` enum:
+
+```text
+informational
+diagnostic
+blocked
+error
+security_error
+```
+
+Closed `retry_class` enum:
+
+```text
+none
+caller_correctable
+retry_after_refresh
+retry_after_owner_repair
+transient_retryable
+policy_change_required
+```
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `error_code` | Yes | None. | Stable uppercase token. Duplicate codes across owners reject registry generation. |
+| `owner_spec` | Yes | None. | Exact owning spec ID. |
+| `severity` | Yes | None. | Must be one closed enum value. |
+| `retry_class` | Yes | None. | Must be one closed enum value. |
+| `redaction_rule` | Yes | None. | Must map every caller-visible and audit-visible field to a data class. |
+| `caller_visible_fields` | Yes | None. | Closed field list for caller-visible `ErrorRecord`. |
+| `audit_visible_fields` | Yes | None. | Closed field list for audit-only `ErrorRecord`. |
+| `owner_context_schema_ref` | Yes | None. | Ref to owner context shape; `TODO:` blocks promotion. |
+| `fixture_ref` | Yes | None. | `120` validation fixture family proving the row. |
+| `shared_110_override_ref` | No | null. | May narrow presentation only; must not change owner cause semantics. |
+
+### GenerateErrorCodeRegistry(owner_fragments, shared_110_rows)
+
+```text
+GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
+1. Canonically sort owner fragments by owner spec, then error_code.
+2. Reject any fragment row with a missing required field, unknown severity, unknown retry_class, missing redaction_rule, missing fixture_ref, or `TODO:` value.
+3. Reject duplicate `error_code` values unless the duplicates are byte-identical shared aliases explicitly declared by `110`.
+4. Merge each owner row with at most one shared `110` observable override selected by exact error_code.
+5. Reject a shared override that changes owner_spec, owner_context_schema_ref, or fixture_ref.
+6. Reject a generic shared code for a failure when an owner-specific generated row covers the same failure class and owner context.
+7. Compute `generated_error_registry_checksum` over canonical row bytes sorted by `error_code`.
+8. Emit `ErrorCodeRegistry` and require its checksum in `030.VersionManifest` for API, export, health, compliance, audit, and validation output.
+```
+
+If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
+
 ## Evidence Drillback
 
 Graph evidence chain:
@@ -196,6 +413,49 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 - Source-extension values that fail redaction, secret scan, namespace validation, or OCSF reserved-name policy must be redacted from caller-visible errors.
 - External-schema non-authority failures must expose owner, external field path, and redaction state without exposing raw source values.
 - Resolver error context must not expose private scope selectors, concrete tenant inventories, credentials, raw payload values, private routes, scanner site names, directory tenant inventories, zone inventories, account lists, or environment-specific source bindings.
+
+### AuthorizationPermissionMatrix
+
+Authorization defaults to deny. Every endpoint must evaluate authorization before owner execution when the request can reveal object existence, private source binding, raw evidence, audit evidence, package evidence, or graph-derived context. A denial must emit an `AuthorizationDecision` and `AuditEvent`; caller-visible output must not reveal inaccessible object existence.
+
+| Endpoint or operation | Required permission | Raw-evidence permission | No-existence-leak behavior | Audit requirement |
+| --- | --- | --- | --- | --- |
+| `AssetSearch` | `asset.search` | Not applicable unless raw filters are explicitly permitted. | Omit unauthorized matches and do not expose hidden result counts. | Audit search scope and result redaction counts. |
+| `AssetDetail` | `asset.read` for visible asset. | `raw.read` only when `include_raw_payload = true`. | Return `AUTHORIZATION_ERROR` without confirming asset existence when caller lacks visibility. | Audit requested ref and redaction classes. |
+| `EvidenceDrillback` | `evidence.read`. | `raw.read` for raw bytes; metadata-only otherwise. | Hide inaccessible chain members and emit most-specific error when lineage is missing. | Audit chain refs and redaction summary. |
+| `GraphQuery` | `graph.query` plus profile-specific object visibility. | `raw.read` only for raw evidence expansion. | Redact unauthorized objects after backend candidate materialization and before response emission. | Audit query checksum, profile refs, and derived-view state. |
+| `OperationalHealthStatus` | `health.read`. | Not applicable. | Redact private refs from diagnostics unless caller has operator/admin diagnostic permission. | Audit requested health scope. |
+| `ComplianceExport` | `compliance.export`. | Evidence refs require `evidence.read`; raw bytes remain forbidden unless explicitly permitted. | Unauthorized scope returns `AUTHORIZATION_ERROR` without row enumeration. | Audit export checksum and non-pass/fail counts. |
+| `AuditExport` | `audit.export`. | Secure diagnostics require `audit.secure_diagnostics`. | Unauthorized scope returns `AUTHORIZATION_ERROR` without event enumeration. | Audit the audit export request and checksum. |
+| `AnalysisReadOnly` | `analysis.read` plus graph/query permissions when graph-backed. | Raw expansion requires `raw.read`. | Mutation attempts fail before authorization-dependent output. | Audit rule bundle, compatibility refs, and redaction summary. |
+
+### AuthorizationDecision schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `authorization_decision_ref` | Yes | None. | Deterministic ref over caller, endpoint, permission, scope, request checksum, and policy refs. |
+| `caller_ref` | Yes | None. | Service principal or user ref; private identity attributes are audit-only. |
+| `endpoint` | Yes | None. | One endpoint token from `EndpointOutcomeMatrix`. |
+| `permission` | Yes | None. | Permission token selected from `AuthorizationPermissionMatrix`. |
+| `decision` | Yes | `deny` when no row matches. | Closed enum: `allow`, `deny`, `redact_only`. |
+| `no_existence_leak_applied` | Yes | `false`. | `true` when denial or redaction hides object existence or counts. |
+| `policy_refs` | Yes | None. | Canonically sorted authorization policy refs and checksums. |
+| `decision_checksum` | Yes | None. | SHA-256 over canonical decision bytes excluding display-only labels. |
+
+### RedactionDataClassMatrix
+
+| Data class | Default caller-visible behavior | Permission or policy required for display | Audit-visible behavior | Required redaction behavior |
+| --- | --- | --- | --- | --- |
+| `raw_payload_bytes` | Hidden. | `raw.read` and endpoint policy allowing raw byte display. | Hash and byte count only unless secure audit policy permits more. | Never inline in `EvidenceRef`, graph properties, errors, or page tokens. |
+| `raw_payload_hashes` | Visible when evidence metadata is visible. | `evidence.read`. | Visible. | Hashes may be displayed but must not imply raw-byte access. |
+| `evidence_refs` | Visible when object is visible. | `evidence.read`. | Visible. | Redact inaccessible chain members without leaking existence. |
+| `private_source_bindings` | Hidden. | No public display permission. | Redacted ref/checksum only unless private implementation audit permits. | Fail with `PRIVATE_BINDING_LEAK` when unredacted in public artifacts. |
+| `backend_native_graph_ids` | Forbidden. | No display permission. | Redacted diagnostic only. | Fail with `GRAPH_BACKEND_ID_FORBIDDEN` or `PAGE_TOKEN_INVALID` before response. |
+| `source_extension_values` | Hidden unless rule permits display. | Active `050.SourceExtensionFieldRule` and redaction policy. | Redacted value class and field path. | Secret-scan failures render as security errors with value hidden. |
+| `package_evidence` | Metadata redacted by default. | Package/admin permission by evidence class. | Evidence refs and checksums; raw SBOM bytes hidden unless policy permits. | Never leak private artifact payloads, repository paths, signer secrets, or unauthorized package evidence. |
+| `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
+
+`RedactionPolicy` must apply this matrix after owner result materialization and before checksum-visible response output. Redaction must not change owner state labels, error codes, or version-manifest refs; it may only remove or replace fields whose data class requires hiding.
 
 ## API, UX, Health, Error, and Security Contract Details
 
@@ -450,20 +710,31 @@ All owner-specific errors must appear in the generated registry before promotion
 
 ### SourceStateLabelMapping
 
-| Owner state | API label | Compliance label | Audit label | Graph label | Allowed negative interpretation | Default |
+`SourceStateLabelMapping` is total for every label declared in `Source and Export State Labels`. A label not listed here is invalid. No row may render as compliance pass/fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark advancement, or risk reduction unless the owner output separately authorizes that exact effect.
+
+| SourceStateLabel | API label | Compliance export label | Audit label | Graph/query label | Authorized negative interpretation | Default behavior |
 | --- | --- | --- | --- | --- | --- | --- |
-| `unknown` | `unknown` | `unknown` | `unknown` | `unknown` | none | unknown |
-| `permission_limited` | `permission_limited` | `unknown` | `permission_limited` | `permission_limited` | none | permission_limited |
-| `partial_known_gap` | `partial_known_gap` | `unknown` | `partial_known_gap` | `partial_known_gap` | none | partial_known_gap |
-| `partial_unknown_gap` | `partial_unknown_gap` | `unknown` | `partial_unknown_gap` | `partial_unknown_gap` | none | partial_unknown_gap |
-| `source_unavailable` | `source_unavailable` | `error` | `source_unavailable` | `source_unavailable` | none | source_unavailable |
-| `scope_unavailable` | `scope_unavailable` | `unknown` | `scope_unavailable` | `scope_unavailable` | none | scope_unavailable |
-| `not_checked` | `not_checked` | `not checked` | `not_checked` | `not_checked` | none | not_checked |
-| `error` | `error` | `error` | `error` | `error` | none | error |
-| `source_stale` | `source_stale` | `stale` | `source_stale` | `source_stale` | none | source_stale |
-| `derived_view_stale` | `derived_view_stale` | reject by default | `derived_view_stale` | `derived_view_stale` | none | derived_view_stale |
-| `authorized_not_observed` | `authorized_not_observed` | owner-defined | `authorized_not_observed` | owner-defined | only when `060` authorizes | owner-defined |
-| `not_applicable` | `not_applicable` | `not applicable` | `not_applicable` | not projected by default | none | not_applicable |
+| `source_stale` | `source_stale` | `stale` | `source_stale` | `source_stale` | No. | Preserve as stale source evidence; do not collapse into derived-view lag. |
+| `derived_view_stale` | `derived_view_stale` | reject by default | `derived_view_stale` | `derived_view_stale` | No. | Preserve as graph/read-model lag; do not collapse into source staleness. |
+| `unknown` | `unknown` | `unknown` | `unknown` | `unknown` | No. | Display as unknown with owner context when diagnostics are permitted. |
+| `not_applicable` | `not_applicable` | `not applicable` | `not_applicable` | not projected by default | No. | Display only when owner row says the fact/control does not apply. |
+| `authorized_not_observed` | `authorized_not_observed` | owner fact result | `authorized_not_observed` | owner-defined only | Yes, only when `060.AbsenceDerivationResult.absence_authorized = true` and predicate permits. | Requires exact authority, completeness, coverage, and staleness refs. |
+| `permission_limited` | `permission_limited` | `unknown` | `permission_limited` | `permission_limited` | No. | Preserve permission-limited state and redact private permission details. |
+| `source_unavailable` | `source_unavailable` | `error` or `unknown` by owner export policy | `source_unavailable` | `source_unavailable` | No. | Preserve unavailable source/feed state; no negative fact. |
+| `scope_unavailable` | `scope_unavailable` | `unknown` | `scope_unavailable` | `scope_unavailable` | No. | Preserve unavailable scope; no negative fact. |
+| `partial_known_gap` | `partial_known_gap` | `unknown` | `partial_known_gap` | `partial_known_gap` | No. | Preserve known gap when owner context is available. |
+| `partial_unknown_gap` | `partial_unknown_gap` | `unknown` | `partial_unknown_gap` | `partial_unknown_gap` | No. | Preserve unknown gap; do not treat as complete. |
+| `not_checked` | `not_checked` | `not checked` | `not_checked` | `not_checked` | No. | Display only for owner-evaluated not-checked state. |
+| `error` | `error` | `error` | `error` | `error` | No. | Emit generated `ErrorRecord`; do not collapse into unknown. |
+| `conflicted` | `conflicted` | `conflicted` | `conflicted` | visible only when owner graph eligibility permits | No. | Preserve conflicting assertion state; no pass/fail or cleanup by default. |
+| `ambiguous` | `ambiguous` | `ambiguous` | `ambiguous` | no mutation and no path expansion by default | No. | Preserve ambiguity; require owner disambiguation or explicit error. |
+
+### Conflicted and ambiguous label distinction
+
+| Label | Required meaning | Forbidden default rendering |
+| --- | --- | --- |
+| `conflicted` | Conflicting evidence or assertion state preserved by the owning domain, including `040.GoldFact.assertion_state = conflicted` or owner conflict output. | Must not render as pass, fail, authorized absence, cleanup, graph expiry, retraction, watermark, remediation, or ambiguity. |
+| `ambiguous` | More than one equally specific interpretation, row, selector, result, or state matched. | Must not render as pass, fail, authorized absence, cleanup, graph expiry, retraction, watermark, remediation, or conflict. |
 
 ### OwnerStateToSourceStateLabelMapping
 
@@ -548,15 +819,20 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 | Policy field | Required behavior |
 | --- | --- |
-| token input fields | Query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. |
-| default expiration | `900` seconds. |
-| minimum expiration | `60` seconds. |
-| maximum expiration | `3600` seconds. |
-| expired token behavior | Fail with `GRAPH_PAGE_TOKEN_EXPIRED` or `PAGE_TOKEN_EXPIRED` before owner query execution. |
-| promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` passes only when token bounds are materialized in this table and in `090.GraphQueryPageTokenPolicy`. |
-| stale derived-view behavior | If token references a stale derived-view state and query class requires current state, fail with `DERIVED_VIEW_LAG_ERROR`. |
-| authorization context mismatch | Fail with `PAGE_TOKEN_INVALID`; do not reveal whether the original result still exists. |
-| backend cursor supplied | Reject with `PAGE_TOKEN_INVALID`; backend cursors are not Cadastre token identity. |
+| request TTL field | Endpoints that paginate accept `page_token_ttl_seconds`; omitted value materializes to `900` before `request_checksum`. |
+| minimum TTL | `60` seconds. |
+| maximum TTL | `3600` seconds. |
+| token input fields | Endpoint token, query checksum, authorization decision checksum, redaction context checksum, owner profile refs, graph profile refs when applicable, derived-view state when applicable, ordering keys, page boundary, TTL, and expiration. |
+| malformed token | Reject with `PAGE_TOKEN_INVALID` before owner execution, backend execution, or result enumeration. |
+| expired token | Reject with `PAGE_TOKEN_EXPIRED` or `GRAPH_PAGE_TOKEN_EXPIRED` before owner execution; expired tokens must not be refreshed. |
+| authorization mismatch | Reject with `PAGE_TOKEN_INVALID`; response must not reveal whether the original result still exists. |
+| request checksum mismatch | Reject with `PAGE_TOKEN_INVALID` before owner execution. |
+| derived-view mismatch | Reject with `DERIVED_VIEW_LAG_ERROR` when current state is required; otherwise reject with `PAGE_TOKEN_INVALID` if the token identity no longer matches. |
+| graph profile mismatch | Reject with `GRAPH_PAGE_TOKEN_INVALID` or `PAGE_TOKEN_INVALID` before backend query execution. |
+| redaction mismatch | Reject with `PAGE_TOKEN_INVALID` before owner execution because page boundaries may differ after redaction. |
+| backend cursor identity | Reject with `PAGE_TOKEN_INVALID`; backend cursors and backend-native IDs are forbidden token identity. |
+| portability | Tokens are not portable across callers, roles, authorization decisions, graph profiles, redaction contexts, endpoint outcome states, request checksums, or derived-view states. |
+| promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` and `110-ENDPOINT-OUTCOME-TOTAL-AC-001` pass only when every endpoint token case has `120` fixtures. |
 
 ### AuditEventSchema
 
@@ -574,29 +850,33 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 ### Observable API outcome matrix
 
-| Endpoint | Condition | Output | Error | Redaction | Authorization | Stale behavior | Partial behavior | Pagination | Owner spec |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| asset search | no matches | empty result | none | applied | omit unauthorized | label stale when present | label partial when present | canonical token | `110`, owner states |
-| asset search | malformed query | none | `API_BOUNDS_INVALID` or owner validation code | n/a | required | n/a | n/a | n/a | `110` |
-| asset search | page size out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `110` |
-| asset detail | inaccessible entity | none | `AUTHORIZATION_ERROR` | no existence leak | fail closed | n/a | n/a | n/a | `110` |
-| evidence drillback | missing lineage | none | `LINEAGE_ERROR` | applied | required | owner label | owner label | n/a | `110` |
-| evidence drillback | raw payload not permitted | metadata plus redaction marker | none | raw redacted | raw permission required | owner label | owner label | canonical token | `110` |
-| evidence drillback | raw payload requested without permission and endpoint requires hard failure | none | `RAW_PAYLOAD_PERMISSION_REQUIRED` | raw redacted | raw permission required | owner label | owner label | n/a | `110` |
-| graph query | graph max depth out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `090`, `110` |
-| graph query | graph timeout | none unless partial allowed | `GRAPH_QUERY_TIMEOUT` | applied | required | owner label | partial only when allowed | canonical token | `090`, `110` |
-| graph query | derived view stale and compliance/audit class | reject | `DERIVED_VIEW_LAG_ERROR` | applied | required | reject by default | owner label | canonical token | `090`, `110` |
-| graph query | bounded path omits traversal classes | none | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | n/a | required | n/a | n/a | n/a | `090`, `110` |
-| graph query | empty traversal classes | empty path result | none | applied | required | owner label | no paths | canonical token | `090`, `110` |
-| graph query | candidate limit reached | none unless partial explicitly permitted | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | applied | required | owner label | no partial by default | canonical token | `090`, `110` |
-| graph query | expired or mismatched graph page token | none | `GRAPH_PAGE_TOKEN_EXPIRED` or `GRAPH_PAGE_TOKEN_INVALID` | no backend cursor leak | required | n/a | n/a | n/a | `090`, `110` |
-| compliance query | stale source or derived view | reject unless owner permits non-authoritative state | `DERIVED_VIEW_LAG_ERROR` or owner stale code | applied | required | reject by default | n/a | canonical token | `060`, `090`, `110` |
-| export | private binding detected | none | `PRIVATE_BINDING_LEAK` | fail closed | export permission required | owner label | owner label | n/a | `010`, `110` |
+`EndpointOutcomeMatrix` is total for public endpoint classes in this spec. Endpoint implementations must select the row by endpoint before executing owner behavior and must apply the most-specific error precedence after owner result materialization.
+
+| Endpoint | Success payload | Empty result | Unauthorized behavior | Raw payload behavior | Source stale behavior | Derived-view stale behavior | Partial known gap | Partial unknown gap | Conflicted behavior | Ambiguous behavior | Page token behavior | Most-specific error precedence | Mutation prohibition |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `AssetSearch` | `AssetSearchResponse.assets[]` plus envelope. | Return `assets = []`, `result_count = 0`, and envelope; do not expose inaccessible counts. | Omit unauthorized matches; deny scope with `AUTHORIZATION_ERROR`. | Raw bytes forbidden in search results. | Label matching rows `source_stale`. | Label only when graph-derived context is included; otherwise not applicable. | Preserve `partial_known_gap`. | Preserve `partial_unknown_gap`. | Preserve `conflicted`; no pass/fail inference. | Preserve `ambiguous`; no result merging. | Validate before enumeration; token not portable across caller or redaction. | Owner-specific validation before `API_BOUNDS_INVALID` when owner context is already selected. | Must not mutate identity, facts, graph, completeness, package, or watermarks. |
+| `AssetDetail` | `AssetDetailResponse.asset` plus envelope. | Visible but absent owner detail returns null detail with owner state label; inaccessible returns authorization denial. | `AUTHORIZATION_ERROR` with no existence leak. | Metadata only unless `raw.read` and endpoint policy permit. | Preserve `source_stale`. | Graph context labels `derived_view_stale`; compliance/audit detail rejects if current graph required. | Preserve. | Preserve. | Preserve assertion conflict. | Preserve selector/result ambiguity. | Detail pagination uses token when evidence or relationships are paged. | `AUTHORIZATION_ERROR` before private-binding leak in caller-visible denial. | Read-only. |
+| `EvidenceDrillback` | Ordered evidence chain. | Empty chain only when owner confirms no drillback refs; missing required lineage emits `LINEAGE_ERROR`. | Hide inaccessible chain members or deny whole chain when leak risk exists. | Raw bytes require `raw.read`; otherwise emit redacted payload ref. | Preserve owner source stale. | Preserve graph context lag separately. | Preserve. | Preserve. | Preserve. | Preserve. | Validate token before expanding next chain page. | `RAW_PAYLOAD_PERMISSION_REQUIRED` when policy requires hard failure; otherwise redaction marker. | Read-only. |
+| `GraphQuery` | Nodes, edges, paths, or graph detail by query class. | Empty traversal classes return no paths; no matches return empty arrays. | Apply authorization/redaction after backend candidate materialization and before response. | Raw evidence expansion requires raw permission. | Display eligible source-stale graph objects only when `090` handoff permits. | Reject or label by `DerivedViewLagPolicy` and query class. | Partial output only when `090` handoff permits. | Partial output only when `090` handoff permits. | Visibility only when `090` permits conflicted graph objects. | Reject or non-mutating empty/diagnostic by `090` handoff. | Graph token identity also includes graph profile, backend taxonomy, output eligibility, derived-view state, and redaction context. | `GRAPH_TRAVERSAL_CLASS_REQUIRED`, token errors, and candidate-limit errors precede generic API errors. | Must not mutate graph, facts, identity, or watermarks. |
+| `OperationalHealthStatus` | Component health rows. | Return evaluated components with no blocking errors. | Deny unauthorized scope with no private diagnostics. | Raw bytes forbidden. | Render as health diagnostic, not pass/fail. | Render graph health lag separately. | Render as degraded/blocking by owner. | Render as degraded/blocking by owner. | Render as error/degraded by owner. | Render as error/degraded by owner. | Pagination optional for large component sets; token policy applies. | Owner health code before generic health error. | Must not repair or mutate. |
+| `ComplianceExport` | Canonical export rows plus checksum. | `rows = []` only for authorized empty scope; no inaccessible counts. | Deny before row enumeration. | Raw bytes forbidden unless separate raw export policy exists. | Export as stale/non-pass-fail by default. | Reject stale graph-derived rows by default. | Export non-pass/fail state. | Export non-pass/fail state. | Export `conflicted`, not pass/fail. | Export `ambiguous`, not pass/fail. | Required for paged export; token not portable across manifest or policy refs. | Owner compliance errors before generic export errors. | Must not mutate facts, graph, remediation, or watermarks. |
+| `AuditExport` | Audit event rows plus checksum. | `audit_events = []` only for authorized empty audit scope. | Deny before event enumeration. | Raw bytes hidden unless secure audit policy explicitly permits. | Audit state as observed; no pass/fail. | Audit derived-view state refs separately. | Audit owner context. | Audit owner context. | Audit conflict context when authorized. | Audit ambiguity context when authorized. | Required for paged audit export. | Authorization and redaction errors before generic export errors. | Must not mutate audited records. |
+| `AnalysisReadOnly` | Analysis result, finding preview, metric, or execution summary. | Empty analysis result is success with envelope. | Deny if caller lacks analysis and underlying graph permissions. | Raw expansion requires raw permission. | Preserve as input state. | Reject or display stale state only when `130` handoff permits. | Preserve non-authoritative partial state. | Preserve non-authoritative partial state. | Preserve conflict without mutation. | Preserve ambiguity without mutation. | Uses API token policy when paged. | `ANALYSIS_MUTATION_FORBIDDEN` and graph compatibility errors precede generic API errors. | Must not mutate raw, silver, identity, gold, graph, package, completeness, watermarks, or manifests. |
 
 ### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
+| `110-API-SCHEMA-TOTAL-AC-001` | Every exported request and response object has a field table with required status, default, bounds or omitted-case behavior, redaction behavior, and error behavior. |
+| `110-STATE-LABEL-TOTAL-AC-001` | Every declared `SourceStateLabel` appears exactly once in `SourceStateLabelMapping`. |
+| `110-STATE-LABEL-CONFLICT-AC-001` | `conflicted` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or ambiguity by default. |
+| `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
+| `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, or unfixtured owner error rows. |
+| `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |
+| `110-REDACTION-MATRIX-AC-001` | Every data class in `RedactionDataClassMatrix` has caller-visible, audit-visible, and forbidden-output fixture coverage. |
+| `110-ENDPOINT-OUTCOME-TOTAL-AC-001` | Every endpoint row in `EndpointOutcomeMatrix` has deterministic success, empty, unauthorized, stale, partial, conflicted, ambiguous, pagination, redaction, and error-precedence behavior. |
+| `110-COMPLIANCE-NONNEGATIVE-AC-001` | Compliance export rows for `unknown`, `error`, `not_checked`, `not_applicable`, `conflicted`, and `ambiguous` are nonnegative counts and never pass/fail by default. |
+| `110-GRAPH-STATE-SEPARATION-AC-001` | `source_stale` and `derived_view_stale` remain separate in graph query, asset detail graph context, compliance export, audit export, and health output. |
 | `110-CLEANUP-AC-001` | No banned reference class remains. |
 | `110-CLEANUP-AC-002` | API and UI state labels remain distinct and cannot imply authorized negative facts unless the owning domain spec emitted the authoritative output. |
 | `110-CLEANUP-AC-003` | Raw payload exposure remains false by default and requires raw-evidence permission. |

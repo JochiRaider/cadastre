@@ -109,6 +109,20 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 
 `FactAbsenceOutcome` must not be inferred from `OmissionState`. Parser, normalizer, resolver, graph projection, API, and analysis stages must not set `GoldFact.absence_outcome`. `GoldFact.absence_outcome = null` means no fact-level absence outcome was produced; it must not mean `unknown`.
 
+### CoreStateApiHandoff
+
+`040` owns core state tokens and record fields. `110` owns caller-visible labels. API handoff must preserve assertion state and absence outcome as separate owner contexts.
+
+| Core state | Required API handoff | Forbidden interpretation |
+| --- | --- | --- |
+| `GoldFact.assertion_state = conflicted` | Maps to `110.SourceStateLabel.conflicted` with assertion-state owner context. | Must not be treated as authorized absence, ambiguity, pass/fail, cleanup, graph expiry, retraction, or source deletion. |
+| `GoldFact.absence_outcome = ambiguous` | Maps to `110.SourceStateLabel.ambiguous` with absence-outcome owner context. | Must not be treated as conflict, pass/fail, authorized absence, cleanup, graph expiry, or source deletion. |
+| `GoldFact.assertion_state = unknown` | Maps to `110.SourceStateLabel.unknown` with assertion-state owner context. | Must not be collapsed with absence-outcome unknown in evidence drillback or audit. |
+| `GoldFact.absence_outcome = unknown` | Maps to `110.SourceStateLabel.unknown` with absence-outcome owner context. | Must not imply unknown assertion state or authorized absence. |
+| `GoldFact.assertion_state = no_op` or no-op correction evidence | No output change plus audit evidence unless `080` permits diagnostic output. | Must not be a source state label by default and must not create graph, compliance, absence, or remediation output. |
+
+Record serializers and API renderers must preserve `assertion_state` and `absence_outcome` separately in evidence drillback and audit paths.
+
 ## Core Record Schema Registry
 
 `040` is the sole normative registry for the field schemas of `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `GoldFact`, `EvidenceRef`, `GraphNodeDeltaShape`, and `GraphEdgeDeltaShape`. Downstream specs may import these schemas by exact name and must not restate field-level schema authority.
@@ -556,6 +570,35 @@ ComputeEvidenceRefId(evidence_ref):
 | `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | Activation-controlled artifact attempts to modify stable core schema behavior. |
 | `PRIVATE_BINDING_LEAK` | A core record or public core-shaped artifact exposes concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories. |
 
+### CoreRecordErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `CORE_UNKNOWN_FIELD` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-unknown-field` |
+| `CORE_REQUIRED_FIELD_MISSING` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-required-field-missing` |
+| `CORE_NULL_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-null-forbidden` |
+| `CORE_FIELD_TYPE_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-field-type-invalid` |
+| `CORE_FIELD_BOUNDS_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-field-bounds-invalid` |
+| `CORE_DECIMAL_PRECISION_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-decimal-precision-invalid` |
+| `CORE_ENUM_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-enum-invalid` |
+| `CORE_ONE_OF_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-one-of-invalid` |
+| `CORE_RECORD_ID_MISMATCH` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-record-id-mismatch` |
+| `CORE_RECORD_CHECKSUM_MISMATCH` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-record-checksum-mismatch` |
+| `CORE_SCHEMA_VERSION_UNSUPPORTED` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-schema-version-unsupported` |
+| `RAW_RECORD_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-raw-record-id-collision` |
+| `SILVER_OBSERVATION_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-silver-observation-id-collision` |
+| `CANONICAL_ENTITY_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-canonical-entity-id-collision` |
+| `SOURCE_ASSET_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-source-asset-id-collision` |
+| `IDENTIFIER_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-identifier-id-collision` |
+| `GOLD_FACT_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-gold-fact-id-collision` |
+| `EVIDENCE_REF_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-id-collision` |
+| `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-raw-payload-forbidden` |
+| `GRAPH_BACKEND_ID_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-graph-backend-id-forbidden` |
+| `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-schema-runtime-override-forbidden` |
+| `PRIVATE_BINDING_LEAK` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-private-binding-leak` |
+
 ### Core schema security and extensibility constraints
 
 | Constraint | Required behavior |
@@ -697,6 +740,7 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 
 | ID | Criterion |
 | --- | --- |
+| `040-API-HANDOFF-AC-001` | API handoff fixtures distinguish `conflicted`, `ambiguous`, assertion-state `unknown`, absence-outcome `unknown`, and `no_op`; none is treated as pass, fail, authorized absence, graph cleanup, or source deletion by default. |
 | `040-CLEANUP-AC-001` | No banned reference class remains. |
 | `040-CLEANUP-AC-002` | Canonical JSON remains deterministic for IDs, checksums, replay equivalence, package activation, validation output, graph delta identity, and audit evidence. |
 | `040-CLEANUP-AC-003` | Omission states remain explicit and cannot be inferred from optionality, nullability, OCSF absence, CIM absence, or source row absence alone. |

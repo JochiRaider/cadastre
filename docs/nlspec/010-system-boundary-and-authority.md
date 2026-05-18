@@ -189,6 +189,20 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `110` |
 | `VOLATILE_ROW_IN_CORE_SPEC` | `010` | `110` |
 
+### BoundaryErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-direct-source-call-forbidden` |
+| `PROJECTION_AUTHORITY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-projection-authority-violation` |
+| `PRIVATE_BINDING_LEAK` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-private-binding-leak` |
+| `UNDECLARED_AUTHORITY_CLASS` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-undeclared-authority-class` |
+| `VOLATILITY_BOUNDARY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-volatility-boundary-violation` |
+| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-activation-artifact-core-conflict` |
+| `VOLATILE_ROW_IN_CORE_SPEC` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-volatile-row-in-core-spec` |
+
 ### Acceptance Criteria
 
 | ID | Criterion |

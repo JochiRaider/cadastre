@@ -508,6 +508,28 @@ ComputeRawFeedManifestId(manifest):
 | `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | The profile or category row requires upstream completeness evidence and the manifest or evidence refs omit it. |
 | `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | An empty target scope is read under the default empty-scope policy and must not be interpreted as source absence. |
 
+### LakehouseErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+
+| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_MISSING` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-missing` |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-inactive` |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-checksum-mismatch` |
+| `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-feed-profile-schema-incomplete` |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-feed-category-row-missing` |
+| `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-profile-branch-unresolved` |
+| `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-declared-subset-required` |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-upstream-completeness-evidence-required` |
+| `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-empty-scope-not-authoritative` |
+| `RAW_FEED_MANIFEST_INVALID` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-raw-feed-manifest-invalid` |
+| `RAW_FEED_MANIFEST_ID_COLLISION` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-raw-feed-manifest-id-collision` |
+
+### LakehouseApiStateLabelGuidance
+
+Profile, category, manifest, table-state, and activation errors render through `110` as `error` or health-blocked states. Partial read, declared-subset, manifest, and empty-scope errors must not render as authorized absence. Upstream completeness insufficiency must map through `060` before any absence-sensitive API, export, graph, or watermark effect.
+
 ### Acceptance Criteria
 
 | ID | Criterion |

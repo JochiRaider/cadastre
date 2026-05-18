@@ -598,7 +598,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, completeness decision refs, source-authority closure refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
 | Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, and derived-view state refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
-| API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
+| API/export output | `110.CommonApiResponseEnvelope` ref, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, and API/export validation refs. |
 | Package activation | package-set manifest checksum, package release manifest refs and checksums, package type policy row refs, package repository model row refs, artifact digests, sizes, media types, subject digests, repository metadata refs, repository snapshot refs, repository freshness proof refs, repository anti-rollback state refs, trust policy refs, signature verification result refs, transparency evidence refs, attestation set refs, build provenance refs, SBOM refs, dependency lock refs, compatibility matrix refs, validation refs, package developer contract refs, package stage binding refs, promotion record refs, deployment revision refs, last-known-good health gate refs, last-known-good package-set refs when applicable, rollback compatibility policy refs, rollback plan/result refs, quarantine record refs, quarantine scope policy refs, emergency override refs, deprecation window policy refs, activation failure event refs when candidate activation fails, lifecycle transition evidence refs, and approval refs. |
 
 Package activation refs required by `VersionManifestCompletenessMatrix` must appear in `included_refs`. Package-specific manifest fields must not create a parallel manifest mechanism unless this spec explicitly adds a field row and defines checksum inclusion behavior.
@@ -609,7 +609,7 @@ Package activation refs required by `VersionManifestCompletenessMatrix` must app
 | --- | ---: | --- |
 | `version_manifest_id` | Yes | Deterministic ID computed from `manifest_kind` and canonical included refs. |
 | `manifest_kind` | Yes | Closed token for run, replay, validation, graph rebuild, or package activation. |
-| `included_refs` | Yes | Canonically sorted refs for every output-affecting artifact. |
+| `included_refs` | Yes | Canonically sorted refs for every output-affecting artifact. API/export output must represent the required `VersionManifestCompletenessMatrix` refs through this field rather than through a parallel manifest mechanism. |
 | `schema_registry_checksum` | Yes | Active `040` core schema registry checksum. |
 | `package_set_checksum` | Yes when packages affect output | Immutable `ProductionPackageSetManifest` checksum. |
 | `stage_state_refs` | Yes | Stage state refs and checksums sorted by state kind then ID. |
@@ -706,6 +706,7 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 
 | ID | Criterion |
 | --- | --- |
+| `030-API-EXPORT-MANIFEST-AC-001` | API/export output fails with `VERSION_MANIFEST_INCOMPLETE` when request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated error-registry checksum, authorization decision ref, redaction context checksum, page-token policy ref, audit event ref, owner error ref, or required derived-view state ref is missing. |
 | `030-CLEANUP-AC-001` | No banned reference class remains. |
 | `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |
 | `030-CLEANUP-AC-003` | Any stage emitting a forbidden record class still fails before commit. |
