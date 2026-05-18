@@ -173,6 +173,22 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
 
+### Lifecycle error registry rows
+
+The generated `ErrorCodeRegistry` must include lifecycle errors with owner, severity, retryability, redaction, and fixture ID. Owner-specific lifecycle errors must be selected before generic lifecycle fallback codes.
+
+| Error code | Owner | Severity | Retryability | Redaction | Caller-visible behavior |
+| --- | --- | --- | --- | --- | --- |
+| `LIFECYCLE_MACHINE_MISSING` | `030` | error | no until spec or artifact changes | artifact refs redacted | block dependent output |
+| `LIFECYCLE_MACHINE_INACTIVE` | `030` | blocked | no until lifecycle changes | artifact refs redacted | block dependent output |
+| `LIFECYCLE_MACHINE_CHECKSUM_MISMATCH` | `030` | error | no until artifact or manifest changes | checksums policy-visible | block output or replay |
+| `LIFECYCLE_EVENT_INVALID` | owner machine | error | no until request changes | event visible | reject transition |
+| `LIFECYCLE_STATE_DERIVATION_FAILED` | owner machine | error | owner-defined | state refs redacted | reject transition |
+| `LIFECYCLE_ILLEGAL_TRANSITION` | owner machine | error | no until prior state or event changes | subject refs redacted | no mutation |
+| `LIFECYCLE_IDEMPOTENCY_CONFLICT` | `030` | error | no until idempotency key or input changes | input checksums visible only by policy | no mutation |
+| `LIFECYCLE_TRANSITION_EVIDENCE_INCOMPLETE` | `030` | error | no until evidence exists | evidence refs redacted | block output or replay |
+| `LIFECYCLE_PARENT_CHILD_STATE_INVALID` | `030` | error | owner-defined | child refs redacted | reject parent transition |
+| `LIFECYCLE_GUARD_REFUSED` | owner machine | blocked | owner-defined | guard context redacted | no mutation |
 
 ### Feed closure error registry rows
 
@@ -243,7 +259,6 @@ All owner-specific errors must appear in the generated registry before promotion
 | `authorized_not_observed` | `authorized_not_observed` | owner-defined | `authorized_not_observed` | owner-defined | only when `060` authorizes | owner-defined |
 | `not_applicable` | `not_applicable` | `not applicable` | `not_applicable` | not projected by default | none | not_applicable |
 
-
 ### OwnerStateToSourceStateLabelMapping
 
 | Owner state | Caller-visible label | Required owner context | Authorized negative interpretation |
@@ -292,6 +307,12 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | upstream completeness unavailable | `unknown` | owner-defined | blocks absence-sensitive effects | data_freshness | evidence refs redacted |
 | completeness effect blocked | `unknown` | no, until completeness row changes | blocks absence, cleanup, retraction, graph expiry, or watermark for requested effect | completeness_health | effect token visible; private refs redacted |
 | watermark blocked by completeness | `blocked` | owner-defined | blocks watermark advancement only; must not mutate facts or graph state | watermark_health | watermark target redacted |
+| lifecycle illegal transition | `error` | no until event or state changes | no mutation; dependent output blocked | lifecycle_health | subject refs redacted |
+| lifecycle idempotency conflict | `error` | no until idempotency conflict resolved | no mutation | lifecycle_health | input checksum policy-visible |
+| lifecycle guard refusal | `blocked` | owner-defined | output blocked; no state mutation | lifecycle_health | guard context redacted |
+| lifecycle machine inactive or missing | `blocked` | no until artifact activation | output blocked | activation_health | artifact refs redacted |
+| package lifecycle failure | `error` or `blocked` | owner-defined | current active package set preserved | package_health | package evidence redacted |
+| graph apply lifecycle partial failure | `blocked` | retry only when resume-safe | derived view not advanced | graph_health | backend evidence redacted |
 
 ### Page token canonicalization
 
@@ -361,6 +382,10 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-FEED-CLOSURE-AC-002` | `partial_known_gap` remains caller-visible as `partial_known_gap` and does not collapse to `unknown` when that owner state is available. |
 | `110-FEED-CLOSURE-AC-003` | Every new `020`, `030`, and `060` feed-closure error code appears in the generated registry with severity, retryability, redaction, owner, and fixture ID. |
 | `110-FEED-CLOSURE-AC-004` | Feed activation, category closure, upstream completeness, effect-blocked, and watermark-blocked health rows are diagnostics only and do not mutate source authority, facts, graph state, or watermarks. |
+
+| `110-LIFECYCLE-ERROR-AC-001` | Lifecycle errors appear in `ErrorCodeRegistry` with owner, severity, retryability, redaction, and fixture ID. |
+| `110-LIFECYCLE-ERROR-AC-002` | Lifecycle errors never collapse to `unknown`, `not_checked`, pass, or fail. |
+| `110-LIFECYCLE-HEALTH-AC-001` | Lifecycle health rows are diagnostic and do not mutate facts, graph state, package state, completeness, or watermarks. |
 
 ## Definition of Done
 

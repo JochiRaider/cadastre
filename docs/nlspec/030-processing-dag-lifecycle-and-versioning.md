@@ -41,6 +41,11 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `DeterministicSideEffectRecord`
 - `LifecycleStatus`
 - `LifecycleStateMachineDefinition`
+- `LifecycleTransitionEvidence`
+- `ApplyLifecycleEvent`
+- `ActivationControlledArtifactLifecycleMachine`
+- `ProductionRunExecutionLifecycleMachine`
+- `StageExecutionLifecycleMachine`
 - `ProcessingStageLifecycleResult`
 - `RunLockSet`
 - `DeclaredDAGSubsetProfile`
@@ -104,13 +109,250 @@ Every production stage output whose record class is imported from `040.CoreRecor
 | `retired` | Must not execute or affect new output. |
 | `quarantined` | Must not execute and must block dependent package-set activation. |
 
+### LifecycleTransitionEvidence schema
+
+`LifecycleTransitionEvidence` is the 030-owned runtime-state record for every production-affecting lifecycle evaluation. Owner-specific lifecycle machines may add owner payload refs, but they must not omit or rename the fields in this table.
+
+| Field | Required rule |
+| --- | --- |
+| `transition_id` | Deterministic ID over lifecycle machine ID, machine version, subject ref, event idempotency key, prior state, event, selected transition row, next state, and output-affecting artifact refs. |
+| `lifecycle_machine_id` | Closed machine identifier. |
+| `machine_version` | Immutable owner-defined version. |
+| `machine_checksum` | SHA-256 over states, events, guard definitions, transition matrix, no-op rules, validation refs, and owner guard row refs. |
+| `subject_ref` | Ref to the artifact, package set, run, stage, graph apply, validation report, review case, or owner-specific lifecycle subject. |
+| `subject_checksum` | Checksum of subject state at evaluation time. |
+| `prior_state` | State derived before event evaluation from owner-declared artifacts and prior persisted transition evidence. |
+| `event` | Closed event token from the selected machine. |
+| `event_idempotency_key` | Required for every production transition. Validation-only fixtures may omit it only when the validation row declares omission behavior. |
+| `guard_results` | Canonically ordered guard outcomes, sorted by declared guard order and then guard ID. |
+| `selected_transition_row_id` | Exact transition row that selected the result. |
+| `next_state` | Result state, including same-state no-op and illegal-transition cases. |
+| `transition_kind` | Closed enum: `state_change`, `idempotent_no_op`, `guard_refusal`, `illegal_transition`, `terminal_no_op`. |
+| `side_effect_refs` | Canonically sorted refs to writes produced by the transition. Empty array means no writes. |
+| `error_code` | Null only for successful state changes or idempotent no-op. Otherwise the value must be the most specific owner code available. |
+| `version_manifest_id` | Required when the transition can affect output, replay, activation, graph apply, watermark eligibility, validation acceptance, or CI gating. |
+| `created_at` | RFC3339 UTC. Excluded from `transition_id`; included in the evidence checksum. |
+
+### ApplyLifecycleEvent algorithm
+
+```text
+ApplyLifecycleEvent(machine, subject_ref, event, event_context):
+1. Validate machine owner, machine version, machine checksum, and validation refs.
+2. Load subject by immutable ref and checksum.
+3. Derive prior_state only from owner-declared artifacts and persisted transition evidence.
+4. Validate event belongs to machine.events.
+5. Validate event_idempotency_key for production transitions.
+6. Evaluate guards in declared order.
+7. Select exactly one transition matrix row.
+8. If selected row is illegal, emit LifecycleTransitionEvidence with no side effects.
+9. If selected row is a no-op, emit no-op evidence unless byte-identical evidence already exists.
+10. If selected row changes state, write only side effects named by that row.
+11. Persist LifecycleTransitionEvidence before any externally visible output, active pointer, derived-view advancement, watermark effect, or last-known-good update.
+12. Include machine checksum and transition evidence refs in VersionManifest when output-affecting.
+```
+
+### Lifecycle guard precedence
+
+Every lifecycle machine must evaluate guard families in this order unless an owner spec adds a more specific guard inside one family.
+
+| Order | Guard family |
+| ---: | --- |
+| 1 | Authorization and private-binding exposure. |
+| 2 | Subject existence and checksum. |
+| 3 | Machine ownership, version, checksum, and validation refs. |
+| 4 | Run lock or activation lock. |
+| 5 | Idempotency replay or idempotency conflict. |
+| 6 | Parent/child persisted state. |
+| 7 | Quarantine and emergency override. |
+| 8 | Owner artifact gates. |
+| 9 | Transition matrix row selection. |
+| 10 | Side-effect preflight. |
+
+### Lifecycle totality and illegal transition rule
+
+Every lifecycle machine must cover every state/event pair by explicit transition rows or by exactly one `all_other_state_event_pairs` row. An `all_other_state_event_pairs` row is valid only when it emits `LIFECYCLE_ILLEGAL_TRANSITION`, writes no production output, mutates no active pointer, advances no watermark, and preserves prior state.
+
+A repeated event with the same subject, event idempotency key, machine version, prior state, and input checksums must produce byte-identical transition evidence or an explicit idempotent no-op. The same event idempotency key with different input checksums must fail with `LIFECYCLE_IDEMPOTENCY_CONFLICT` before side effects.
+
+### ActivationControlledArtifactLifecycleMachine
+
+Machine ID: `030.ActivationControlledArtifactLifecycleMachine.v1`.
+
+States:
+
+```text
+draft
+validated
+canary
+active
+deprecated
+retired
+quarantined
+```
+
+Events:
+
+```text
+validation_passed
+validation_failed
+start_canary
+canary_passed
+canary_failed
+activate
+deprecate
+expire_deprecation
+retire
+quarantine
+clear_quarantine
+rollback_select
+replay_same_event
+```
+
+Required transition rows:
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `draft` | `validation_passed` | `validated` | Persist validation pass evidence. |
+| `draft` | `validation_failed` | `draft` | Persist validation failure evidence; no production output. |
+| `validated` | `start_canary` | `canary` | Canary or shadow output only. |
+| `canary` | `canary_passed` | `validated` | Persist canary pass evidence. |
+| `canary` | `canary_failed` | `validated` | Persist failure evidence and block activation until a new pass. |
+| `validated` | `activate` | `active` | Owner activation guards and validation refs must pass. |
+| `active` | `deprecate` | `deprecated` | Persist deprecation evidence. |
+| `deprecated` | `expire_deprecation` | `retired` | Persist expiry evidence. |
+| `deprecated` | `retire` | `retired` | Persist retirement evidence. |
+| any non-retired state | `quarantine` | `quarantined` | Block execution and dependent activation. |
+| `quarantined` | `clear_quarantine` | `validated` | Never clear directly to `active`. |
+| `deprecated` | `rollback_select` | `active` | Allowed only through owner-approved immutable rollback target. |
+| terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
+
+Canary and shadow states must not write current production output, advance source/projection/graph watermarks, or mark last-known-good.
+
+### ProductionRunExecutionLifecycleMachine
+
+Machine ID: `030.ProductionRunExecutionLifecycleMachine.v1`.
+
+States:
+
+```text
+planned
+preflighted
+locks_acquired
+running
+succeeded
+failed
+aborted
+```
+
+Events:
+
+```text
+preflight_passed
+preflight_failed
+locks_acquired
+locks_failed
+start_run
+stage_succeeded
+stage_failed_isolated
+stage_failed_nonisolated
+lock_lost
+complete
+abort
+replay_same_event
+```
+
+Required transition rows:
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `planned` | `preflight_passed` | `preflighted` | Persist preflight evidence. |
+| `planned` | `preflight_failed` | `failed` | No production output. |
+| `preflighted` | `locks_acquired` | `locks_acquired` | Persist complete lock set. |
+| `preflighted` | `locks_failed` | `failed` | Release acquired locks and write no production output. |
+| `locks_acquired` | `start_run` | `running` | Persist run-start evidence. |
+| `running` | `stage_succeeded` | `running` | Continue eligible downstream stages. |
+| `running` | `stage_failed_isolated` | `running` | Continue only for declared isolated outputs. |
+| `running` | `stage_failed_nonisolated` | `failed` | Stop downstream stages. |
+| `running`, `locks_acquired`, or `preflighted` | `lock_lost` | `failed` | Stop before next output commit. |
+| `running` | `complete` | `succeeded` | Persist completion evidence and final manifest refs. |
+| `planned`, `preflighted`, `locks_acquired`, or `running` | `abort` | `aborted` | Persist abort evidence and write no further output. |
+| terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
+
+### StageExecutionLifecycleMachine
+
+Machine ID: `030.StageExecutionLifecycleMachine.v1`.
+
+States:
+
+```text
+pending
+ready
+running
+retry_wait
+succeeded
+failed_isolated
+failed_nonisolated
+skipped
+no_op
+```
+
+Events:
+
+```text
+dependencies_satisfied
+start_stage
+core_schema_failed
+forbidden_output
+retryable_error
+retry_timer_elapsed
+retry_exhausted
+nonretryable_error
+stage_success
+stage_no_output
+upstream_nonisolated_failed
+replay_same_event
+```
+
+Required transition rows:
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `pending` | `dependencies_satisfied` | `ready` | Stage may start when ordering and dependency guards pass. |
+| `ready` | `start_stage` | `running` | Persist stage-start evidence. |
+| `running` | `retryable_error` | `retry_wait` | Allowed only when retry policy permits. |
+| `retry_wait` | `retry_timer_elapsed` | `running` | Resume attempt under the same stage context. |
+| `retry_wait` | `retry_exhausted` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
+| `running` | `core_schema_failed` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
+| `running` | `forbidden_output` | `failed_nonisolated` | Emit `FORBIDDEN_STAGE_OUTPUT`; no forbidden output commit. |
+| `running` | `nonretryable_error` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
+| `running` | `stage_success` | `succeeded` | Persist output refs and transition evidence. |
+| `running` | `stage_no_output` | `no_op` | Persist no-op evidence. |
+| `pending` or `ready` | `upstream_nonisolated_failed` | `skipped` | Persist skip evidence. |
+| terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
+
+### ProcessingStageLifecycleResult schema
+
+| Field | Required rule |
+| --- | --- |
+| `stage_id` | Exact DAG stage ID. |
+| `lifecycle_machine_id` | `030.StageExecutionLifecycleMachine.v1` unless an owner-specific machine is named. |
+| `terminal_state` | One `030.StageExecutionLifecycleMachine.v1` state. |
+| `transition_evidence_refs` | Non-empty for production stage execution. |
+| `output_refs` | Canonically sorted output refs; default `[]`. |
+| `blocked_effects` | Array of blocked effects such as `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark`; default `[]`. |
+| `error_refs` | Owner-specific errors; default `[]`. |
+| `version_manifest_id` | Required for production output. |
+
 ## Run Locks
 
 `RunLockSet` must be acquired before any production output write. Lock keys must cover source/feed scope, completeness scope, coverage scope, projection scope, graph apply target, package set, and requested output class when concurrent writes could change observable output.
 
 ## Version Manifest Contract
 
-`VersionManifest` must include every output-affecting profile, policy, package artifact, package-set manifest, source/feed config hash, stage state hash, lakehouse ref, completeness receipt, coverage assertion, schema artifact, temporal policy, resolver profile, graph profile, graph apply result, and acceptance report that can affect output or replay.
+`VersionManifest` must include every output-affecting profile, policy, package artifact, package-set manifest, source/feed config hash, stage state hash, lakehouse ref, completeness receipt, coverage assertion, schema artifact, temporal policy, resolver profile, graph profile, graph apply result, lifecycle machine definition, lifecycle machine checksum, lifecycle transition evidence ref, lifecycle state artifact ref, and acceptance report that can affect output or replay.
 
 A production output without a complete immutable `VersionManifest` must fail with `VERSION_MANIFEST_INCOMPLETE`. `activation_artifact_refs` must be present in `VersionManifest.included_refs` for every output-affecting activation-controlled artifact.
 
@@ -260,21 +502,27 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 | `watermark_checkpoint` | watermark kind, attempted value, commit record | `060`, `080`, `090` | Required before advancement. |
 | `package_activation_ref` | package-set manifest and deployment revision | `100` | Required for production output. |
 | `replay_ref` | replay input set, equivalence checksum, result | `080`, `120` | Required for replay output. |
+| `lifecycle_transition_evidence` | machine ID, machine version, transition evidence ref, evidence checksum | `030`, lifecycle owners | Required for output-affecting lifecycle transitions. |
+| `lifecycle_state_artifact` | subject ref, derived state, machine checksum, transition evidence refs | `030`, lifecycle owners | Required when lifecycle state affects replay, activation, graph apply, watermark eligibility, or CI gating. |
 
 ### LifecycleStateMachineDefinition row schema
 
 | Field | Required | Rule |
 | --- | ---: | --- |
+| `lifecycle_machine_id` | Yes | Stable closed machine identifier. |
+| `machine_version` | Yes | Immutable owner-defined machine version. |
+| `machine_checksum` | Yes | SHA-256 over states, events, guards, transition table, no-op rules, validation refs, and owner guard row refs. |
 | `states` | Yes | Closed enum. |
 | `events` | Yes | Closed enum. |
-| `guards` | Yes | Deterministic ordered list. |
+| `guards` | Yes | Deterministic ordered list using `Lifecycle guard precedence`. |
 | `transition_table` | Yes | Total for every state/event pair unless pure deterministic algorithm is declared. |
-| `illegal_transition_behavior` | Yes | Must emit owner-specific error and no state mutation. |
-| `idempotency_rule` | Yes | Replayed transition must produce identical result or explicit no-op. |
-| `artifact_derived_state_rule` | Yes | Defines which artifacts determine state. |
-| `observability_fields` | Yes | Includes lifecycle ID, prior state, event, guard, result, error, checksums. |
+| `all_other_state_event_pairs` | Required when explicit rows do not enumerate every pair | Must be illegal-transition or deterministic no-op as declared by this spec. |
+| `illegal_transition_behavior` | Yes | Must emit owner-specific error or `LIFECYCLE_ILLEGAL_TRANSITION` and no state mutation. |
+| `idempotency_rule` | Yes | Replayed transition must produce byte-identical result or explicit no-op; changed inputs under the same key fail. |
+| `artifact_derived_state_rule` | Yes | Defines which artifacts and persisted transition evidence determine state. |
+| `observability_fields` | Yes | Must include every `LifecycleTransitionEvidence` required field. |
 | `parent_child_composition` | Yes | Parent must not depend on child in-memory state. |
-| `validation_rows` | Yes | Must reference `120` rows. |
+| `validation_rows` | Yes | Must reference `120` rows and owner-specific fixtures. |
 
 Lifecycle diagrams are representational unless generated from a declared lifecycle table.
 
@@ -289,9 +537,10 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Gold output | temporal policy, exact source authority refs, lakehouse feed completeness profile row refs, coverage refs, staleness refs, absence policy refs when absence-sensitive, correction policy, source refs, snapshot refs. |
 | Absence, cleanup, retraction, or graph expiry output | `060` completeness decision refs, authority refs, coverage refs, staleness refs, absence derivation result refs, and requested effect token. |
 | Watermark output | projection watermark policy, completeness decision refs, authority refs, coverage refs where applicable, staleness refs, and `WatermarkCommitRecord`. |
-| Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, apply result. |
+| Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, graph apply lifecycle transition evidence, apply result. |
+| Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
-| Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs. |
+| Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs, package lifecycle transition evidence, and last-known-good evidence when applicable. |
 
 ### VersionManifestSchema
 
@@ -307,6 +556,9 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
 | `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
 | `activation_artifact_refs` | Required when activation-controlled artifacts affect output | Canonically sorted `ActivationControlledArtifactRef` rows and checksums. |
+| `lifecycle_machine_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Machine ID, version, owner, and machine checksum refs. |
+| `lifecycle_transition_evidence_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Canonically sorted transition evidence refs and checksums. |
+| `lifecycle_state_artifact_refs` | Required when persisted lifecycle state artifacts affect output, replay, activation, graph apply, watermark eligibility, or CI gating | Subject refs, state artifact refs, and checksums. |
 | `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
 | `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
 
@@ -314,13 +566,17 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 
 ### RequiredLifecycleMachineBindings
 
-| Production lifecycle | Required owner | Transition table status | Validation row |
-| --- | --- | --- | --- |
-| package/profile activation | `100` plus package/profile owner | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-package-activation` |
-| production run execution | `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-production-run` |
-| feed stage execution | `020`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-feed-stage` |
-| graph apply | `090`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-graph-apply` |
-| validation acceptance | `120`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-validation-acceptance` |
+| Production lifecycle | Required owner | Machine ID | Transition-table location | Validation rows |
+| --- | --- | --- | --- | --- |
+| activation-controlled artifact lifecycle | `030` plus artifact owner | `030.ActivationControlledArtifactLifecycleMachine.v1` | `030`; owner guard rows in owner spec | `val-030-lifecycle-artifact-totality`, owner artifact rows |
+| package-set activation | `100` | `100.PackageSetActivationLifecycleMachine.v1` | `100` | `val-100-lifecycle-package-activation` |
+| production run execution | `030` | `030.ProductionRunExecutionLifecycleMachine.v1` | `030` | `val-030-lifecycle-production-run` |
+| stage execution | `030` plus stage owner | `030.StageExecutionLifecycleMachine.v1` | `030`; owner event-derivation rows in owner spec | `val-030-lifecycle-stage-execution` |
+| feed stage execution | `020`, `030` | `030.StageExecutionLifecycleMachine.v1` with `020.FeedStageLifecycleEventDerivation` | `020`, `030` | `val-030-lifecycle-feed-stage` |
+| graph apply | `090` | `090.GraphApplyLifecycleMachine.v1` | `090` | `val-090-lifecycle-graph-apply-totality` |
+| validation acceptance | `120` | `120.ValidationAcceptanceLifecycleMachine.v1` | `120` | `val-120-lifecycle-validation-acceptance` |
+
+`ValidateSpecSet` must fail when any row in this table omits a concrete machine ID, transition-table owner, validation row, or owner guard/event-derivation location. Owner-specific errors must be used when available; generic lifecycle errors are fallback only.
 
 ### RunLockKeyDerivation
 
@@ -362,6 +618,21 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `DECLARED_DAG_SUBSET_SCOPE_MISMATCH` | The active subset profile does not cover the requested stage IDs, feed profiles, activation scope, or output class. |
 | `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | A subset stage attempts an output, absence effect, cleanup, retraction, graph expiry, projection, or watermark behavior forbidden by the active subset profile. |
 
+### Lifecycle errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `LIFECYCLE_MACHINE_MISSING` | A required lifecycle machine definition or owner binding is absent. |
+| `LIFECYCLE_MACHINE_INACTIVE` | A required lifecycle machine exists but is not active for the execution scope. |
+| `LIFECYCLE_MACHINE_CHECKSUM_MISMATCH` | Machine checksum differs from the manifest, registry, or selected transition evidence. |
+| `LIFECYCLE_EVENT_INVALID` | Event token is not in the selected machine's closed event set. |
+| `LIFECYCLE_STATE_DERIVATION_FAILED` | Prior state cannot be derived from owner-declared artifacts and persisted transition evidence. |
+| `LIFECYCLE_ILLEGAL_TRANSITION` | Selected state/event pair is illegal and no owner-specific illegal-transition code exists. |
+| `LIFECYCLE_IDEMPOTENCY_CONFLICT` | Same event idempotency key is reused with different input checksums. |
+| `LIFECYCLE_TRANSITION_EVIDENCE_INCOMPLETE` | Required transition evidence field, checksum, or manifest ref is missing. |
+| `LIFECYCLE_PARENT_CHILD_STATE_INVALID` | Parent transition depends on invalid, missing, or in-memory child state. |
+| `LIFECYCLE_GUARD_REFUSED` | A declared guard refuses the transition and no owner-specific refusal code exists. |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
@@ -384,6 +655,13 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-FEED-CLOSURE-AC-002` | A production subset request without a matching active `DeclaredDAGSubsetProfile` fails before stage execution. |
 | `030-FEED-CLOSURE-AC-003` | A subset profile that permits raw replay but omits watermark behavior does not advance a watermark. |
 | `030-FEED-CLOSURE-AC-004` | Same DAG bytes, same requested subset, same subset profile, and same activation refs produce byte-identical stage order and manifest refs. |
+
+| `030-LIFECYCLE-AC-001` | All required lifecycle machines have closed states and closed events. |
+| `030-LIFECYCLE-AC-002` | Every state/event pair selects exactly one transition row. |
+| `030-LIFECYCLE-AC-003` | Illegal transitions emit evidence, mutate no state, and write no production output. |
+| `030-LIFECYCLE-AC-004` | Idempotent replay is byte-identical or fails with a deterministic idempotency conflict. |
+| `030-LIFECYCLE-AC-005` | Canary and shadow outputs never advance current production, last-known-good, or watermark state. |
+| `030-LIFECYCLE-AC-006` | Lifecycle transition evidence appears in `VersionManifest` whenever lifecycle behavior is output-affecting. |
 
 ## Definition of Done
 

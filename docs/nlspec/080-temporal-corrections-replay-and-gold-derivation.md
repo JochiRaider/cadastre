@@ -56,6 +56,7 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ApplyGoldCorrection`
 - `DeriveFacts`
 - `ComputeReplayEquivalenceChecksum`
+- `LifecycleEvidenceReplayEquivalence`
 
 ## Temporal Axes
 
@@ -124,6 +125,17 @@ Late evidence must be routed through `EvaluateLateArrival` using an active late-
 Production replay must validate required replay policy artifact refs, then run `ReplayInputSufficiencyCheck`, `ReplayEquivalencePolicy`, `DecideReplayMode`, and `ComputeReplayEquivalenceChecksum` before any replay output is written.
 
 `ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. The contract table below defines active draft output classes and explicit remaining blocker rows.
+
+### Lifecycle evidence in replay equivalence
+
+Replay must not silently substitute lifecycle decisions. Lifecycle evidence is part of replay equivalence when it gates output, activation, graph apply, watermark eligibility, package selection, or validation acceptance.
+
+| Replay output class | Lifecycle refs included in replay checksum | Excluded fields |
+| --- | --- | --- |
+| production run output | machine ID, machine version, machine checksum, transition evidence refs, selected transition row IDs, transition kinds | transition `created_at` for ID; mutable audit-only fields |
+| package activation output | package lifecycle machine checksum, package-set activation evidence, failure/rollback/quarantine transition evidence refs | wall-clock display fields |
+| graph apply output | graph apply machine checksum, graph apply transition refs, idempotency key, committed-batch evidence refs | backend physical IDs and runtime duration |
+| validation acceptance output | validation machine checksum, validation report refs, acceptance transition refs | validation execution wall-clock duration |
 
 ## Deterministic Side Effects
 
@@ -255,6 +267,7 @@ Replay-equivalence ownership split:
 | `080-REPLAY-SPLIT-AC-001` | Projection, API, and analysis replay rows import owner-specific included/excluded fields and use `080` only for checksum algorithm and preflight ordering. |
 | `080-VOLATILITY-AC-001` | Inactive temporal policy, missing knowledge-time policy, correction policy checksum mismatch, late-arrival row manifest omission, and replay policy row absence fail before gold or replay output. |
 | `080-VOLATILITY-AC-002` | Current `TODO:` temporal and replay rows block affected production outputs until active artifact rows and validation refs exist. |
+| `080-LIFECYCLE-REPLAY-AC-001` | Replay rejects output when required lifecycle machine checksum or transition evidence refs are absent, mutable-only, checksum-mismatched, or excluded from the active replay equivalence policy. |
 
 ## Definition of Done
 

@@ -57,6 +57,8 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `ActivatePackageSet`
 - `RollbackPackageSet`
 - `QuarantinePackage`
+- `PackageSetActivationLifecycleMachine`
+- `PackageDeprecationWindowPolicy`
 
 ## Activation Unit
 
@@ -116,6 +118,80 @@ ActivatePackageSet(candidate_set, current_active_set):
 14. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
 15. Mark LastKnownGoodPackageSet only after post-activation health gates pass.
 ```
+
+## Package Set Activation Lifecycle
+
+Machine ID: `100.PackageSetActivationLifecycleMachine.v1`.
+
+States:
+
+```text
+candidate
+validated
+shadow_running
+canary_running
+activating
+active
+last_known_good
+activation_failed
+rollback_pending
+deprecated
+retired
+quarantined
+```
+
+Events:
+
+```text
+promotion_checks_passed
+promotion_checks_failed
+start_shadow
+shadow_passed
+shadow_failed
+start_canary
+canary_passed
+canary_failed
+activate
+activation_committed
+activation_failed
+post_activation_health_passed
+post_activation_health_failed
+rollback_requested
+rollback_checks_passed
+rollback_checks_failed
+deprecate
+retire
+quarantine
+retry_activation
+replay_same_event
+```
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `candidate` | `promotion_checks_passed` | `validated` | Persist `PackagePromotionRecord`. |
+| `candidate` | `promotion_checks_failed` | `activation_failed` | Preserve current active set; no candidate production output. |
+| `validated` | `start_shadow` | `shadow_running` | Shadow output only. |
+| `shadow_running` | `shadow_passed` | `validated` | Persist shadow pass evidence. |
+| `shadow_running` | `shadow_failed` | `activation_failed` | No production output. |
+| `validated` | `start_canary` | `canary_running` | Canary output only. |
+| `canary_running` | `canary_passed` | `validated` | Persist canary pass evidence. |
+| `canary_running` | `canary_failed` | `activation_failed` | Current active set preserved. |
+| `validated` | `activate` | `activating` | Activation lock and all gates required. |
+| `activating` | `activation_committed` | `active` | Persist `PackageDeploymentRevision`. |
+| `activating` | `activation_failed` | `activation_failed` | Current active set preserved. |
+| `active` | `post_activation_health_passed` | `last_known_good` | Persist `LastKnownGoodPackageSet`. |
+| `active` | `post_activation_health_failed` | `rollback_pending` | Do not mark last-known-good. |
+| `active`, `last_known_good`, `activation_failed`, or `quarantined` | `rollback_requested` | `rollback_pending` | Immutable verified rollback target required. |
+| `rollback_pending` | `rollback_checks_passed` | `active` | Persist `PackageRollbackResult`. |
+| `rollback_pending` | `rollback_checks_failed` | prior state | No target activation. |
+| `active` or `last_known_good` | `deprecate` | `deprecated` | Persist deprecation record. |
+| `deprecated` | `retire` | `retired` | Persist retirement evidence. |
+| any non-retired state | `quarantine` | `quarantined` | Block dependent activation. |
+| `activation_failed` | `retry_activation` | `candidate` | Candidate checksum unchanged and retryable failure class required. |
+| terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
+
+Canary and shadow states must not write current production output, advance watermarks, or mark last-known-good.
 
 ## Rollback and Emergency Behavior
 
@@ -192,15 +268,16 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 ### PackageDeprecationWindowPolicy
 
 | Package type | Default window | Minimum | Maximum | Emergency retirement behavior | Compatibility override behavior | Validation fixture | Closure state |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| feed reader | TODO | TODO | TODO | immediate quarantine or retirement allowed when trust or correctness gate fails | only with explicit owner approval and validation evidence | `fixture-100-deprecation-feed-reader` | blocked_owner_todo |
-| parser | TODO | TODO | TODO | same | same | `fixture-100-deprecation-parser` | blocked_owner_todo |
-| mapping | TODO | TODO | TODO | same | same | `fixture-100-deprecation-mapping` | blocked_owner_todo |
-| resolver profile | TODO | TODO | TODO | same | same | `fixture-100-deprecation-resolver` | blocked_owner_todo |
-| projection package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-projection` | blocked_owner_todo |
-| validation package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-validation` | blocked_owner_todo |
+| --- | ---: | ---: | ---: | --- | --- | --- | --- |
+| feed reader | 90 days | 0 days | 180 days | Immediate quarantine or retirement when trust, correctness, or schema guard fails. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-feed-reader` | closed_local |
+| parser | 90 days | 0 days | 180 days | Immediate quarantine or retirement when trust, correctness, or schema guard fails. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-parser` | closed_local |
+| mapping | 90 days | 0 days | 180 days | Immediate quarantine or retirement when trust, correctness, or schema guard fails. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-mapping` | closed_local |
+| resolver profile | 30 days | 0 days | 90 days | Immediate quarantine when identity, authority, temporal, graph, trust, or safety guard fails. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-resolver` | closed_local |
+| projection package | 30 days | 0 days | 90 days | Immediate quarantine when graph, schema, apply, or trust guard fails. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-projection` | closed_local |
+| validation package | 180 days | 0 days | 365 days | Immediate retirement when fixture or validation output is invalid or unsafe. | Explicit owner approval plus validation evidence. | `fixture-100-deprecation-validation` | closed_local |
+| trust policy, signer, repository metadata, anti-rollback policy | 0 days | 0 days | 30 days for planned rotation only | Immediate quarantine on compromise, expiry, signer deauthorization, rollback detection, or transparency failure. | No compatibility override for new activation. | `fixture-100-deprecation-trust-policy` | closed_local |
 
-Missing package deprecation window values block package promotion for affected package types. Do not infer deprecation windows from external package managers, deployment controllers, or prior releases.
+A deprecated package must not be newly selected after its deprecation window expires except as an immutable verified rollback target allowed by `PackageRollbackPlan`.
 
 ### Package activation failure codes
 
@@ -220,6 +297,15 @@ Missing package deprecation window values block package promotion for affected p
 | `PACKAGE_SBOM_SUBJECT_MISMATCH` | SBOM subject does not match release subject digest. |
 | `PACKAGE_COMPATIBILITY_FAILED` | Compatibility matrix row fails. |
 | `PACKAGE_VALIDATION_FAILED` | Required validation row fails, is blocked, or is missing. |
+
+| `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | Package lifecycle event is invalid for the prior state. |
+| `PACKAGE_ACTIVATION_IDEMPOTENCY_CONFLICT` | Package activation idempotency key is reused with different input checksums. |
+| `PACKAGE_CANARY_OUTPUT_FORBIDDEN` | Canary execution attempts current production output, watermark advancement, or last-known-good state. |
+| `PACKAGE_SHADOW_OUTPUT_FORBIDDEN` | Shadow execution attempts current production output, watermark advancement, or last-known-good state. |
+| `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | Rollback target is mutable, missing, quarantined without permission, or not a verified package-set manifest. |
+| `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | Dependent activation references a quarantined package or artifact. |
+| `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | Deprecated artifact is selected after the applicable deprecation window without verified rollback authorization. |
+| `PACKAGE_RETRY_NOT_ALLOWED` | Retry is requested for a non-retryable activation failure or changed candidate checksum. |
 
 ### ProductionPackageSetManifest schema
 
@@ -280,6 +366,13 @@ Missing package deprecation window values block package promotion for affected p
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, approval refs, and checksum. |
 | `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
 | `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
+
+| `100-LIFECYCLE-AC-001` | Package activation lifecycle matrix is total. |
+| `100-LIFECYCLE-AC-002` | Failed candidate activation preserves current active package set and writes no candidate production output. |
+| `100-LIFECYCLE-AC-003` | Canary and shadow never mark last-known-good or advance watermarks. |
+| `100-LIFECYCLE-AC-004` | Rollback target must be an immutable verified manifest. |
+| `100-LIFECYCLE-AC-005` | Quarantine blocks dependent activation and cannot clear directly to active. |
+| `100-DEPRECATION-WINDOW-AC-001` | Every package type has explicit deprecation defaults, minimums, and maximums. |
 
 ## Definition of Done
 

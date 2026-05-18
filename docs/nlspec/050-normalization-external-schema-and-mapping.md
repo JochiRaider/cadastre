@@ -52,6 +52,7 @@ Define how parsed raw records become silver observations and how external schema
 - `CanonicalValidationOutput`
 - `MappingValidationRule`
 - `ObservationTypeExternalMappingValidationMatrix`
+- `MappingArtifactLifecycleGuardRows`
 
 ## Parser Contract
 
@@ -159,6 +160,20 @@ OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`,
 | `CanonicalValidationOutput` | `runtime_state_record` | Records deterministic validation state and checksum. |
 
 Concrete rows in `### Observation-to-OCSF mapping matrix` are activation-controlled row examples or blocking `TODO:` rows. They are not production-active rows unless represented by an active artifact ref.
+
+### MappingArtifactLifecycleGuardRows
+
+`050` activation-controlled artifacts use `030.ActivationControlledArtifactLifecycleMachine.v1`. `050` owns only the mapping-specific guard rows below.
+
+| Artifact class | Required guard before `validated` | Required guard before `active` | Quarantine trigger |
+| --- | --- | --- | --- |
+| parser profile | Parser fixtures pass, malformed/unsupported/duplicate cases pass, and no authoritative output attempt occurs. | Package set active, parser stage binding active, and validation refs non-expired. | Parser emits forbidden output or raw evidence leak. |
+| mapping bundle | `CanonicalValidationOutput` passes, no core override occurs, and no undeclared source roots exist. | Observation mapping matrix rows are complete or non-active TODO blockers; mapping package is in the active package set. | Core field override, undeclared extension field, or OCSF artifact mismatch. |
+| external schema profile/artifact | Artifact checksum, compiler, validator, class allowlist, profile set, and extension set validate. | `OCSFBaseEventFieldPolicy`, enum rules, profile resolution, and observation-type fixtures pass. | Schema artifact checksum mismatch or dev/main schema used in production. |
+| source-extension rule set | Namespace, type, bounds, redaction, collision, and secret-scan validation pass. | Rule refs are present in mapping bundle and manifest. | Raw secret exposure or reserved-name collision. |
+| CIM projection profile | Projection-loss manifest fixtures pass. | Projection remains non-authoritative. | CIM output attempts to become raw, silver, gold, or identity authority. |
+
+A mapping artifact entering `active` status must have `030.LifecycleTransitionEvidence` for `030.ActivationControlledArtifactLifecycleMachine.v1` and the relevant mapping-specific guard rows.
 
 ### ExternalSchemaArtifactRef field table
 
@@ -279,6 +294,7 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-VOLATILITY-AC-001` | Every production mapping-related artifact validates through `030.ActivationControlledArtifactRef` before silver output. |
 | `050-VOLATILITY-AC-002` | OCSF artifact checksum mismatch, inactive enum rule sets, omitted source-extension row refs, and mapping core overrides fail before production output. |
 | `050-VOLATILITY-AC-003` | `cadastre_only` mapping with null schema profile is allowed only by an active mapping row. |
+| `050-LIFECYCLE-AC-001` | Every `050` activation-controlled artifact entering `active` status has a `030.LifecycleTransitionEvidence` ref for the generic artifact lifecycle and mapping-specific guard rows. |
 
 ## Definition of Done
 

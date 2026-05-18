@@ -52,6 +52,8 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `UnresolvedTargetReference`
 - `TargetSelectorSafetyPolicy`
 - `ResolveIdentity`
+- `ResolverArtifactLifecycleGuardRows`
+- `IdentityReviewCaseStateMachineBinding`
 
 ## Resolver Authority
 
@@ -82,6 +84,27 @@ Stable identity semantics, weak-evidence defaults, hard-blocker precedence, revi
 | `UnresolvedTargetReference` | `runtime_state_record` | Runtime hint record; no identity by itself. |
 | `TargetSelectorSafetyPolicy` | `activation_controlled_artifact` | Must validate before selectors influence resolver or projection behavior. |
 | `ResolveIdentity` | `stable_core_contract` | Algorithm validates artifact refs before candidate generation. |
+
+### ResolverArtifactLifecycleGuardRows
+
+Resolver activation artifacts use `030.ActivationControlledArtifactLifecycleMachine.v1`. `070` owns identity-specific guard rows and review-case state-machine requirements.
+
+| Artifact class | Lifecycle binding | Required owner guards |
+| --- | --- | --- |
+| `ResolverProfile` | `030.ActivationControlledArtifactLifecycleMachine.v1` | Coverage for run mode, entity type, source scopes, evidence classes, lifecycle boundary types, activation scenarios, and blocker coverage. |
+| `IdentifierEvidenceClass` row set | Generic artifact lifecycle | Stable weak-evidence defaults preserved; extensions cannot permit weak auto-merge unless stable semantics permit. |
+| `IdentifierScope` row set | Generic artifact lifecycle | Scope keys, canonicalization, uncovered-scope behavior, and fixtures. |
+| `CandidateGenerationProfile` | Generic artifact lifecycle | Blocking keys, deterministic pair ordering, candidate caps, and overflow behavior. |
+| `AssetGenerationBoundary` row set | Generic artifact lifecycle | Reimage, clone, VDI, reinstall, delete/recreate, scanner correlation, and lifecycle blocker fixtures. |
+| `TargetSelectorSafetyPolicy` | Generic artifact lifecycle | Selector maximum resolution state and forbidden identity side effects. |
+
+### IdentityReviewCaseStateMachineBinding
+
+Machine ID: `070.IdentityReviewCaseStateMachine.v1`.
+
+`IdentityReviewCase` uses an owner-local deterministic state machine rather than shared `LifecycleStatus`. Review state changes must emit owner-local transition evidence and must not mutate canonical identity except through a terminal `IdentityDecision` record.
+
+TODO: `070` must add closed review states, closed events, a total transition matrix, reviewer authority guard order, expiration behavior, terminal identity-decision output rules, illegal-transition behavior, idempotency key handling, and validation rows for `070.IdentityReviewCaseStateMachine.v1` before authoritative promotion. The existing `IdentityReviewCase state machine` table remains a partial transition catalog and does not close this TODO.
 
 ## Evidence Roles
 
@@ -306,6 +329,8 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, and resolver artifact checksum mismatch fail before identity mutation. |
 | `070-VOLATILITY-AC-002` | Candidate cap overflow does not auto-merge overflowed candidates and blocks authoritative promotion while numeric caps remain `TODO:`. |
 | `070-VOLATILITY-AC-003` | A resolver profile that attempts graph-key-only auto-merge fails before candidate decision output. |
+| `070-LIFECYCLE-AC-001` | Resolver profile activation emits generic artifact lifecycle transition evidence and resolver-specific guard results before identity mutation. |
+| `070-LIFECYCLE-AC-002` | `070.IdentityReviewCaseStateMachine.v1` remains blocked by explicit TODO rows until review states, events, total transitions, idempotency, expiration, and validation rows are closed. |
 
 ## Definition of Done
 

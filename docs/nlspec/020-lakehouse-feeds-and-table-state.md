@@ -54,6 +54,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `ReplayRetentionDecision`
 - `CrossTableCommitProfile`
 - `CatalogBranchPromotionPolicy`
+- `FeedStageLifecycleEventDerivation`
 
 ## Feed Read Contract
 
@@ -70,7 +71,6 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 | `manifest_list` | `RawFeedManifest` | Manifest validation result and read completeness receipt. |
 
 `LakehouseFeedAvailabilityCheck` must validate catalog, table, object, partition, manifest, and schema availability without enterprise source calls or observation-producing side effects.
-
 
 ### LakehouseFeedProfileSchema
 
@@ -213,6 +213,32 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 17. Persist `VersionManifest` refs for every output-affecting activation artifact, profile, policy, target, schema, state, manifest, feasibility assessment, and category closure row set.
 18. Return no absence, cleanup, retraction, graph expiry, or watermark result from this algorithm.
 ```
+
+### FeedStageLifecycleEventDerivation
+
+`FeedStageLifecycleEventDerivation` maps feed-read branch outcomes into `030.StageExecutionLifecycleMachine.v1` events. It must not restate the generic stage lifecycle transition matrix. Every feed-read branch must emit a `030.ProcessingStageLifecycleResult` or fail before production output.
+
+| Feed read outcome | Lifecycle event | Terminal state expectation | Required side effects |
+| --- | --- | --- | --- |
+| Profile schema missing or invalid | `nonretryable_error` | `failed_nonisolated` unless stage isolation permits `failed_isolated` | No read, no raw import, no watermark. |
+| No active category closure row | `nonretryable_error` | `failed_nonisolated` unless stage isolation permits `failed_isolated` | No read, no raw import. |
+| Category closure deterministic no-op block | `stage_no_output` | `no_op` | Emit block/no-op evidence only. |
+| Category closure deterministic error block | `nonretryable_error` | `failed_nonisolated` unless isolated | Emit owner error; no production output. |
+| Branch unresolved | `nonretryable_error` | `failed_nonisolated` unless isolated | No read. |
+| Declared subset missing | `nonretryable_error` | `failed_nonisolated` unless isolated | No subset output. |
+| Declared subset output forbidden | `forbidden_output` | `failed_nonisolated` | No output commit. |
+| Missing table, dataset, object, partition, or schema refs before read | `nonretryable_error` unless read policy declares the condition retryable | `failed_nonisolated` or `retry_wait` | No raw import until retry or success. |
+| Manifest invalid | `nonretryable_error` | `failed_nonisolated` unless isolated | Receipt or diagnostic only; no raw import commit. |
+| Partial known gap with positive records allowed | `stage_success` | `succeeded` | Persist raw positives, receipt, and `blocked_effects = [absence, cleanup, retraction, graph_expiry, watermark]`. |
+| Partial unknown gap with positive records allowed | `stage_success` | `succeeded` | Persist raw positives, receipt, and `blocked_effects = [absence, cleanup, retraction, graph_expiry, watermark]`. |
+| Empty target scope under `not_authoritative_for_absence` | `stage_success` | `succeeded` | Persist receipt and diagnostic; absence and watermark remain blocked. |
+| Empty target scope under `reject_empty_scope` | `nonretryable_error` | `failed_nonisolated` unless isolated | No read output. |
+| Successful full read | `stage_success` | `succeeded` | Persist raw rows or manifest validation, receipt, and state records. |
+| Successful manifest-list validation that produces no raw rows | `stage_no_output` or `stage_success` as profile declares | `no_op` or `succeeded` | Persist receipt and validation refs; no absence-sensitive effects unless `060` later permits them. |
+
+Feed-related `030.ProcessingStageLifecycleResult` usage must add `feed_receipt_state_ref`. The field must reference the persisted `LakehouseReadCompletenessReceipt` when the feed stage reaches `succeeded`, `no_op`, or an isolated failure after receipt emission.
+
+`020` remains non-authoritative for absence, cleanup, retraction, graph expiry, and watermark authorization. Those effects may be unblocked only by `060` after the feed stage result records the blocked effects.
 
 ## Feed and Table State Contract Details
 
@@ -480,6 +506,10 @@ ComputeRawFeedManifestId(manifest):
 | `020-FEED-CLOSURE-AC-004` | Omitted or invalid target-kind input never defaults to a table, object, partition, manifest, or dataset read. |
 | `020-FEED-CLOSURE-AC-005` | Declared subset reads fail before output unless an active `030.DeclaredDAGSubsetProfile` covers requested outputs and effects. |
 | `020-FEED-CLOSURE-AC-006` | Partial known gaps, partial unknown gaps, empty scopes under the default policy, and missing lakehouse rows never authorize absence, cleanup, retraction, graph expiry, or watermark advancement. |
+
+| `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
+| `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
+| `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |
 
 ## Definition of Done
 

@@ -54,6 +54,7 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `ApplyDerivationRules`
 - `CreateRiskAcceptance`
 - `ValidateAnalysisQueryImport`
+- `AnalysisRegistryArtifactLifecycleGuardRows`
 
 ## Non-Authority Rule
 
@@ -105,6 +106,19 @@ Analysis, enrichment, lineage, and registry artifacts may be active only through
 | `RegistryArtifactGovernance` | `activation_controlled_artifact` | Governance metadata with no fact authority by itself. |
 | `RegistryCustomPropertySchema` | `activation_controlled_artifact` | Defines typed custom-property metadata only. |
 | `RegistryClassificationPolicy` | `activation_controlled_artifact` | Classification metadata only. |
+
+### AnalysisRegistryArtifactLifecycleGuardRows
+
+Analysis, enrichment, lineage, and registry activation-controlled artifacts use `030.ActivationControlledArtifactLifecycleMachine.v1`. `130` owns only the non-authority and owner-specific guard rows below.
+
+| Artifact class | Required guard before `active` | Quarantine trigger |
+| --- | --- | --- |
+| `AnalysisRuleBundle` | Rule graph compatibility passes, query target is active, rule is read-only, and validation refs pass. | Attempts mutation or graph profile incompatibility. |
+| `DerivationRuleBundle` | Routes gold output only through `080`, with authority and completeness refs present. | Emits gold outside `080`. |
+| `DerivedGraphEdgeRule` | Routes graph output only through `090`, with supporting facts, rule refs, and profile refs persisted. | Emits graph deltas without supporting facts or active projection path. |
+| `ThreatIntelEnrichmentProfile` | Enrichment-only outputs and distribution mapping validate. | Attempts identity, source authority, completeness, or fact authority. |
+| `LineageFacetMappingPolicy` | Immutable schema URL, schema bytes, checksum, and collision behavior validate. | Schema checksum mismatch or mutable schema URL. |
+| `RegistryArtifactGovernance` | Owner, domain, lifecycle, checksum, approval, validation refs, activation scope present. | Registry metadata attempts production authority without owner spec. |
 
 ## Analysis, Enrichment, and Registry Contract Details
 
@@ -217,6 +231,7 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-RISK-SCORING-AC-001` | Numeric scoring is disabled by default and cannot emit authoritative risk scores without a future accepted scoring policy. |
 | `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
 | `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
+| `130-LIFECYCLE-AC-001` | Every analysis, enrichment, lineage, and registry activation-controlled artifact entering `active` status has generic artifact lifecycle transition evidence and owner-specific guard results. |
 
 ## Definition of Done
 

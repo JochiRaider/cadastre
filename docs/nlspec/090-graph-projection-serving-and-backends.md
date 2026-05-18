@@ -65,6 +65,7 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `ProjectGraphDeltas`
 - `RunGraphReadModelDriftCheck`
 - `RebuildGraph`
+- `GraphApplyLifecycleMachine`
 
 ## Projection Authority
 
@@ -131,6 +132,63 @@ ApplyGraphDelta(delta_set, apply_profile):
 10. On failure, record committed batch IDs or prove no committed writes.
 11. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
 ```
+
+## Graph Apply Lifecycle
+
+Machine ID: `090.GraphApplyLifecycleMachine.v1`.
+
+States:
+
+```text
+prepared
+preflighted
+applying
+partial_committed
+applied
+failed_no_commit
+failed_partial
+resume_pending
+no_op
+```
+
+Events:
+
+```text
+preflight_passed
+preflight_failed
+start_apply
+batch_committed
+batch_failed_before_commit
+batch_failed_after_commit
+retryable_backend_error
+retry_exhausted
+resume_requested
+resume_safe
+resume_unsafe
+identical_reapply
+idempotency_conflict
+complete
+replay_same_event
+```
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `prepared` | `preflight_passed` | `preflighted` | Persist preflight evidence. |
+| `prepared` | `preflight_failed` | `failed_no_commit` | No backend writes. |
+| `preflighted` | `start_apply` | `applying` | Persist apply-start evidence. |
+| `applying` | `batch_committed` | `applying` or `partial_committed` | Persist committed-batch evidence. |
+| `applying` | `complete` | `applied` | Persist `GraphApplyResult`; derived-view update eligible. |
+| `applying` | `batch_failed_before_commit` | `failed_no_commit` | No derived-view advancement. |
+| `applying` | `batch_failed_after_commit` | `failed_partial` | Persist committed-batch proof; no derived-view advancement. |
+| `failed_partial` | `resume_requested` | `resume_pending` | Same idempotency key required. |
+| `resume_pending` | `resume_safe` | `applying` | Resume after last compatible committed batch. |
+| `resume_pending` | `resume_unsafe` | `failed_partial` | Emit `GRAPH_APPLY_RESUME_UNSAFE`; no mutation. |
+| `applied` | `identical_reapply` | `no_op` | Idempotent no-op. |
+| any state | `idempotency_conflict` | same state | Emit `GRAPH_DELTA_IDEMPOTENCY_CONFLICT`; no mutation. |
+| terminal repeated identical event | `replay_same_event` | same state | Existing evidence or byte-identical no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
+
+Failed, partial, aborted, or schema-preflight-failed graph apply must not advance derived-view or watermark state. Backend transaction behavior must be represented as persisted evidence; it must not become lifecycle authority.
 
 ## QueryGraph Contract
 
@@ -199,14 +257,16 @@ The MVP active graph edge set is exactly `observed_connection`. Any additional a
 
 ### GraphApplyProfile defaults
 
-| Setting | Default | Maximum | Required behavior |
-| --- | --- | --- | --- |
-| batch size | TODO: owner decision required before authoritative promotion | TODO | Missing default blocks production graph apply activation. Do not infer batch size from backend defaults. |
-| retry count | TODO: owner decision required before authoritative promotion | TODO | Retryable error classes must be explicit. Do not infer retry count from driver defaults. |
-| transaction boundary | one declared batch | n/a | Partial apply must record committed batch IDs or prove no committed writes. |
-| partial apply behavior | fail closed unless resume evidence is complete | n/a | Unsafe resume emits `GRAPH_APPLY_RESUME_UNSAFE`. |
-| read-after-write proof | required | n/a | Graph apply result must include proof or block derived-view advancement. |
-| schema stale behavior | reject | n/a | Emit `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
+| Setting | Default | Minimum | Maximum | Rule |
+| --- | ---: | ---: | ---: | --- |
+| `max_batch_deltas` | 1000 | 1 | 5000 | May be lowered per backend; may be raised above 1000 only by a validated profile row. |
+| `retry_max_attempts` | 0 | 0 | 3 | Retry is disabled unless retryable error classes are explicitly declared. |
+| `retryable_error_classes` | `[]` | n/a | closed owner set | No driver or backend implicit retry-class inheritance. |
+| `retry_delay_schedule_seconds` | `[]` | n/a | `[1, 2, 4]` | Used only when retries are enabled. |
+| `transaction_boundary` | one declared batch | n/a | n/a | Commit only at the declared boundary. |
+| `partial_apply_behavior` | fail closed unless resume evidence is complete | n/a | n/a | Unsafe resume emits `GRAPH_APPLY_RESUME_UNSAFE`. |
+| `read_after_write_proof` | required | n/a | n/a | Missing proof blocks derived-view advancement. |
+| `schema_stale_behavior` | reject | n/a | n/a | Emit `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
 
 ### GraphQueryTranslationProfile observable contract
 
@@ -318,7 +378,12 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |
 | `090-REBUILD-MANIFEST-AC-001` | Every graph rebuild promotion has a `GraphRebuildManifest` with input refs, profile refs, schema fingerprint, output checksum, status, and errors. |
 | `090-VOLATILITY-AC-001` | Inactive graph projection profile, query translation checksum mismatch, apply profile manifest omission, backend ID exposure, and attempted `has_theoretical_reachability` activation fail before mutation or serving. |
-| `090-VOLATILITY-AC-002` | Graph apply batch and retry defaults remain blocking `TODO:` rows until owner-supplied default, maximum, and retryable error classes are defined. |
+| `090-VOLATILITY-AC-002` | Graph apply default values, maximums, retry classes, and retry schedule are explicit and no backend default is inherited. |
+| `090-LIFECYCLE-AC-001` | Graph apply lifecycle matrix is total. |
+| `090-LIFECYCLE-AC-002` | Identical reapply produces no mutation and no duplicate graph objects. |
+| `090-LIFECYCLE-AC-003` | Partial apply without committed-batch proof fails with `GRAPH_APPLY_RESUME_UNSAFE`. |
+| `090-LIFECYCLE-AC-004` | Failed, partial, aborted, or schema-preflight-failed apply never advances derived-view or watermark state. |
+| `090-GRAPH-APPLY-DEFAULTS-AC-001` | Graph apply defaults and maximums are explicit. |
 
 ## Definition of Done
 

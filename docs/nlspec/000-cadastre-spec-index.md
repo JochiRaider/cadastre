@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -184,7 +184,11 @@ Rules:
 | LakehouseFeedProfileSchema | `020` | 020,030,120,domain | runtime_data_input | `stable_core_contract` | 120 | blocked_validation | feed profile schema validation and target-kind omission fixtures required |
 | LakehouseFeedFeasibilityAssessment | `020` | 020,030,120,domain | runtime_data_input | `runtime_state_record` | 120 | blocked_validation | assessment schema, blocking reason, and activation-result fixtures required |
 | LakehouseFeedCategoryClosureRowSet | `020` | 020,030,060,110,120,domain | runtime_data_input | `activation_controlled_artifact` | 120 | blocked_validation | every active feed category requires closure row or deterministic block row |
-| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | `stable_core_contract` | 120 | blocked_owner_todo | run-lock lease timing, lifecycle transition rows, and declared subset profile validation rows remain TODO |
+| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | `stable_core_contract` | 120 | blocked_owner_todo | run-lock lease timing remains TODO; lifecycle transition rows are now owner-routed and validation gated |
+| Lifecycle machine mechanics | `030` | all lifecycle owners | runtime_orchestration | `stable_core_contract` | 120 | closed_local | validation rows required |
+| ActivationControlledArtifactLifecycleMachine | `030` plus artifact owner | all artifact owners | runtime_orchestration | `stable_core_contract` | 120 | closed_local | owner guard validation rows required |
+| ProductionRunExecutionLifecycleMachine | `030` | `120`, domain | runtime_orchestration | `stable_core_contract` | 120 | closed_local | lifecycle fixtures required |
+| StageExecutionLifecycleMachine | `030`, feed event derivation by `020` | `020`, `120`, domain | runtime_orchestration | `stable_core_contract` | 120 | closed_local | feed-stage fixtures required |
 | ActivationControlledArtifactRef | `030` | 020,050,060,070,080,090,100,110,120,130 | runtime_orchestration | `stable_core_contract` | 120 | blocked_validation | activation artifact ref validation rows required |
 | DeclaredDAGSubsetProfile | `030` | 020,060,080,090,120 | runtime_orchestration | `activation_controlled_artifact` | 120 | blocked_validation | subset output, watermark, absence, cleanup, retraction, and graph-expiry negative fixtures required |
 | Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | `stable_core_contract` | 120 | blocked_validation | owner enum and one-of validation rows required |
@@ -194,10 +198,13 @@ Rules:
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
 | Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
-| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_owner_todo | graph apply numeric defaults and validation checksums remain TODO |
-| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_owner_todo | package deprecation windows remain TODO |
+| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | graph apply validation checksums remain TODO |
+| GraphApplyLifecycleMachine | `090` | `030`, `080`, `110`, `120` | derived_projection | `stable_core_contract` | 120 | closed_local | graph apply fixtures required |
+| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_validation | package lifecycle fixture checksums remain TODO |
+| PackageSetActivationLifecycleMachine | `100` | `030`, `110`, `120` | runtime_activation | `stable_core_contract` | 120 | closed_local | package lifecycle fixtures required |
 | API, errors, security | `110` | all owner specs | runtime_api | `stable_core_contract` | 120 | blocked_owner_todo | page-token expiration bounds remain TODO |
 | Validation and acceptance | `120` | 000 and all owner specs | validation | `stable_core_contract` | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
+| ValidationAcceptanceLifecycleMachine | `120` | `000`, `030`, domain | validation | `stable_core_contract` | 120 | closed_local | validation lifecycle fixtures required |
 | Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | `stable_core_contract` | 120 | blocked_validation | fixture checksums required |
 | Deferred reachability | `200` | 090,110,120 | inactive_future_domain | `inactive_future_domain` | 120 | inactive_deferred | deferred |
 
@@ -271,6 +278,8 @@ Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMat
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
 
 `ValidateSpecSet` must fail before promotion when any exported implementation-relevant artifact lacks a volatility class, an activation-controlled artifact has no owner spec, a volatile production row is embedded in a stable core section without being marked example-only or `TODO:`, or a reference, ADR, or archive document is used as runtime authority.
+
+`SpecSetVersion.validation_matrix_refs` must include lifecycle validation rows for every lifecycle machine that can affect production output, activation, graph apply, replay, watermark eligibility, or CI gating. Authoritative handoff must fail when lifecycle ownership or closure state is inconsistent with `domain.md` unresolved or resolved lifecycle status.
 
 ## Archival Policy
 

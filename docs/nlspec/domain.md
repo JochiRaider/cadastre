@@ -428,6 +428,18 @@ Lifecycle concepts in root `domain.md` identify the domain meaning and owner of 
 | API/source/export state labels | API, UI, evidence drillback, compliance export, audit export, analysis output. | `110`, source domain owners. | User-facing state separation. | Authorized negative facts or compliance pass/fail unless owner output exists. |
 | Future reachability result state | Inactive future reachability results. | `200`. | Deferred analysis state for modeled reachability. | Active graph or gold output before promotion. |
 
+Lifecycle runtime behavior is owner-routed. `domain.md` names machine IDs and domain meaning only; it must not restate transition matrices.
+
+| Lifecycle machine | Domain meaning | Owner spec | Runtime table location |
+| --- | --- | --- | --- |
+| `030.ActivationControlledArtifactLifecycleMachine.v1` | Generic artifact activation, canary, deprecation, retirement, quarantine, and idempotent no-op behavior. | `030` plus artifact owner guard rows | `030`; owner guard rows in artifact owner spec |
+| `030.ProductionRunExecutionLifecycleMachine.v1` | Production run preflight, lock, run, failure, completion, and abort. | `030` | `030` |
+| `030.StageExecutionLifecycleMachine.v1` | Stage readiness, running, retry, success, no-op, isolated or non-isolated failure, and skip. | `030` plus stage owner event derivation | `030`; feed derivation in `020` |
+| `090.GraphApplyLifecycleMachine.v1` | Graph apply preflight, apply, partial failure, resume, and idempotent reapply. | `090` | `090` |
+| `100.PackageSetActivationLifecycleMachine.v1` | Package-set promotion, shadow, canary, activation, failure, rollback, last-known-good, deprecation, and quarantine. | `100` | `100` |
+| `120.ValidationAcceptanceLifecycleMachine.v1` | Validation acceptance status transitions. | `120` | `120` |
+| `070.IdentityReviewCaseStateMachine.v1` | Manual identity review states and terminal decision routing. | `070` | `070`; currently blocked by owner-local TODO |
+
 | State token | Applies to | Meaning | Terminal | Default transition authority | Owner |
 | --- | --- | --- | --- | --- | --- |
 | `draft` | Spec status | Authoring text that is not review-complete. | No. | Index promotion process. | `000` |
@@ -785,15 +797,15 @@ Drift-control rules:
 
 ## 25. Unresolved questions
 
-| ID | Question | Blocking scope | Required source or owner decision | Default until resolved |
-| --- | --- | --- | --- | --- |
-| `DOM-TODO-005` | TODO: Complete source-category-specific coverage dimension catalog. | Coverage-sensitive absence and negative claims. | `060` owner decision. | Coverage-dependent negative claims remain blocked where dimensions are unresolved. |
-| `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | Affected correction classes remain blocked. |
-| `DOM-TODO-007` | TODO: Finalize replay equivalence policy catalog. | Production replay and deterministic rebuild. | `080` owner decision. | Production replay remains blocked for unresolved output classes. |
-| `DOM-TODO-008` | TODO: Complete active MVP observation type to OCSF category/class/activity/type mapping rows. | External schema mapping and silver validation. | `050` owner decision. | Any missing row is a blocking `TODO:` for that observation type. |
-| `DOM-TODO-009` | TODO: Provide exhaustive active graph edge family registry and edge semantics rows for the MVP graph profile. | Relationship-family and graph mapping completeness. | `090` owner decision. | Graph edge mapping remains only concept-level; missing edge rows block activation. |
-| `DOM-TODO-010` | TODO: Confirm lifecycle transition tables for every production-affecting lifecycle machine. | Lifecycle behavior. | `030` plus package/profile owner decisions. | `LifecycleStatus` tokens remain shared names only. |
-| `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | Treat `domain.md` as no-runtime-export vocabulary reference. |
+| ID | Question | Blocking scope | Required source or owner decision | Blocking owner refs | Default until resolved |
+| --- | --- | --- | --- | --- | --- |
+| `DOM-TODO-005` | TODO: Complete source-category-specific coverage dimension catalog. | Coverage-sensitive absence and negative claims. | `060` owner decision. | `060` coverage rows. | Coverage-dependent negative claims remain blocked where dimensions are unresolved. |
+| `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | `080` correction rows. | Affected correction classes remain blocked. |
+| `DOM-TODO-007` | TODO: Finalize replay equivalence policy catalog. | Production replay and deterministic rebuild. | `080` owner decision. | `080` replay rows. | Production replay remains blocked for unresolved output classes. |
+| `DOM-TODO-008` | TODO: Complete active MVP observation type to OCSF category/class/activity/type mapping rows. | External schema mapping and silver validation. | `050` owner decision. | `050` mapping rows. | Any missing row is a blocking `TODO:` for that observation type. |
+| `DOM-TODO-009` | TODO: Provide exhaustive active graph edge family registry and edge semantics rows for the MVP graph profile. | Relationship-family and graph mapping completeness. | `090` owner decision. | `090` graph edge rows. | Graph edge mapping remains only concept-level; missing edge rows block activation. |
+| `DOM-TODO-010` | TODO: Confirm lifecycle transition tables and validation evidence for every production-affecting lifecycle machine. | Lifecycle behavior. | `030`, `020`, `070`, `090`, `100`, `120` owner decisions and `120` validation evidence. | `070.IdentityReviewCaseStateMachine.v1` TODO and `120` lifecycle fixture checksums. | Runtime behavior is routed by exact machine ID, but authoritative lifecycle closure remains blocked until owner-local TODOs and lifecycle validation rows close. |
+| `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | `000` export/status rows. | Treat `domain.md` as no-runtime-export vocabulary reference. |
 
 A downstream implementation must not resolve a `TODO:` by inference.
 
@@ -826,6 +838,7 @@ Unresolved rows in this section are valid only when the named owner spec contain
 | `DOMAIN-SCHEMA-PATCH-AC-002` | Root vocabulary distinguishes semantic fact key from immutable fact record ID. |
 | `DOMAIN-SCHEMA-PATCH-AC-003` | Root vocabulary states that `EvidenceRef` is not raw payload storage. |
 | `DOM-AC-020` | The root-domain owner map uses owner specs and exported contract names only. |
+| `DOM-LIFECYCLE-AC-001` | `domain.md` routes lifecycle machines to owner specs by exact machine ID and does not restate transition matrices. |
 | `DOMAIN-CLEANUP-AC-001` | The document contains no banned reference class. |
 | `DOMAIN-CLEANUP-AC-002` | Every owner-routing table uses the cleaned status vocabulary from `000`. |
 | `DOMAIN-CLEANUP-AC-003` | Conflict handling uses local `TODO:` rows or validation failure. |

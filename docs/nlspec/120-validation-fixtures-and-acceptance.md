@@ -38,6 +38,8 @@ Define fixtures, validation matrices, golden corpus, shadow execution, replay va
 - `AcceptanceReport`
 - `ValidateSpecSet`
 - `RunValidationMatrix`
+- `LifecycleValidationMatrix`
+- `ValidationAcceptanceLifecycleMachine`
 
 ## Validation Ownership Rule
 
@@ -50,7 +52,7 @@ This spec verifies behavior owned by domain specs. It must not create new behavi
 | `ValidationMatrix` | Rows mapping contract, scenario, fixture, expected output, expected error/no-op, owner spec, and pass/fail evidence. |
 | `LakehouseFeedFixture` | Redacted replayable feed rows, objects, manifests, supplier metadata, and expected read/import outcomes. |
 | `ValidationScenario` | Validation-only scenario with given records, expected outputs, expected diagnostics, no-op assertions, and mutation prohibition. |
-| `EventSequenceValidationCorpus` | Ordered event sequences for temporal, correction, replay, watermark, CDC, graph apply, and rebuild behavior. |
+| `EventSequenceValidationCorpus` | Ordered event sequences for temporal, correction, replay, watermark, CDC, graph apply, rebuild, lifecycle transition, idempotency, no-op, rollback, quarantine, and validation acceptance behavior. |
 | `GoldenCorpus` | Canonical set of input fixtures and expected outputs used for regression and promotion. |
 | `AcceptanceReport` | Immutable report that records criteria pass/fail status, checksums, owner, environment, and timestamp. |
 
@@ -200,7 +202,6 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
 
-
 ### FeedCategoryClosureValidationMatrix
 
 Each fixture family in this matrix applies to every active feed category in `020.LakehouseFeedCategoryClosureRequirementTable`. `future_reachability` must use deterministic block/no-op fixtures for MVP instead of positive reachability output.
@@ -259,6 +260,8 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `not_run` | Row exists but has no execution evidence. | Third. |
 | `pass` | Row ran and all expected evidence matched. | Lowest. |
 
+Lifecycle transition evidence is required for acceptance status changes that affect promotion. A promotion-affecting `AcceptanceReport` status change without matching `120.ValidationAcceptanceLifecycleMachine.v1` transition evidence is invalid and must fail before promotion.
+
 ### Required negative tests by owner
 
 | Owner spec | Forbidden boundary | Fixture ID | Fixture checksum | Expected error/no-op | Expected output checksum | Mutation prohibition | Acceptance criterion | Blocking status |
@@ -293,8 +296,12 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `080` | replay mismatch | `fixture-080-replay-mismatch` | TODO | replay mismatch error | TODO | no replay output | `080-CLEANUP-AC-004` | blocking |
 | `090` | theoretical reachability edge | `fixture-090-theoretical-reachability-edge` | TODO | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op | TODO | no graph mutation | `090-CLEANUP-AC-004` | blocking |
 | `090` | backend internal ID | `fixture-090-backend-id` | TODO | `GRAPH_BACKEND_ID_FORBIDDEN` | TODO | no graph response identity leak | `090-CLEANUP-AC-003` | blocking |
+| `090` | graph apply unsafe resume | `fixture-090-lifecycle-graph-apply-resume-unsafe` | TODO | `GRAPH_APPLY_RESUME_UNSAFE` | TODO | no graph mutation and no derived-view advancement | `090-LIFECYCLE-AC-003` | blocking |
+| `090` | graph apply identical reapply | `fixture-090-lifecycle-identical-reapply` | TODO | idempotent no-op | TODO | no duplicate graph object | `090-LIFECYCLE-AC-002` | blocking |
 | `100` | unauthorized signer | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
 | `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
+| `100` | canary output isolation | `fixture-100-lifecycle-canary-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` or no-op | TODO | no current production output, no watermark, no last-known-good | `100-LIFECYCLE-AC-003` | blocking |
+| `100` | quarantine blocks dependent activation | `fixture-100-lifecycle-quarantine-blocks-dependent-activation` | TODO | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | TODO | no dependent package activation | `100-LIFECYCLE-AC-005` | blocking |
 | `110` | state-label collapse | `fixture-110-state-label-collapse` | TODO | reject/non-collapse | TODO | no incorrect API state | `110-CLEANUP-AC-002` | blocking |
 | `110` | page token authorization mismatch | `fixture-110-page-token-auth-mismatch` | TODO | `PAGE_TOKEN_INVALID` | TODO | no data disclosure | `110-PAGE-TOKEN-AC-001` | blocking |
 | `110` | new owner state label non-collapse | `fixture-110-feed-closure-state-labels` | TODO | reject/non-collapse | TODO | no authorized negative fact rendering | `110-FEED-CLOSURE-AC-001` | blocking |
@@ -302,6 +309,69 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `130` | lineage facet checksum mismatch | `fixture-130-lineage-facet-checksum-mismatch` | TODO | `LINEAGE_FACET_CHECKSUM_MISMATCH` | TODO | no lineage activation | `130-AC-003` | blocking |
 | `200` | active reachability output | `fixture-200-active-reachability-output` | TODO | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | TODO | no gold, graph, API output | `200-CLEANUP-AC-003` | blocking |
 | volatility | activation artifact redefines stable core behavior; activation artifact omitted from `VersionManifest`; runtime state substituted as source truth | `fixture-120-volatility-boundary` | TODO | owner-specific volatility error or no-op | TODO | no production mutation | `120-VOLATILITY-AC-001` | blocking |
+
+### LifecycleValidationMatrix
+
+Lifecycle validation rows must be executable ordered event sequences. Each row must name expected transition evidence, expected output checksum or no-op, expected error when applicable, and mutation-prohibition proof.
+
+| Validation row | Owner | Required assertion |
+| --- | --- | --- |
+| `val-030-lifecycle-artifact-totality` | `030` | Every artifact lifecycle state/event pair resolves to legal transition, no-op, or illegal-transition evidence. |
+| `val-030-lifecycle-idempotent-replay` | `030` | Same event key and same inputs produce byte-identical evidence. |
+| `val-030-lifecycle-idempotency-conflict` | `030` | Same key with changed input checksum fails with `LIFECYCLE_IDEMPOTENCY_CONFLICT`. |
+| `val-030-lifecycle-production-run` | `030` | Non-isolated stage failure stops downstream stages and emits no downstream production output. |
+| `val-030-lifecycle-stage-execution` | `030` | Stage execution machine has total state/event coverage and expected terminal states. |
+| `val-030-lifecycle-feed-stage` | `020`, `030` | Partial feed read emits valid lifecycle result with blocked effects and no absence or watermark. |
+| `val-090-lifecycle-graph-apply-totality` | `090` | Graph apply machine has total state/event coverage. |
+| `val-090-lifecycle-graph-apply-resume-safe` | `090` | Partial apply with committed-batch proof resumes after last compatible batch. |
+| `val-090-lifecycle-graph-apply-resume-unsafe` | `090` | Partial apply without proof fails with `GRAPH_APPLY_RESUME_UNSAFE`. |
+| `val-090-lifecycle-graph-apply-identical-reapply` | `090` | Identical reapply returns no-op and does not mutate graph. |
+| `val-100-lifecycle-package-activation` | `100` | Candidate activation failure preserves current active package set. |
+| `val-100-lifecycle-canary-isolation` | `100` | Canary and shadow emit no current production output, watermark, or last-known-good state. |
+| `val-100-lifecycle-rollback-immutable-target` | `100` | Mutable rollback targets fail. |
+| `val-100-lifecycle-quarantine-blocks-dependent-activation` | `100` | Quarantine blocks dependent activation and cannot clear directly to active. |
+| `val-100-lifecycle-deprecation-window-expiry` | `100` | Deprecated artifact cannot be newly selected after window expiry except verified rollback. |
+| `val-120-lifecycle-validation-acceptance` | `120` | Acceptance reaches `passed` only when every required row passes and no owner TODO remains. |
+| `val-domain-lifecycle-todo-resolved` | `domain`, `000`, `120` | `DOM-TODO-010` is resolved only when all owner machines and validation rows exist and pass. |
+
+### ValidationAcceptanceLifecycleMachine
+
+Machine ID: `120.ValidationAcceptanceLifecycleMachine.v1`.
+
+States:
+
+```text
+pending
+running
+passed
+failed
+blocked
+expired
+superseded
+```
+
+Events:
+
+```text
+start_validation
+all_rows_passed
+row_failed
+owner_todo_found
+acceptance_expired
+superseded_by_new_report
+replay_same_event
+```
+
+| Prior state | Event | Next state | Required behavior |
+| --- | --- | --- | --- |
+| `pending` | `start_validation` | `running` | Matrix, fixture refs, owner specs, and input checksums validate. |
+| `running` | `all_rows_passed` | `passed` | Persist `AcceptanceReport`. |
+| `running` | `row_failed` | `failed` | Acceptance report includes failing rows. |
+| `running` | `owner_todo_found` | `blocked` | Persist blocking report. |
+| `passed` | `acceptance_expired` | `expired` | Persist expiry evidence. |
+| `passed`, `failed`, `blocked`, or `expired` | `superseded_by_new_report` | `superseded` | Persist supersession evidence. |
+| terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
+| `all_other_state_event_pairs` | any other event | same state | Illegal transition evidence; no mutation. |
 
 ### ExpectedMutationProhibition rows
 
@@ -318,14 +388,14 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 
 | Owner | Required fixture families |
 | --- | --- |
-| `020` | feed read, manifest validation, read completeness, raw ID replay, omitted object, partial known gap, feed category closure, feasibility assessment, missing profile field, target-kind omission, declared subset, empty-scope, object/partition known gap, unknown gap, private-binding leak. |
-| `030` | DAG ordering, lifecycle transition, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
+| `020` | feed read, feed lifecycle event derivation, manifest validation, read completeness, raw ID replay, omitted object, partial known gap, feed category closure, feasibility assessment, missing profile field, target-kind omission, declared subset, empty-scope, object/partition known gap, unknown gap, private-binding leak. |
+| `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
 | `050` | OCSF mapping, enum handling, source extension, disabled base-event fields, cadastre-only null profile. |
 | `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating. |
 | `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
 | `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
-| `090` | edge semantics, graph apply, query ordering, reachability prohibition, backend ID rejection. |
-| `100` | package activation, trust, rollback, emergency behavior, repository unsupported form. |
+| `090` | edge semantics, graph apply lifecycle, graph apply resume, identical reapply, query ordering, reachability prohibition, backend ID rejection. |
+| `100` | package activation lifecycle, trust, canary and shadow isolation, rollback, quarantine, emergency behavior, deprecation window expiry, repository unsupported form. |
 | `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
 | `130` | analysis mutation, lineage facet, registry non-authority, threat-intel no-identity, risk scoring boundary. |
 
@@ -354,6 +424,11 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-FEED-CLOSURE-AC-002` | Every profile-dependent branch in `020`, `030`, and `060` has a validation row with expected receipt state, error/no-op, user-facing label, and mutation prohibition. |
 | `120-FEED-CLOSURE-AC-003` | Every active feed category has positive and negative fixtures for complete, partial, stale, permission-limited, missing-profile-row, missing-upstream-evidence, weak-progress, empty-complete, and watermark-blocked cases. |
 | `120-FEED-CLOSURE-AC-004` | Every absence-sensitive output has exact authority, completeness, coverage, staleness, and watermark fixtures where applicable. |
+
+| `120-LIFECYCLE-AC-001` | Every production-affecting lifecycle machine has executable event-sequence fixtures. |
+| `120-LIFECYCLE-AC-002` | Aggregate `AcceptanceReport` cannot pass while any required lifecycle fixture is blocked, not run, failed, missing checksum, or missing expected output. |
+| `120-LIFECYCLE-AC-003` | Validation acceptance lifecycle matrix is total and idempotent. |
+| `120-LIFECYCLE-AC-004` | Domain/owner lifecycle closure status contradiction fails with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 
 ## Definition of Done
 

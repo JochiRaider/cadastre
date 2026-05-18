@@ -53,6 +53,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `ProjectionWatermarkPolicy`
 - `WatermarkCommitRecord`
 - `EvaluateLakehouseFeedCompleteness`
+- `SourceAuthorityArtifactLifecycleGuardRows`
 
 ## Source Authority Contract
 
@@ -65,7 +66,6 @@ A broad source-category ranking must not act as fallback authority when the exac
 ## Completeness Contract
 
 `LakehouseFeedCompletenessProfile` maps feed-read completeness and supplier-provided upstream evidence into source completeness decisions. A `LakehouseReadCompletenessReceipt` alone must not authorize absence, retraction, cleanup, graph expiry, or watermark advancement.
-
 
 `LakehouseFeedCompletenessProfileRow` is the activation-controlled row shape that makes feed-read completeness decisions scope-exact. Missing rows, missing `allowed_effects`, or missing upstream evidence must not be interpreted as permission for absence, cleanup, retraction, graph expiry, or watermark advancement.
 
@@ -143,6 +143,23 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `ProjectionWatermarkPolicy` | `activation_controlled_artifact` | Must be active before watermark advancement. |
 | `WatermarkCommitRecord` | `runtime_state_record` | Records attempted watermark outcome; does not grant authority. |
 | `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` | `stable_core_contract` | Algorithms validate activation refs before output. |
+
+### SourceAuthorityArtifactLifecycleGuardRows
+
+`060` policy row sets use `030.ActivationControlledArtifactLifecycleMachine.v1` for activation. Runtime completeness, absence, and watermark decisions remain algorithmic unless a future owner patch defines a lifecycle subject, closed states, closed events, a total transition matrix, and validation rows.
+
+| Artifact class | Lifecycle binding | Required owner guards |
+| --- | --- | --- |
+| `SourceAuthorityProfile` and row set | `030.ActivationControlledArtifactLifecycleMachine.v1` | Exact fact, predicate, dataset, and scope coverage; no broad fallback; validation refs. |
+| `LakehouseFeedCompletenessProfileRow` row set | Generic artifact lifecycle | Exact feed category, read target, receipt state, upstream evidence, allowed effects, and validation refs. |
+| `CoverageDimensionProfile` source-specific rows | Generic artifact lifecycle | Coverage domain, dimension states, staleness rules, permission behavior, and fixture refs. |
+| `ProgressSignalInterpretationPolicy` | Generic artifact lifecycle | Signal class, default non-authority, exact granted effect, and weak-signal combination fixture. |
+| `ProjectionWatermarkPolicy` | Generic artifact lifecycle | Required completeness, apply status, and no advancement after failed or partial apply. |
+| `AbsenceDerivationPolicy` | Generic artifact lifecycle | Absence, no-op, stale, error result mapping, and blocking precedence fixture. |
+
+### Pure algorithm lifecycle non-substitution rule
+
+`EvaluateLakehouseFeedCompleteness`, `DeriveAbsenceOrUnknown`, and watermark evaluation are pure deterministic algorithms for MVP. They must not be converted into lifecycle machines unless a future owner patch defines a lifecycle subject, closed states, closed events, total transition matrix, and validation rows.
 
 ## EvaluateLakehouseFeedCompleteness Algorithm
 
@@ -277,7 +294,6 @@ Missing rows, stale states, partial states, permission-limited states, weak prog
 | cloud inventory | missing cloud resource and resource deletion inference. |
 | source history | no-change proof outside supported history window. |
 
-
 ### FeedCategoryCoverageEffectMatrix
 
 This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without restating feed-read target mechanics. Exact activation-controlled rows must provide the source-specific refs before effects are allowed.
@@ -396,6 +412,7 @@ Weak progress signals must not combine into stronger authority.
 | `060-FEED-CLOSURE-AC-003` | `allowed_effects = []` or omitted allowed effects blocks absence, cleanup, retraction, graph expiry, and watermark. |
 | `060-FEED-CLOSURE-AC-004` | Blocking precedence is deterministic and selects the same blocking reason for identical evidence, rows, refs, and requested effect. |
 | `060-FEED-CLOSURE-AC-005` | Complete or empty-complete decisions authorize effects only through exact active authority, completeness, coverage, and staleness rows. |
+| `060-LIFECYCLE-AC-001` | Source authority, completeness, coverage, progress, absence, and watermark artifacts can become active only through `030.LifecycleTransitionEvidence`, while `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` remain pure deterministic algorithms. |
 
 ## Definition of Done
 
