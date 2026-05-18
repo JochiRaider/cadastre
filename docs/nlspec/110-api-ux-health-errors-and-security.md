@@ -95,6 +95,8 @@ ambiguous
 
 These labels must not be rendered as authorized negative facts or compliance pass/fail states unless the owning domain spec has emitted the corresponding authoritative output.
 
+`not_authoritative_for_absence` is an owner completeness decision, not an authorized negative fact. Caller-visible output must map it to `unknown` with owner context unless an endpoint exposes owner diagnostics separately.
+
 ## Error Model
 
 `ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
@@ -171,6 +173,29 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
 
+
+### Feed closure error registry rows
+
+The generated `ErrorCodeRegistry` must include the following owner-specific rows. Caller-visible fields are code, message, severity, retryability, owner spec, affected record type, field path when applicable, redaction state, and error correlation ID. Audit-visible fields may add artifact refs, selected branch, requested effect, validation refs, checksums, and secure diagnostic refs.
+
+| Error code | Owner | Severity | Retryability | Redaction | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | `020` | error | no, until profile changes | field path allowed, value redacted | `feed-020-profile-schema-incomplete` |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` | blocked | no, until artifact activation changes | category visible; private refs redacted | `feed-020-category-row-missing` |
+| `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | `020` | blocked | no, until profile or row changes | branch name visible; payload redacted | `feed-020-profile-branch-unresolved` |
+| `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | `020` | blocked | no, until subset profile activates | subset scope redacted | `feed-020-declared-subset-required` |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | `020` | blocked | owner-defined | evidence class visible; private refs redacted | `feed-category-missing-upstream-completeness-*` |
+| `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | `020` | diagnostic | no, until policy changes | scope redacted | `feed-020-empty-scope-not-authoritative` |
+| `DECLARED_DAG_SUBSET_PROFILE_MISSING` | `030` | blocked | no, until artifact activation changes | subset scope redacted | `fixture-030-subset-profile-missing` |
+| `DECLARED_DAG_SUBSET_SCOPE_MISMATCH` | `030` | error | no, until profile or request changes | scope redacted | `fixture-030-subset-scope-mismatch` |
+| `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | `030` | error | no, until profile or request changes | output class visible | `fixture-030-subset-output-forbidden` |
+| `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | `060` | blocked | no, until artifact activation changes | row selector redacted | `feed-category-missing-profile-row-*` |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` | `060` | blocked | owner-defined | evidence refs redacted | `feed-category-missing-upstream-completeness-*` |
+| `COMPLETENESS_EFFECT_NOT_ALLOWED` | `060` | blocked | no, until profile row changes | effect token visible | `fixture-060-effect-not-allowed` |
+| `COMPLETENESS_BLOCKING_PRECEDENCE_APPLIED` | `060` | diagnostic | no | blocking reason visible; private refs redacted | `fixture-060-blocking-precedence` |
+| `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | `060` | blocked | no, until profile row changes | scope redacted | `feed-category-empty-complete-*` |
+| `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | `060` | blocked | owner-defined | watermark target redacted | `feed-category-watermark-blocked-*` |
+
 ### Activation artifact error handling
 
 Artifact activation failures must use the most specific owner code when available. `030.ACTIVATION_ARTIFACT_INCOMPLETE` is the generic fallback only when no domain-specific code exists.
@@ -218,6 +243,20 @@ All owner-specific errors must appear in the generated registry before promotion
 | `authorized_not_observed` | `authorized_not_observed` | owner-defined | `authorized_not_observed` | owner-defined | only when `060` authorizes | owner-defined |
 | `not_applicable` | `not_applicable` | `not applicable` | `not_applicable` | not projected by default | none | not_applicable |
 
+
+### OwnerStateToSourceStateLabelMapping
+
+| Owner state | Caller-visible label | Required owner context | Authorized negative interpretation |
+| --- | --- | --- | --- |
+| `not_authoritative_for_absence` | `unknown` | completeness decision, owner spec, blocking reason, and redacted artifact refs when diagnostic access permits | forbidden |
+| `partial_known_gap` | `partial_known_gap` | known missing object, partition, or row-range metadata when permitted | forbidden |
+| `partial_unknown_gap` | `partial_unknown_gap` | unknown-gap diagnostic and redacted feed refs | forbidden |
+| `permission_limited` | `permission_limited` | permission or visibility limitation class | forbidden |
+| `source_unavailable` | `source_unavailable` | unavailable source/feed target class | forbidden |
+| `scope_unavailable` | `scope_unavailable` | unavailable scope selector class | forbidden |
+| stale source output | `source_stale` | staleness policy ref and selected time basis when permitted | forbidden |
+| authorized empty or negative output with `060.AbsenceDerivationResult.absence_authorized = true` | `authorized_not_observed` | exact authority, completeness, coverage, and staleness refs | allowed only for the authorized predicate and scope |
+
 ### PrivateBindingLeakResponse
 
 Public docs, APIs, exports, and validation reports must fail closed or redact when private source bindings appear. Public API responses must not reveal inaccessible asset existence through partial detail responses.
@@ -248,6 +287,11 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | activation artifact validation refs missing | `blocked` | owner-defined | prevents activation or stage output | activation_health | fixture refs redacted |
 | package-set artifact mismatch | `error` | no, until package set changes | preserves current active package set | package_health | package evidence redacted |
 | activation artifact owner spec mismatch | `error` | no, until artifact metadata changes | blocks activation or stage output | activation_health | owner names visible; private refs redacted |
+| feed activation blocked | `blocked` | no, until profile, category row, feasibility assessment, or validation refs change | blocks feed activation and dependent output | feed_health | profile and artifact refs redacted |
+| feed category closure missing | `blocked` | no, until category closure row set activates | blocks category-dependent feed reads | feed_health | category visible; private refs redacted |
+| upstream completeness unavailable | `unknown` | owner-defined | blocks absence-sensitive effects | data_freshness | evidence refs redacted |
+| completeness effect blocked | `unknown` | no, until completeness row changes | blocks absence, cleanup, retraction, graph expiry, or watermark for requested effect | completeness_health | effect token visible; private refs redacted |
+| watermark blocked by completeness | `blocked` | owner-defined | blocks watermark advancement only; must not mutate facts or graph state | watermark_health | watermark target redacted |
 
 ### Page token canonicalization
 
@@ -313,6 +357,10 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-ACTIVATION-ERROR-AC-001` | Activation artifact errors expose owner, artifact class, retryability, and redaction state. |
 | `110-ACTIVATION-ERROR-AC-002` | Activation artifact errors never collapse into `unknown`, `not_checked`, pass, or fail. |
 | `110-PAGE-TOKEN-DEFAULTS-AC-001` | Page-token default and maximum expiration are explicit or promotion is blocked. |
+| `110-FEED-CLOSURE-AC-001` | `not_authoritative_for_absence` renders as `unknown` with owner context and never as an authorized negative fact. |
+| `110-FEED-CLOSURE-AC-002` | `partial_known_gap` remains caller-visible as `partial_known_gap` and does not collapse to `unknown` when that owner state is available. |
+| `110-FEED-CLOSURE-AC-003` | Every new `020`, `030`, and `060` feed-closure error code appears in the generated registry with severity, retryability, redaction, owner, and fixture ID. |
+| `110-FEED-CLOSURE-AC-004` | Feed activation, category closure, upstream completeness, effect-blocked, and watermark-blocked health rows are diagnostics only and do not mutate source authority, facts, graph state, or watermarks. |
 
 ## Definition of Done
 
@@ -323,6 +371,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-AC-003` | Source stale and derived-view stale states are never collapsed. |
 | `110-AC-004` | Error records include owner spec and use the most specific available error code. |
 | `110-AC-005` | Compliance and audit query classes reject stale graph-derived state by default. |
+| `110-AC-006` | API, health, evidence drillback, compliance export, and audit export preserve distinctions among unknown, not authoritative, partial, permission-limited, stale, and authorized-not-observed states. |
 
 ## Open Questions
 

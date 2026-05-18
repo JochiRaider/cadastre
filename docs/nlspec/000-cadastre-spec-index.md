@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -178,15 +178,20 @@ Rules:
 | Documentation governance | `000` | `MANIFEST.md` and registered documentation artifacts | governance | `stable_core_contract` | 120 | blocked_validation | open until registry consistency rows pass |
 | Root domain vocabulary | `domain` | all owner specs | vocabulary | `stable_core_contract` | 120 | blocked_owner_todo | open until domain TODOs close |
 | Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | `stable_core_contract` | 120 | closed_local | validation rows required |
-| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | `stable_core_contract` | 120 | blocked_validation | open until manifest fixtures and checksum rows close |
+| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | `stable_core_contract` | 120 | blocked_validation | open until feed profile schema completion, feed category closure row validation, feasibility assessment export/schema alignment, manifest fixtures, and checksum rows close |
 | RawFeedManifest | `020` | 030,040,060,120 | runtime_data_input | `runtime_state_record` | 120 | closed_local | validation fixture checksums required |
 | Raw record identity import | `020` | 040,120,domain | runtime_data_input | `stable_core_contract` | 120 | closed_local | imports `040.ComputeRawRecordId`; no local ID order blocker |
-| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | `stable_core_contract` | 120 | blocked_owner_todo | run-lock lease timing and lifecycle transition rows remain TODO |
+| LakehouseFeedProfileSchema | `020` | 020,030,120,domain | runtime_data_input | `stable_core_contract` | 120 | blocked_validation | feed profile schema validation and target-kind omission fixtures required |
+| LakehouseFeedFeasibilityAssessment | `020` | 020,030,120,domain | runtime_data_input | `runtime_state_record` | 120 | blocked_validation | assessment schema, blocking reason, and activation-result fixtures required |
+| LakehouseFeedCategoryClosureRowSet | `020` | 020,030,060,110,120,domain | runtime_data_input | `activation_controlled_artifact` | 120 | blocked_validation | every active feed category requires closure row or deterministic block row |
+| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | `stable_core_contract` | 120 | blocked_owner_todo | run-lock lease timing, lifecycle transition rows, and declared subset profile validation rows remain TODO |
 | ActivationControlledArtifactRef | `030` | 020,050,060,070,080,090,100,110,120,130 | runtime_orchestration | `stable_core_contract` | 120 | blocked_validation | activation artifact ref validation rows required |
+| DeclaredDAGSubsetProfile | `030` | 020,060,080,090,120 | runtime_orchestration | `activation_controlled_artifact` | 120 | blocked_validation | subset output, watermark, absence, cleanup, retraction, and graph-expiry negative fixtures required |
 | Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | `stable_core_contract` | 120 | blocked_validation | owner enum and one-of validation rows required |
 | ComputeRawRecordId | `040` | 020,120,domain | runtime_data_shape | `stable_core_contract` | 120 | closed_local | validation fixture checksums required |
 | External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | `stable_core_contract` | 120 | blocked_owner_todo | exact OCSF rows and artifact checksums remain TODO |
-| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_owner_todo | source-specific coverage rows remain TODO |
+| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_owner_todo | exact feed completeness row schema, source-specific category/effect rows, and source-specific coverage rows remain TODO |
+| LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
 | Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
 | Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_owner_todo | graph apply numeric defaults and validation checksums remain TODO |
@@ -261,6 +266,8 @@ No document may be marked `authoritative` when it has unresolved owner `TODO:` r
 
 Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMatrix` rows for every `040` exported record in `SpecSetVersion.validation_matrix_refs`. Unresolved owner `TODO:` rows in core schemas, owner error codes, fixture checksums, expected output checksums, or downstream cross-references remain implementation exclusions.
 
+`SpecSetVersion.validation_matrix_refs` must include `020-FEED-CLOSURE-AC-*`, `030-FEED-CLOSURE-AC-*`, `060-FEED-CLOSURE-AC-*`, `110-FEED-CLOSURE-AC-*`, and `120-FEED-CLOSURE-AC-*` rows before authoritative handoff when any production feed category is active.
+
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
 
 `ValidateSpecSet` must fail before promotion when any exported implementation-relevant artifact lacks a volatility class, an activation-controlled artifact has no owner spec, a volatile production row is embedded in a stable core section without being marked example-only or `TODO:`, or a reference, ADR, or archive document is used as runtime authority.
@@ -289,6 +296,8 @@ Archived documents are historical reference only and never implementation author
 | `000-VOLATILITY-AC-002` | Activation-controlled artifacts reference an owner stable core contract. |
 | `000-VOLATILITY-AC-003` | Stable core specs do not contain production-active volatile row instances. |
 | `000-VOLATILITY-AC-004` | Research, ADR, reference, and archive documents remain non-runtime even when cited as evidence. |
+| `000-FEED-CLOSURE-AC-001` | `ValidateSpecSet` fails with registry or volatility errors if `LakehouseFeedProfileSchema`, `LakehouseFeedFeasibilityAssessment`, `LakehouseFeedCategoryClosureRowSet`, `LakehouseFeedCompletenessProfileRow`, or `DeclaredDAGSubsetProfile` lacks exactly one owner and volatility classification. |
+| `000-FEED-CLOSURE-AC-002` | `SpecSetVersion.validation_matrix_refs` includes the feed-closure acceptance rows before authoritative handoff for any active feed category. |
 
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |

@@ -62,7 +62,9 @@ Every active domain spec must include at least one negative validation case for 
 | --- | --- |
 | Direct source calls | Production package attempts enterprise source API call and fails before output. |
 | Feed completeness | Missing feed row attempts absence and fails. |
+| Feed profile closure | Missing feed profile field, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
 | Source authority | Missing exact authority row attempts gold derivation and fails. |
+| Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | IP-only/hostname-only/DNS-only/PTR-only/graph-key-only merge attempt fails. |
 | Graph | Backend internal ID appears in response or selector and fails. |
 | Package | Unauthorized signer with valid cryptographic signature fails activation. |
@@ -185,11 +187,11 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | Owner spec | Required success | Required rejection | Required no-op | Required edge | Required replay | Required redaction | Required authorization | Required negative authority-boundary | Required volatility-boundary |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `010` | authority class | direct source call | validation exploration no-op | private/public boundary | n/a | private leak | API/private boundary | direct source, projection authority | required when owner declares activation-controlled artifacts. |
-| `020` | feed read/import | malformed manifest | partial no-absence | CDC metadata | raw ID replay | private binding | n/a | no direct source call | required when owner declares activation-controlled artifacts. |
+| `020` | feed read/import and category closure | malformed manifest, profile schema incomplete, category row missing | partial no-absence, empty-scope no-absence | CDC metadata and closure branch behavior | raw ID replay | private binding | n/a | no direct source call and unresolved profile branch | required when owner declares activation-controlled artifacts. |
 | `030` | DAG execution | forbidden output | safe subset no-op | lifecycle illegal transition | manifest replay | n/a | n/a | subset authority | required when owner declares activation-controlled artifacts. |
 | `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection | required when owner declares activation-controlled artifacts. |
 | `050` | OCSF mapping | artifact mismatch | unmapped no-op | unknown enum | mapping replay | source extension redaction | n/a | undeclared extension | required when owner declares activation-controlled artifacts. |
-| `060` | absence authorized | missing authority row | weak signal no-op | partial completeness | watermark replay | n/a | n/a | missing coverage | required when owner declares activation-controlled artifacts. |
+| `060` | absence authorized and empty-complete authorized | missing authority row, missing completeness row, missing upstream evidence | weak signal no-op and effect-not-allowed no-op | blocking precedence and partial completeness | watermark replay and watermark blocked | n/a | n/a | missing coverage and weak-signal combination | required when owner declares activation-controlled artifacts. |
 | `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality | required when owner declares activation-controlled artifacts. |
 | `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
 | `090` | graph query/apply | backend ID rejection | empty traversal no-path | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition | required when owner declares activation-controlled artifacts. |
@@ -197,6 +199,39 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
+
+
+### FeedCategoryClosureValidationMatrix
+
+Each fixture family in this matrix applies to every active feed category in `020.LakehouseFeedCategoryClosureRequirementTable`. `future_reachability` must use deterministic block/no-op fixtures for MVP instead of positive reachability output.
+
+| Fixture family | Required coverage | Expected result |
+| --- | --- | --- |
+| `feed-category-valid-complete-*` | One complete positive case per non-blocked active feed category and requested effect. | Complete or empty-complete only when exact rows and refs permit. |
+| `feed-category-missing-profile-row-*` | Category has no active `LakehouseFeedCompletenessProfileRow` or `LakehouseFeedCategoryClosureRow`. | Owner-specific missing-row error; no effect. |
+| `feed-category-missing-upstream-completeness-*` | Required upstream evidence omitted, stale, insufficient, permission-limited, or scope-limited. | `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` or `not_authoritative_for_absence`; no effect. |
+| `feed-category-partial-known-gap-*` | Known missing object, partition, row range, or scope. | `partial_known_gap`; no absence, cleanup, retraction, graph expiry, or watermark. |
+| `feed-category-partial-unknown-gap-*` | Missing scope cannot be identified. | `partial_unknown_gap`; no absence-sensitive effect. |
+| `feed-category-permission-limited-*` | Supplier or source visibility is permission-limited. | `permission_limited`; no negative fact. |
+| `feed-category-stale-*` | Source or evidence is stale under active staleness policy. | `source_stale` or blocking reason; no effect unless exact row permits. |
+| `feed-category-empty-complete-*` | Empty scope or empty complete read with exact upstream evidence. | Authorized effect only through exact `060` row; otherwise empty-scope block. |
+| `feed-category-weak-progress-*` | Cursor, ack, heartbeat, freshness, provenance, graph, or destination cleanup signal without active policy. | Weak-signal no-authority error or unknown no-op. |
+| `feed-category-watermark-blocked-*` | Watermark requested while completeness gate blocks effect. | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED`; no watermark advancement. |
+
+| Feed category | Required fixture status |
+| --- | --- |
+| `endpoint_inventory` | Positive and negative closure fixtures required. |
+| `configuration_inventory` | Positive and negative closure fixtures required. |
+| `vulnerability_scan` | Positive and negative closure fixtures required, including scanner coverage dimensions. |
+| `control_evaluation` | Positive and negative closure fixtures required, including control-result mapping. |
+| `directory_inventory` | Positive and negative closure fixtures required, including hidden-object permission. |
+| `directory_membership` | Positive and negative closure fixtures required, including direct/transitive mode and AD primary-group handling. |
+| `dns_record_set` | Positive and negative closure fixtures required, including TTL non-authority. |
+| `dhcp_ipam_assignment` | Positive and negative closure fixtures required, including lease expiry non-authority. |
+| `network_flow` | Positive observed-flow and missing-flow-unknown fixtures required; absence fixture must block. |
+| `cloud_asset_inventory` | Positive and negative closure fixtures required, including permission-limited inventory. |
+| `source_history` | Positive and negative closure fixtures required, including outside-window no-proof. |
+| `future_reachability` | MVP block/no-op fixture required; positive reachability output forbidden. |
 
 ### TwoIndependentImplementersCheck
 
@@ -233,14 +268,25 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `010` | projection authority violation | `fixture-010-projection-authority-violation` | TODO | `PROJECTION_AUTHORITY_VIOLATION` | TODO | no authoritative mutation | `010-CLEANUP-AC-004` | blocking |
 | `020` | CDC metadata as authority | `fixture-020-cdc-metadata-non-authority` | TODO | no-op | TODO | no absence, no retraction, no watermark | `020-CLEANUP-AC-004` | blocking |
 | `020` | malformed feed manifest | `feed-020-malformed-manifest` | TODO | `manifest_invalid` | TODO | no raw import commit | `020-MANIFEST-AC-001` | blocking |
+| `020` | missing feed profile field | `feed-020-profile-schema-incomplete` | TODO | `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | TODO | no feed read | `020-FEED-CLOSURE-AC-001` | blocking |
+| `020` | missing category closure row | `feed-020-category-row-missing` | TODO | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | TODO | no feed read | `020-FEED-CLOSURE-AC-002` | blocking |
+| `020` | unresolved profile branch | `feed-020-profile-branch-unresolved` | TODO | `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | TODO | no production output | `020-FEED-CLOSURE-AC-003` | blocking |
+| `020` | invalid empty-scope authorization | `feed-020-empty-scope-not-authoritative` | TODO | `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | TODO | no absence and no watermark | `020-FEED-CLOSURE-AC-006` | blocking |
+| `020` | declared subset missing | `feed-020-declared-subset-required` | TODO | `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | TODO | no subset output | `020-FEED-CLOSURE-AC-005` | blocking |
 | `030` | forbidden stage output | `fixture-030-forbidden-stage-output` | TODO | `FORBIDDEN_STAGE_OUTPUT` | TODO | no production output | `030-CLEANUP-AC-003` | blocking |
 | `030` | duplicate stage ID | `fixture-030-duplicate-stage-id` | TODO | `DAG_STAGE_ID_DUPLICATE` | TODO | no production output | `030-DAG-ORDER-AC-001` | blocking |
+| `030` | subset output forbidden | `fixture-030-subset-output-forbidden` | TODO | `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | TODO | no production output and no watermark | `030-FEED-CLOSURE-AC-002` | blocking |
 | `040` | unknown field | `fixture-040-unknown-field` | TODO | `CORE_UNKNOWN_FIELD` | TODO | no record commit | `040-CLEANUP-AC-002` | blocking |
 | `040` | one-of invalid | `fixture-040-one-of-invalid` | TODO | `CORE_ONE_OF_INVALID` | TODO | no record commit | `120-SCHEMA-PATCH-AC-001` | blocking |
 | `050` | undeclared extension | `fixture-050-source-extension-undeclared` | TODO | `SOURCE_EXTENSION_FIELD_UNDECLARED` | TODO | no silver output | `050-CLEANUP-AC-002` | blocking |
 | `050` | OCSF artifact mismatch | `fixture-050-ocsf-artifact-mismatch` | TODO | `OCSF_ARTIFACT_MISMATCH` | TODO | no normalized output | `050-OCSF-BASELINE-AC-001` | blocking |
 | `060` | weak progress absence | `fixture-060-weak-progress-absence` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no absence, no cleanup, no watermark | `060-CLEANUP-AC-003` | blocking |
 | `060` | missing coverage | `fixture-060-coverage-required` | TODO | `COVERAGE_ASSERTION_REQUIRED` | TODO | no coverage-sensitive fact | `060-COVERAGE-CLOSURE-AC-001` | blocking |
+| `060` | missing completeness profile row | `feed-category-missing-profile-row-*` | TODO | `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | TODO | no absence-sensitive effect | `060-FEED-CLOSURE-AC-001` | blocking |
+| `060` | missing upstream completeness evidence | `feed-category-missing-upstream-completeness-*` | TODO | `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` | TODO | no absence-sensitive effect | `060-FEED-CLOSURE-AC-002` | blocking |
+| `060` | effect not allowed | `fixture-060-effect-not-allowed` | TODO | `COMPLETENESS_EFFECT_NOT_ALLOWED` | TODO | no absence, cleanup, retraction, graph expiry, or watermark | `060-FEED-CLOSURE-AC-003` | blocking |
+| `060` | weak-signal combination | `feed-category-weak-progress-*` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no stronger authority | `060-CLEANUP-AC-003` | blocking |
+| `060` | watermark blocked by completeness | `feed-category-watermark-blocked-*` | TODO | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | TODO | no watermark advancement | `060-FEED-CLOSURE-AC-004` | blocking |
 | `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
 | `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
 | `080` | current-time fallback | `fixture-080-current-time-fallback` | TODO | temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
@@ -251,6 +297,7 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
 | `110` | state-label collapse | `fixture-110-state-label-collapse` | TODO | reject/non-collapse | TODO | no incorrect API state | `110-CLEANUP-AC-002` | blocking |
 | `110` | page token authorization mismatch | `fixture-110-page-token-auth-mismatch` | TODO | `PAGE_TOKEN_INVALID` | TODO | no data disclosure | `110-PAGE-TOKEN-AC-001` | blocking |
+| `110` | new owner state label non-collapse | `fixture-110-feed-closure-state-labels` | TODO | reject/non-collapse | TODO | no authorized negative fact rendering | `110-FEED-CLOSURE-AC-001` | blocking |
 | `130` | analysis mutation | `fixture-130-analysis-mutation` | TODO | `ANALYSIS_MUTATION_FORBIDDEN` | TODO | no mutation | `130-CLEANUP-AC-003` | blocking |
 | `130` | lineage facet checksum mismatch | `fixture-130-lineage-facet-checksum-mismatch` | TODO | `LINEAGE_FACET_CHECKSUM_MISMATCH` | TODO | no lineage activation | `130-AC-003` | blocking |
 | `200` | active reachability output | `fixture-200-active-reachability-output` | TODO | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | TODO | no gold, graph, API output | `200-CLEANUP-AC-003` | blocking |
@@ -271,10 +318,10 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 
 | Owner | Required fixture families |
 | --- | --- |
-| `020` | feed read, manifest validation, read completeness, raw ID replay, omitted object, partial known gap. |
-| `030` | DAG ordering, lifecycle transition, version manifest ID/checksum, run lock failure, forbidden output. |
+| `020` | feed read, manifest validation, read completeness, raw ID replay, omitted object, partial known gap, feed category closure, feasibility assessment, missing profile field, target-kind omission, declared subset, empty-scope, object/partition known gap, unknown gap, private-binding leak. |
+| `030` | DAG ordering, lifecycle transition, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
 | `050` | OCSF mapping, enum handling, source extension, disabled base-event fields, cadastre-only null profile. |
-| `060` | absence, coverage, progress signal, source staleness, control result mapping. |
+| `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating. |
 | `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
 | `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
 | `090` | edge semantics, graph apply, query ordering, reachability prohibition, backend ID rejection. |
@@ -303,6 +350,10 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-ACCEPTANCE-PRECEDENCE-AC-001` | Aggregate `AcceptanceReport` cannot pass while any non-deferred required row is `fail`, `blocked`, or `not_run`, or while any required fixture checksum or expected output checksum is `TODO`. |
 | `120-VOLATILITY-AC-001` | Aggregate `AcceptanceReport` fails while any non-deferred volatility row is `fail`, `blocked`, `not_run`, or missing expected checksum. |
 | `120-VOLATILITY-AC-002` | Validation rows cover inactive, missing, mismatched, out-of-scope, and runtime-restating activation artifacts. |
+| `120-FEED-CLOSURE-AC-001` | Aggregate acceptance fails while any active feed category lacks a closure row, deterministic block row, validation refs, or fixture refs. |
+| `120-FEED-CLOSURE-AC-002` | Every profile-dependent branch in `020`, `030`, and `060` has a validation row with expected receipt state, error/no-op, user-facing label, and mutation prohibition. |
+| `120-FEED-CLOSURE-AC-003` | Every active feed category has positive and negative fixtures for complete, partial, stale, permission-limited, missing-profile-row, missing-upstream-evidence, weak-progress, empty-complete, and watermark-blocked cases. |
+| `120-FEED-CLOSURE-AC-004` | Every absence-sensitive output has exact authority, completeness, coverage, staleness, and watermark fixtures where applicable. |
 
 ## Definition of Done
 
@@ -313,6 +364,7 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-AC-003` | Golden corpus replay produces byte-identical expected outputs or deterministic failure records. |
 | `120-AC-004` | Validation artifacts are redacted, checksummed, and replayable. |
 | `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can be promoted to `authoritative`. |
+| `120-AC-006` | `RunValidationMatrix` emits blocked or fail for any unresolved active feed category, unresolved profile branch, missing fixture checksum, or missing expected output checksum. |
 
 ## Open Questions
 

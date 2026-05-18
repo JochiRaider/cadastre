@@ -48,6 +48,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `CoverageDimensionProfile`
 - `CoverageAssertion`
 - `LakehouseFeedCompletenessProfile`
+- `LakehouseFeedCompletenessProfileRow`
 - `ProgressSignalInterpretationPolicy`
 - `ProjectionWatermarkPolicy`
 - `WatermarkCommitRecord`
@@ -65,10 +66,34 @@ A broad source-category ranking must not act as fallback authority when the exac
 
 `LakehouseFeedCompletenessProfile` maps feed-read completeness and supplier-provided upstream evidence into source completeness decisions. A `LakehouseReadCompletenessReceipt` alone must not authorize absence, retraction, cleanup, graph expiry, or watermark advancement.
 
+
+`LakehouseFeedCompletenessProfileRow` is the activation-controlled row shape that makes feed-read completeness decisions scope-exact. Missing rows, missing `allowed_effects`, or missing upstream evidence must not be interpreted as permission for absence, cleanup, retraction, graph expiry, or watermark advancement.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `profile_row_id` | Yes | none | Stable row ID scoped to `060` and included in the row-set checksum. |
+| `feed_category` | Yes | none | Must match `020.LakehouseFeedCategoryClosureRow.feed_category`. |
+| `source_dataset` | Yes | none | Vendor-neutral dataset token. |
+| `scope_selector` | Yes | none | Canonical selector for the source/feed scope; broad source-category scope is not a fallback. |
+| `read_target_kind` | Yes | none | Closed read target kind imported from `020`. |
+| `receipt_state` | Yes | none | One `020.LakehouseReadCompletenessReceipt` state. |
+| `upstream_evidence_class` | Yes | none | Supplier evidence class required by the category row. |
+| `upstream_evidence_state` | Yes | none | Closed token: `sufficient`, `insufficient`, `missing`, `permission_limited`, `scope_unavailable`, `source_unavailable`, `stale`, `not_applicable`. |
+| `coverage_domain` | No | null | Required when the requested effect is coverage-sensitive. |
+| `completeness_decision` | Yes | none | One completeness decision from the completeness table. |
+| `allowed_effects` | No | `[]` | Closed effect tokens: `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Missing or empty means no effects are allowed. |
+| `blocking_reason` | Required when decision blocks an effect | null | Most specific blocking code from the blocking precedence table. |
+| `source_authority_row_refs` | No | `[]` | Exact authority refs required for effects; broad source-category rankings are invalid. |
+| `source_staleness_policy_refs` | No | `[]` | Exact staleness policy refs required for effects. |
+| `validation_refs` | Yes | none | Non-empty refs proving the row's positive and negative behavior. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+
+A row with `completeness_decision in {complete, empty_complete}` may enter absence evaluation only when `allowed_effects` contains the requested effect and all exact authority, coverage, and staleness refs validate.
+
 | Completeness decision | Absence authority default | Cleanup/retraction default |
 | --- | --- | --- |
-| `complete` | May be considered only when profile row permits. | May be considered only when profile row permits. |
-| `empty_complete` | May be considered only when profile row permits. | May be considered only when profile row permits. |
+| `complete` | May be considered only when `LakehouseFeedCompletenessProfileRow.allowed_effects` contains `absence`. | May be considered only when `allowed_effects` contains the requested effect. |
+| `empty_complete` | May be considered only when `LakehouseFeedCompletenessProfileRow.allowed_effects` contains `absence`. | May be considered only when `allowed_effects` contains the requested effect. |
 | `partial_known_gap` | Forbidden. | Forbidden. |
 | `partial_unknown_gap` | Forbidden. | Forbidden. |
 | `source_unavailable` | Forbidden. | Forbidden. |
@@ -113,11 +138,45 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `AbsenceDerivationPolicy` | `activation_controlled_artifact` | Must be active before absence/no-op/stale result selection. |
 | `CoverageDimensionProfile` | stable catalog plus activation-controlled source-specific rows | Source-specific rows must be active before coverage-sensitive output. |
 | `CoverageAssertion` | `runtime_state_record` | Evidence record consumed only through active profiles. |
-| `LakehouseFeedCompletenessProfile` | `activation_controlled_artifact` | Must evaluate feed-read and upstream evidence before absence effects. |
+| `LakehouseFeedCompletenessProfile` and `LakehouseFeedCompletenessProfileRow` row sets | `activation_controlled_artifact` | Must evaluate feed-read and upstream evidence before absence effects and must declare allowed effects explicitly. |
 | `ProgressSignalInterpretationPolicy` | `activation_controlled_artifact` | Weak signals remain non-authoritative unless an active row grants the exact effect. |
 | `ProjectionWatermarkPolicy` | `activation_controlled_artifact` | Must be active before watermark advancement. |
 | `WatermarkCommitRecord` | `runtime_state_record` | Records attempted watermark outcome; does not grant authority. |
 | `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` | `stable_core_contract` | Algorithms validate activation refs before output. |
+
+## EvaluateLakehouseFeedCompleteness Algorithm
+
+```text
+EvaluateLakehouseFeedCompleteness(receipt, upstream_evidence_set, active_feed_completeness_profile_row_set, feed_category_closure_row, authority_profile_rows, coverage_assertions, staleness_policy_refs, requested_effect):
+1. Validate every required activation artifact ref through `030.ActivationControlledArtifactRef`.
+2. Select candidate `LakehouseFeedCompletenessProfileRow` rows by exact feed category, source dataset, scope selector, read target kind, receipt state, upstream evidence class, and activation scope.
+3. If no row matches, return `not_authoritative_for_absence` with `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING`.
+4. Apply `CompletenessBlockingPrecedence` to receipt state, upstream evidence state, manifest validity, source availability, permission, partial gaps, staleness, authority, coverage, and not-applicable state.
+5. If a blocking condition exists, return exactly one completeness decision, selected row refs, and the most specific blocking reason.
+6. If `requested_effect` is absent from `allowed_effects`, return the row decision with `COMPLETENESS_EFFECT_NOT_ALLOWED` and no effect.
+7. Validate exact authority profile row refs, coverage assertion refs when required, and staleness policy refs.
+8. Emit exactly one completeness decision: `complete`, `empty_complete`, `partial_known_gap`, `partial_unknown_gap`, `source_unavailable`, `scope_unavailable`, `permission_limited`, `not_attempted`, `not_authoritative_for_absence`, or `not_applicable`.
+9. Include selected row refs, upstream evidence refs, authority refs, coverage refs, staleness refs, blocking reason, requested effect, and validation refs in the result and `VersionManifest`.
+```
+
+### CompletenessBlockingPrecedence
+
+| Precedence | Blocking condition | Required decision | Blocking reason |
+| ---: | --- | --- | --- |
+| 1 | Required activation artifact missing, inactive, checksum-mismatched, out of scope, or unvalidated. | deterministic error or `not_authoritative_for_absence` | owner-specific activation error |
+| 2 | Manifest invalid or required schema unavailable. | `partial_unknown_gap` or deterministic error | `manifest_invalid` or `schema_unavailable` |
+| 3 | Source or lakehouse target unavailable. | `source_unavailable` | `source_unavailable` |
+| 4 | Scope unavailable. | `scope_unavailable` | `scope_unavailable` |
+| 5 | Permission limited or visibility limited. | `permission_limited` | `permission_limited` |
+| 6 | Partial unknown gap. | `partial_unknown_gap` | `partial_unknown_gap` |
+| 7 | Partial known gap. | `partial_known_gap` | `partial_known_gap` |
+| 8 | Stale source state blocks requested effect. | `not_authoritative_for_absence` | `stale` |
+| 9 | Exact authority, coverage, or effect permission missing. | `not_authoritative_for_absence` | most specific missing authority, coverage, or effect code |
+| 10 | Not applicable by exact profile row. | `not_applicable` | `not_applicable` |
+| 11 | Empty complete with effect allowed. | `empty_complete` | none |
+| 12 | Complete with effect allowed. | `complete` | none |
+
+Only `complete` and `empty_complete` may enter absence evaluation, and only when `allowed_effects` contains the requested effect.
 
 ## DeriveAbsenceOrUnknown Algorithm
 
@@ -127,13 +186,14 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 2. Fail before absence, cleanup, retraction, graph expiry, or watermark advancement when an authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact is missing, inactive, checksum-mismatched, out of scope, or unvalidated.
 3. Reject when no active SourceAuthorityProfileRow covers the fact type, predicate, source dataset, scopes, and requested absence authority.
 4. Reject when required LakehouseReadCompletenessReceipt is missing or not tied to the active feed profile and manifest refs.
-5. Evaluate UpstreamCompletenessEvidence through LakehouseFeedCompletenessProfile.
-6. If any blocking unsafe completeness decision is present, return unknown with the most specific unsafe state.
-7. Evaluate SourceStalenessPolicy using declared time-input precedence.
-8. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
-9. Reject weak progress signals unless one active ProgressSignalInterpretationPolicy row grants the exact effect.
-10. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
-11. Include authority profile row refs, policy refs, artifact checksums, feed manifest refs, and validation refs in the result and `VersionManifest`.
+5. Evaluate UpstreamCompletenessEvidence and the read receipt through `EvaluateLakehouseFeedCompleteness` for the requested effect.
+6. If the completeness decision is not `complete` or `empty_complete`, return unknown, not applicable, stale, no-op, or deterministic error with the selected blocking reason.
+7. Reject when the selected completeness row's `allowed_effects` omits the requested effect.
+8. Evaluate SourceStalenessPolicy using declared time-input precedence.
+9. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
+10. Reject weak progress signals unless one active ProgressSignalInterpretationPolicy row grants the exact effect.
+11. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
+12. Include authority profile row refs, completeness row refs, policy refs, artifact checksums, feed manifest refs, requested effect, and validation refs in the result and `VersionManifest`.
 ```
 
 ### AbsenceDerivationResult schema
@@ -162,6 +222,12 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 | `SOURCE_AUTHORITY_ARTIFACT_INACTIVE` | A required source authority artifact is not active for production execution. |
 | `SOURCE_AUTHORITY_ARTIFACT_CHECKSUM_MISMATCH` | A required source authority artifact checksum mismatches the active ref or manifest. |
 | `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` | An active source authority row set exists but no row covers the requested scope. |
+| `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | No active completeness profile row covers feed category, dataset, scope selector, target kind, receipt state, upstream evidence class, and activation scope. |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` | Required upstream evidence is missing, stale, permission-limited, scope-limited, or insufficient for the requested effect. |
+| `COMPLETENESS_EFFECT_NOT_ALLOWED` | The selected completeness row does not list the requested effect in `allowed_effects`. |
+| `COMPLETENESS_BLOCKING_PRECEDENCE_APPLIED` | A higher-precedence blocking condition selected the completeness decision and blocked a lower-precedence effect. |
+| `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | An empty scope is complete for the feed read but not authorized for absence by exact completeness, authority, coverage, and staleness rows. |
+| `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | Watermark advancement is requested while completeness, upstream evidence, authority, coverage, or staleness gates block the effect. |
 
 ## Watermarks
 
@@ -210,6 +276,26 @@ Missing rows, stale states, partial states, permission-limited states, weak prog
 | flow | flow non-observation and observed-connection absence. |
 | cloud inventory | missing cloud resource and resource deletion inference. |
 | source history | no-change proof outside supported history window. |
+
+
+### FeedCategoryCoverageEffectMatrix
+
+This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without restating feed-read target mechanics. Exact activation-controlled rows must provide the source-specific refs before effects are allowed.
+
+| Feed category | Required completeness, coverage, and authority dimensions before effects | Effects that may be allowed by exact row | Missing or insufficient evidence result |
+| --- | --- | --- | --- |
+| `endpoint_inventory` | endpoint scope, enrollment or inventory visibility, collection window, failed-scope evidence, source authority, staleness, coverage assertion | `absence`, `cleanup`, `graph_expiry`, `watermark` | `not_authoritative_for_absence` or specific partial/permission state |
+| `configuration_inventory` | configuration scope, object type, source authority, staleness, coverage assertion for affected domain | `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark` | `not_authoritative_for_absence` |
+| `vulnerability_scan` | scanner target, credential/auth status, plugin/check set, scan window, failed-target/exclusion evidence, coverage assertion, staleness, authority rows | `absence`, `cleanup`, `retraction`, `watermark` | `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` or `COVERAGE_ASSERTION_REQUIRED` |
+| `control_evaluation` | benchmark/check scope, applicability, control result mapping, evaluation status, coverage assertion, staleness, authority rows | `absence`, `retraction`, `watermark` | `not_checked`, `unknown`, or exact blocking reason; no pass/fail by default |
+| `directory_inventory` | tenant/domain, object type, hidden-object permission, page/delta completion, coverage, staleness, authority rows | `absence`, `cleanup`, `graph_expiry`, `watermark` | `permission_limited`, `partial_known_gap`, or `not_authoritative_for_absence` |
+| `directory_membership` | tenant/domain, group, member type, direct/transitive mode, hidden-membership permission, page/delta completion, AD primary-group handling, coverage, staleness, authority rows | `absence`, `cleanup`, `retraction`, `watermark` | `permission_limited`, `partial_known_gap`, `partial_unknown_gap`, or `not_authoritative_for_absence` |
+| `dns_record_set` | zone/source scope, authoritative source, TTL basis, collection window, coverage, staleness, authority rows | `absence`, `retraction`, `watermark` | TTL expiry alone maps to `not_authoritative_for_absence` |
+| `dhcp_ipam_assignment` | DHCP/IPAM scope, lease window, authoritative-system evidence, coverage, staleness, authority rows | `absence`, `cleanup`, `retraction`, `watermark` | lease expiry alone maps to `not_authoritative_for_absence` |
+| `network_flow` | sensor scope, collection point, time window, role evidence, coverage, staleness, authority rows | `watermark` only when exact row permits; absence effects default blocked | missing flow maps to `unknown` |
+| `cloud_asset_inventory` | account/project/subscription, region, resource type, permission visibility, source-history requirement when applicable, coverage, staleness, authority rows | `absence`, `cleanup`, `graph_expiry`, `watermark` | `permission_limited`, `stale`, or `not_authoritative_for_absence` |
+| `source_history` | source-native history window, retention profile, query scope, authority rows, staleness rows | `absence`, `watermark` only within supported window and exact row permission | outside-window no-result maps to `not_authoritative_for_absence` |
+| `future_reachability` | inactive deferred reachability contracts only | none in MVP | deterministic no-op or deferred reachability error |
 
 ### LakehouseFeedCompletenessProfile table
 
@@ -278,8 +364,8 @@ Weak progress signals must not combine into stronger authority.
 
 | Completeness decision | Absence authority | Cleanup authority | Retraction authority | Graph expiry authority | Watermark authority | Default API state | Owner |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `complete` | profile-gated | profile-gated | profile-gated | profile-gated | profile-gated | observed or authorized_not_observed | `060` |
-| `empty_complete` | profile-gated | profile-gated | profile-gated | profile-gated | profile-gated | authorized_not_observed | `060` |
+| `complete` | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | observed or authorized_not_observed | `060` |
+| `empty_complete` | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | allowed_effects-gated | authorized_not_observed | `060` |
 | `partial_known_gap` | forbidden | forbidden | forbidden | forbidden | forbidden | partial_known_gap | `060` |
 | `partial_unknown_gap` | forbidden | forbidden | forbidden | forbidden | forbidden | partial_unknown_gap | `060` |
 | `source_unavailable` | forbidden | forbidden | forbidden | forbidden | forbidden | source_unavailable | `060` |
@@ -305,6 +391,11 @@ Weak progress signals must not combine into stronger authority.
 | `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, and manifest refs or a specific blocking reason. |
 | `060-VOLATILITY-AC-001` | Missing exact source-authority row, inactive row set, staleness checksum mismatch, coverage row absence, and weak-signal combination cases fail or no-op with no absence, cleanup, retraction, graph expiry, or watermark advancement. |
 | `060-VOLATILITY-AC-002` | Every output-affecting source-authority artifact ref appears in `VersionManifest` with checksum and validation refs. |
+| `060-FEED-CLOSURE-AC-001` | Missing `LakehouseFeedCompletenessProfileRow` maps to `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` and no absence-sensitive effect. |
+| `060-FEED-CLOSURE-AC-002` | Missing upstream completeness evidence maps to `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` or `not_authoritative_for_absence`, not absence. |
+| `060-FEED-CLOSURE-AC-003` | `allowed_effects = []` or omitted allowed effects blocks absence, cleanup, retraction, graph expiry, and watermark. |
+| `060-FEED-CLOSURE-AC-004` | Blocking precedence is deterministic and selects the same blocking reason for identical evidence, rows, refs, and requested effect. |
+| `060-FEED-CLOSURE-AC-005` | Complete or empty-complete decisions authorize effects only through exact active authority, completeness, coverage, and staleness rows. |
 
 ## Definition of Done
 
@@ -315,6 +406,7 @@ Weak progress signals must not combine into stronger authority.
 | `060-AC-003` | Every coverage-dependent fact has a current coverage assertion or emits a deterministic unknown/error outcome. |
 | `060-AC-004` | Source staleness and derived-view lag are exposed as distinct states. |
 | `060-AC-005` | Every watermark attempt emits exactly one `WatermarkCommitRecord`. |
+| `060-AC-006` | Gold derivation, cleanup, retraction, graph expiry, and watermark advancement persist completeness row refs and blocking reasons before producing absence-sensitive effects. |
 
 ## Open Questions
 

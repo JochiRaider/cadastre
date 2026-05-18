@@ -36,6 +36,9 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `RawSupplierProfile`
 - `LakehouseFeedProfile`
 - `LakehouseFeedProfileSchema`
+- `LakehouseFeedFeasibilityAssessment`
+- `LakehouseFeedCategoryClosureRow`
+- `LakehouseFeedCategoryClosureRowSet`
 - `LakehouseFeedAvailabilityCheck`
 - `RawFeedManifest`
 - `LakehouseReadPolicy`
@@ -56,6 +59,8 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 
 A production feed read must start from an active `LakehouseFeedProfile`. The profile must name the supplier class, read target kind, scope keys, schema refs, object or table refs, package bindings, replay-relevant configuration hashes, and redacted access-reference hashes.
 
+A production feed read must validate the profile against `LakehouseFeedProfileSchema` and must resolve exactly one active `LakehouseFeedCategoryClosureRow` from an active `LakehouseFeedCategoryClosureRowSet` before reading or importing raw records. The phrase `profile permits` is not runtime behavior. Every profile-dependent branch must resolve to a named profile field, an active activation-controlled artifact ref, a deterministic branch result, and a validation row.
+
 | Read target kind | Required reference | Output allowed |
 | --- | --- | --- |
 | `table_snapshot` | `LakehouseSnapshotRef` | Raw feed rows and read completeness receipt. |
@@ -65,6 +70,57 @@ A production feed read must start from an active `LakehouseFeedProfile`. The pro
 | `manifest_list` | `RawFeedManifest` | Manifest validation result and read completeness receipt. |
 
 `LakehouseFeedAvailabilityCheck` must validate catalog, table, object, partition, manifest, and schema availability without enterprise source calls or observation-producing side effects.
+
+
+### LakehouseFeedProfileSchema
+
+`LakehouseFeedProfileSchema` is the stable schema for every `LakehouseFeedProfile`. A profile with a missing required field must fail before lakehouse availability checks, feed reads, raw import, completeness evaluation, absence evaluation, cleanup, graph expiry, retraction, or watermark advancement.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `feed_profile_id` | Yes | none | Stable profile identifier scoped to `020`; must not encode a private source route. |
+| `feed_category` | Yes | none | Closed category token from `LakehouseFeedCategoryClosureRequirementTable`; unknown tokens fail closed until an active category closure row set and validation rows exist. |
+| `source_category` | Yes | none | Vendor-neutral source category; private vendor/product names are forbidden in public profile bytes. |
+| `source_dataset` | Yes | none | Vendor-neutral dataset token used by `060` authority, coverage, staleness, and completeness rows. |
+| `supplier_profile_ref` | Yes | none | `030.ActivationControlledArtifactRef` with `artifact_class = raw_supplier_profile`. |
+| `read_target_kind` | Yes | none | One of `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, or `manifest_list`; omission fails with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE`. |
+| `read_policy_ref` | Yes | none | Active `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_read_policy`. |
+| `scope_key_schema` | Yes | none | Canonical JSON object declaring scope keys, type, bounds, and redaction behavior. Empty scope key schema is forbidden for production feeds. |
+| `absence_sensitive_domains` | No | `[]` | Canonically sorted domain tokens. Empty means the feed may preserve positive observations but must not support absence-sensitive effects. |
+| `partial_read_policy` | No | `positive_records_only` | Closed enum: `reject_read`, `positive_records_only`, `declared_subset_required`. The default permits positive raw import from known partial reads only and forbids absence-sensitive effects. |
+| `empty_scope_policy` | No | `not_authoritative_for_absence` | Closed enum: `not_authoritative_for_absence`, `empty_complete_requires_060`, `reject_empty_scope`. |
+| `availability_check_required` | No | `true` | `false` is allowed only for validation fixtures and must not be used for production reads. |
+| `availability_refresh_policy` | No | `fail_if_stale` | Closed enum: `fail_if_stale`, `refresh_before_read`; refresh may validate lakehouse artifacts only. |
+| `upstream_completeness_required` | No | derived | Materializes to `true` when `absence_sensitive_domains` is non-empty or the category row requires upstream evidence; otherwise `false`. |
+| `coverage_profile_refs` | No | `[]` | Refs to active `060.CoverageDimensionProfile` rows required for absence-sensitive domains. Missing required refs block effects. |
+| `source_authority_profile_refs` | No | `[]` | Refs to active `060.SourceAuthorityProfileRow` row sets. Missing refs block absence-sensitive effects. |
+| `source_staleness_policy_refs` | No | `[]` | Refs to active `060.SourceStalenessPolicy` rows required by category and effect. |
+| `parser_mapping_refs` | No | `[]` | Parser and mapping artifact refs required before raw records may advance past import into parsing or normalization. |
+| `fixture_refs` | Yes | none | Non-empty refs to `120.LakehouseFeedFixture` rows covering the category and target kind. |
+| `validation_refs` | Yes | none | Non-empty refs to passing validation rows for profile schema, branch behavior, category closure, and private-binding leak rejection. |
+| `activation_scope` | Yes | none | Vendor-neutral scope in which the profile may affect output. It must not contain concrete tenant inventories, routes, credentials, or private source lists. |
+
+Profile validation must materialize defaults before checksum computation. Unknown fields fail before activation unless the owning profile schema version declares an extension map.
+
+### LakehouseFeedCategoryClosureRow
+
+`LakehouseFeedCategoryClosureRowSet` is an activation-controlled artifact represented by `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_feed_category_closure_row_set`. The row set instantiates the stable category-closure contract; it must not define new read target kinds, receipt states, authority classes, omission states, or effect tokens.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `feed_category` | Yes | none | Must be one category from `LakehouseFeedCategoryClosureRequirementTable`. |
+| `allowed_read_target_kinds` | Yes | none | Non-empty array of closed read target kinds unless `deterministic_block_code` blocks the category. |
+| `absence_sensitive_domains` | No | `[]` | Domains whose negative or not-observed outputs require `060` completeness, authority, coverage, and staleness gates. |
+| `required_upstream_evidence_classes` | No | `[]` | Supplier evidence classes that must be present before `060` may evaluate effects. |
+| `required_coverage_domains` | No | `[]` | `060.CoverageDimensionProfile` domains required for effects. |
+| `required_authority_refs` | No | `[]` | Exact `060.SourceAuthorityProfileRow` refs or row-set refs required by the category. |
+| `required_staleness_refs` | No | `[]` | Exact `060.SourceStalenessPolicy` refs required by the category. |
+| `allowed_effects` | No | `[]` | Closed effect tokens imported from `060`: `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Empty means positive observations only. |
+| `default_missing_row_result` | Yes | none | Deterministic result when a required upstream object, partition, row, or source-scope record is missing. It must not be `absence` by default. |
+| `deterministic_block_code` | Required when category is blocked | null | Error or no-op code used when the category exists but is intentionally blocked for MVP. |
+| `validation_refs` | Yes | none | Non-empty refs to category-specific positive and negative validation rows. |
+
+A missing active row for a known feed category fails with `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING`. A known category that product governance removes from MVP must still have an active closure row with `allowed_effects = []`, a deterministic block code, and validation refs.
 
 ## Raw Import Contract
 
@@ -107,7 +163,10 @@ Feed and table contracts split stable behavior from activatable profiles and run
 | `RawSupplierProfile` | `activation_controlled_artifact` | supporting evidence | Must be active before dependent feed profiles execute. |
 | `LakehouseFeedProfile` | `activation_controlled_artifact` | supporting evidence | Must be referenced by `030.ActivationControlledArtifactRef`. |
 | `LakehouseFeedProfileSchema` | `stable_core_contract` | runtime data input | Owned by `020`; package or profile rows must not redefine it. |
+| `LakehouseFeedCategoryClosureRow` | `activation_controlled_artifact` | supporting evidence | Row inside an active `LakehouseFeedCategoryClosureRowSet`; must instantiate the stable closure schema only. |
+| `LakehouseFeedCategoryClosureRowSet` | `activation_controlled_artifact` | supporting evidence | Must be active before category-dependent feed reads or absence-sensitive effects. |
 | `LakehouseFeedAvailabilityCheck` | `runtime_state_record` | supporting evidence | Must be recorded when required by the active profile. |
+| `LakehouseFeedFeasibilityAssessment` | `runtime_state_record` | activation evidence | Must record activation readiness or deterministic blocking reasons for the feed profile and category row. |
 | `RawFeedManifest` | `runtime_state_record` | supporting evidence | Must be included in `VersionManifest` when output-affecting. |
 | `LakehouseReadPolicy` | `activation_controlled_artifact` | supporting evidence | Must be active and manifest-recorded before read. |
 | `RawRecordImportRun` | `runtime_state_record` | supporting evidence | Must record deterministic import inputs and refs. |
@@ -135,32 +194,50 @@ Production feed reads and table maintenance decisions must fail closed when any 
 
 ```text
 ReadLakehouseFeed(profile, read_policy, target_ref):
-1. Validate `030.ActivationControlledArtifactRef` for `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, and every required table, retention, maintenance, cross-table, or catalog policy artifact.
-2. Fail before read when any required artifact ref is missing, inactive, checksum-mismatched, outside activation scope, missing validation refs, or omitted from `VersionManifest`.
-3. Verify no direct enterprise source endpoint is referenced.
-4. Verify LakehouseFeedAvailabilityCheck is current when required by profile.
-5. Validate target_ref against read_policy target kind and checksum rules.
-6. Read only declared table snapshots, dataset versions, objects, partitions, or manifests.
-7. Persist read checkpoints as StageStateRecord when output-affecting.
-8. Persist RawRecordImportRun inputs.
-9. Persist only `RawRecord` rows that pass `040.ValidateCoreRecord`, or persist deterministic import errors.
-10. Persist LakehouseReadCompletenessReceipt.
-11. Persist VersionManifest refs for every output-affecting activation artifact, profile, policy, target, schema, state, and manifest.
+1. Validate `030.ActivationControlledArtifactRef` for `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, `LakehouseFeedCategoryClosureRowSet`, and every required table, retention, maintenance, cross-table, or catalog policy artifact.
+2. Validate `profile` against `LakehouseFeedProfileSchema` after default materialization.
+3. Fail with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` when any required profile field, including `read_target_kind`, is omitted or invalid.
+4. Resolve exactly one active `LakehouseFeedCategoryClosureRow` for `profile.feed_category` and fail with `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` when no row exists.
+5. Fail with the row's `deterministic_block_code` when the category row is intentionally blocked for MVP.
+6. Fail with `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` when a branch depends on an unmaterialized profile field, missing closure row field, missing validation ref, or missing owner-defined result.
+7. Verify no direct enterprise source endpoint, private route, credential, or environment-specific source list is referenced.
+8. Verify `LakehouseFeedAvailabilityCheck` is current when `availability_check_required = true`; if stale, apply `availability_refresh_policy`.
+9. Validate `target_ref` against `read_policy`, `profile.read_target_kind`, `allowed_read_target_kinds`, and checksum rules.
+10. For a declared subset read, validate an active `030.DeclaredDAGSubsetProfile`; otherwise fail with `LAKEHOUSE_DECLARED_SUBSET_REQUIRED`.
+11. Read only declared table snapshots, dataset versions, objects, partitions, or manifests.
+12. Map every missing, unreadable, omitted, empty, or invalid target condition through `ReadTargetBranchPolicy`.
+13. Persist read checkpoints as `StageStateRecord` when output-affecting.
+14. Persist `RawRecordImportRun` inputs.
+15. Persist only positive `RawRecord` rows that pass `040.ValidateCoreRecord` and are permitted by `partial_read_policy`; otherwise persist deterministic import errors.
+16. Persist `LakehouseReadCompletenessReceipt` with the branch-selected receipt state.
+17. Persist `VersionManifest` refs for every output-affecting activation artifact, profile, policy, target, schema, state, manifest, feasibility assessment, and category closure row set.
+18. Return no absence, cleanup, retraction, graph expiry, or watermark result from this algorithm.
 ```
 
 ## Feed and Table State Contract Details
 
 ### LakehouseFeedFeasibilityAssessment
 
-`LakehouseFeedFeasibilityAssessment` is exported by this spec. A feed may become active only when the feed has a passing assessment or an explicit blocking row.
+`LakehouseFeedFeasibilityAssessment` is exported by this spec. It is a runtime state record that proves activation readiness or records deterministic blocking reasons. A feed may become active only when the assessment exists, references the active feed profile and category closure row, and has `activation_result = pass`; otherwise activation is blocked.
 
-| Feed category | Required metadata | Timestamp sufficiency | Identifier sufficiency | Replayability | Fixture coverage | Completeness evidence | Parser/mapping readiness | Activation result |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `table_snapshot` | Snapshot ref, schema ref, scope keys, supplier profile | Required | Required for source-native or payload-hash identity | Required | Required | Required when absence-sensitive | Required | `blocked_until_all_pass` |
-| `dataset_version` | Dataset version ref, table-set checksum, schema refs | Required | Required | Required | Required | Required when absence-sensitive | Required | `blocked_until_all_pass` |
-| `object_batch` | Object refs, byte totals, object checksums, manifest checksum | Required or explicit `unknown` | Required or payload-hash identity | Required | Required | Optional unless absence-sensitive | Required | `blocked_until_all_pass` |
-| `partition_set` | Partition refs, partition checksums, partition bounds | Required | Required | Required | Required | Required when absence-sensitive | Required | `blocked_until_all_pass` |
-| `manifest_list` | Manifest refs, manifest checksums, schema refs | Required | Required if raw import follows | Required | Required | Required when absence-sensitive | Required | `blocked_until_all_pass` |
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `assessment_id` | Yes | none | Deterministic ID over feed profile ref, category row ref, policy refs, readiness statuses, and blocking reasons. |
+| `feed_profile_ref` | Yes | none | Active `LakehouseFeedProfile` ref. |
+| `feed_category_row_ref` | Yes | none | Active `LakehouseFeedCategoryClosureRow` ref from the active row set. |
+| `read_policy_ref` | Yes | none | Active `LakehouseReadPolicy` ref. |
+| `payload_fidelity_status` | Yes | none | Closed token: `pass`, `blocked`, `not_applicable`. |
+| `metadata_sufficiency_status` | Yes | none | Must pass when required target refs, schema refs, manifest refs, and supplier lineage are required. |
+| `timestamp_sufficiency_status` | Yes | none | Must pass before downstream temporal processing; `unknown` is not a pass. |
+| `identifier_sufficiency_status` | Yes | none | Must pass when raw records can affect identity, target selectors, graph projection, or source authority. |
+| `replayability_status` | Yes | none | Must pass when target refs, object refs, state refs, and manifest refs are retained for replay. |
+| `fixture_coverage_status` | Yes | none | Must pass when `fixture_refs` cover category, target kind, branch behavior, and private-binding leak cases. |
+| `completeness_evidence_status` | Yes | none | Must pass for absence-sensitive domains and may be `not_applicable` only when `absence_sensitive_domains = []`. |
+| `parser_mapping_readiness_status` | Yes | none | Must pass before parser, mapping, normalization, or downstream output stages can use the feed. |
+| `activation_result` | Yes | none | `pass` only when every required status is `pass` or explicitly `not_applicable`; otherwise `blocked_until_all_pass`. |
+| `blocking_reasons` | Yes | `[]` | Required non-empty when `activation_result != pass`; sorted by blocking code then artifact ref. |
+
+`activation_result = pass` is forbidden when any required dimension is omitted, `blocked`, `unknown`, stale, checksum-mismatched, outside activation scope, or missing validation refs.
 
 ### RawSupplierProfile
 
@@ -171,15 +248,45 @@ ReadLakehouseFeed(profile, read_policy, target_ref):
 | `validation_fixture_supplier` | public redacted class | fixture ID, source category, redaction summary, checksum | raw private payload unless redacted fixture permits | Validation-only, no production evidence. |
 | `private_bound_supplier` | private implementation artifact only | none in public docs | all concrete bindings | Public artifact must fail if present. |
 
-### Read target policy table
+### ReadTargetBranchPolicy
 
-| Target kind | Required reference | Checksum inputs | Timeout default | Retry behavior | Failed-object behavior | Omitted-object behavior | Output classes | Replay requirement |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `table_snapshot` | `LakehouseSnapshotRef` | table profile, snapshot ID, schema ID, partition/delete refs | `300s` | retry metadata read 3 times | fail read | fail unless profile permits partial | raw rows, receipt | snapshot ref retained |
-| `dataset_version` | `DatasetVersionRef` | dataset version, table-set checksum, schema refs | `300s` | retry metadata read 3 times | fail read | fail unless subset profile permits | raw rows, receipt | dataset ref retained |
-| `object_batch` | `RawFeedManifest.object_refs` | object URI hash, size, checksum, manifest checksum | `600s` | retry object read 3 times | emit `read_partial_known_gap` | emit `read_partial_known_gap` | raw objects, receipt | object refs retained |
-| `partition_set` | `RawFeedManifest.partition_refs` | partition keys, schema, bounds, manifest checksum | `600s` | retry partition read 3 times | emit `read_partial_known_gap` | emit `read_partial_known_gap` | raw rows, receipt | partition refs retained |
-| `manifest_list` | `RawFeedManifest` | manifest bytes, schema refs, object/partition refs | `120s` | retry manifest read 3 times | `manifest_invalid` | `manifest_invalid` | manifest validation, receipt | manifest retained |
+The read target branch table is total for production feed reads. A branch not covered by this table must fail with `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` before read, import, completeness evaluation, absence evaluation, cleanup, retraction, graph expiry, or watermark advancement.
+
+| Condition | Required receipt state | Required error or no-op | Output classes | VersionManifest requirement |
+| --- | --- | --- | --- | --- |
+| `read_target_kind` omitted or outside the closed enum | none | `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | none | rejected profile validation refs only |
+| `feed_category` has no active closure row | none | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | none | rejected profile and row-set refs |
+| Category closure row has `deterministic_block_code` | none | row-defined deterministic block/no-op code | none | category row ref and validation refs |
+| `table_snapshot` missing `LakehouseSnapshotRef`, schema ref, or required table profile ref | `read_unavailable` or `schema_unavailable` as applicable | hard read failure | receipt and diagnostics only | failed target refs and read policy ref |
+| `dataset_version` missing `DatasetVersionRef`, schema refs, or table-set checksum | `read_unavailable` or `schema_unavailable` as applicable | hard read failure | receipt and diagnostics only | failed target refs and read policy ref |
+| Manifest checksum, count, object shape, partition shape, or schema ref invalid | `manifest_invalid` | `manifest_invalid` | manifest validation result and receipt only | manifest ref and validation error refs |
+| Manifest-listed object or partition is unreadable after retry and its identity is known | `read_partial_known_gap` | no absence, cleanup, retraction, graph expiry, or watermark | positive raw records only when `partial_read_policy = positive_records_only` | missing object or partition ref and checkpoint refs |
+| Missing scope is suspected but the missing object, partition, row range, or table region cannot be identified | `read_partial_unknown_gap` | no absence, cleanup, retraction, graph expiry, or watermark | diagnostics and any already committed positive raw records permitted by policy | partial state and blocking reason refs |
+| Declared subset requested without active `030.DeclaredDAGSubsetProfile` | none | `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | none | subset request ref and rejected profile refs |
+| Declared subset emits an output forbidden by `030.DeclaredDAGSubsetProfile` | none | `030.DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | none | subset profile ref and stage output refs |
+| Empty target scope with `empty_scope_policy = not_authoritative_for_absence` | `read_complete` | `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | receipt and diagnostics; no absence-sensitive effects | empty scope evidence and profile ref |
+| Empty target scope with `empty_scope_policy = empty_complete_requires_060` | `read_complete` | no feed-read error; `060` must decide effects | receipt only | upstream evidence refs and completeness profile refs |
+| Empty target scope with `empty_scope_policy = reject_empty_scope` | none | hard read failure | diagnostics only | profile and target refs |
+| Successful full read of declared target | `read_complete` | none | raw rows or manifest validation, receipt, state records | all target, manifest, policy, category, and state refs |
+
+### LakehouseFeedCategoryClosureRequirementTable
+
+This table defines the MVP feed-category closure catalog. It does not activate a category row by itself. Each non-blocked category must have exactly one active `LakehouseFeedCategoryClosureRow` in the active row set before production use. Unknown or future categories fail closed until an active row set, `060` completeness rows, and `120` validation rows exist.
+
+| Feed category | Allowed read target kinds in active row | Absence-sensitive uses | Required upstream evidence classes | Required `060` coverage domains | Default missing-row behavior | MVP result |
+| --- | --- | --- | --- | --- | --- | --- |
+| `endpoint_inventory` | Any closed read target kind when the active row permits it. | Endpoint non-observation, cleanup, graph expiry, watermark. | scope enumeration, permission visibility, collection window, failed-scope evidence. | endpoint | `not_authoritative_for_absence` | Requires active closure row. |
+| `configuration_inventory` | Any closed read target kind when the active row permits it. | Configuration absence, stale configuration, cleanup, watermark. | configuration scope, collection window, failed-item evidence, source permission state. | endpoint, cloud inventory, or control as row declares | `not_authoritative_for_absence` | Requires active closure row. |
+| `vulnerability_scan` | Any closed read target kind when the active row permits it. | Vulnerability absence, fixed-state absence, scan watermark. | scanner target scope, credential/auth status, plugin/check set, scan window, failed-target and exclusion evidence. | vulnerability | `not_authoritative_for_absence` | Requires active closure row. |
+| `control_evaluation` | Any closed read target kind when the active row permits it. | Control pass, fail, unknown, not checked, not applicable, watermark. | benchmark/check scope, applicability evidence, evaluation status, result mapping refs. | control | `not_authoritative_for_absence` | Requires active closure row. |
+| `directory_inventory` | Any closed read target kind when the active row permits it. | Principal, group, device, and directory-object absence. | tenant/domain scope, page or delta completion, hidden-object permission state, failed-scope evidence. | directory | `not_authoritative_for_absence` | Requires active closure row. |
+| `directory_membership` | Any closed read target kind when the active row permits it. | Group non-membership, user non-membership, membership cleanup, watermark. | tenant/domain, group, member type, direct/transitive mode, hidden-membership permission, page/delta completion, AD primary-group evidence. | directory | `not_authoritative_for_absence` | Requires active closure row. |
+| `dns_record_set` | Any closed read target kind when the active row permits it. | DNS absence and stale DNS state. | zone/source scope, authoritative source evidence, TTL basis, collection window. | DNS | `not_authoritative_for_absence` | Requires active closure row. |
+| `dhcp_ipam_assignment` | Any closed read target kind when the active row permits it. | Lease absence, assignment absence, host cleanup, watermark. | DHCP/IPAM scope, lease window, authoritative-system evidence, failed-scope evidence. | DHCP/IPAM | `not_authoritative_for_absence` | Requires active closure row. |
+| `network_flow` | Any closed read target kind when the active row permits it. | Positive observed-flow evidence only by default. | sensor scope, collection point, time window, role evidence, packet/flow field completeness. | flow | `unknown`; missing flow must not imply no flow. | Requires active closure row; absence effects default blocked. |
+| `cloud_asset_inventory` | Any closed read target kind when the active row permits it. | Cloud resource absence, deletion inference, graph expiry, watermark. | account/project/subscription, region, resource type, permission visibility, source-history evidence when required. | cloud inventory | `not_authoritative_for_absence` | Requires active closure row. |
+| `source_history` | Any closed read target kind when the active row permits it. | No-change proof only within supported source-native history window. | history window, retention profile, query scope, outside-window evidence. | source history | `unknown`; outside-window no-result is not proof. | Requires active closure row. |
+| `future_reachability` | none | none in MVP. | inactive deferred reachability evidence only. | deferred reachability | deterministic no-op/block. | Blocked for MVP with `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or owner no-op. |
 
 ### LakehouseReadPolicy payload limits
 
@@ -328,6 +435,12 @@ ComputeRawFeedManifestId(manifest):
 | no absence from manifest | `feed-020-no-absence-from-manifest` | `val-020-no-absence-from-manifest` | Missing object or row yields no absence without `060` gates. |
 | CDC tombstone | `feed-020-cdc-tombstone-non-authority` | `val-020-cdc-tombstone-non-authority` | No retraction without `060` and `080` policy. |
 | no direct source call | `feed-010-direct-source-call` | `neg-010-direct-source-call` | `DIRECT_SOURCE_CALL_FORBIDDEN`. |
+| profile schema incomplete | `feed-020-profile-schema-incomplete` | `val-020-feed-profile-schema-incomplete` | `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE`; no read. |
+| missing category closure row | `feed-020-category-row-missing` | `val-020-category-row-missing` | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING`; no read. |
+| unresolved profile branch | `feed-020-profile-branch-unresolved` | `val-020-profile-branch-unresolved` | `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED`; no output. |
+| declared subset required | `feed-020-declared-subset-required` | `val-020-declared-subset-required` | `LAKEHOUSE_DECLARED_SUBSET_REQUIRED`; no output. |
+| empty scope not authoritative | `feed-020-empty-scope-not-authoritative` | `val-020-empty-scope-not-authoritative` | `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE`; no absence or watermark. |
+| feed category closure catalog | `feed-020-category-closure-*` | `val-020-category-closure-*` | Each MVP category has one positive or deterministic block row and one missing-row negative case. |
 
 ### Feed activation artifact errors
 
@@ -336,6 +449,12 @@ ComputeRawFeedManifestId(manifest):
 | `LAKEHOUSE_ACTIVATION_ARTIFACT_MISSING` | A required feed, table, read, retention, maintenance, cross-table, or catalog policy artifact ref is missing. |
 | `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | A required artifact exists but lifecycle status is not allowed for production execution. |
 | `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | A required artifact checksum differs from the active artifact ref or manifest. |
+| `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | A feed profile omits a required `LakehouseFeedProfileSchema` field, uses an invalid target kind, or leaves a required branch input unresolved. |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | No active `LakehouseFeedCategoryClosureRow` covers the profile's `feed_category`. |
+| `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | A feed read branch still depends on unmaterialized profile or closure-row policy. |
+| `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | A declared subset read is requested or required but no active `030.DeclaredDAGSubsetProfile` covers the request. |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | The profile or category row requires upstream completeness evidence and the manifest or evidence refs omit it. |
+| `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | An empty target scope is read under the default empty-scope policy and must not be interpreted as source absence. |
 
 ### Acceptance Criteria
 
@@ -355,6 +474,12 @@ ComputeRawFeedManifestId(manifest):
 | `020-VOLATILITY-AC-001` | A production feed read with an inactive `LakehouseFeedProfile` emits no `RawRecord`. |
 | `020-VOLATILITY-AC-002` | Identical feed bytes with different active `LakehouseReadPolicy` checksums produce different `VersionManifest` refs or fail before output. |
 | `020-VOLATILITY-AC-003` | Table maintenance fails before destructive action when the required policy artifact is inactive or omitted from `VersionManifest`. |
+| `020-FEED-CLOSURE-AC-001` | Feed profile activation and production read fail with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` when any required profile schema field is omitted, including `read_target_kind`. |
+| `020-FEED-CLOSURE-AC-002` | Every active feed category either has an active `LakehouseFeedCategoryClosureRow` with validation refs or a deterministic MVP block row. |
+| `020-FEED-CLOSURE-AC-003` | Every profile-dependent feed-read branch resolves to an explicit field, active artifact ref, receipt state, error/no-op, and validation row. |
+| `020-FEED-CLOSURE-AC-004` | Omitted or invalid target-kind input never defaults to a table, object, partition, manifest, or dataset read. |
+| `020-FEED-CLOSURE-AC-005` | Declared subset reads fail before output unless an active `030.DeclaredDAGSubsetProfile` covers requested outputs and effects. |
+| `020-FEED-CLOSURE-AC-006` | Partial known gaps, partial unknown gaps, empty scopes under the default policy, and missing lakehouse rows never authorize absence, cleanup, retraction, graph expiry, or watermark advancement. |
 
 ## Definition of Done
 
@@ -365,6 +490,7 @@ ComputeRawFeedManifestId(manifest):
 | `020-AC-003` | Every production read and write has table-format-native refs when it can affect output or replay. |
 | `020-AC-004` | Destructive maintenance is refused when any protected manifest, snapshot, replay window, or legal hold would be invalidated. |
 | `020-AC-005` | Feed profile activation fails while feed feasibility, raw supplier profiles, read policy catalog, raw manifest schema, or feed fixture coverage is `TODO:` for the target feed. |
+| `020-AC-006` | Every active production feed category has an active closure row set, a passing feasibility assessment, fixture refs, validation refs, and deterministic missing-row behavior. |
 
 ## Open Questions
 

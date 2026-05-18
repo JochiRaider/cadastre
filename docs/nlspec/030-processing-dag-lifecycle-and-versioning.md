@@ -141,8 +141,10 @@ Closed `artifact_class` values are:
 
 ```text
 lakehouse_feed_profile
+lakehouse_feed_category_closure_row_set
 raw_supplier_profile
 lakehouse_read_policy
+declared_dag_subset_profile
 lakehouse_table_profile
 replay_retention_policy
 table_maintenance_policy
@@ -155,6 +157,12 @@ source_authority_profile
 source_authority_row_set
 source_staleness_policy
 coverage_dimension_profile
+lakehouse_feed_completeness_profile
+supplier_collection_visibility_profile
+control_result_mapping_row_set
+source_history_retention_profile
+absence_derivation_policy
+projection_watermark_policy
 progress_signal_policy
 resolver_profile
 candidate_generation_profile
@@ -195,7 +203,27 @@ Failure precedence is missing ref, owner mismatch, invalid artifact class, check
 
 ## Declared Subset Contract
 
-A production stage subset may execute only with an active `DeclaredDAGSubsetProfile`. The subset profile must state allowed outputs, forbidden outputs, cleanup behavior, absence behavior, projection behavior, watermark behavior, and required validation rows.
+A production stage subset may execute only with an active `DeclaredDAGSubsetProfile` referenced by `030.ActivationControlledArtifactRef` with `artifact_class = declared_dag_subset_profile`. The subset profile must make every absence, cleanup, retraction, graph-expiry, projection, and watermark effect explicit. Omission of an effect field is not permission.
+
+### DeclaredDAGSubsetProfile schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `subset_profile_id` | Yes | none | Stable artifact ID scoped to `030`. |
+| `covered_stage_ids` | Yes | none | Non-empty canonical array of stage IDs the subset may execute. |
+| `covered_feed_profile_refs` | No | `[]` | Feed profile refs covered by the subset. Empty means no feed profile is covered. |
+| `allowed_output_classes` | Yes | none | Non-empty closed output class set. A stage output outside this set fails with `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN`. |
+| `forbidden_output_classes` | No | `[]` | Additional closed output classes that must fail even if a stage would otherwise allow them. |
+| `absence_behavior` | No | `forbidden` | Closed enum: `forbidden`, `allowed_when_060_effect_allowed`. |
+| `cleanup_behavior` | No | `forbidden` | Closed enum: `forbidden`, `allowed_when_060_effect_allowed`. |
+| `retraction_behavior` | No | `forbidden` | Closed enum: `forbidden`, `allowed_when_060_effect_allowed`. |
+| `graph_expiry_behavior` | No | `forbidden` | Closed enum: `forbidden`, `allowed_when_060_effect_allowed`. |
+| `watermark_behavior` | No | `forbidden` | Closed enum: `forbidden`, `allowed_when_060_effect_allowed`. |
+| `projection_behavior` | No | `forbidden` | Closed enum: `forbidden`, `canary_only`, `persisted_delta_replay_only`, `allowed_when_profiles_match`. |
+| `validation_refs` | Yes | none | Non-empty refs to subset positive and negative validation rows. |
+| `activation_scope` | Yes | none | Execution scope covered by the profile. |
+
+A production subset request without a matching active subset profile must fail with `DECLARED_DAG_SUBSET_PROFILE_MISSING` before any stage executes. A subset profile whose scope does not cover the requested feed profile, stage IDs, output class, or activation scope must fail with `DECLARED_DAG_SUBSET_SCOPE_MISMATCH`.
 
 ## Execution Algorithm
 
@@ -254,11 +282,13 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 
 | Output class | Required refs |
 | --- | --- |
-| Raw import output | feed profile, read policy, raw feed manifest, raw import package, table/object refs, state records. |
+| Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | Silver output | raw refs, parser package, mapping bundle, external schema profile, validation output. |
 | Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
-| Gold output | temporal policy, source authority, coverage, correction policy, source refs, snapshot refs. |
+| Gold output | temporal policy, exact source authority refs, lakehouse feed completeness profile row refs, coverage refs, staleness refs, absence policy refs when absence-sensitive, correction policy, source refs, snapshot refs. |
+| Absence, cleanup, retraction, or graph expiry output | `060` completeness decision refs, authority refs, coverage refs, staleness refs, absence derivation result refs, and requested effect token. |
+| Watermark output | projection watermark policy, completeness decision refs, authority refs, coverage refs where applicable, staleness refs, and `WatermarkCommitRecord`. |
 | Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, apply result. |
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
 | Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs. |
@@ -314,18 +344,23 @@ RunLockKeyDerivation(scope):
 
 ### DeclaredDAGSubsetProfile matrix
 
-| Subset mode | Allowed outputs | Forbidden outputs | Absence behavior | Cleanup behavior | Projection behavior | Watermark behavior | Validation requirement |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `validation_only` | validation reports, diagnostics | production records | forbidden | forbidden | forbidden | forbidden | negative authority rows |
-| `feed_replay` | raw records and receipts | silver/gold/graph/API | no absence | no cleanup | no projection | no advancement | feed replay rows |
-| `graph_rebuild` | graph rebuild manifest and graph apply result | raw/silver/gold mutation | no absence | no source cleanup | allowed from persisted deltas | projection only if `060` permits | rebuild equivalence rows |
-| `package_canary` | canary output and activation evidence | current production output | no absence | no cleanup | canary only | no production advancement | package canary rows |
+| Subset mode | Allowed outputs | Forbidden outputs | Absence behavior | Cleanup behavior | Retraction behavior | Graph expiry behavior | Projection behavior | Watermark behavior | Validation requirement |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `validation_only` | validation reports, diagnostics | production records | forbidden | forbidden | forbidden | forbidden | forbidden | forbidden | negative authority rows |
+| `feed_replay` | raw records and receipts | silver/gold/graph/API | forbidden | forbidden | forbidden | forbidden | forbidden | forbidden | feed replay rows |
+| `graph_rebuild` | graph rebuild manifest and graph apply result | raw/silver/gold mutation | forbidden | forbidden | forbidden | allowed only when `060` permits requested effect | persisted delta replay only | forbidden unless explicit watermark behavior permits | rebuild equivalence rows |
+| `package_canary` | canary output and activation evidence | current production output | forbidden | forbidden | forbidden | forbidden | canary only | forbidden | package canary rows |
+
+A subset profile that omits watermark behavior must not advance a watermark. A subset profile that allows raw replay must not inherit full-run absence, cleanup, retraction, graph expiry, or watermark behavior.
 
 ### Activation artifact errors
 
 | Error code | Emitted when |
 | --- | --- |
 | `ACTIVATION_ARTIFACT_INCOMPLETE` | A required activation-controlled artifact ref is missing required fields, invalid, unvalidated, out of scope, superseded, or otherwise incomplete after more specific owner codes are unavailable. |
+| `DECLARED_DAG_SUBSET_PROFILE_MISSING` | A production subset request has no matching active `DeclaredDAGSubsetProfile`. |
+| `DECLARED_DAG_SUBSET_SCOPE_MISMATCH` | The active subset profile does not cover the requested stage IDs, feed profiles, activation scope, or output class. |
+| `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | A subset stage attempts an output, absence effect, cleanup, retraction, graph expiry, projection, or watermark behavior forbidden by the active subset profile. |
 
 ### Acceptance Criteria
 
@@ -345,6 +380,10 @@ RunLockKeyDerivation(scope):
 | `030-ACTIVATION-AC-001` | Every output-affecting activation-controlled artifact appears in `VersionManifest`. |
 | `030-ACTIVATION-AC-002` | Inactive, checksum-mismatched, scope-mismatched, or unvalidated artifacts fail with deterministic precedence. |
 | `030-ACTIVATION-AC-003` | Two implementations given the same refs produce byte-identical `version_manifest_id`. |
+| `030-FEED-CLOSURE-AC-001` | The closed `artifact_class` registry includes feed category closure row sets, declared subset profiles, lakehouse feed completeness profiles, supplier visibility profiles, control result mappings, source history retention profiles, absence policies, and projection watermark policies. |
+| `030-FEED-CLOSURE-AC-002` | A production subset request without a matching active `DeclaredDAGSubsetProfile` fails before stage execution. |
+| `030-FEED-CLOSURE-AC-003` | A subset profile that permits raw replay but omits watermark behavior does not advance a watermark. |
+| `030-FEED-CLOSURE-AC-004` | Same DAG bytes, same requested subset, same subset profile, and same activation refs produce byte-identical stage order and manifest refs. |
 
 ## Definition of Done
 
@@ -355,6 +394,7 @@ RunLockKeyDerivation(scope):
 | `030-AC-003` | Every production-affecting lifecycle has closed states, closed events, total transitions, illegal-transition behavior, and validation criteria. |
 | `030-AC-004` | Every output-affecting state record is hashable, replayable, and included in `VersionManifest`. |
 | `030-AC-005` | Production replay rejects missing, mutable-only, checksum-mismatched, or retention-ineligible manifest refs before writing output. |
+| `030-AC-006` | Declared subset execution fails closed for absence, cleanup, retraction, graph expiry, projection, and watermark effects unless the active subset profile and `060` effect gates both permit the requested behavior. |
 
 ## Open Questions
 
