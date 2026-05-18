@@ -67,7 +67,7 @@ Every active domain spec must include at least one negative validation case for 
 | Feed profile closure | Missing feed profile field, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
 | Source authority | Missing exact authority row, ambiguous authority row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
-| Identity | IP-only/hostname-only/DNS-only/PTR-only/graph-key-only merge attempt fails. |
+| Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
 | Graph | Backend internal ID appears in response or selector and fails; OCSF endpoint order attempts graph direction without `FlowRoleEvidence` and emits no edge. |
 | Package | Unauthorized signer with valid cryptographic signature fails activation. |
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
@@ -82,7 +82,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | Volatility boundary | Required negative case | Expected result |
 | --- | --- | --- |
 | core/artifact boundary | Mapping bundle attempts to define a new core field. | Fails before persistence. |
-| artifact activation | Inactive resolver profile is referenced. | Fails before identity output. |
+| artifact activation | Inactive resolver profile, missing candidate generation profile, checksum-mismatched evidence class row set, out-of-scope split policy, omitted resolver explanation policy, or missing `VersionManifest` resolver artifact refs are referenced. | Fails before identity output or replay. |
 | artifact checksum | Source-authority row checksum mismatch. | Fails before gold derivation. |
 | artifact omission | Graph projection profile or OCSF mapping row set omitted from `VersionManifest`. | Fails before dependent output. |
 | external schema non-authority | OCSF profile attempts to treat observables, status, severity, confidence, field absence, or endpoint order as authority. | Fails before authority or graph effect. |
@@ -196,7 +196,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection | required when owner declares activation-controlled artifacts. |
 | `050` | OCSF mapping row success by row family | missing row, ambiguous row, missing discriminator, forbidden field, deprecated field, unknown enum, IPAM split, artifact mismatch | cadastre-only null-profile no-op when row permits | unknown enum and mapping discriminator branches | mapping replay | source extension redaction | n/a | undeclared extension and source-extension wildcard | required when owner declares activation-controlled artifacts. |
 | `060` | absence authorized and empty-complete authorized | missing authority row, ambiguous authority row, missing completeness row, missing upstream evidence, missing coverage row, missing staleness row, missing control-result mapping, and external-schema authority attempt | weak signal no-op, weak-signal combination blocked, effect-not-allowed no-op, OCSF non-authority no-op, DNS TTL no deletion, DHCP lease no host absence, and missing-flow unknown | blocking precedence, partial completeness, source-history outside-window, and directory visibility gaps | watermark replay, closure-manifest replay, and watermark blocked | n/a | n/a | missing coverage, weak-signal combination, source-history no-change, DNS/DHCP/flow negative non-authority, and OCSF status/severity/confidence non-authority | required when owner declares activation-controlled artifacts. |
-| `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality | required when owner declares activation-controlled artifacts. |
+| `070` | creation, attachment, exact durable merge, split, and no-decision | weak-only, under-scoped, blocker, missing row, ambiguous row, and overflow | selector-only and unsupported entity | split handoff | decision/explanation checksum replay | resolver private-binding redaction through `010`/`110` | reviewer authority | review cannot mutate identity without terminal decision | inactive/missing/checksum-mismatched/out-of-scope resolver artifacts and package core conflict. |
 | `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
 | `090` | graph query/apply and flow-role edge direction | backend ID rejection and OCSF endpoint-order direction rejection | empty traversal no-path and missing-flow-role no-edge | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition and endpoint-order non-authority | required when owner declares activation-controlled artifacts. |
 | `100` | package activation | unauthorized signer | failed candidate keep-current | rollback | package-set replay | n/a | promotion auth | emergency no trust bypass | required when owner declares activation-controlled artifacts. |
@@ -542,7 +542,7 @@ replay_same_event
 | `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
 | `050` | OCSF mapping row success, missing row, ambiguous row, activity discriminator missing, required object path missing, forbidden field, unknown enum, OCSF Other not permitted, deprecated field, source extension rule success, undeclared source extension, wildcard rejection, secret scan, cadastre-only null profile, DHCP/IPAM split required. |
 | `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating, OCSF status non-authority, OCSF severity non-authority, OCSF confidence non-authority, OCSF observable non-authority, OCSF field absence non-authority. |
-| `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
+| `070` | identity-create, identity-attach, identity-durable-merge, identity-weak-rejection, identity-hard-blocker, identity-candidate-overflow, identity-confidence-band, identity-review-state-machine, identity-selector-safety, identity-split-handoff, identity-explanation-checksum, identity-replay, identity-package-artifact-core-conflict. |
 | `080` | temporal-resolution, knowledge-time-import, late-arrival, gold-correction, assertion-transition, correction-snapshot-ref, gold-correction-no-op-error, replay-equivalence, graph-handoff, temporal-version-manifest. |
 | `090` | edge semantics, graph apply lifecycle, graph apply resume, identical reapply, query ordering, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, flow-role evidence required. |
 | `100` | package activation lifecycle, trust, canary and shadow isolation, rollback, quarantine, emergency behavior, deprecation window expiry, repository unsupported form. |
@@ -594,6 +594,13 @@ replay_same_event
 | `120-OCSF-NONAUTH-AC-001` | `AcceptanceReport` cannot pass unless OCSF status, severity, confidence, observables, enrichments, and field absence non-authority fixtures pass. |
 | `120-OCSF-DIRECTION-AC-001` | `AcceptanceReport` cannot pass unless OCSF endpoint-order graph-direction rejection fixtures pass. |
 | `120-LIFECYCLE-AC-004` | Domain/owner lifecycle closure status contradiction fails with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
+| `120-IDENTITY-CLOSURE-AC-001` | Aggregate acceptance fails while any `070` resolver row coverage, evidence class, scope, decision matrix, confidence band, review routing, split policy, explanation policy, activation report, or selector safety fixture is missing, blocked, failed, not run, checksum-mismatched, or has a `TODO` expected output. |
+| `120-IDENTITY-CLOSURE-AC-002` | Validation proves deterministic resolver pair ordering and byte-identical decision/explanation checksums across two independent implementations. |
+| `120-IDENTITY-CLOSURE-AC-003` | Overflow fixtures prove no identity mutation and no auto-merge from overflowed candidates. |
+| `120-IDENTITY-REVIEW-AC-001` | Every review state/event pair is covered and illegal transitions emit no mutation. |
+| `120-IDENTITY-SPLIT-AC-001` | Split handoff fixtures prove required `GraphCorrectionHandoff` fields, no resolver graph mutation, and deterministic replay. |
+| `120-IDENTITY-EXPLANATION-AC-001` | Resolver explanation checksum fixtures include every required output-affecting field and exclude non-output volatile fields. |
+| `120-IDENTITY-PACKAGE-AC-001` | Package-supplied resolver artifact weakening fails activation and preserves the current active package set. |
 
 ## Definition of Done
 
@@ -605,6 +612,7 @@ replay_same_event
 | `120-AC-004` | Validation artifacts are redacted, checksummed, and replayable. |
 | `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can be promoted to `authoritative`. |
 | `120-AC-006` | `RunValidationMatrix` emits blocked or fail for any unresolved active feed category, unresolved profile branch, missing fixture checksum, or missing expected output checksum. |
+| `120-AC-007` | Authoritative promotion is forbidden while any non-deferred identity closure row is `fail`, `blocked`, `not_run`, missing checksum, or has a `TODO` expected output. |
 
 ## Open Questions
 

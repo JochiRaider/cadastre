@@ -157,7 +157,7 @@ Every `enum_token` field must be governed by exactly one closed enum owner befor
 | assertion states | `040`, `080` | `GoldFact.assertion_state` and correction transitions | closed for default states; owner-specific transitions in `080` |
 | raw import and payload enums | `020`, `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | owner enum row required before promotion |
 | silver observation enums | `050`, `040` | observation type, source category, field quality, external profile state | owner enum row required before promotion |
-| identity enums | `070`, `040` | identity decision, evidence role, review state, selector mechanism | owner enum row required before promotion |
+| identity enums | `070`, `040` | identity decision, evidence role, review state, selector mechanism | closed by `070.Identity closed enum tables` after resolver closure; promotion blocks if `070` enum closure is absent or inconsistent. |
 | temporal and correction enums | `080`, `040` | temporal quality, correction class, replay result, bitemporal query mode | owner enum row required before promotion |
 | graph enums | `090`, `040` | graph node type, edge type, operation, traversal class, assertion visibility | owner enum row required before promotion |
 | API, package, validation, and analysis enums | `100`, `110`, `120`, `130` | status, health, error, validation, and analysis tokens | owner enum row required before promotion |
@@ -302,6 +302,8 @@ Shape validation materializes required defaults before checksum computation. Unk
 | `source_decision_refs` | `array<cadastre_id>` | yes | `[]` | no | no | scalar default | lexical by ref ID | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `supersedes_entity_ids` | `array<cadastre_id>` | yes | `[]` | no | no | scalar default | lexical by ref ID | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `split_from_entity_id` | `cadastre_id` | yes | null unless split correction created the entity | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+
+`creation_identity_decision_id` is a reference to a `070.IdentityDecision`. Creation permission, creation decision class validity, attachment semantics, merge semantics, and split semantics are owned by `070`; this schema only validates field shape and canonical bytes.
 
 ### SourceAssetSchema
 
@@ -588,6 +590,7 @@ If a record carries an activation-artifact value outside a declared extension ma
 | decimal precision | Use `DecimalPrecisionPolicy.confidence_0_1`; no rounding; persisted value has six fractional digits. | closed_local |
 | one-of members | Use `CoreOneOfRegistry`; any row with TODO allowed kinds blocks authoritative promotion for affected outputs. | blocked_owner_todo |
 | enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_owner_todo |
+| identity enum closure | `070.Identity closed enum tables` must pass `120` validation before authoritative promotion when identity output is in scope. | blocked_validation |
 | private binding error | `PRIVATE_BINDING_LEAK` is available to core schema and imported from `010`/`110` for public artifact rejection. | closed_local |
 | core schema volatility | Core schemas, omission states, ID/checksum policies, scalar bounds, and validation precedence are stable core; activation artifacts cannot alter them. | closed_local |
 
@@ -654,9 +657,9 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | --- | --- | --- | --- |
 | `RawRecord` | `040.ComputeRawRecordId` | `020` supplies feed, target, manifest, source dataset, scope, supplier identity, payload hash, and import profile inputs. | `020` |
 | `CadastreSilverObservation` | `040.CoreRecordIdPolicy` | `050` supplies mapping and normalized payload inputs. | `050` |
-| `CanonicalEntity` | `040.CoreRecordIdPolicy` | `070` supplies identity decision, resolver, and policy inputs. | `070` |
-| `SourceAsset` | `040.CoreRecordIdPolicy` | `070` supplies source scope and source-native identity inputs. | `070` |
-| `Identifier` | `040.CoreRecordIdPolicy` | `070` supplies typed identifier scope and validity inputs. | `070` |
+| `CanonicalEntity` | `040.CoreRecordIdPolicy` | `070` supplies creation decision, resolver, policy, attachment, merge, and split decision refs as resolver-owned inputs. | `070` |
+| `SourceAsset` | `040.CoreRecordIdPolicy` | `070` supplies source scope, source-native identity, attachment decision refs, and split decision refs as resolver-owned inputs. | `070` |
+| `Identifier` | `040.CoreRecordIdPolicy` | `070` supplies typed identifier scope, validity inputs, attachment decision refs, merge decision refs, and split decision refs as resolver-owned inputs. | `070` |
 | `GoldFact` | `040.ComputeGoldFactKeyId` and `040.ComputeGoldFactId` | `060` and `080` supply authority, temporal, evidence, and correction inputs. | `060`, `080` |
 | `EvidenceRef` | `040.ComputeEvidenceRefId` | Owner specs supply referenced artifact metadata only; raw payload bytes are forbidden. | `040`, `110` |
 | `GraphNodeDeltaShape` and `GraphEdgeDeltaShape` | Shape validation in `040`; runtime delta ID policies imported from `090`. | `090` supplies projection/apply semantics. | `090` |
@@ -688,6 +691,7 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-SCHEMA-PATCH-AC-004` | Every array or map that affects IDs, checksums, replay, graph deltas, validation output, or audit output declares deterministic ordering. |
 | `040-SCHEMA-PATCH-AC-005` | `GoldFact` separates `gold_fact_key_id` from immutable `gold_fact_id`. |
 | `040-SCHEMA-PATCH-AC-006` | `EvidenceRef` and graph delta shapes reject raw payload bytes. |
+| `040-IDENTITY-ENUM-AC-001` | Identity enum closure is validated by `120` and inconsistent or absent `070` identity enum closure blocks authoritative promotion. |
 | `040-SCHEMA-PATCH-AC-007` | Backend-generated IDs fail in graph delta shapes with `GRAPH_BACKEND_ID_FORBIDDEN`. |
 | `040-SCHEMA-PATCH-AC-008` | `ValidateCoreRecord` produces byte-identical canonical bytes and checksums for the same inputs across two independent implementations. |
 | `040-VOLATILITY-AC-001` | Activation artifacts cannot alter core record fields or ID/checksum behavior. |

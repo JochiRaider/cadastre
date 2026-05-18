@@ -73,7 +73,7 @@ If an activation-controlled artifact conflicts with a stable core contract, the 
 
 The public NLSpec set must define vendor-neutral feed contracts. Concrete vendor names, private source binding artifacts, routes, credentials, and environment-specific bindings must live in private implementation artifacts and must not appear in public canonical records.
 
-Core schemas may name vendor-neutral source categories and redacted refs only. A public `RawRecord`, `EvidenceRef`, graph delta, API response, validation report, or export artifact that exposes a private source binding must fail with `PRIVATE_BINDING_LEAK` before publication or persistence.
+Core schemas may name vendor-neutral source categories and redacted refs only. A public `RawRecord`, `EvidenceRef`, graph delta, API response, validation report, package report, resolver row catalog, or export artifact that exposes a private source binding must fail with `PRIVATE_BINDING_LEAK` before publication or persistence.
 
 | Artifact | Public canonical model status |
 | --- | --- |
@@ -94,12 +94,22 @@ A public row, validation report, export, API response, or persisted public artif
 
 Private source binding artifacts may map concrete upstream systems to public vendor-neutral datasets. Private mappings must not alter the public `060` row-resolution algorithm, matching specificity, default omission behavior, error precedence, or allowed effect semantics.
 
+### IdentityResolverRowPublicBindingRule
+
+Public identity resolver row catalogs may contain only vendor-neutral source categories, source datasets, row IDs, redacted artifact refs, canonical scope selectors, lifecycle status, validation refs, and checksummed policy refs.
+
+`ResolverProfileRow`, `IdentifierScope`, `IdentifierEvidenceClass`, `AssetGenerationBoundary`, `CandidateGenerationProfile`, `TargetSelectorSafetyPolicy`, `IdentityReviewRoutingPolicy`, `SplitPolicy`, `IdentityConfidenceBand`, `ResolverDecisionMatrix`, and `ResolverExplanationPolicy` public instances must not contain concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventory, zone inventory, account lists, or environment-specific source target lists.
+
+A public resolver row, package activation report, validation report, export, API response, or persisted public artifact that contains a concrete product name, tenant ID, private route, credential, host list, scanner site name, directory tenant inventory, zone inventory, account list, or environment-specific source target list must fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, package report materialization, or validation-report materialization.
+
+Private source binding artifacts may map concrete upstream systems to public resolver scopes. Private mappings must not alter the public `070` resolver row-selection algorithm, evidence authority defaults, blocker precedence, decision semantics, review totality, split policy semantics, selector safety, or explanation checksum policy.
+
 ## Cross-Domain Invariants
 
 - Missing lakehouse rows must not imply source absence.
 - Successful feed read must not imply source completeness.
 - Source completeness must not imply source authority.
-- Source authority must not imply identity merge authority.
+- Source authority, source completeness, source scope, and public resolver row presence must not imply identity merge, creation, or attachment authority.
 - Identity resolution must not mutate graph state directly.
 - Graph apply success must not imply fact correctness.
 - Package signature verification must not imply package activation eligibility.
@@ -112,7 +122,7 @@ Private source binding artifacts may map concrete upstream systems to public ven
 | --- | --- |
 | `DIRECT_SOURCE_CALL_FORBIDDEN` | Production execution attempts to call or authenticate to an enterprise source system. |
 | `PROJECTION_AUTHORITY_VIOLATION` | A derived projection attempts to create authoritative records. |
-| `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
+| `PRIVATE_BINDING_LEAK` | A public artifact, including identity resolver rows and package-supplied resolver artifacts, contains a concrete private vendor/source binding. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | An activation-controlled artifact attempts to define product authority or stable core semantics. |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | An activation-controlled artifact conflicts with the owner stable core contract. |
@@ -194,6 +204,7 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-VOLATILITY-AC-002` | Activation artifacts that conflict with stable core fail before production output. |
 | `010-VOLATILITY-AC-003` | Product authority, identity semantics, temporal semantics, and projection boundaries remain stable-core owned. |
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-001` | A public source-authority row containing a private route or concrete tenant inventory fails before persistence, publication, export, or validation-report materialization. |
+| `010-IDENTITY-PRIVATE-BINDING-AC-001` | Public resolver profile rows, identifier scope rows, and package-supplied resolver artifacts containing concrete tenant inventories, private routes, credentials, scanner site names, or account lists fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response, package report, or validation-report materialization. |
 
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
 

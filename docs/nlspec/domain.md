@@ -271,7 +271,15 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Identifier | Typed normalized observed identifier with scope and validity. | Identity decision. | `Identifier`, `IdentifierScope` | `040`, `070` | Resolved. |
 | Identity evidence item | Typed resolver input with evidence class, scope, time, durability, reuse risk, contribution, blockers, and evidence refs. | Identity decision or canonical entity. | `IdentityEvidenceItem`, `IdentifierEvidenceClass` | `070` | Resolved. |
 | Resolver profile | Sole production authority for identity resolution behavior. | Generic scoring heuristic or implementation module. | `ResolverProfile` | `070` | Resolved. |
-| Identity decision | Governed resolver output that creates, rejects, splits, conflicts, or declines identity relationships. | Identifier equality, source-native merge history, graph key, reviewer note. | `IdentityDecision` | `070`, `040` | Resolved. |
+| Identity decision | Governed resolver output that creates, attaches, merges, rejects, splits, conflicts, or declines identity relationships. | Identifier equality, source-native merge history, graph key, reviewer note. | `IdentityDecision`; decision states owned by `070` | `070`, `040` | Resolved. |
+| `canonical_created` | Routing-only identity decision vocabulary for a new canonical entity created by resolver-owned durable evidence rules. | Domain permission to create identity outside `070`. | `canonical_created` | `070` | Resolved as owner-routed vocabulary. |
+| `source_asset_attached` | Routing-only identity decision vocabulary for attaching a source asset to exactly one existing canonical entity. | Merge of two canonical entities. | `source_asset_attached` | `070` | Resolved as owner-routed vocabulary. |
+| `auto_merged` | Routing-only identity decision vocabulary for resolver-owned canonical merge. | Weak evidence merge or reviewer note. | `auto_merged` | `070` | Resolved as owner-routed vocabulary. |
+| `identity_candidate` | Routing-only identity decision vocabulary for a non-mutating candidate. | Canonical identity mutation. | `candidate` | `070` | Resolved as owner-routed vocabulary. |
+| `identity_rejected` | Routing-only identity decision vocabulary for rejected candidate evidence. | Source absence or graph cleanup. | `rejected` | `070` | Resolved as owner-routed vocabulary. |
+| `identity_split` | Routing-only identity decision vocabulary for split output and graph correction handoff. | Direct graph mutation. | `split` | `070`, `080`, `090` | Resolved as owner-routed vocabulary. |
+| `identity_conflicted` | Routing-only identity decision vocabulary for unresolved conflicting identity evidence. | Authorized merge. | `conflicted` | `070` | Resolved as owner-routed vocabulary. |
+| `identity_no_decision` | Routing-only identity decision vocabulary for unsupported, weak, selector-only, overflowed, or out-of-scope evidence. | Negative fact or deletion. | `no_decision` | `070` | Resolved as owner-routed vocabulary. |
 | Unresolved target reference | Relationship hint that has not created or merged canonical identity. | Weak entity or automatic relationship target. | `UnresolvedTargetReference` | `070` | Resolved. |
 | Source authority profile | Executable authority arbitration for gold fact type and predicate. | Source category preference, source completeness, or staleness policy. | `SourceAuthorityProfile`, `SourceAuthorityProfileRow` | `060` | Resolved. |
 | Coverage assertion | Source-backed coverage state required before coverage-dependent facts or negative claims may be emitted. | Scanner presence, source presence, or feed read success by itself. | `CoverageAssertion`, `CoverageDimensionProfile` | `060` | Resolved at stable contract level; active source-specific row instances are activation-controlled and validation-blocked until present. |
@@ -440,7 +448,7 @@ Lifecycle runtime behavior is owner-routed. `domain.md` names machine IDs and do
 | `090.GraphApplyLifecycleMachine.v1` | Graph apply preflight, apply, partial failure, resume, and idempotent reapply. | `090` | `090` |
 | `100.PackageSetActivationLifecycleMachine.v1` | Package-set promotion, shadow, canary, activation, failure, rollback, last-known-good, deprecation, and quarantine. | `100` | `100` |
 | `120.ValidationAcceptanceLifecycleMachine.v1` | Validation acceptance status transitions. | `120` | `120` |
-| `070.IdentityReviewCaseStateMachine.v1` | Manual identity review states and terminal decision routing. | `070` | `070`; currently blocked by owner-local TODO |
+| `070.IdentityReviewCaseStateMachine.v1` | Manual identity review states and terminal decision routing. | `070` | `070`; closed by `070.IdentityReviewCaseStateMachineBinding` after identity closure validation passes |
 
 | State token | Applies to | Meaning | Terminal | Default transition authority | Owner |
 | --- | --- | --- | --- | --- | --- |
@@ -522,9 +530,9 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | `DOM-INV-001` | Cadastre production must be lakehouse-fed and must not call configured enterprise source systems directly. | `010`, `020` | Production source API call fails before output with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | `DOM-INV-002` | Missing lakehouse rows, missing objects, or successful feed reads must not imply source absence. | `020`, `060` | Absence derivation requires active completeness and authority gates. |
 | `DOM-INV-003` | Source completeness must not imply source authority. | `060` | Exact `SourceAuthorityProfileRow` is required for gold derivation and absence authority. |
-| `DOM-INV-004` | Source authority must not imply identity merge authority. | `060`, `070` | Identity merge requires active `ResolverProfile` and no hard blockers. |
+| `DOM-INV-004` | Source authority, source completeness, source scope, and public resolver row presence must not imply identity creation, attachment, or merge authority. | `060`, `070`, `010` | Identity creation, attachment, and merge require active `ResolverProfileRow`, durable evidence where required, exact scope, no hard blockers, and passing identity closure validation. |
 | `DOM-INV-005` | Identity evidence must be materialized before resolver output. | `070` | Resolver run rejects uncovered or under-scoped evidence. |
-| `DOM-INV-006` | IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-only, and mapped-target-only evidence must never auto-merge. | `070` | Required negative identity validation cases fail merge. |
+| `DOM-INV-006` | Weak-only, selector-only, graph-key-only, source-native-merge-history-only, semantic-overlay-only, and mapped-target-only evidence must never create, attach, or merge canonical identity. | `070` | Required identity closure validation cases fail creation, attachment, and merge. |
 | `DOM-INV-007` | Parser and normalization stages must not assert canonical truth, absence, identity, gold facts, graph deltas, health state, watermark state, or package state. | `050`, `030` | Forbidden output class fails with `FORBIDDEN_STAGE_OUTPUT`. |
 | `DOM-INV-008` | Every gold fact must carry valid time, known time, assertion state, evidence, confidence, and authority references. | `040`, `080` | Core record validation and gold derivation validation pass. |
 | `DOM-INV-009` | Gold corrections must not mutate existing `GoldFact` rows in place. | `080` | Correction emits known-time closures, inserts, interval splits, conflicts, no-ops, or errors. |
@@ -831,6 +839,7 @@ Unresolved rows in this section are valid only when the named owner spec contain
 | `DOM-AC-012` | Rationale is separated from normative requirements; normative requirements are listed in Section 21. |
 | `DOM-AC-013` | No Cartulary-specific content remains except the short exclusion note in Section 1. |
 | `domain-source-closure-status-consistency` | `domain.md` must not mark source-category coverage unresolved when `060` marks the stable contract closed, and must not mark it resolved if `060` still contains owner-local blockers for the stable contract. |
+| `domain-identity-closure-status-consistency` | `domain.md` must not mark `070.IdentityReviewCaseStateMachine.v1` blocked when `070` closes it, and must not mark it closed if `070` reintroduces owner-local blockers. |
 | `DOM-AC-014` | No Cadastre requirement is invented from the uploaded template. |
 | `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25 and has a matching owner-local blocker, validation row, or deferred-status row in the named owner spec. |
 | `DOM-AC-016` | The document passes the two-independent-implementers test for domain vocabulary, owner lookup, entity interpretation, relationship interpretation, and boundary decisions. |

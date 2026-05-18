@@ -415,6 +415,15 @@ absence_derivation_policy
 projection_watermark_policy
 progress_signal_policy
 resolver_profile
+identifier_evidence_class_row_set
+identifier_scope_row_set
+asset_generation_boundary_row_set
+target_selector_safety_policy
+resolver_decision_matrix_row_set
+identity_confidence_band_row_set
+identity_review_routing_policy
+identity_split_policy
+resolver_explanation_policy
 candidate_generation_profile
 temporal_semantics_policy
 knowledge_time_policy
@@ -553,7 +562,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
-| Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
+| Identity output | resolver profile row set, identifier evidence class row set, identifier scope row set, candidate generation profile, asset generation boundary row set, target selector safety policy, resolver decision matrix row set, identity confidence band row set, identity review routing policy, identity split policy, resolver explanation policy, evidence item refs/checksums, identity decision refs, review case refs when applicable, resolver explanation refs/checksums, graph correction handoff refs when applicable, activation report refs when activation or promotion is in scope, and shadow/canary refs when promotion uses them. |
 | Temporal resolution output | `TemporalSemanticsPolicy` row ref, `KnowledgeTimeImportPolicy` row ref, source evidence refs, selected input path/value checksum, `TemporalObservationTimeResolution` ref, and resolution checksum. |
 | Gold fact output | temporal resolution ref and checksum, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, source refs, derivation refs, and validation refs. |
 | Gold correction output | `GoldFactChangeSet` ref, correction policy ref, assertion transition row ref, old `LakehouseSnapshotRef`, new `LakehouseSnapshotRef`, table-set checksum ref, retention-protection ref, temporal resolution refs, authority refs, absence refs when applicable, and graph handoff effect refs. |
@@ -582,6 +591,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
 | `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
 | `activation_artifact_refs` | Required when activation-controlled artifacts affect output | Canonically sorted `ActivationControlledArtifactRef` rows and checksums. |
+| `resolver_runtime_state_refs` | Required when identity output affects output or replay | Canonically sorted `070.IdentityDecision`, `070.IdentityReviewCase`, `070.ResolverExplanation`, `070.GraphCorrectionHandoff`, `070.ResolverActivationReport`, and `070.ResolverShadowRun` refs and checksums when present. These refs must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
 | `temporal_resolution_refs` | Required when source observation time affects gold, correction, graph projection, audit, or replay | Canonically sorted `080.TemporalObservationTimeResolution` refs and checksums. |
 | `correction_snapshot_ref_sets` | Required for correction output | Old snapshot refs, new snapshot refs, table-set checksums, retention-protection refs, and mutable-ref rejection evidence. |
 | `replay_sufficiency_check_refs` | Required for replay output | One `080.ReplayInputSufficiencyCheck` ref per replay output class. |
@@ -686,6 +696,10 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-FEED-CLOSURE-AC-002` | A production subset request without a matching active `DeclaredDAGSubsetProfile` fails before stage execution. |
 | `030-FEED-CLOSURE-AC-003` | A subset profile that permits raw replay but omits watermark behavior does not advance a watermark. |
 | `030-FEED-CLOSURE-AC-004` | Same DAG bytes, same requested subset, same subset profile, and same activation refs produce byte-identical stage order and manifest refs. |
+| `030-IDENTITY-MANIFEST-AC-001` | Identity output fails with `VERSION_MANIFEST_INCOMPLETE` when any consulted resolver artifact ref is omitted from `VersionManifest`. |
+| `030-IDENTITY-MANIFEST-AC-002` | Resolver artifact checksum mismatch, inactive artifact, or out-of-scope activation ref fails before identity output or replay promotion. |
+| `030-IDENTITY-MANIFEST-AC-003` | Resolver explanation checksum refs and split graph correction handoff refs are included for identity replay when applicable. |
+| `030-IDENTITY-MANIFEST-AC-004` | `ResolverActivationReport` and `ResolverShadowRun` refs are manifest-included when activation, shadow, canary, or promotion uses them. |
 
 | `030-OCSF-MAP-ARTIFACT-AC-001` | Silver output fails with `VERSION_MANIFEST_INCOMPLETE` when any output-affecting OCSF mapping row set, enum rule set, base-event field policy set, profile-resolution manifest, source-extension rule set, or observation-type validation matrix ref is missing from `VersionManifest`. |
 | `030-SOURCE-CLOSURE-MANIFEST-AC-001` | Absence-sensitive output fails with `VERSION_MANIFEST_INCOMPLETE` when any consulted `060` row-set ref is omitted. |
@@ -712,6 +726,7 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-AC-004` | Every output-affecting state record is hashable, replayable, and included in `VersionManifest`. |
 | `030-AC-005` | Production replay rejects missing, mutable-only, checksum-mismatched, or retention-ineligible manifest refs before writing output. |
 | `030-AC-006` | Declared subset execution fails closed for absence, cleanup, retraction, graph expiry, projection, and watermark effects unless the active subset profile and `060` effect gates both permit the requested behavior. |
+| `030-AC-007` | Identity output replay is incomplete unless every output-affecting resolver artifact, runtime state ref, explanation checksum, and split handoff ref is manifest-included. |
 
 ## Open Questions
 

@@ -119,6 +119,8 @@ Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` mu
 
 `ApplyGoldCorrection` must validate, in order, core schema, temporal resolution, source authority, absence derivation when the candidate is negative or cleanup-derived, correction policy, assertion-state transition row, snapshot-ref policy, replay input sufficiency when replaying, and graph handoff metadata. Schema validation fails before temporal resolution is consumed. Temporal resolution fails before gold ID computation. Source authority fails before fact creation. Missing snapshot refs fail before correction output. Graph handoff is emitted as metadata only and never mutates graph state.
 
+When the graph handoff effect is `identity_split_handoff`, `ApplyGoldCorrection` must validate the `070.GraphCorrectionHandoff` ref, split decision ref, split policy ref, affected canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and `VersionManifest` ref. Missing or checksum-mismatched split handoff metadata must emit `REPLAY_INPUT_INSUFFICIENT` or the more specific owner code, must emit no correction output, and must emit no graph handoff effect other than `none`. `080` must not recompute resolver split partitions.
+
 `fact_retraction`, `interval_split`, and cleanup-derived corrections require `AbsenceDerivationResult.absence_authorized = true` and `allowed_effects` containing the requested correction effect. Missing or unsafe source-authority closure produces no correction and must emit the most specific `060` blocking reason.
 
 ## Assertion-State Transition Matrix
@@ -449,10 +451,10 @@ Global replay failure precedence:
 | activation-controlled policy artifacts | temporal, knowledge-time, late-arrival, correction, snapshot-ref, replay-equivalence, and output-class rows | `TEMPORAL_ARTIFACT_MISSING` or owner-specific artifact error | reject before replay output | reject before replay output | reject before replay output |
 | raw | feed profile, manifest, object/table refs, import profile | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | silver | raw refs, parser/mapping, external schema artifact | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
-| identity | resolver profile, evidence refs, resolver explanation, version manifest | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
+| identity | resolver profile row, evidence refs, identity decision refs, review case refs when applicable, resolver explanation checksum, graph correction handoff refs when split affects gold or graph output, and version manifest | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | gold | temporal, authority, absence, evidence, correction policy, version manifest | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | gold correction | old snapshot, new snapshot, table-set checksum, correction policy, transition row, graph handoff refs | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
-| graph delta | projection profile, graph handoff effect, delta refs, schema refs | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
+| graph delta | projection profile, graph handoff effect, delta refs, schema refs, resolver explanation checksum, and graph correction handoff refs when split affects projection | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph apply | apply profile, idempotency key, backend evidence, derived-view state | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph rebuild | rebuild manifest, rebuild equivalence row, index consistency, schema fingerprint | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | api/export/analysis/validation | owner output-class row, owner refs, authorization/redaction, expected checksum | `REPLAY_POLICY_ARTIFACT_MISSING` or `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
@@ -487,7 +489,7 @@ Global replay failure precedence:
 | `expire_projected_object` | authorized retraction may expire graph object and `060` permits `graph_expiry` | emit expiry only through `090.GraphExpirySourceAuthorityGate` |
 | `cleanup_projected_object` | authorized cleanup may remove projection object and `060` permits `cleanup` | emit cleanup only through `090.GraphExpirySourceAuthorityGate` |
 | `conflict_visibility_update` | stale or conflicted assertion visibility changes without fact-key replacement | update visibility only when graph semantics and eligibility rows permit |
-| `identity_split_handoff` | `070.GraphCorrectionHandoff` requires projection reroute after identity split | route through `090.ProjectGraphDeltas`; resolver and correction engine do not mutate graph |
+| `identity_split_handoff` | `070.GraphCorrectionHandoff` validates split decision ref, split policy ref, retained and new canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and version manifest ref | route through `090.ProjectGraphDeltas`; missing or checksum-mismatched handoff refs fail before correction/projection with no graph mutation |
 
 ### Temporal artifact errors
 
@@ -539,6 +541,10 @@ Global replay failure precedence:
 | `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |
 | `080-SOURCE-CLOSURE-CORRECTION-AC-001` | Source deletion evidence without exact `060` closure emits no retraction. |
 | `080-SOURCE-CLOSURE-REPLAY-AC-001` | Replay rejects gold output when any consulted `060` row checksum differs. |
+| `080-IDENTITY-SPLIT-HANDOFF-AC-001` | A valid identity split handoff contains split decision ref, split policy ref, partition refs, affected fact refs or selection checksum, resolver explanation checksum, and version manifest ref. |
+| `080-IDENTITY-SPLIT-HANDOFF-AC-002` | Missing identity split handoff metadata fails before correction or projection and emits no graph handoff effect except `none`. |
+| `080-IDENTITY-SPLIT-HANDOFF-AC-003` | Checksum drift in `070.GraphCorrectionHandoff` or resolver explanation rejects replay before output. |
+| `080-IDENTITY-SPLIT-HANDOFF-AC-004` | `080` treats identity split handoff as immutable metadata and never mutates graph state. |
 
 ## Definition of Done
 

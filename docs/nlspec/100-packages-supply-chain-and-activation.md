@@ -80,6 +80,8 @@ Partial package-set activation is forbidden unless a future accepted NLSpec defi
 
 Package manifests must not define new canonical fields, authority classes, identity semantics, temporal semantics, graph semantics, API states, validation report shapes, or trust semantics. A package set that contains a valid package release but invalid artifact refs must fail activation or block the dependent stage before output.
 
+Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
+
 ## Trust Verification
 
 `PackageSignatureVerificationResult` must be structured evidence. Scalar summaries such as `signature_status = verified` must not authorize activation.
@@ -112,11 +114,12 @@ ActivatePackageSet(candidate_set, current_active_set):
 8. Verify every package-supplied activation-controlled artifact ref through `030.ActivationControlledArtifactRef`.
 9. Verify each artifact owner spec and artifact class is permitted by the package type compatibility table.
 10. Verify artifact checksums, lifecycle status, validation refs, activation scope, and package-set membership.
-11. Verify validation matrix and required negative fixtures.
-12. Persist PackagePromotionRecord with artifact refs.
-13. If any check fails, keep current_active_set active, write no candidate production output, and emit PackageActivationFailureEvent.
-14. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
-15. Mark LastKnownGoodPackageSet only after post-activation health gates pass.
+11. When package-supplied artifacts have owner spec `070`, verify identity artifact compatibility: permitted artifact class, stable weak-evidence defaults unchanged, no graph-key-only or weak-only merge authority, no hard-blocker weakening, no decision-state redefinition, no review terminality weakening, no split or explanation checksum policy redefinition, and required identity validation refs present.
+12. Verify validation matrix and required negative fixtures.
+13. Persist PackagePromotionRecord with artifact refs.
+14. If any check fails, keep current_active_set active, write no candidate production output, and emit PackageActivationFailureEvent.
+15. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
+16. Mark LastKnownGoodPackageSet only after post-activation health gates pass.
 ```
 
 ## Package Set Activation Lifecycle
@@ -288,6 +291,7 @@ A deprecated package must not be newly selected after its deprecation window exp
 | `PACKAGE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | A package-supplied artifact checksum mismatches the release, artifact ref, or package-set manifest. |
 | `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | A package-supplied artifact does not cover the activation scope. |
 | `PACKAGE_ACTIVATION_ARTIFACT_VALIDATION_MISSING` | Required artifact validation refs are missing or not passing. |
+| `PACKAGE_ACTIVATION_ARTIFACT_CORE_CONFLICT` | Package-supplied activation artifact conflicts with an owner stable core contract; maps to `010.ACTIVATION_ARTIFACT_CORE_CONFLICT` for shared boundary handling. |
 | `PACKAGE_SET_CHECKSUM_MISMATCH` | Candidate package set checksum or release manifest checksum mismatches. |
 | `PACKAGE_COHESION_INCOMPLETE` | A cohesion group is incomplete. |
 | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | Repository form is inactive or unsupported for MVP. |
@@ -366,6 +370,9 @@ A deprecated package must not be newly selected after its deprecation window exp
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, approval refs, and checksum. |
 | `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
 | `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
+| `100-RESOLVER-ARTIFACT-AC-001` | A package-supplied resolver artifact that permits weak-only, selector-only, mapped-target-only, source-native-merge-history-only, or graph-key-only create, attach, or merge fails activation and preserves the current active set. |
+| `100-RESOLVER-ARTIFACT-AC-002` | A package-supplied resolver artifact with missing identity validation refs fails activation before candidate production output. |
+| `100-RESOLVER-ARTIFACT-AC-003` | Resolver profile checksum mismatch in a candidate package set fails activation, keeps the current active set, and writes no candidate production output. |
 
 | `100-LIFECYCLE-AC-001` | Package activation lifecycle matrix is total. |
 | `100-LIFECYCLE-AC-002` | Failed candidate activation preserves current active package set and writes no candidate production output. |

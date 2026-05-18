@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -179,6 +179,30 @@ The following source-authority closure artifacts must have exactly one volatilit
 | `GoldFactChangeSet` | `runtime_state_record` | `080` | `080` | yes | required for correction output and graph handoff |
 | `ReplayInputSufficiencyCheck` | `runtime_state_record` | `080` | `080` | yes | required before replay output |
 
+### Required identity resolver volatility classifications
+
+The following identity resolver artifacts and runtime state records must have exactly one volatility classification before authoritative handoff. The rows classify artifact interfaces and state records, not private source bindings.
+
+| artifact_or_contract | volatility_class | owner_spec | stable_core_owner | may_affect_output | version_manifest_requirement |
+| --- | --- | --- | --- | --- | --- |
+| `ResolverProfileRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before identity output |
+| `IdentifierEvidenceClassRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before identity output |
+| `IdentifierScopeRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before candidate generation |
+| `AssetGenerationBoundaryRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before blocker evaluation |
+| `CandidateGenerationProfile` | `activation_controlled_artifact` | `070` | `070` | yes | required before candidate generation |
+| `TargetSelectorSafetyPolicy` | `activation_controlled_artifact` | `070` | `070` | yes | required before selectors influence output |
+| `ResolverDecisionMatrixRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before decision output |
+| `IdentityConfidenceBandRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before confidence selection |
+| `IdentityReviewRoutingPolicy` | `activation_controlled_artifact` | `070` | `070` | yes | required when review can open or transition |
+| `IdentitySplitPolicy` | `activation_controlled_artifact` | `070` | `070` | yes | required before split output |
+| `ResolverExplanationPolicy` | `activation_controlled_artifact` | `070` | `070` | yes | required before identity decision visibility |
+| `IdentityDecision` | `runtime_state_record` | `070` | `070` | yes | required for identity output and replay |
+| `IdentityReviewCase` | `runtime_state_record` | `070` | `070` | yes when review is opened or transitioned | required for review output and replay |
+| `ResolverExplanation` | `runtime_state_record` | `070` | `070` | yes | required for every identity decision and replay |
+| `GraphCorrectionHandoff` | `runtime_state_record` | `070` | `070` | yes when split affects gold or graph output | required for split correction/projection |
+| `ResolverActivationReport` | `runtime_state_record` | `070` | `070` | yes for activation and promotion | required when activation or promotion is in scope |
+| `ResolverShadowRun` | `runtime_state_record` | `070` | `070` | yes for shadow/canary promotion | required when promotion uses shadow or canary evidence |
+
 ## Document Registry
 
 | ID | Path | Document class | Status | Owner | May drive implementation | Source-of-truth role |
@@ -238,7 +262,7 @@ The following source-authority closure artifacts must have exactly one volatilit
 | Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_validation | stable schemas, matching algorithms, error precedence, and fail-closed behavior are closed by `060`; active source-specific row instances and fixture checksums remain validation-blocked |
 | `SourceAuthorityClosureMatrix` | `060` | `020`, `030`, `080`, `090`, `110`, `120`, `domain` | `runtime_authority_validation` | `stable_core_contract` | 120 | blocked_validation | open until every active absence-sensitive feed category has exact active authority, completeness, coverage, staleness, progress, control-result, source-history, absence, and watermark row coverage or an explicit deterministic block row |
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
-| Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
+| Identity resolution | `070` | 040,060,080,090,100,110,120,domain | runtime_identity | `stable_core_contract` | 120 | blocked_validation | stable resolver rows, candidate caps, review totality, confidence bands, split handoff, and weak-evidence defaults are closed by `070`; active row instances and fixture checksums remain validation-blocked |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | closed_local | validation rows required; concrete activation-controlled row instances remain blockers only when selected for production scope |
 | Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | graph apply validation checksums remain TODO |
 | GraphApplyLifecycleMachine | `090` | `030`, `080`, `110`, `120` | derived_projection | `stable_core_contract` | 120 | closed_local | graph apply fixtures required |
@@ -363,6 +387,9 @@ Archived documents are historical reference only and never implementation author
 | `000-OCSF-MAP-AC-001` | `ValidateSpecSet` fails when a new mapping row set lacks a volatility classification, an artifact class exists in `030` but not in `000`, a validation row exists in `120` but is missing from required promotion refs, or a research report is referenced as runtime authority. |
 | `000-OCSF-MAP-AC-002` | Every new OCSF mapping row set and policy set is classified as activation-controlled and tied to required `120` validation refs before authoritative handoff. |
 | `000-SOURCE-CLOSURE-AC-001` | Promotion fails when an active absence-sensitive feed category lacks `120` validation refs for `SourceAuthorityClosureMatrix`. |
+| `000-IDENTITY-CLOSURE-AC-001` | Promotion fails when identity output is in implementation scope and `SpecSetVersion.validation_matrix_refs` lacks required identity closure, replay, review, split, explanation, and package weakening validation rows. |
+| `000-IDENTITY-CLOSURE-AC-002` | Promotion fails when unresolved `070` identity TODOs exist or when `domain.md`, `040`, `070`, `110`, and `120` disagree on identity decision enum closure or review-state-machine closure. |
+| `000-IDENTITY-VOLATILITY-AC-001` | Every identity resolver row-set artifact is classified as activation-controlled and every identity runtime decision/explanation/handoff record is classified as runtime state in exactly one place. |
 
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |

@@ -125,7 +125,7 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 
 ## Error Model
 
-`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
+`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Identity resolver error codes are owned by `070`; this spec defines only observable handling, redaction, severity, retryability, caller-visible fields, and audit-visible refs. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
 
 `message` must be at most 1024 Unicode scalar values after normalization. Caller-visible `ErrorRecord` fields are code, message, severity, retryability, owner spec, affected record type, field path, redaction state, and error correlation ID. Audit-visible fields may additionally include record ID, source artifact refs, owner error context, input checksum, and secure diagnostic refs.
 
@@ -158,6 +158,7 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 - Audit events must record caller, authorization context checksum, operation, input checksum, output object classes, redaction summary, and error code when emitted.
 - Source-extension values that fail redaction, secret scan, namespace validation, or OCSF reserved-name policy must be redacted from caller-visible errors.
 - External-schema non-authority failures must expose owner, external field path, and redaction state without exposing raw source values.
+- Resolver error context must not expose private scope selectors, concrete tenant inventories, credentials, raw payload values, private routes, scanner site names, directory tenant inventories, zone inventories, account lists, or environment-specific source bindings.
 
 ## API, UX, Health, Error, and Security Contract Details
 
@@ -218,6 +219,27 @@ The generated error registry must include the following mapping, source-extensio
 | `120` | validation | `ErrorRecord` | validation and acceptance errors | owner row | `110` | validation rows |
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
+
+### IdentityResolverErrorObservableMapping
+
+`070` owns resolver error semantics. `110` maps resolver errors to observable API, health, validation, and audit behavior. Generic error codes must fail validation when a more specific resolver code applies.
+
+| Error code | Owner | Severity | Retryability | Redaction | Caller-visible fields | Audit-visible refs |
+| --- | --- | --- | --- | --- | --- | --- |
+| `RESOLVER_PROFILE_ROW_MISSING` | `070` | blocked | no, until profile row activates | row selector redacted | code, severity, retryability, owner, affected record type, redaction state, correlation ID | resolver profile ref, redacted selector hash, version manifest ref |
+| `RESOLVER_PROFILE_ROW_AMBIGUOUS` | `070` | error | no, until row set changes | matching row refs redacted unless authorized | code, severity, retryability, owner, redaction state, correlation ID | matching row refs, row-set checksum, version manifest ref |
+| `IDENTITY_EVIDENCE_UNDER_SCOPED` | `070` | error | no, until evidence changes | scope values redacted; missing key names visible | code, field path, severity, owner, redaction state, correlation ID | evidence item refs, identifier scope refs, input checksum |
+| `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | `070` | diagnostic | yes only after supported row activates | entity type visible | code, severity, retryability, owner, affected record type, correlation ID | resolver row ref and validation ref |
+| `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | `070` | blocked | yes after profile bounds or input partition changes | blocking key value redacted; block kind visible | code, severity, retryability, owner, redaction state, correlation ID | block kind, member count, cap, profile ref |
+| `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | `070` | blocked | yes after profile bounds or input partition changes | source asset IDs redacted unless authorized | code, severity, retryability, owner, redaction state, correlation ID | partition checksum, candidate cap, profile ref |
+| `RESOLVER_DECISION_ROW_MISSING` | `070` | error | no, until decision matrix changes | candidate refs redacted | code, severity, retryability, owner, correlation ID | decision matrix ref, blocker result refs, candidate checksum |
+| `RESOLVER_CONFIDENCE_BAND_MISSING` | `070` | error | no, until band row changes | score visible, evidence redacted | code, severity, retryability, owner, correlation ID | confidence band ref, decision row ref, explanation ref |
+| `RESOLVER_REVIEW_ROUTING_MISSING` | `070` | error | no, until routing policy changes | candidate refs redacted | code, severity, retryability, owner, correlation ID | routing policy ref, candidate checksum |
+| `RESOLVER_SPLIT_POLICY_MISSING` | `070` | error | no, until split policy activates | split refs redacted | code, severity, retryability, owner, correlation ID | split decision ref, resolver explanation ref, version manifest ref |
+| `RESOLVER_EXPLANATION_INCOMPLETE` | `070` | error | no, until output or policy changes | missing field names visible; values redacted | code, field path, severity, owner, redaction state, correlation ID | explanation policy ref, output decision ref, checksum inputs |
+| `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | `070` | error | yes after reviewer reloads current evidence | evidence values redacted | code, severity, retryability, owner, redaction state, correlation ID | review case ref, expected checksum, supplied checksum |
+| `IDENTITY_REVIEW_AUTHORITY_MISSING` | `070` | security error | no, until authorization changes | reviewer identity redacted from caller | code, severity, retryability, owner, redaction state, correlation ID | reviewer auth context checksum, case ref, event |
+| `TARGET_SELECTOR_UNSAFE` | `070` | security error | no, until selector policy changes | selector value redacted; mechanism visible | code, severity, retryability, owner, redaction state, correlation ID | selector policy ref, unresolved target ref, mechanism |
 
 ### Lifecycle error registry rows
 
@@ -492,6 +514,10 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-LIFECYCLE-HEALTH-AC-001` | Lifecycle health rows are diagnostic and do not mutate facts, graph state, package state, completeness, or watermarks. |
 | `110-OCSF-MAP-ERROR-AC-001` | Every new `050`, `060`, and `090` OCSF mapping, source-extension, external-schema non-authority, and flow-role evidence code appears in `ErrorCodeRegistry` with severity, retryability, redaction, owner, and caller-visible behavior. |
 | `110-OCSF-MAP-ERROR-AC-002` | Mapping-blocked observations render as `error`, source-extension redaction failures render as security errors, and OCSF non-authority blocks never render as authorized negative facts or compliance pass/fail states. |
+| `110-IDENTITY-ERROR-AC-001` | Every new `070` resolver error appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible refs, and fixture ID. |
+| `110-IDENTITY-ERROR-AC-002` | Resolver errors must use the specific `070` code when applicable and must not collapse to generic validation, unknown, pass, or fail states. |
+| `110-IDENTITY-REDACTION-AC-001` | Resolver error responses redact private source bindings, concrete tenant inventories, credentials, raw payload values, and environment-specific source target lists. |
+| `110-IDENTITY-NO-MUTATION-AC-001` | Resolver error rendering does not mutate identity, graph, package, completeness, watermark, or source-authority state. |
 
 ## Definition of Done
 

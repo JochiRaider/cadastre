@@ -34,10 +34,17 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `IdentifierSchema`
 - `CoreRecordValidationAlgorithm`
 - `ActivationControlledArtifactRef`
+- `CanonicalJSON`
+- `DecimalPrecisionPolicy.confidence_0_1`
 
 ## Exports
 
 - `ResolverProfile`
+- `ResolverProfileRow`
+- `ResolverDecisionMatrix`
+- `IdentityConfidenceBand`
+- `IdentityReviewRoutingPolicy`
+- `SplitPolicy`
 - `IdentifierEvidenceClass`
 - `IdentityEvidenceItem`
 - `IdentifierScope`
@@ -59,9 +66,46 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 
 `ResolverProfile` is the sole production authority for identity resolution. A resolver run must fail when no active profile covers resolver run mode, entity type, source scopes, evidence classes, and lifecycle boundary types.
 
-Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before candidate generation, blocker evaluation, review routing, merge, split, reject, conflict, or no-decision output.
+Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before candidate generation, blocker evaluation, review routing, creation, attachment, merge, split, reject, conflict, or no-decision output.
 
 A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier` records only by emitting records that pass the corresponding `040` schema and `040.ValidateCoreRecord`. `creation_identity_decision_id`, `resolver_profile_id`, and `identity_policy_version` must be present when a `CanonicalEntity` is created. `SourceAsset.source_scope`, `SourceAsset.source_native_identity`, and `SourceAsset.source_asset_type` must be sufficient for `040.SourceAssetSchema`; under-scoped source identity fails before candidate generation. `Identifier` outputs must include typed scope, quality, validity, known time, and evidence refs. `ResolverExplanation` must reference core record IDs and checksums rather than duplicate core fields.
+
+### Resolver Determinism Closure
+
+Each production resolver run must resolve exactly one active `ResolverProfileRow` before candidate generation. Resolution must fail before mutation when any row, artifact ref, checksum, source scope, identifier scope, lifecycle status, activation scope, or validation ref is missing, inactive, ambiguous, mismatched, under-scoped, or outside the run scope. The selected row must name every output-affecting resolver artifact, and every selected artifact and runtime state ref must appear in `030.VersionManifest`.
+
+A production resolver must not use implementation-local defaults for evidence class authority, blocking keys, candidate caps, hard blocker precedence, confidence bands, review routing, split partitioning, explanation checksum inputs, or learned artifacts. Omitted values must use the defaults in this spec or must emit the most specific resolver error before identity mutation.
+
+### ResolverProfileRow schema
+
+`ResolverProfileRow` is the row-level executable interface inside `ResolverProfile`. Concrete row sets are activation-controlled artifacts; stable decision semantics remain owned by this spec.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the resolver profile row set. |
+| `resolver_profile_id` | Yes | none | Stable profile ID. |
+| `profile_version` | Yes | none | Immutable owner version included in explanation and manifest checksums. |
+| `run_mode` | Yes | none | Closed token; production selection requires `production` unless a validation/shadow/canary mode is explicitly requested. |
+| `entity_type` | Yes | none | Must match one row in `ResolverProfileCoverageMatrix`. |
+| `source_scope_selector` | Yes | none | Canonical selector over source/feed scopes; concrete private source bindings are forbidden in public rows. |
+| `source_scope_match_policy` | Yes | `exact_scope_required` | Closed enum: `exact_scope_required`, `scope_subset_allowed_for_review_only`. Subset policy must not create, attach, or merge. |
+| `evidence_class_set_ref` | Yes | none | `030.ActivationControlledArtifactRef` with `artifact_class = identifier_evidence_class_row_set`. |
+| `identifier_scope_row_refs` | Yes | none | Non-empty canonical array of active `IdentifierScope` row refs. |
+| `candidate_generation_profile_ref` | Yes | none | `artifact_class = candidate_generation_profile`. |
+| `hard_blocker_row_refs` | Yes | none | Non-empty canonical array of active `AssetGenerationBoundary` or hard-blocker rows. |
+| `decision_matrix_ref` | Yes | none | `artifact_class = resolver_decision_matrix_row_set`. |
+| `confidence_band_ref` | Yes | none | `artifact_class = identity_confidence_band_row_set`. |
+| `review_routing_policy_ref` | Yes | none | `artifact_class = identity_review_routing_policy`. |
+| `split_policy_ref` | Yes | none | `artifact_class = identity_split_policy`. |
+| `explanation_policy_ref` | Yes | none | `artifact_class = resolver_explanation_policy`. |
+| `target_selector_policy_ref` | Yes | none | `artifact_class = target_selector_safety_policy`. |
+| `allowed_decision_classes` | Yes | none | Non-empty subset of the closed identity decision states. |
+| `creation_policy` | Yes | `durable_evidence_creation_allowed` for `host`, `user`, and `service_account`; `creation_forbidden` for unsupported types | Creation still requires durable evidence, exact scope, no existing canonical candidate, no blocker, and selected decision row. |
+| `merge_policy` | Yes | `durable_evidence_merge_allowed` | Merge still requires exact durable evidence, exact scope, no blocker, and selected decision row. |
+| `learned_artifact_policy` | No | `disabled` | Learned artifacts may propose candidates only when active; they must not override blockers or emit create, attach, or merge decisions by themselves. |
+| `validation_refs` | Yes | none | Non-empty refs proving creation, attachment, durable merge, weak rejection, blockers, overflow, review totality, split handoff, selector safety, explanation checksum, and replay. |
+| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ## Resolver artifact activation boundary
 
@@ -73,8 +117,13 @@ Stable identity semantics, weak-evidence defaults, hard-blocker precedence, revi
 | `IdentifierEvidenceClass` row set | stable default semantics plus activation-controlled extensions | Extensions must not allow weak evidence auto-merge unless stable semantics permit. |
 | `IdentityEvidenceItem` | `runtime_state_record` | Materialized evidence input. |
 | `IdentifierScope` row set | `activation_controlled_artifact` | Scope registry under stable canonicalization rules. |
-| `CandidateGenerationProfile` | `activation_controlled_artifact` | Must define bounds or remain `blocked_owner_todo`. |
+| `CandidateGenerationProfile` | `activation_controlled_artifact` | Defines blocking keys, pair ordering, caps, overflow, and learned-artifact policy. |
 | `AssetGenerationBoundary` row set | `activation_controlled_artifact` | Must preserve stable blocker semantics. |
+| `ResolverDecisionMatrix` row set | `activation_controlled_artifact` | Instantiates the closed decision conditions without redefining decision semantics. |
+| `IdentityConfidenceBand` row set | `activation_controlled_artifact` | Instantiates the closed confidence-band table. |
+| `IdentityReviewRoutingPolicy` | `activation_controlled_artifact` | Routes review only under closed review-state semantics. |
+| `SplitPolicy` | `activation_controlled_artifact` | Instantiates split partitioning and graph handoff behavior. |
+| `ResolverExplanationPolicy` | `activation_controlled_artifact` | Selects included/excluded explanation checksum fields from this spec. |
 | `IdentityDecision` | `runtime_state_record` | System-of-record output governed by resolver profile. |
 | `IdentityReviewCase` | `runtime_state_record` | Review state; mutation only through terminal identity decisions. |
 | `ResolverActivationReport` | `runtime_state_record` | Validation/activation state record. |
@@ -94,8 +143,13 @@ Resolver activation artifacts use `030.ActivationControlledArtifactLifecycleMach
 | `ResolverProfile` | `030.ActivationControlledArtifactLifecycleMachine.v1` | Coverage for run mode, entity type, source scopes, evidence classes, lifecycle boundary types, activation scenarios, and blocker coverage. |
 | `IdentifierEvidenceClass` row set | Generic artifact lifecycle | Stable weak-evidence defaults preserved; extensions cannot permit weak auto-merge unless stable semantics permit. |
 | `IdentifierScope` row set | Generic artifact lifecycle | Scope keys, canonicalization, uncovered-scope behavior, and fixtures. |
-| `CandidateGenerationProfile` | Generic artifact lifecycle | Blocking keys, deterministic pair ordering, candidate caps, and overflow behavior. |
+| `CandidateGenerationProfile` | Generic artifact lifecycle | Blocking keys, deterministic pair ordering, candidate caps, overflow behavior, and learned-artifact fixtures. |
 | `AssetGenerationBoundary` row set | Generic artifact lifecycle | Reimage, clone, VDI, reinstall, delete/recreate, scanner correlation, and lifecycle blocker fixtures. |
+| `ResolverDecisionMatrix` row set | Generic artifact lifecycle | Creation, attachment, durable merge, candidate, rejection, split, conflict, and no-decision fixtures. |
+| `IdentityConfidenceBand` row set | Generic artifact lifecycle | Closed band values, decimal canonicalization, and replay fixtures. |
+| `IdentityReviewRoutingPolicy` | Generic artifact lifecycle | Review totality, reviewer authority, and snapshot checksum fixtures. |
+| `SplitPolicy` | Generic artifact lifecycle | Split partitioning, ambiguous partition handling, and graph handoff fixtures. |
+| `ResolverExplanationPolicy` | Generic artifact lifecycle | Explanation checksum inclusion/exclusion and replay fixtures. |
 | `TargetSelectorSafetyPolicy` | Generic artifact lifecycle | Selector maximum resolution state and forbidden identity side effects. |
 
 ### IdentityReviewCaseStateMachineBinding
@@ -104,65 +158,84 @@ Machine ID: `070.IdentityReviewCaseStateMachine.v1`.
 
 `IdentityReviewCase` uses an owner-local deterministic state machine rather than shared `LifecycleStatus`. Review state changes must emit owner-local transition evidence and must not mutate canonical identity except through a terminal `IdentityDecision` record.
 
-TODO: `070` must add closed review states, closed events, a total transition matrix, reviewer authority guard order, expiration behavior, terminal identity-decision output rules, illegal-transition behavior, idempotency key handling, and validation rows for `070.IdentityReviewCaseStateMachine.v1` before authoritative promotion. The existing `IdentityReviewCase state machine` table remains a partial transition catalog and does not close this TODO.
+The machine states are `opened`, `in_review`, `blocked`, `expired`, `cancelled`, and `terminal_decision_emitted`. The machine events are `assign`, `approve_merge`, `reject_merge`, `approve_split`, `request_more_evidence`, `evidence_supplied`, `expire`, `cancel`, and `replay_same_event`. The total transition matrix in `IdentityReviewCase state machine` is closed for this machine version. Any state/event pair not explicitly allowed by that matrix must emit `IDENTITY_REVIEW_TRANSITION_INVALID`, preserve the current state, write no identity mutation, and produce deterministic transition evidence.
 
 ## Evidence Roles
 
-| Evidence class default | Auto-merge authority |
-| --- | --- |
-| Durable cloud provider resource ID within exact provider scope | Profile-defined. |
-| Endpoint agent durable ID within enrollment scope | Profile-defined. |
-| Kubernetes UID within cluster/resource/generation scope | Source-object identity only by default. |
-| IP address only | Never. |
-| Hostname only | Never. |
-| DNS name only | Never. |
-| PTR only | Never. |
-| Flow ID only | Never. |
-| Scanner name only | Never. |
-| Source-native merge history only | Never. |
-| Semantic overlay only | Never. |
-| Mapped target only | Never. |
-| Graph key only | Never. |
+Stable evidence defaults are closed by this spec. A `ResolverProfileRow` may narrow authority or route to review, but it must not grant create, attach, or merge authority to a class whose stable default forbids it.
+
+| Evidence class default | Creation authority | Attachment authority | Merge authority | Required exact scope | Default role | Forbidden use |
+| --- | --- | --- | --- | --- | --- | --- |
+| Durable cloud provider resource ID | May create only under exact provider plus account/project/subscription scope, region when applicable, compatible generation, exact normalized value, and no blocker. | May attach under the same exact scope and no blocker. | May merge only when the durable ID bundle proves the same source object under exact scope and no blocker. | provider, account/project/subscription, region when applicable, generation key when available | `positive_evidence` | Global identity outside the exact scope. |
+| Endpoint agent durable ID | May create under exact enrollment scope and no blocker. | May attach under exact enrollment scope and no blocker. | May merge only when the same durable ID is observed in the exact enrollment scope or when a qualifying durable provider ID bundle also matches. | enrollment tenant, deployment, agent namespace, generation when available | `positive_evidence` | Merge across reinstall, clone, or VDI boundary without qualifying durable provider evidence. |
+| Directory user ID | May create for `user` under exact directory tenant/domain/source scope and no blocker. | May attach under exact directory tenant/domain/source scope and no blocker. | May merge only under exact durable directory identity and no delete/recreate or reenrollment blocker. | directory tenant/domain/source and immutable user identifier | `positive_evidence` | Name, mail, UPN, or display-label merge by itself. |
+| Service account durable ID | May create for `service_account` under exact provider/account/tenant scope and no blocker. | May attach under exact provider/account/tenant scope and no blocker. | May merge only under exact durable provider or directory ID and no rekey/delete blocker. | provider/account/tenant or directory tenant plus service account ID | `positive_evidence` | Secret name, display name, or role-name merge by itself. |
+| Kubernetes UID | Must not create Cadastre canonical host identity by default. | May attach only as source-object identity when scope is cluster, namespace, resource kind, UID, and generation. | Never by default. | cluster, namespace, resource kind, UID, generation when available | `source_object_identity` | Name-based workload or host identity merge. |
+| IP address only | Never. | Never. | Never. | address family, observed interval, source scope | `candidate_hint` | Any create, attach, or merge. |
+| Hostname only | Never. | Never. | Never. | source scope and observed interval | `candidate_hint` | Any create, attach, or merge. |
+| DNS name only or PTR only | Never. | Never. | Never. | zone/source scope and observed interval | `candidate_hint` | Any create, attach, or merge. |
+| Flow ID only | Never. | Never. | Never. | sensor scope and observation interval | `correlation_hint` | Identity creation or relationship endpoint merge. |
+| Scanner name only | Never. | Never. | Never. | scanner scope and scan interval | `candidate_hint` | Asset identity merge. |
+| Source-native merge history only | Never. | Never. | Never. | source scope and source history ref | `lineage_only` | Cadastre identity authority by itself. |
+| Semantic overlay only | Never. | Never. | Never. | mapping artifact scope | `lineage_only` | Identity evidence. |
+| Mapped target only | Never. | Never. | Never. | selector source scope | `selector` | Identity evidence. |
+| Graph key only | Never. | Never. | Never. | graph backend profile scope | `selector` | Identity evidence. |
 
 ## Candidate Generation
 
-`CandidateGenerationProfile` must define blocking keys, allowed heuristics, prohibited selectors, deterministic pair ordering, candidate caps, overflow behavior, and learned-artifact policy. Learned candidate generation may propose candidates but must not override hard blockers, lifecycle boundaries, or decision matrix rows.
+`CandidateGenerationProfile` must define blocking keys, allowed heuristics, prohibited selectors, deterministic pair ordering, candidate caps, overflow behavior, and learned-artifact policy. Learned candidate generation may propose candidates only when `learned_artifact_policy != disabled`; it must not override hard blockers, lifecycle boundaries, decision matrix rows, confidence bands, review routing, or split policy.
+
+Candidate generation must materialize blocking keys before candidate pairs. A blocking key whose required scope input is absent must be rejected as under-scoped and must not produce candidates. A blocking key whose member count exceeds `max_members_per_blocking_key` must emit `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` and must not produce auto-merge output from that block.
+
+| Block kind rank | Blocking key class | Canonical key string | Scope hash inputs | Generation handling | Default output when key is weak or selector-only |
+| ---: | --- | --- | --- | --- | --- |
+| 10 | durable provider ID | `provider_id:<provider>:<normalized_value>` | provider, account/project/subscription, region when applicable | append `generation:<asset_generation_key>` when present; missing generation remains eligible only if no generation blocker fires | may create, attach, or merge only through decision matrix |
+| 20 | endpoint agent ID | `endpoint_agent_id:<namespace>:<normalized_value>` | enrollment tenant, deployment, agent namespace | append generation when present; reinstall blocker wins before confidence | may create or attach; merge requires same enrollment scope or provider durable bundle |
+| 30 | directory user ID | `directory_user_id:<directory_namespace>:<normalized_value>` | directory tenant/domain/source | delete/recreate or reenrollment blocker wins | may create, attach, or merge only for `user` |
+| 40 | service account durable ID | `service_account_id:<namespace>:<normalized_value>` | provider/account/tenant or directory tenant | rekey/delete blocker wins | may create, attach, or merge only for `service_account` |
+| 50 | Kubernetes UID | `k8s_uid:<normalized_uid>` | cluster, namespace, resource kind | UID plus generation identifies source object only by default | source-object identity only; no canonical merge by default |
+| 60 | weak hostname | `hostname:<nfc_lowercase_hostname>` | source scope and observed interval | hostname reuse blocker wins | candidate or no_decision only |
+| 70 | weak IP | `ip:<address_family>:<canonical_ip>` | source scope and observed interval | IP reuse blocker wins | candidate or no_decision only |
+| 80 | weak DNS/PTR | `dns:<canonical_fqdn>` or `ptr:<canonical_ptr>` | zone/source scope and observed interval | conflicting resolution blocker wins | candidate or no_decision only |
+| 90 | selector-only | `selector:<mechanism>:<normalized_value>` | selector source scope | no generation authority | unresolved target or no_decision only |
+
+`scope_hash` must be `sha256` over `040.CanonicalJSON` of the ordered scope inputs declared for the block kind. Candidate pair ordering must sort by block kind rank, blocking key UTF-8 bytes, lexical left source asset ID, lexical right source asset ID, and evidence item set checksum. The left source asset ID is the lexically smaller source asset ID; ties use lexical evidence item ID order.
 
 ## Hard Blocker Precedence
 
-Hard blockers and lifecycle generation boundaries must be evaluated before confidence computation and before any decision matrix row can permit auto-merge.
+Hard blockers and lifecycle generation boundaries must be evaluated before confidence computation, review approval, and any decision matrix row that can create, attach, or merge. A fired blocker must persist in the `ResolverExplanation`; confidence bands and reviewer notes must not override it.
 
-| Boundary | Default effect |
-| --- | --- |
-| Reimage evidence | Blocks auto-merge across boundary unless profile permits split-aware continuation. |
-| Clone or VDI reuse | Blocks auto-merge across generation. |
-| Agent reinstall | Blocks unless source scope and durable external evidence repair the generation. |
-| Delete/recreate | Blocks across provider object generations. |
-| Hostname reuse | Blocks hostname-only and weak merge. |
-| IP reuse | Blocks IP-only and time-overlapping weak merge. |
-| Directory reenrollment | Blocks source-local identity unless profile row permits. |
-| Kubernetes recreate | Blocks name-based identity without UID/generation evidence. |
-| Scanner correlation change | Blocks scanner-name-only and scanner-merge-only identity. |
+| Precedence | Blocker family | Default effect | Override allowance |
+| ---: | --- | --- | --- |
+| 1 | Scope mismatch or under-scoped evidence | Reject create, attach, merge, and split partitioning from the affected evidence. | Never. |
+| 2 | Prior split or revoked merge | Block re-merge across the split boundary unless the split policy emits a new terminal merge decision with new durable evidence after the split known time. | Never for replay of the old event. |
+| 3 | Generation boundary | Block auto-merge across reimage, clone, VDI reuse, agent reinstall, provider delete/recreate, directory reenrollment, Kubernetes recreate, or source rekey. | Only a split-aware continuation row may attach source assets without merging canonical entities. |
+| 4 | Conflicting durable IDs | Emit `conflicted` or review; do not create, attach, or merge until conflict is resolved by durable evidence. | Never for weak or learned evidence. |
+| 5 | Weak identifier reuse | Reject weak-only create, attach, and merge; weak values may remain candidate hints. | Never. |
+| 6 | Source-native merge contradiction | Emit blocker or review; source-native merge history remains lineage only. | Never as standalone authority. |
+| 7 | Candidate overflow | Emit deterministic overflow error or diagnostic review; no overflowed candidate may auto-merge. | Never inside the overflowed run. |
 
 ## ResolveIdentity Algorithm
 
 ```text
 ResolveIdentity(evidence_items, resolver_profile, source_authority_context, version_manifest):
-1. Validate `ResolverProfile`, `CandidateGenerationProfile`, `IdentifierScope`, `IdentifierEvidenceClass`, `AssetGenerationBoundary`, and `TargetSelectorSafetyPolicy` refs through `030.ActivationControlledArtifactRef`.
-2. Fail before candidate generation when any required artifact is inactive, missing, checksum-mismatched, out of scope, or unvalidated.
-3. Validate active resolver_profile coverage for entity type, source scopes, run mode, evidence classes, and lifecycle boundaries.
-4. Normalize identifiers into IdentifierScope-aware IdentityEvidenceItem rows.
+1. Validate `ResolverProfile`, `ResolverProfileRow`, `IdentifierEvidenceClass`, `IdentifierScope`, `CandidateGenerationProfile`, `AssetGenerationBoundary`, `ResolverDecisionMatrix`, `IdentityConfidenceBand`, `IdentityReviewRoutingPolicy`, `SplitPolicy`, `ResolverExplanationPolicy`, and `TargetSelectorSafetyPolicy` refs through `030.ActivationControlledArtifactRef`.
+2. Fail before candidate generation when any required row or artifact is inactive, missing, ambiguous, checksum-mismatched, out of scope, superseded, or unvalidated.
+3. Resolve exactly one active `ResolverProfileRow` for run mode, entity type, source scopes, evidence classes, lifecycle boundary types, and activation scope.
+4. Normalize identifiers into `IdentifierScope`-aware `IdentityEvidenceItem` rows and materialize defaults before checksum computation.
 5. Reject uncovered or under-scoped evidence with the most specific resolver error.
-6. Generate candidate pairs through CandidateGenerationProfile.
-7. Sort candidate pairs by deterministic pair ordering.
-8. Evaluate hard blockers and lifecycle generation boundaries.
-9. Select decision matrix rows only after blocker evaluation.
-10. Compute deterministic confidence band or governed score as profile defines.
-11. Emit one IdentityDecision per candidate: auto_merged, candidate, rejected, split, conflicted, or no_decision.
-12. Persist IdentityReviewCase when manual review is required.
-13. Persist exactly one ResolverExplanation per IdentityDecision.
-14. Emit GraphCorrectionHandoff for every split that affects prior gold facts or graph output.
-15. Include every output-affecting resolver artifact ref in `VersionManifest`.
+6. Generate blocking keys from the canonical blocking-key table; reject under-scoped keys before candidate pair materialization.
+7. For each blocking key, sort members lexically by source asset ID and evidence item checksum, generate unordered candidate pairs, and stop at the first overflow bound crossed.
+8. Sort candidate pairs by block kind rank, blocking key UTF-8 bytes, lexical left source asset ID, lexical right source asset ID, and evidence item set checksum.
+9. Enforce per-source-asset and resolver-partition candidate caps after sorting; overflow emits the overflow code and no mutation for overflowed candidates.
+10. Evaluate hard blockers and lifecycle generation boundaries in precedence order before confidence selection.
+11. Select exactly one resolver decision matrix row per candidate after blocker evaluation.
+12. Select exactly one deterministic confidence band from `IdentityConfidenceBand`; persist the canonical six-digit decimal score from `040.DecimalPrecisionPolicy.confidence_0_1`.
+13. Apply review routing. Review output may open `IdentityReviewCase`, but no review action may create, attach, merge, or split except through a terminal `IdentityDecision`.
+14. Emit exactly one `IdentityDecision` per candidate: `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, or `no_decision`.
+15. Persist exactly one `ResolverExplanation` per `IdentityDecision` using the explanation checksum fields in this spec.
+16. Emit `GraphCorrectionHandoff` for every split that affects prior gold facts or graph output; the resolver must not mutate graph state.
+17. Include every output-affecting resolver artifact ref, runtime decision ref, explanation checksum, review case ref, and graph correction handoff ref in `VersionManifest`.
 ```
 
 ## Review Contract
@@ -179,88 +252,153 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
 
 ### ResolverProfileCoverageMatrix
 
-| Entity type | Run mode | Source scopes | Evidence classes | Lifecycle boundary types | Decision output classes | Validation scenarios |
+| Entity type | Run mode | Source scope coverage | Evidence classes | Lifecycle boundary classes | Allowed decision outputs | Validation scenario families |
 | --- | --- | --- | --- | --- | --- | --- |
-| `host` | `production` | provider/account/tenant/site/cluster as applicable | durable IDs plus weak evidence classes | reimage, clone, VDI, reinstall, delete/recreate, reuse | auto_merged, candidate, rejected, split, conflicted, no_decision | weak evidence rejection, hard blocker, split handoff |
-| `user` | `production` | directory tenant/domain/source | directory IDs plus names and memberships | delete/recreate, reenrollment | candidate, rejected, conflicted, no_decision unless profile permits merge | permission-limited and hidden-membership cases |
-| `service_account` | `production` | provider/account/tenant | durable provider IDs and directory IDs | delete/recreate, rekey | candidate, rejected, no_decision | scope mismatch cases |
-| `unsupported_entity_type` | any | any | any | any | no_decision only | emit `RESOLVER_ENTITY_TYPE_UNSUPPORTED`; no identity mutation |
+| `host` | `production`, `shadow`, `canary`, `validation` | provider/account/project/subscription, region when applicable, endpoint enrollment scope, scanner/feed scope, cluster scope when present | durable provider ID, endpoint agent ID, Kubernetes UID, weak hostname, weak IP, weak DNS/PTR, scanner name, graph key selector, source-native merge history | reimage, clone, VDI reuse, agent reinstall, provider delete/recreate, hostname reuse, IP reuse, Kubernetes recreate, scanner correlation change | `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` | `identity-create`, `identity-attach`, `identity-durable-merge`, `identity-weak-rejection`, `identity-hard-blocker`, `identity-candidate-overflow`, `identity-split-handoff`, `identity-explanation-checksum` |
+| `user` | `production`, `shadow`, `canary`, `validation` | directory tenant/domain/source, provider tenant when federated | directory user ID, durable provider principal ID, weak name/mail/UPN hint, group-membership hint, graph key selector, source-native merge history | delete/recreate, reenrollment, hidden membership or permission-limited evidence | `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` | `identity-create`, `identity-attach`, `identity-durable-merge`, `identity-review-state-machine`, `identity-selector-safety`, `identity-replay` |
+| `service_account` | `production`, `shadow`, `canary`, `validation` | provider/account/tenant, directory tenant, workload namespace when applicable | service account durable ID, provider principal ID, directory service principal ID, weak display-name hint, graph key selector, source-native merge history | rekey, delete/recreate, directory reenrollment, namespace recreation | `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` | `identity-create`, `identity-attach`, `identity-durable-merge`, `identity-hard-blocker`, `identity-confidence-band`, `identity-package-artifact-core-conflict` |
+| `unsupported_entity_type` | any | any | any | any | `no_decision` only | `identity-unsupported-entity-type` |
+
+The `unsupported_entity_type` row is closed behavior. It must emit `RESOLVER_ENTITY_TYPE_UNSUPPORTED`, must emit `no_decision`, must not open review, and must not mutate `CanonicalEntity`, `SourceAsset`, or `Identifier`.
 
 ### IdentifierScope canonicalization
 
 | Source class | Identifier class | Required scope keys | Normalization | Uncovered-scope behavior |
 | --- | --- | --- | --- | --- |
-| cloud provider | provider resource ID | provider, account/project/subscription, region when applicable | provider-lowercase, exact ID string | reject as under-scoped |
-| endpoint agent | agent durable ID | vendor-neutral enrollment scope, tenant, deployment | exact ID string | reject as under-scoped |
-| Kubernetes | UID | cluster, namespace, resource kind, generation where applicable | exact UID | source-object identity only by default |
-| network | IP address | address family, observed time, source scope | canonical textual IP | weak evidence only |
-| DNS | name/PTR | zone/source scope, observed time | lowercase FQDN with trailing-dot normalization | weak evidence only |
-| graph | backend key | backend profile and graph object scope | exact string | selector only, no identity |
+| cloud provider | provider resource ID | provider, account/project/subscription, region when applicable, generation when available | provider lowercased; ID value exact after NFC; region lowercased | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates |
+| endpoint agent | agent durable ID | enrollment tenant, deployment, agent namespace, generation when available | exact ID string after NFC | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates |
+| directory | user or service account durable ID | directory tenant/domain/source and immutable object ID | exact ID string after NFC; display names excluded | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates |
+| Kubernetes | UID | cluster, namespace, resource kind, UID, generation when available | exact UID after NFC | source-object identity only by default |
+| network | IP address | address family, observed interval, source scope | canonical textual IP | weak evidence only |
+| DNS | name/PTR | zone/source scope, observed interval | lowercase FQDN with trailing-dot normalization | weak evidence only |
+| graph | backend key | backend profile and graph object scope | exact string after NFC | selector only; no identity |
 
 ### IdentifierEvidenceClass registry
 
-| Evidence class | Durability | Scope | Reuse risk | Default role | Auto-merge authority | Negative evidence effect | Review routing |
+| Evidence class | Durability | Scope | Reuse risk | Default role | Creation/attachment/merge authority | Negative evidence effect | Review routing |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| durable provider ID | high | provider-scoped | medium after delete/recreate | positive evidence | profile-defined | lifecycle blocker can override | no review unless conflict |
-| endpoint agent ID | high | enrollment-scoped | medium after reinstall | positive evidence | profile-defined | reinstall can block | review on conflict |
-| hostname | low | source/time-scoped | high | candidate hint | never | reuse can block weak merge | review candidate only |
-| IP address | low | time-scoped | high | candidate hint | never | reuse can block weak merge | review candidate only |
-| DNS/PTR | low | zone/time-scoped | high | candidate hint | never | conflicting resolution blocks weak merge | review candidate only |
-| flow ID | low | sensor-scoped | high | correlation hint | never | none by itself | no_decision |
-| graph key | low | backend-scoped | high | selector | never | none by itself | no_decision |
-| source-native merge history | medium | source-scoped | medium | lineage only | never | may become blocker if contradicting | review candidate |
+| durable provider ID | high | exact provider/account/project/subscription, region when applicable | medium after delete/recreate | `positive_evidence` | create, attach, and merge only under exact scope, compatible generation, exact normalized value, and no blocker | generation or conflict blocker wins | no review unless conflict or split |
+| endpoint agent ID | high | exact enrollment tenant/deployment/namespace | medium after reinstall, clone, VDI | `positive_evidence` | create or attach; merge only under exact enrollment scope or qualifying durable provider bundle | reinstall/clone/VDI blocker wins | review on conflict |
+| directory user ID | high | exact directory tenant/domain/source | medium after delete/recreate or reenrollment | `positive_evidence` | create, attach, or merge for `user` only under exact durable ID and no blocker | reenrollment/delete blocker wins | review on conflict or hidden-membership gap |
+| service account durable ID | high | exact provider/account/tenant or directory tenant | medium after rekey/delete | `positive_evidence` | create, attach, or merge for `service_account` only under exact durable ID and no blocker | rekey/delete blocker wins | review on conflict |
+| Kubernetes UID | high for source object, not canonical host | exact cluster/namespace/resource/generation | medium after recreate | `source_object_identity` | no canonical merge by default | recreate blocker wins | no_decision unless profile opens review |
+| hostname | low | source/time scoped | high | `candidate_hint` | never | reuse blocks weak merge | review candidate only |
+| IP address | low | source/time scoped | high | `candidate_hint` | never | reuse blocks weak merge | review candidate only |
+| DNS/PTR | low | zone/time scoped | high | `candidate_hint` | never | conflicting resolution blocks weak merge | review candidate only |
+| flow ID | low | sensor scoped | high | `correlation_hint` | never | none by itself | no_decision |
+| graph key | low | backend scoped | high | `selector` | never | none by itself | no_decision |
+| source-native merge history | medium | source scoped | medium | `lineage_only` | never | contradiction may block | review candidate only |
+| learned hint | model-artifact scoped | resolver scope | model drift risk | `candidate_hint` | never | none by itself | review candidate only |
 
 ### Resolver decision matrix
 
-| Decision | Required condition | Output behavior |
-| --- | --- | --- |
-| `auto_merged` | Profile row permits, hard blockers absent, evidence class sufficient, confidence band satisfied | Emit terminal `IdentityDecision`. |
-| `candidate` | Evidence suggests match but authority insufficient or review required | Emit `IdentityDecision` plus `IdentityReviewCase`. |
-| `rejected` | Candidate fails rule or blocker fires | Emit rejection with explanation. |
-| `split` | Prior merge invalidated by split evidence | Emit split decision and `GraphCorrectionHandoff`. |
-| `conflicted` | Concurrent evidence prevents deterministic resolution | Emit conflicted decision and review case when permitted. |
-| `no_decision` | Evidence is uncovered, weak, selector-only, or out of profile scope | Emit no decision; no identity mutation. |
+| Decision | Required condition | Output behavior | Mutation limit |
+| --- | --- | --- | --- |
+| `canonical_created` | Durable evidence class permits creation; exact source and identifier scopes validate; no existing canonical candidate remains after sorted candidate evaluation; `creation_policy = durable_evidence_creation_allowed`; no blocker fires; confidence band is `single_durable_creation`. | Emit terminal `IdentityDecision` and create one `CanonicalEntity` plus required `SourceAsset`/`Identifier` records that pass `040`. | Must not merge with any existing canonical entity. |
+| `source_asset_attached` | Exactly one existing canonical entity matches exact durable evidence under exact scope; no blocker fires; decision row permits attachment; confidence band is `exact_durable_attach`. | Emit terminal `IdentityDecision` and attach the source asset or identifier to that canonical entity. | Must not merge two existing canonical entities. |
+| `auto_merged` | Two or more existing canonical entities have exact compatible durable evidence under exact scope; no blocker fires; decision row permits merge; confidence band is `exact_durable_merge`. | Emit terminal `IdentityDecision` linking merged canonical refs and supersession refs. | Must not use weak, selector-only, learned-only, or source-native merge-history-only evidence. |
+| `candidate` | Evidence suggests a possible match, but stable authority is insufficient, review is required, evidence is weak-only, learned-only, or policy routes to review. | Emit non-mutating `IdentityDecision`; open review only when review routing permits. | No canonical mutation. |
+| `rejected` | Candidate fails scope, evidence class, hard blocker, lifecycle, selector safety, or decision row condition. | Emit rejection with explanation. | No canonical mutation. |
+| `split` | Prior merge is invalidated by split evidence, approved split review, or deterministic split policy; affected facts or graph projection may change. | Emit terminal split `IdentityDecision` and `GraphCorrectionHandoff`. | Resolver must not mutate graph. |
+| `conflicted` | Conflicting durable evidence or equally specific decision rows prevent deterministic creation, attachment, merge, or split. | Emit conflicted decision and review case when routing permits. | No canonical mutation before terminal review decision. |
+| `no_decision` | Evidence is uncovered, unsupported entity type, selector-only, out of profile scope, overflowed, or otherwise ineligible. | Emit no-decision with explanation or deterministic error. | No canonical mutation. |
+
+### Deterministic confidence bands
+
+MVP confidence is rule-banded, not probabilistic. Scores must be persisted as `040.DecimalPrecisionPolicy.confidence_0_1` values with six fractional digits and no rounding.
+
+| Band | Score | Selection condition | Permitted decision classes |
+| --- | ---: | --- | --- |
+| `blocked` | `0.000000` | Any non-overridable hard blocker fired. | `rejected`, `no_decision`, `conflicted` |
+| `selector_only` | `0.000000` | Only selector evidence exists. | `no_decision` |
+| `weak_hint_only` | `0.250000` | Only weak hostname/IP/DNS/PTR/scanner hint exists. | `candidate`, `rejected`, `no_decision` |
+| `learned_hint_only` | `0.300000` | Only learned or model-generated hint exists. | `candidate`, `rejected`, `no_decision` |
+| `single_durable_creation` | `0.900000` | One exact durable evidence bundle under exact scope and no existing canonical candidate. | `canonical_created` |
+| `exact_durable_attach` | `0.950000` | One exact durable evidence bundle attaches to exactly one existing canonical entity and no blocker fires. | `source_asset_attached` |
+| `exact_durable_merge` | `1.000000` | Exact compatible durable evidence proves the same object across existing canonical entities and no blocker fires. | `auto_merged` |
+| `conflicting_durable` | `0.500000` | Durable evidence conflicts or equally specific rows disagree. | `conflicted`, `candidate`, `rejected` |
+
+If more than one band condition matches, the selected band must be the first row in this table whose selection condition is true.
 
 ### IdentityReviewCase state machine
 
-| Current state | Event | Next state | Illegal transition behavior |
-| --- | --- | --- | --- |
-| `opened` | reviewer assigns | `in_review` | `IDENTITY_REVIEW_TRANSITION_INVALID` |
-| `opened` | expires | `expired` | same |
-| `in_review` | approve merge | `terminal_decision_emitted` | same |
-| `in_review` | reject merge | `terminal_decision_emitted` | same |
-| `in_review` | request more evidence | `blocked` | same |
-| `blocked` | evidence supplied | `in_review` | same |
-| any terminal state | any mutation event | unchanged | same and no mutation |
+Reviewer authority guards must execute before transition selection in this order: reviewer authorization, case lifecycle status, evidence snapshot checksum match, hard blocker result preservation, idempotency key match, and terminal-state check. A review event whose evidence snapshot checksum does not equal the case snapshot checksum must emit `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` and must not transition. A review event without required reviewer authority must emit `IDENTITY_REVIEW_AUTHORITY_MISSING` and must not transition.
 
-Manual review must never mutate canonical identity outside terminal `IdentityDecision` records.
+| Current state | `assign` | `approve_merge` | `reject_merge` | `approve_split` | `request_more_evidence` | `evidence_supplied` | `expire` | `cancel` | `replay_same_event` |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `opened` | `in_review` | illegal | `terminal_decision_emitted` | illegal | `blocked` | illegal | `expired` | `cancelled` | idempotent no-op |
+| `in_review` | `in_review` | `terminal_decision_emitted` | `terminal_decision_emitted` | `terminal_decision_emitted` | `blocked` | illegal | `expired` | `cancelled` | idempotent no-op |
+| `blocked` | illegal | illegal | `terminal_decision_emitted` | illegal | `blocked` | `in_review` | `expired` | `cancelled` | idempotent no-op |
+| `expired` | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | idempotent no-op |
+| `cancelled` | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | idempotent no-op |
+| `terminal_decision_emitted` | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | terminal no-op | idempotent no-op |
 
-`IdentityReviewCase` transition coverage is total. Any state/event pair not listed as an allowed transition must reject mutation, preserve the current state, and emit `IDENTITY_REVIEW_TRANSITION_INVALID`. Expiration routes the case to `expired` and must not mutate canonical identity.
+Illegal transitions must emit `IDENTITY_REVIEW_TRANSITION_INVALID`, preserve current state, write no `IdentityDecision`, write no `CanonicalEntity`, write no `SourceAsset`, write no `Identifier`, and write no `GraphCorrectionHandoff`. Terminal no-op transitions must emit deterministic transition evidence and no mutation. `approve_merge` must be illegal when only weak, learned, selector-only, source-native-merge-history-only, mapped-target-only, or graph-key-only evidence exists.
+
+### Review routing defaults
+
+| Candidate condition | Default routing | Reviewer authority limit |
+| --- | --- | --- |
+| Weak-only candidate | May open review when policy permits. | Reviewer must not approve merge without new durable evidence materialized as `IdentityEvidenceItem`. |
+| Learned-only candidate | May open review when policy permits. | Reviewer must not approve merge without new durable evidence and passing replay fixture. |
+| Conflicting durable evidence | Must open review when profile permits review; otherwise emit `conflicted`. | Reviewer may approve only after conflict-resolving durable evidence snapshot matches the case. |
+| Candidate overflow | May open diagnostic review only when profile permits. | Reviewer must not approve merge from an overflowed block; rerun under non-overflow conditions is required. |
+| Hard blocker fired | Review may document blocker only. | Reviewer must not override non-overridable blockers. |
+| Selector-only evidence | No review by default. | No creation, attachment, merge, or split authority. |
+
+### SplitPolicy schema and deterministic split algorithm
+
+`SplitPolicy` is an activation-controlled artifact with `artifact_class = identity_split_policy`. It must name trigger conditions, partition key rules, retained canonical partition selection, new canonical partition creation rules, ambiguous partition behavior, affected fact selection, and `GraphCorrectionHandoff` emission rules.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `split_policy_id` | Yes | none | Stable policy ID. |
+| `trigger_decision_classes` | Yes | none | Non-empty subset containing `split`; review-approved split must emit terminal `split`. |
+| `partition_key_rule` | Yes | none | Canonical rule over durable evidence scope, generation boundary, known time, and source asset refs. |
+| `retained_canonical_partition_rule` | Yes | none | Deterministic rule; default is partition containing the oldest known active durable evidence, ties by lexical canonical entity ID. |
+| `new_canonical_partition_rule` | Yes | none | Creates one canonical entity per non-retained partition only through `040.CanonicalEntitySchema`. |
+| `ambiguous_partition_behavior` | No | `emit_conflicted_no_split` | Closed enum: `emit_conflicted_no_split`, `open_review`, `reject_split`. |
+| `affected_fact_selection` | Yes | none | Exact fact refs or deterministic affected-fact selection checksum required. |
+| `graph_correction_handoff_required` | Yes | `true` | Must be true when gold facts or graph output may be affected. |
+| `validation_refs` | Yes | none | Split partition, ambiguous partition, handoff, replay, and no-direct-graph-mutation fixtures. |
+
+Split execution must sort source assets by lexical source asset ID, compute each partition key using `040.CanonicalJSON`, select the retained partition, create new canonical partitions only for non-retained partitions, select affected facts using the policy rule, emit a `split` `IdentityDecision`, and emit `GraphCorrectionHandoff` when affected facts or graph output are non-empty. `GraphCorrectionHandoff` must include split decision ref, split policy ref, retained canonical entity ref, new canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and version manifest ref. The resolver must never mutate graph state.
 
 ### Identity closed enum tables
 
 | Enum family | Closed values |
 | --- | --- |
-| identity decision states | `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` |
-| review case states | `opened`, `in_review`, `blocked`, `expired`, `terminal_decision_emitted` |
-| review events | `assign`, `approve_merge`, `reject_merge`, `request_more_evidence`, `evidence_supplied`, `expire`, `cancel` |
-| evidence roles | `positive_evidence`, `negative_evidence`, `candidate_hint`, `selector`, `lineage_only`, `correlation_hint` |
+| identity decision states | `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` |
+| review case states | `opened`, `in_review`, `blocked`, `expired`, `cancelled`, `terminal_decision_emitted` |
+| review events | `assign`, `approve_merge`, `reject_merge`, `approve_split`, `request_more_evidence`, `evidence_supplied`, `expire`, `cancel`, `replay_same_event` |
+| evidence roles | `positive_evidence`, `negative_evidence`, `candidate_hint`, `selector`, `lineage_only`, `correlation_hint`, `source_object_identity` |
 | selector mechanisms | `mapped_target`, `opengraph_property_matching`, `graph_key`, `hostname`, `ip_address`, `dns_name`, `ptr_name` |
 
 ### Resolver error codes
 
 | Error code | Emitted when |
 | --- | --- |
-| `RESOLVER_ARTIFACT_MISSING` | A required resolver, candidate, scope, evidence-class, boundary, or selector policy artifact ref is missing. |
+| `RESOLVER_ARTIFACT_MISSING` | A required resolver, candidate, scope, evidence-class, boundary, decision, confidence, review, split, explanation, or selector policy artifact ref is missing. |
 | `RESOLVER_ARTIFACT_INACTIVE` | A required resolver artifact is not active for production execution. |
 | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | A resolver artifact checksum mismatches the active ref or manifest. |
-| `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | A resolver artifact does not cover resolver run mode, entity type, source scope, evidence class, or lifecycle boundary. |
+| `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | A resolver artifact does not cover resolver run mode, entity type, source scope, evidence class, lifecycle boundary, or activation scope. |
 | `RESOLVER_PROFILE_MISSING` | No active resolver profile covers run mode, entity type, source scopes, evidence classes, and lifecycle boundaries. |
+| `RESOLVER_PROFILE_ROW_MISSING` | No active `ResolverProfileRow` covers the resolver run tuple. |
+| `RESOLVER_PROFILE_ROW_AMBIGUOUS` | More than one equally specific active `ResolverProfileRow` covers the resolver run tuple. |
 | `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | Entity type maps to the unsupported row. |
 | `IDENTITY_EVIDENCE_UNDER_SCOPED` | Required scope keys are absent or non-canonical. |
 | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | Evidence class lacks a covering resolver profile row. |
-| `IDENTITY_HARD_BLOCKER_TRIGGERED` | Hard blocker or generation boundary prevents auto-merge. |
+| `IDENTITY_HARD_BLOCKER_TRIGGERED` | Hard blocker or generation boundary prevents create, attach, or merge. |
+| `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | A blocking key exceeds `max_members_per_blocking_key`. |
+| `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | Candidate pairs exceed per-source-asset or resolver-partition caps. |
+| `RESOLVER_DECISION_ROW_MISSING` | No decision matrix row covers a candidate after blocker evaluation. |
+| `RESOLVER_CONFIDENCE_BAND_MISSING` | No confidence band row covers the candidate decision state. |
+| `RESOLVER_REVIEW_ROUTING_MISSING` | Review is required but no active review routing policy row covers the candidate condition. |
+| `RESOLVER_SPLIT_POLICY_MISSING` | A split decision is selected without an active split policy. |
+| `RESOLVER_EXPLANATION_INCOMPLETE` | Required explanation fields or checksum inputs are missing. |
 | `IDENTITY_REVIEW_TRANSITION_INVALID` | Review event is illegal for the current state. |
+| `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | Review event evidence snapshot checksum does not match the case snapshot. |
+| `IDENTITY_REVIEW_AUTHORITY_MISSING` | Reviewer lacks authority for the requested review event. |
 | `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
 | `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
 
@@ -268,40 +406,51 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 
 | Field | Default | Maximum | Overflow behavior | Closure state |
 | --- | --- | --- | --- | --- |
-| `candidate_cap` | TODO: owner decision required | TODO: owner decision required | Sort candidate pairs by deterministic pair ordering, emit overflow output state, and do not auto-merge overflowed candidates. Missing owner values block authoritative resolver promotion. | blocked_owner_todo |
+| `max_members_per_blocking_key` | `256` | `1024` | Emit `RESOLVER_CANDIDATE_BLOCK_OVERFLOW`; emit no mutation from the overflowed block; do not auto-merge overflowed candidates. | closed_local |
+| `max_candidate_pairs_per_source_asset` | `128` | `512` | Emit `RESOLVER_CANDIDATE_PARTITION_OVERFLOW`; keep non-overflowed prior pairs only when their block did not overflow; do not auto-merge overflowed candidates. | closed_local |
+| `max_candidate_pairs_per_resolver_partition` | `1000000` | `5000000` | Emit `RESOLVER_CANDIDATE_PARTITION_OVERFLOW`; stop pair generation at deterministic boundary; no mutation for overflowed partition. | closed_local |
+| `learned_artifact_policy` | `disabled` | n/a | Learned artifacts cannot produce candidates when disabled; when enabled, learned candidates remain `candidate_hint` only. | closed_local |
+
+Profile rows may set lower limits. Setting a value above the maximum or omitting a required cap fails artifact activation before production resolver output.
 
 ### ResolverExplanation required fields
 
-| Field | Required behavior |
-| --- | --- |
-| decision row | Reference the selected resolver decision matrix row. |
-| blockers evaluated | Include fired and non-fired blocker row IDs. |
-| evidence refs | Reference `IdentityEvidenceItem` rows and source evidence refs. |
-| confidence band | Include deterministic band or governed score inputs. |
-| review routing | Include review case ref when manual review is required. |
-| checksum | SHA-256 over canonical explanation bytes. |
+`ResolverExplanation` checksum must include output-affecting fields and exclude non-output volatile fields.
+
+| Inclusion class | Fields | Checksum rule |
+| --- | --- | --- |
+| Required included fields | resolver profile row ref/checksum, candidate generation profile ref/checksum, identifier scope refs/checksums, evidence class refs/checksums, hard blocker row refs/checksums, decision matrix ref/checksum, confidence band ref/checksum, review routing policy ref/checksum, split policy ref/checksum, explanation policy ref/checksum, target selector policy ref/checksum, source scope selector, run mode, entity type, candidate pair ID, blocking key, evidence item refs/checksums, hard blocker results, selected decision row, selected confidence band, canonical score, review routing result, graph correction handoff ref when applicable, output decision ref, version manifest ref | Included in `ResolverExplanation` checksum. |
+| Required excluded fields | runtime duration, worker ID, thread ID, wall-clock evaluation time, UI labels, reviewer display name, non-output diagnostic ordering, request correlation ID | Excluded from `ResolverExplanation` checksum and must not affect replay equivalence. |
+
+Missing any required included field emits `RESOLVER_EXPLANATION_INCOMPLETE` before the `IdentityDecision` becomes externally visible.
 
 ### ResolverActivationReport requirements
 
-| Requirement | Default |
+| Scenario gate | Required behavior |
 | --- | --- |
-| scenario pass/fail | required for every evidence class and blocker class |
-| shadow run | required before canary |
-| canary | required before active production unless owner explicitly defers |
-| blocker coverage | every hard blocker has positive and negative fixture |
-| deterministic output checksums | required for decisions and explanations |
-| promotion eligibility | blocked while any required scenario fails or is missing |
+| creation | At least one scenario proves durable evidence creation and weak-only creation rejection. |
+| attachment | At least one scenario proves exact durable attach and rejection of attachment that would merge two canonical entities. |
+| durable merge | At least one scenario proves exact durable merge and blocker-precedence rejection. |
+| weak evidence rejection | IP-only, hostname-only, DNS-only, PTR-only, scanner-name-only, graph-key-only, mapped-target-only, and source-native-merge-history-only attempts must fail create, attach, and merge. |
+| blocker precedence | Every hard blocker has fired and non-fired fixture pairs and proves it precedes confidence and review. |
+| overflow | Block overflow and partition overflow emit deterministic errors and no mutation. |
+| review totality | Every review state/event pair is covered and illegal transitions emit no mutation. |
+| split handoff | Split emits `GraphCorrectionHandoff` with required refs and no direct graph mutation. |
+| selector safety | Selector mechanisms cannot exceed maximum resolution state. |
+| explanation checksum replay | Same inputs produce byte-identical explanation checksum. |
+| shadow/canary determinism | Shadow and canary runs match production decision/explanation checksums before activation. |
 
 ### Hard blocker matrix
 
 | Boundary | Evidence trigger | Default effect | Override allowance | Required validation rows |
 | --- | --- | --- | --- | --- |
-| reimage | source or temporal evidence crosses generation | block auto-merge | profile row only | blocker override rejection |
-| clone or VDI reuse | repeated agent/image evidence | block auto-merge | profile row with split-aware continuation | clone rejection |
-| agent reinstall | new enrollment generation | block unless durable external evidence repairs | profile row | reinstall case |
-| delete/recreate | provider object generation changes | block cross-generation merge | profile row | delete/recreate case |
-| hostname/IP reuse | reused weak value | block weak merge | none for weak-only | weak evidence no-merge |
-| Kubernetes recreate | same name, different UID | block name-based identity | UID/generation evidence only | recreate case |
+| scope mismatch or under-scoped evidence | missing required scope key or scope hash mismatch | reject create, attach, merge, and split from affected evidence | never | `identity-under-scoped-rejection` |
+| prior split or revoked merge | prior terminal split or revoked merge covers the candidate pair | block re-merge of old event | never for replay of old event | `identity-prior-split-blocker` |
+| generation boundary | reimage, clone, VDI, reinstall, delete/recreate, reenrollment, rekey, Kubernetes recreate | block auto-merge across generation | split-aware continuation may attach only when durable evidence permits | `identity-generation-boundary` |
+| conflicting durable IDs | incompatible durable IDs under same exact scope | emit `conflicted` or review; no create/attach/merge | never with weak or learned evidence | `identity-conflicting-durable` |
+| weak identifier reuse | reused hostname/IP/DNS/PTR/scanner value | block weak create, attach, and merge | never | `identity-weak-reuse-rejection` |
+| source-native merge contradiction | source-native merge history contradicts Cadastre durable evidence | preserve lineage and block or review | never by itself | `identity-source-native-merge-contradiction` |
+| candidate overflow | block or partition cap exceeded | overflow diagnostic/review only; no mutation | never in overflowed run | `identity-candidate-overflow` |
 
 ### Selector safety matrix
 
@@ -317,30 +466,37 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | ID | Criterion |
 | --- | --- |
 | `070-CLEANUP-AC-001` | No banned reference class remains. |
-| `070-CLEANUP-AC-002` | Identity resolution still fails when no active `ResolverProfile` covers the run mode, entity type, source scopes, evidence classes, and lifecycle boundary types. |
-| `070-CLEANUP-AC-003` | Hard blockers and lifecycle boundaries still run before confidence computation and decision matrix selection. |
-| `070-CLEANUP-AC-004` | Target selectors still cannot create canonical identity by themselves. |
+| `070-CLEANUP-AC-002` | Identity resolution fails when no active `ResolverProfileRow` covers run mode, entity type, source scopes, evidence classes, lifecycle boundary types, and activation scope. |
+| `070-CLEANUP-AC-003` | Hard blockers and lifecycle boundaries run before confidence computation, review approval, and decision matrix selection. |
+| `070-CLEANUP-AC-004` | Target selectors cannot create, attach, or merge canonical identity by themselves. |
 | `070-SCHEMA-PATCH-AC-001` | Every emitted `CanonicalEntity`, `SourceAsset`, and `Identifier` passes `040.ValidateCoreRecord`. |
 | `070-SCHEMA-PATCH-AC-002` | `070` does not restate core record fields except by exact schema name reference. |
-| `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity or identifier merge by bypassing the `040` and `070` validation sequence. |
-
-| `070-REVIEW-TOTALITY-AC-001` | Every `IdentityReviewCase` state/event pair has an allowed transition or emits `IDENTITY_REVIEW_TRANSITION_INVALID` without identity mutation. |
-| `070-EXPLANATION-AC-001` | Every `IdentityDecision` has exactly one `ResolverExplanation` with decision row, blockers, evidence refs, confidence band, review routing, and checksum. |
-| `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, and resolver artifact checksum mismatch fail before identity mutation. |
-| `070-VOLATILITY-AC-002` | Candidate cap overflow does not auto-merge overflowed candidates and blocks authoritative promotion while numeric caps remain `TODO:`. |
-| `070-VOLATILITY-AC-003` | A resolver profile that attempts graph-key-only auto-merge fails before candidate decision output. |
+| `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity, source asset attachment, or identifier merge by bypassing the `040` and `070` validation sequence. |
+| `070-RESOLVER-ROW-AC-001` | Exactly one active `ResolverProfileRow` is selected before candidate generation, and missing, ambiguous, inactive, checksum-mismatched, or out-of-scope rows fail before mutation. |
+| `070-MVP-MATRIX-AC-001` | `host`, `user`, `service_account`, and `unsupported_entity_type` are covered by the MVP coverage matrix with closed decision outputs. |
+| `070-DURABLE-MERGE-AC-001` | Exact durable evidence under exact scope can create, attach, or merge only through the matching decision row and confidence band. |
+| `070-WEAK-REJECTION-AC-001` | Weak-only, selector-only, learned-only, source-native-merge-history-only, and graph-key-only evidence never create, attach, or merge. |
+| `070-PAIR-ORDER-AC-001` | Candidate pair ordering is byte-identical across implementations for the same blocking keys and evidence item checksums. |
+| `070-OVERFLOW-AC-001` | Block and partition overflow emit deterministic errors and no identity mutation. |
+| `070-BLOCKER-PRECEDENCE-AC-001` | Blockers execute before confidence selection and reviewer authority, and non-overridable blockers cannot be overridden. |
+| `070-REVIEW-TOTALITY-AC-001` | Every `IdentityReviewCase` state/event pair has an allowed transition, idempotent no-op, terminal no-op, or `IDENTITY_REVIEW_TRANSITION_INVALID` without identity mutation. |
+| `070-EXPLANATION-AC-001` | Every `IdentityDecision` has exactly one `ResolverExplanation` with all required included fields and a canonical checksum. |
+| `070-SPLIT-HANDOFF-AC-001` | Every identity split affecting gold or graph output emits `GraphCorrectionHandoff` with split policy, partition, affected fact, resolver explanation, and version manifest refs. |
+| `070-MANIFEST-AC-001` | `VersionManifest` contains all consulted resolver artifacts, runtime decision refs, review refs, explanation checksums, and graph correction handoff refs. |
+| `070-PACKAGE-WEAKENING-AC-001` | Package-supplied resolver artifacts that weaken stable weak-evidence defaults or redefine identity semantics fail activation before production output. |
+| `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, resolver artifact checksum mismatch, and package artifact core conflict fail before identity mutation. |
 | `070-LIFECYCLE-AC-001` | Resolver profile activation emits generic artifact lifecycle transition evidence and resolver-specific guard results before identity mutation. |
-| `070-LIFECYCLE-AC-002` | `070.IdentityReviewCaseStateMachine.v1` remains blocked by explicit TODO rows until review states, events, total transitions, idempotency, expiration, and validation rows are closed. |
 
 ## Definition of Done
 
 | ID | Criterion |
 | --- | --- |
-| `070-AC-001` | Same inputs, active resolver profile, source scopes, blockers, and version manifest produce identical identity decisions and explanations. |
-| `070-AC-002` | IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-only, and mapped-target-only evidence never auto-merges. |
+| `070-AC-001` | Same inputs, active resolver row, source scopes, blockers, artifact refs, and version manifest produce byte-identical identity decisions and explanations. |
+| `070-AC-002` | IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-only, mapped-target-only, learned-only, and selector-only evidence never create, attach, or merge. |
 | `070-AC-003` | Hard blockers and lifecycle boundaries override confidence scores and reviewer notes. |
 | `070-AC-004` | Manual review cannot mutate identity without terminal `IdentityDecision`, `IdentityReviewCase`, `ResolverExplanation`, and `VersionManifest` refs. |
-| `070-AC-005` | Every identity split that affects gold or graph output emits `GraphCorrectionHandoff`. |
+| `070-AC-005` | Every identity split that affects gold or graph output emits `GraphCorrectionHandoff` and no resolver graph mutation. |
+| `070-AC-006` | Authoritative promotion fails while any resolver closure validation row is missing, blocked, not run, failed, checksum-mismatched, or has a `TODO` expected output. |
 
 ## Open Questions
 
