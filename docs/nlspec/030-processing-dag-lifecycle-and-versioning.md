@@ -451,6 +451,22 @@ analysis_rule_bundle
 registry_governance_artifact
 package_release
 production_package_set
+package_type_policy_row_set
+package_repository_model_row_set
+package_trust_policy
+package_transparency_evidence_policy
+package_provenance_policy
+package_sbom_policy
+package_dependency_lock_policy
+package_compatibility_matrix
+package_deprecation_window_policy
+last_known_good_health_gate
+rollback_compatibility_policy
+quarantine_scope_policy
+emergency_package_override_policy
+package_promotion_gate_policy
+package_stage_binding
+package_developer_contract
 validation_matrix
 lakehouse_feed_fixture
 golden_corpus
@@ -583,7 +599,9 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, and derived-view state refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
-| Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs, package lifecycle transition evidence, and last-known-good evidence when applicable. |
+| Package activation | package-set manifest checksum, package release manifest refs and checksums, package type policy row refs, package repository model row refs, artifact digests, sizes, media types, subject digests, repository metadata refs, repository snapshot refs, repository freshness proof refs, repository anti-rollback state refs, trust policy refs, signature verification result refs, transparency evidence refs, attestation set refs, build provenance refs, SBOM refs, dependency lock refs, compatibility matrix refs, validation refs, package developer contract refs, package stage binding refs, promotion record refs, deployment revision refs, last-known-good health gate refs, last-known-good package-set refs when applicable, rollback compatibility policy refs, rollback plan/result refs, quarantine record refs, quarantine scope policy refs, emergency override refs, deprecation window policy refs, activation failure event refs when candidate activation fails, lifecycle transition evidence refs, and approval refs. |
+
+Package activation refs required by `VersionManifestCompletenessMatrix` must appear in `included_refs`. Package-specific manifest fields must not create a parallel manifest mechanism unless this spec explicitly adds a field row and defines checksum inclusion behavior.
 
 ### VersionManifestSchema
 
@@ -729,6 +747,8 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-GRAPH-PROFILE-MANIFEST-AC-002` | Edge semantics, output eligibility, query translation, backend taxonomy mapping, property policy, and derived-view lag refs are manifest-included whenever they affect graph output or serving. |
 | `030-GRAPH-REBUILD-MANIFEST-AC-001` | Graph rebuild promotion fails unless manifest refs include rebuild manifest, index consistency check, schema fingerprint, and canonical output checksum inputs. |
 | `030-IDENTITY-SPLIT-GRAPH-HANDOFF-AC-001` | Identity split graph handoff output includes `070.GraphCorrectionHandoff` refs and resolver explanation checksum refs. |
+| `030-PACKAGE-ARTIFACT-CLASS-AC-001` | Every package activation-controlled artifact class required by `100` appears in the closed `artifact_class` registry. |
+| `030-PACKAGE-VM-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, validation, lifecycle, or approval ref is missing from `VersionManifest.included_refs`. |
 
 ## Definition of Done
 

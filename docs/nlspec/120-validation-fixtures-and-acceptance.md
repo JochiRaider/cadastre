@@ -69,7 +69,7 @@ Every active domain spec must include at least one negative validation case for 
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
 | Graph | Backend internal ID appears in response or selector and fails; active MVP edge set is exactly `observed_connection`; missing or ambiguous `FlowRoleEvidence` emits no edge; OCSF endpoint order cannot determine direction; unresolved endpoint identity emits no edge; generic external graph payload is not pathfinding; theoretical reachability and boolean reachability properties are prohibited; query candidate limits and page tokens fail closed. |
-| Package | Unauthorized signer with valid cryptographic signature fails activation. |
+| Package | Missing package-type policy, ambiguous package-type policy, unknown package type, unsupported repository form, unauthorized signer, missing transparency evidence, missing attestation, missing SBOM, dependency live resolution, compatibility failure, deprecation expiry, failed post-activation health gate, mutable rollback target, rollback compatibility failure, quarantine target block, emergency trust bypass, and package `VersionManifest` omission fail or no-op with no forbidden mutation. |
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis rule attempts mutation and fails. |
@@ -199,7 +199,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `070` | creation, attachment, exact durable merge, split, and no-decision | weak-only, under-scoped, blocker, missing row, ambiguous row, and overflow | selector-only and unsupported entity | split handoff | decision/explanation checksum replay | resolver private-binding redaction through `010`/`110` | reviewer authority | review cannot mutate identity without terminal decision | inactive/missing/checksum-mismatched/out-of-scope resolver artifacts and package core conflict. |
 | `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
 | `090` | graph query/apply and positive observed-connection projection | backend ID rejection, OCSF endpoint-order direction rejection, unresolved endpoint rejection, backend taxonomy unmapped rejection, query candidate-limit rejection, and page-token rejection | empty traversal no-path, missing-flow-role no-edge, ambiguous-flow-role no-edge, and generic external graph payload no-pathfinding | active profile exact edge set, edge semantics, output eligibility, and apply order | rebuild equivalence and graph profile replay | raw property redaction and backend ID redaction | graph auth and output eligibility | reachability prohibition, endpoint-order non-authority, selector-only endpoint non-authority, and backend-state non-authority | required when owner declares activation-controlled artifacts. |
-| `100` | package activation | unauthorized signer | failed candidate keep-current | rollback | package-set replay | n/a | promotion auth | emergency no trust bypass | required when owner declares activation-controlled artifacts. |
+| `100` | package type policy, supported repository forms, trust, transparency, attestation, provenance, SBOM, dependency lock, compatibility, deprecation, health, rollback, quarantine, emergency, and package manifest success | unknown type, missing policy, ambiguous policy, unsupported Git tree snapshot, unauthorized signer, threshold failure, missing transparency, missing attestation, missing SBOM, live dependency resolution, compatibility failure, expired deprecation, failed health gate, mutable rollback target, rollback incompatibility, quarantine block, emergency bypass, and package manifest omission | failed candidate keep-current, health-fail not-LKG, quarantine no mutation, and shadow/canary no current output | rollback preflight and emergency bounded actions | package-set replay and manifest completeness | package evidence redaction through `110` | promotion auth and emergency quorum | signature/trust bypass forbidden, dependency lock non-authority, and mutable Git ref non-authority | required when owner declares activation-controlled artifacts. |
 | `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
@@ -384,6 +384,58 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 
 A validation row in this matrix must include fixture checksum, expected `AbsenceDerivationResult` checksum when applicable, expected `VersionManifest` checksum or expected manifest error, expected output checksum when output is allowed, expected no-op when output is blocked, expected error code when rejected, and mutation-prohibition proof for raw, silver, identity, gold, graph, watermark, compliance export, and API label mutation classes affected by the case.
 
+### PackageActivationValidationMatrix
+
+Every row in this matrix validates behavior owned by `100`, manifest inclusion owned by `030`, observable error handling owned by `110`, or acceptance aggregation owned by `120`. Rows with `TODO` fixture checksums or expected output checksums are blocking and must prevent authoritative package activation handoff.
+
+| Row class | Required coverage |
+| --- | --- |
+| `100-package-type-policy` | Unknown, missing, ambiguous, inactive, scope-mismatched, and manifest-omitted package type policy rows. |
+| `100-repository-form` | Supported repository forms and `git_tree_snapshot` rejection. |
+| `100-trust` | Unauthorized signer, inactive trust root, threshold failure, transparency evidence missing. |
+| `100-attestation-sbom` | Missing, mismatched, expired, and policy-failed attestation and SBOM refs. |
+| `100-dependency-lock` | Missing lock, checksum mismatch, live dependency resolution attempt. |
+| `100-compatibility` | Missing, failed, expired, and mismatched compatibility rows across required axes. |
+| `100-deprecation` | In-window use, expired use, emergency extension, and forbidden new activation. |
+| `100-health-lkg` | Health pass marks LKG, health fail does not. |
+| `100-rollback` | Mutable target rejection, immutable target pass, incompatible state/schema/graph/trust/replay rejection. |
+| `100-quarantine` | Artifact, release, set, signer, trust root, snapshot, namespace, and package type quarantine blocking. |
+| `100-emergency` | Allowed bounded override actions and forbidden trust bypass. |
+| `100-version-manifest` | Omitted package activation refs reject output. |
+
+A `PackageActivationValidationMatrix` row must include fixture checksum, expected output checksum or expected no-op, expected error when rejected, mutation prohibition, owner spec, acceptance criterion, and `VersionManifest` requirement. The row must identify the package activation ref classes required by `030.VersionManifestCompletenessMatrix` and the observable error mapping required by `110.PackageActivationErrorObservableMapping`.
+
+Required `100` fixture rows:
+
+| Row ID | Fixture ID | Fixture checksum | Expected error or no-op | Expected output checksum | Mutation prohibition | Acceptance criterion | Blocking status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-100-package-type-unknown` | `fixture-100-package-type-unknown` | TODO | `PACKAGE_TYPE_UNKNOWN` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-002` | blocking |
+| `val-100-package-type-policy-missing` | `fixture-100-package-type-policy-missing` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-003` | blocking |
+| `val-100-package-type-policy-ambiguous` | `fixture-100-package-type-policy-ambiguous` | TODO | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-004` | blocking |
+| `val-100-git-tree-snapshot-unsupported` | `fixture-100-git-tree-snapshot-unsupported` | TODO | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | TODO | no candidate production output | `100-REPOSITORY-FORM-AC-002` | blocking |
+| `val-100-package-set-checksum-mismatch` | `fixture-100-package-set-checksum-mismatch` | TODO | `PACKAGE_SET_CHECKSUM_MISMATCH` | TODO | current active set unchanged | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `val-100-unauthorized-signer` | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
+| `val-100-transparency-evidence-missing` | `fixture-100-transparency-evidence-missing` | TODO | `PACKAGE_TRANSPARENCY_EVIDENCE_MISSING` | TODO | no package activation | `100-TRANSPARENCY-AC-001` | blocking |
+| `val-100-attestation-missing` | `fixture-100-attestation-missing` | TODO | `PACKAGE_ATTESTATION_MISSING` | TODO | no package activation | `100-ATTESTATION-AC-001` | blocking |
+| `val-100-attestation-subject-mismatch` | `fixture-100-attestation-subject-mismatch` | TODO | `PACKAGE_ATTESTATION_SUBJECT_MISMATCH` | TODO | no package activation | `100-ATTESTATION-AC-001` | blocking |
+| `val-100-sbom-missing` | `fixture-100-sbom-missing` | TODO | `PACKAGE_SBOM_MISSING` | TODO | no package activation | `100-SBOM-AC-001` | blocking |
+| `val-100-sbom-subject-mismatch` | `fixture-100-sbom-subject-mismatch` | TODO | `PACKAGE_SBOM_SUBJECT_MISMATCH` | TODO | no package activation | `100-SBOM-AC-001` | blocking |
+| `val-100-dependency-lock-missing` | `fixture-100-dependency-lock-missing` | TODO | `PACKAGE_DEPENDENCY_LOCK_MISSING` | TODO | no package activation | `100-DEPENDENCY-LOCK-AC-001` | blocking |
+| `val-100-dependency-live-resolution-forbidden` | `fixture-100-dependency-live-resolution-forbidden` | TODO | `PACKAGE_DEPENDENCY_LIVE_RESOLUTION_FORBIDDEN` | TODO | no package activation | `100-DEPENDENCY-LOCK-AC-001` | blocking |
+| `val-100-compatibility-failed` | `fixture-100-compatibility-failed` | TODO | `PACKAGE_COMPATIBILITY_FAILED` | TODO | no package activation | `100-COMPATIBILITY-AC-001` | blocking |
+| `val-100-deprecation-window-expired` | `fixture-100-deprecation-window-expired` | TODO | `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | TODO | no new activation | `100-DEPRECATION-WINDOW-AC-002` | blocking |
+| `val-100-lkg-health-gate-failed` | `fixture-100-lkg-health-gate-failed` | TODO | `PACKAGE_LKG_HEALTH_GATE_FAILED` | TODO | no last-known-good mark | `100-LKG-HEALTH-AC-002` | blocking |
+| `val-100-mutable-rollback-target` | `fixture-100-mutable-rollback-target` | TODO | `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | TODO | no package activation | `100-ROLLBACK-AC-001` | blocking |
+| `val-100-rollback-state-incompatible` | `fixture-100-rollback-state-incompatible` | TODO | `PACKAGE_ROLLBACK_STATE_INCOMPATIBLE` | TODO | active set unchanged | `100-ROLLBACK-AC-002` | blocking |
+| `val-100-rollback-graph-incompatible` | `fixture-100-rollback-graph-incompatible` | TODO | `PACKAGE_ROLLBACK_GRAPH_INCOMPATIBLE` | TODO | active set unchanged | `100-ROLLBACK-AC-002` | blocking |
+| `val-100-quarantine-artifact-blocks-release` | `fixture-100-quarantine-artifact-blocks-release` | TODO | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | TODO | no dependent activation | `100-QUARANTINE-AC-001` | blocking |
+| `val-100-quarantine-signer-blocks-activation` | `fixture-100-quarantine-signer-blocks-activation` | TODO | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | TODO | no dependent activation | `100-QUARANTINE-AC-001` | blocking |
+| `val-100-quarantine-clear-not-active` | `fixture-100-quarantine-clear-not-active` | TODO | no-op | TODO | no direct active transition | `100-QUARANTINE-AC-002` | blocking |
+| `val-100-emergency-bypass-forbidden` | `fixture-100-emergency-bypass-forbidden` | TODO | `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | TODO | no package activation | `100-EMERGENCY-AC-001` | blocking |
+| `val-100-version-manifest-package-refs-missing` | `fixture-100-version-manifest-package-refs-missing` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `100-VERSION-MANIFEST-AC-001` | blocking |
+| `val-100-canary-output-isolation` | `fixture-100-canary-output-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` | TODO | no current production output | `100-LIFECYCLE-AC-003` | blocking |
+| `val-100-shadow-output-isolation` | `fixture-100-shadow-output-isolation` | TODO | `PACKAGE_SHADOW_OUTPUT_FORBIDDEN` | TODO | no current production output | `100-LIFECYCLE-AC-003` | blocking |
+
 ### TwoIndependentImplementersCheck
 
 | Field | Required content |
@@ -483,10 +535,25 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `090` | graph apply identical reapply | `fixture-090-lifecycle-identical-reapply` | TODO | idempotent no-op | TODO | no duplicate graph object | `090-LIFECYCLE-AC-002` | blocking |
 | `090` | OCSF endpoint order no graph direction | `ocsf-endpoint-order-no-graph-direction-*` | TODO | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op | TODO | no graph mutation | `090-OCSF-DIRECTION-AC-001` | blocking |
 | `090` | missing flow-role evidence | `flow-role-evidence-required-*` | TODO | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op | TODO | no graph mutation | `090-OCSF-DIRECTION-AC-002` | blocking |
+| `100` | package type unknown | `fixture-100-package-type-unknown` | TODO | `PACKAGE_TYPE_UNKNOWN` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-002` | blocking |
+| `100` | package type policy missing | `fixture-100-package-type-policy-missing` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-003` | blocking |
+| `100` | package type policy ambiguous | `fixture-100-package-type-policy-ambiguous` | TODO | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-004` | blocking |
+| `100` | unsupported Git tree snapshot | `fixture-100-git-tree-snapshot-unsupported` | TODO | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | TODO | no candidate production output | `100-REPOSITORY-FORM-AC-002` | blocking |
 | `100` | unauthorized signer | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
-| `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
-| `100` | canary output isolation | `fixture-100-lifecycle-canary-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` or no-op | TODO | no current production output, no watermark, no last-known-good | `100-LIFECYCLE-AC-003` | blocking |
-| `100` | quarantine blocks dependent activation | `fixture-100-lifecycle-quarantine-blocks-dependent-activation` | TODO | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | TODO | no dependent package activation | `100-LIFECYCLE-AC-005` | blocking |
+| `100` | missing transparency evidence | `fixture-100-transparency-evidence-missing` | TODO | `PACKAGE_TRANSPARENCY_EVIDENCE_MISSING` | TODO | no package activation | `100-TRANSPARENCY-AC-001` | blocking |
+| `100` | missing attestation | `fixture-100-attestation-missing` | TODO | `PACKAGE_ATTESTATION_MISSING` | TODO | no package activation | `100-ATTESTATION-AC-001` | blocking |
+| `100` | missing SBOM | `fixture-100-sbom-missing` | TODO | `PACKAGE_SBOM_MISSING` | TODO | no package activation | `100-SBOM-AC-001` | blocking |
+| `100` | dependency live resolution | `fixture-100-dependency-live-resolution-forbidden` | TODO | `PACKAGE_DEPENDENCY_LIVE_RESOLUTION_FORBIDDEN` | TODO | no package activation | `100-DEPENDENCY-LOCK-AC-001` | blocking |
+| `100` | compatibility failed | `fixture-100-compatibility-failed` | TODO | `PACKAGE_COMPATIBILITY_FAILED` | TODO | no package activation | `100-COMPATIBILITY-AC-001` | blocking |
+| `100` | deprecation window expired | `fixture-100-deprecation-window-expired` | TODO | `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | TODO | no new activation | `100-DEPRECATION-WINDOW-AC-002` | blocking |
+| `100` | LKG health gate failed | `fixture-100-lkg-health-gate-failed` | TODO | `PACKAGE_LKG_HEALTH_GATE_FAILED` | TODO | no last-known-good mark | `100-LKG-HEALTH-AC-002` | blocking |
+| `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | TODO | no package activation | `100-ROLLBACK-AC-001` | blocking |
+| `100` | rollback compatibility failure | `fixture-100-rollback-state-incompatible` | TODO | `PACKAGE_ROLLBACK_STATE_INCOMPATIBLE` | TODO | active set unchanged | `100-ROLLBACK-AC-002` | blocking |
+| `100` | quarantine blocks dependent activation | `fixture-100-quarantine-artifact-blocks-release` | TODO | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | TODO | no dependent package activation | `100-QUARANTINE-AC-001` | blocking |
+| `100` | emergency bypass forbidden | `fixture-100-emergency-bypass-forbidden` | TODO | `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | TODO | no package activation | `100-EMERGENCY-AC-001` | blocking |
+| `100` | package manifest refs missing | `fixture-100-version-manifest-package-refs-missing` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `100-VERSION-MANIFEST-AC-001` | blocking |
+| `100` | canary output isolation | `fixture-100-canary-output-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` | TODO | no current production output or LKG | `100-LIFECYCLE-AC-003` | blocking |
+| `100` | shadow output isolation | `fixture-100-shadow-output-isolation` | TODO | `PACKAGE_SHADOW_OUTPUT_FORBIDDEN` | TODO | no current production output or LKG | `100-LIFECYCLE-AC-003` | blocking |
 | `110` | state-label collapse | `fixture-110-state-label-collapse` | TODO | reject/non-collapse | TODO | no incorrect API state | `110-CLEANUP-AC-002` | blocking |
 | `110` | page token authorization mismatch | `fixture-110-page-token-auth-mismatch` | TODO | `PAGE_TOKEN_INVALID` | TODO | no data disclosure | `110-PAGE-TOKEN-AC-001` | blocking |
 | `110` | new owner state label non-collapse | `fixture-110-feed-closure-state-labels` | TODO | reject/non-collapse | TODO | no authorized negative fact rendering | `110-FEED-CLOSURE-AC-001` | blocking |
@@ -580,7 +647,7 @@ replay_same_event
 | `070` | identity-create, identity-attach, identity-durable-merge, identity-weak-rejection, identity-hard-blocker, identity-candidate-overflow, identity-confidence-band, identity-review-state-machine, identity-selector-safety, identity-split-handoff, identity-explanation-checksum, identity-replay, identity-package-artifact-core-conflict. |
 | `080` | temporal-resolution, knowledge-time-import, late-arrival, gold-correction, assertion-transition, correction-snapshot-ref, gold-correction-no-op-error, replay-equivalence, graph-handoff, temporal-version-manifest. |
 | `090` | active profile exact edge set, observed-connection positive projection, missing/ambiguous flow-role no-edge, unresolved endpoint no-edge, traversal behavior, graph apply lifecycle, graph apply ordering, page-token behavior, query candidate limit, rebuild equivalence, backend taxonomy rejection, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, generic external payload non-pathfinding, and source-kind cleanup safety. |
-| `100` | package activation lifecycle, trust, canary and shadow isolation, rollback, quarantine, emergency behavior, deprecation window expiry, repository unsupported form. |
+| `100` | package type policy, repository form, trust, transparency, attestation, SBOM, dependency lock, compatibility, deprecation, health/LKG, rollback, quarantine, emergency, package manifest completeness, canary and shadow isolation. |
 | `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
 | `130` | analysis mutation, lineage facet, registry non-authority, threat-intel no-identity, risk scoring boundary. |
 
@@ -643,6 +710,8 @@ replay_same_event
 | `120-GRAPH-REBUILD-EQUIVALENCE-AC-001` | Rebuild fixtures prove profile, schema, index, query, eligibility, taxonomy, property, and output checksum equivalence. |
 | `120-GRAPH-ENDPOINT-IDENTITY-AC-001` | Endpoint identity fixtures prove unresolved target hints, graph keys, and selector-only evidence emit no graph endpoint. |
 | `120-GRAPH-PAGE-TOKEN-AC-001` | Page-token fixtures prove TTL, expiry, mismatch, authorization context, derived-view state, and profile-ref identity behavior. |
+| `120-PACKAGE-ACTIVATION-AC-001` | Aggregate acceptance fails while any required package activation fixture is blocked, not run, failed, missing fixture checksum, missing expected-output checksum, missing expected error, or missing mutation-prohibition proof. |
+| `120-PACKAGE-MATRIX-AC-001` | Every `PackageActivationValidationMatrix` row has fixture checksum, expected output checksum, expected error or no-op, mutation prohibition, owner spec, and version manifest requirement. |
 
 ## Definition of Done
 

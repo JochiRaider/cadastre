@@ -330,6 +330,11 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | `replay_equivalence` | Deterministic equality rule for replay outputs and required refs. | Ad hoc checksum or current-state comparison. | `080` | `080` | `120` | canonical |
 | `graph_backend_profile` | Activation profile for a graph serving backend and its preflight requirements. | Backend selection, backend docs, benchmark result. | `090` | `090` | `120` | canonical |
 | `package_set` | Immutable coherent activation target for production packages. | Single package artifact, version string, signature scalar, dependency lock. | `100` | `100` | `120` | canonical |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | `100` | `100` | `120` | TODO: enum confirmation required |
+| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `100` | `100` | `120` | canonical |
+| `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `100` | `100` | `120` | canonical |
+| `package_quarantine` | Immutable block record over package activation targets. | Artifact mutation, signature rewrite, or hidden denylist. | `100` | `100` | `120` | canonical |
+| `emergency_package_override` | Bounded emergency action record. | Trust bypass or unverified activation. | `100` | `100` | `120` | canonical |
 | `validation_matrix` | Executable row set proving success, rejection, no-op, edge, replay, redaction, authorization, and negative authority-boundary behavior. | Test-plan prose or aggregate acceptance claim. | `120` | `120` | `120` | canonical |
 | `deferred_reachability` | Future theoretical reachability domain preserved inactive with no MVP graph or gold effect. | Observed connection, graph traversal, provider analyzer truth. | `200` | none while deferred. | `120` | deferred |
 
@@ -371,7 +376,12 @@ A glossary term may become canonical only when `docs/nlspec/domain.md` adds or u
 | Graph edge delta | Primitive graph edge projection delta. | Cadastre-owned deterministic graph edge ID; not backend ID. | Delta set and graph apply lifecycle. | Governed by graph edge semantics and projected from facts/rules. | `040`, `090` | Resolved. |
 | Graph read-model object | Derived graph serving object after graph apply. | Cadastre graph ID translated through backend profile. | Derived view state and graph apply result. | Served by graph query; drillback to gold/silver/raw. | `090`, `110` | Resolved. |
 | Package release | Immutable package release record. | Artifact digest, subject digest, package type, release version, release checksum. | Package lifecycle and package-set activation. | Included in production package set manifest. | `100` | Resolved. |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | Confirmed `PackageType` token. | Selects package type policy before activation. | `100` | TODO: token list requires product-governance confirmation. |
+| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `PackageTypePolicyRow`, `PackageTypePolicyRowSet`. | Selects package evidence, compatibility, stage, rollback, health, quarantine, and emergency requirements. | `100` | Resolved as owner-routed behavior; active rows still gate use. |
 | Production package set | Coherent activation unit for package runtime behavior. | Immutable package-set checksum. | Promotion, activation, rollback, quarantine, last-known-good. | Provides package roles for DAG stages and validation. | `100`, `030` | Resolved. |
+| `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `LastKnownGoodPackageSet`, `LastKnownGoodHealthGate`. | Permits rollback eligibility only after health gates pass. | `100` | Resolved as owner-routed behavior. |
+| `package_quarantine` | Immutable block record over package activation targets. | Artifact mutation, signature rewrite, or hidden denylist. | `PackageQuarantineRecord`, `QuarantineScopePolicy`. | Blocks dependent activation or rollback according to target kind and scope. | `100` | Resolved as owner-routed behavior. |
+| `emergency_package_override` | Bounded emergency action record. | Trust bypass or unverified activation. | `EmergencyPackageOverrideRecord`. | Allows quarantine, retirement, abort, verified rollback, or deprecation-window extension only. | `100` | Resolved as owner-routed behavior. |
 | Analysis finding | Non-authoritative analysis output. | Finding identity as defined by analysis owner. | Analysis/workflow lifecycle only. | May reference graph query and evidence but cannot mutate facts or graph state. | `130` | Resolved. |
 | Registry governance artifact | Governance metadata artifact. | Registry artifact checksum and schema refs. | Registry lifecycle. | May annotate owners/classifications/policies but not define fact authority. | `130` | Resolved. |
 | Reachability analysis artifact | Future inactive reachability analysis output. | Future query/result/artifact checksum when activated. | Inactive deferred until promoted. | Must not emit MVP facts, graph edges, or graph properties. | `200` | Inactive deferred. |
@@ -597,25 +607,31 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | --- | --- | --- | --- |
 | Lakehouse/persistence | Feed profiles, raw imports, table snapshots, commits, dataset versions, retention, maintenance. | System-of-record vocabulary and table-state non-substitution rule. | Treating lakehouse product defaults, table names, snapshot times, object keys, or catalog names as fact authority. |
 
-### 18.5 Domain model versus API/UI specs
+### 18.5 Domain model versus package activation specs
+
+| Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
+| --- | --- | --- | --- |
+| Package activation | Package type policy, package release manifests, package-set activation, trust, repository evidence, compatibility, health gates, rollback, quarantine, and emergency override. | Package vocabulary routing and package-versus-domain distinction. | Treating package name, module name, artifact filename, repository ref, dependency lock, SBOM existence, signature scalar, or emergency override as activation authority. |
+
+### 18.6 Domain model versus API/UI specs
 
 | Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
 | --- | --- | --- | --- |
 | API/UI | Request/response shapes, state labels, redaction, authorization, health, errors, audit. | Stable term mapping and label-versus-identity rule. | Treating UI labels, displayed order, page tokens, or labels as stable domain identity. |
 
-### 18.6 Domain model versus validation and fixture specs
+### 18.7 Domain model versus validation and fixture specs
 
 | Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
 | --- | --- | --- | --- |
 | Validation/fixtures | Validation matrices, fixtures, golden corpus, acceptance reports, validation acceptance. | Binary root-domain acceptance criteria. | Treating test fixture shape as domain behavior owner or using validation artifact to invent behavior. |
 
-### 18.7 Domain model versus package and implementation details
+### 18.8 Domain model versus package and implementation details
 
 | Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
 | --- | --- | --- | --- |
 | Packages/implementation | Package releases, package-set activation, trust, code modules, local functions, package names, build and deployment mechanisms. | Package-domain boundary and implementation-mapping exception. | Treating module/package/function/table/route names as domain definitions or production activation authority. |
 
-### 18.8 Cadastre domain concepts versus external schema or external-system concepts
+### 18.9 Cadastre domain concepts versus external schema or external-system concepts
 
 | Adjacent area | What it owns | What root `domain.md` owns | Forbidden substitution |
 | --- | --- | --- | --- |
@@ -816,6 +832,7 @@ Drift-control rules:
 | `DOM-TODO-009` | TODO: Complete graph edge-family validation evidence for the MVP graph profile. | Relationship-family and graph mapping promotion. | `090` and `120` owner evidence. | `090` graph edge rows plus `120-GRAPH-PROFILE-CLOSURE-*` fixture and expected-output checksums. | Domain routing is resolved to `observed_connection`; authoritative graph edge-family closure remains blocked while any required `120` graph validation checksum is `TODO`, blocked, failed, or not run. |
 | `DOM-TODO-010` | TODO: Confirm lifecycle transition tables and validation evidence for every production-affecting lifecycle machine. | Lifecycle behavior. | `030`, `020`, `070`, `090`, `100`, `120` owner decisions and `120` validation evidence. | `070.IdentityReviewCaseStateMachine.v1` TODO and `120` lifecycle fixture checksums. | Runtime behavior is routed by exact machine ID, but authoritative lifecycle closure remains blocked until owner-local TODOs and lifecycle validation rows close. |
 | `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | `000` export/status rows. | Treat `domain.md` as no-runtime-export vocabulary reference. |
+| `DOM-TODO-012` | TODO: Confirm canonical `PackageType` enum tokens before authoritative package activation handoff. | Package vocabulary, package type policy, deprecation policy, compatibility policy, validation matrix rows, and version-manifest refs. | Product governance plus `100`, `000`, `030`, and `120` owner decisions. | `100.PackageType`, `100.PackageTypePolicyRow`, `000` package volatility rows, and `120-PACKAGE-*` fixtures. | Package vocabulary is routed to `100`; production promotion remains blocked while enum confirmation is unresolved. |
 
 A downstream implementation must not resolve a `TODO:` by inference.
 
@@ -848,6 +865,7 @@ Unresolved rows in this section are valid only when the named owner spec contain
 | `DOM-AC-019` | No external-draft evidence table remains in this document. |
 | `DOMAIN-SCHEMA-PATCH-AC-001` | Root vocabulary routes all core record field schemas to `040`. |
 | `DOMAIN-SCHEMA-PATCH-AC-002` | Root vocabulary distinguishes semantic fact key from immutable fact record ID. |
+| `DOM-PACKAGE-TERMS-AC-001` | `domain.md` routes `package_type`, `package_type_policy`, `last_known_good_package_set`, `package_quarantine`, and `emergency_package_override` to `100` and defines no runtime schema or algorithm for them. |
 | `DOMAIN-SCHEMA-PATCH-AC-003` | Root vocabulary states that `EvidenceRef` is not raw payload storage. |
 | `DOM-AC-020` | The root-domain owner map uses owner specs and exported contract names only. |
 | `DOM-LIFECYCLE-AC-001` | `domain.md` routes lifecycle machines to owner specs by exact machine ID and does not restate transition matrices. |

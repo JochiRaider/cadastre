@@ -381,6 +381,47 @@ Caller-visible output must not reveal private source bindings, private routes, r
 | package-set artifact mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | package-set ref and release manifest refs | Health state only. |
 | owner spec mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | declared and required owner specs | Health state only. |
 
+### PackageActivationErrorObservableMapping
+
+Every package activation, rollback, quarantine, last-known-good, emergency, and package manifest error owned by `100` must appear in `ErrorCodeRegistry`. Package errors must expose caller-visible diagnostics without leaking private package evidence.
+
+Caller-visible package error fields are code, owner, severity, retryability, affected package-set checksum or redacted ref class, redaction state, and error correlation ID. Audit-visible fields may include package type policy row refs, repository metadata refs, repository snapshot refs, trust refs, signature verification refs, transparency refs, attestation refs, provenance refs, SBOM refs, dependency lock refs, compatibility refs, rollback refs, quarantine refs, emergency refs, manifest refs, lifecycle refs, and validation refs.
+
+Artifact payload locations, signer secrets, private repository paths, raw SBOM contents, private source bindings, unauthorized package evidence, and private package registry credentials must not be caller-visible.
+
+| Error code | Owner | Severity | Retryability | Caller-visible behavior | Audit-visible refs |
+| --- | --- | --- | --- | --- | --- |
+| `PACKAGE_TYPE_UNKNOWN` | `100` | error | no, until release manifest changes | activation blocked; current active set preserved | release manifest ref, supplied token redacted when private |
+| `PACKAGE_TYPE_POLICY_MISSING` | `100` | blocked | no, until policy row activates | activation blocked | package type, target environment, policy row-set ref |
+| `PACKAGE_TYPE_POLICY_AMBIGUOUS` | `100` | error | no, until policy rows change | activation blocked | matching policy row refs when authorized |
+| `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | `100` | error | no, until repository form changes | activation blocked | release manifest ref, repository form |
+| `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | `100` | security error | no, until repository metadata is remediated | activation blocked | anti-rollback state ref, metadata refs |
+| `PACKAGE_REPOSITORY_METADATA_EXPIRED` | `100` | blocked | yes after metadata refresh | activation blocked | metadata refs, expiration evidence |
+| `PACKAGE_SIGNER_UNAUTHORIZED` | `100` | security error | no, until trust policy or signer changes | activation blocked | signature verification result, signer ref redacted by policy |
+| `PACKAGE_SIGNATURE_THRESHOLD_FAILED` | `100` | security error | no, until signature evidence changes | activation blocked | threshold row, verification refs |
+| `PACKAGE_TRANSPARENCY_EVIDENCE_MISSING` | `100` | blocked | no, until evidence changes | activation blocked | transparency policy row ref, release subject digest ref |
+| `PACKAGE_TRUST_ROOT_INACTIVE` | `100` | security error | no, until trust policy changes | activation blocked | trust root ref, policy row ref |
+| `PACKAGE_ATTESTATION_MISSING` | `100` | blocked | no, until evidence changes | activation blocked | attestation policy row ref |
+| `PACKAGE_ATTESTATION_SUBJECT_MISMATCH` | `100` | error | no, until evidence or release changes | activation blocked | attestation ref, expected subject digest ref |
+| `PACKAGE_PROVENANCE_POLICY_FAILED` | `100` | error | no, until provenance or policy changes | activation blocked | provenance policy row ref, build provenance ref |
+| `PACKAGE_SBOM_MISSING` | `100` | blocked | no, until evidence changes | activation blocked | SBOM policy row ref |
+| `PACKAGE_SBOM_SUBJECT_MISMATCH` | `100` | error | no, until evidence or release changes | activation blocked | SBOM ref, expected subject digest ref |
+| `PACKAGE_SBOM_POLICY_FAILED` | `100` | error | no, until SBOM or policy changes | activation blocked | SBOM policy row ref, SBOM ref |
+| `PACKAGE_DEPENDENCY_LOCK_MISSING` | `100` | blocked | no, until lock evidence changes | activation blocked | dependency lock policy row ref |
+| `PACKAGE_DEPENDENCY_LOCK_MISMATCH` | `100` | error | no, until lock or manifest changes | activation blocked | lock checksum refs, dependency digest refs |
+| `PACKAGE_DEPENDENCY_LIVE_RESOLUTION_FORBIDDEN` | `100` | security error | no | activation blocked | attempted dependency source redacted |
+| `PACKAGE_COMPATIBILITY_FAILED` | `100` | blocked | no, until compatibility rows change | activation or rollback blocked | compatibility row refs and failed axis |
+| `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | `100` | blocked | no, until policy or release changes | new activation blocked | deprecation policy row ref, release refs |
+| `PACKAGE_LKG_HEALTH_GATE_FAILED` | `100` | blocked | owner-defined | active-but-not-last-known-good | health gate ref, failed output class refs |
+| `PACKAGE_ROLLBACK_STATE_INCOMPATIBLE` | `100` | blocked | no, until rollback target or state changes | rollback blocked; active set unchanged | rollback policy ref, state refs |
+| `PACKAGE_ROLLBACK_REPLAY_INPUT_INSUFFICIENT` | `100` | blocked | yes after inputs restore | rollback blocked; active set unchanged | replay input refs, manifest refs |
+| `PACKAGE_ROLLBACK_GRAPH_INCOMPATIBLE` | `100` | blocked | no, until graph evidence changes | rollback blocked; active set unchanged | graph rebuild or delta reapply refs |
+| `PACKAGE_ROLLBACK_TRUST_INCOMPATIBLE` | `100` | security error | no, until trust policy changes | rollback blocked; active set unchanged | trust refs, rollback trust-allow refs |
+| `PACKAGE_ROLLBACK_QUARANTINE_BLOCKED` | `100` | blocked | no, until quarantine successor record permits | rollback blocked; active set unchanged | quarantine record refs |
+| `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | `100` | blocked | no, until successor quarantine record permits | activation blocked | quarantine target refs and scope policy refs |
+| `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | `100` | security error | no | no activation output and current active set preserved | emergency override record ref, attempted bypass class |
+| `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | `100` | blocked | no, until manifest changes | output rejected before visibility | missing package manifest ref classes |
+
 ### GraphQueryErrorRegistryRows
 
 | Error code | Owner | Severity | Retryability | Caller-visible behavior | Audit-visible refs |
@@ -484,6 +525,21 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | late discard forbidden | `error` | no, until route policy changes | preserves evidence; blocks discard | temporal_health | evidence refs redacted |
 | snapshot-ref failure | `blocked` | no, until immutable old/new refs exist | blocks correction and replay output | replay_health | snapshot refs redacted |
 
+| package type policy missing | `blocked` | no, until policy row activates | activation blocked; current active package set preserved | package_health | policy refs redacted |
+| unsupported repository form | `error` | no, until release materializes into supported form | activation blocked; current active package set preserved | package_health | repository refs redacted |
+| repository freshness blocked | `blocked` | yes after metadata refresh unless rollback detected | activation blocked; current active package set preserved | package_health | metadata refs redacted |
+| trust/signature blocked | `error` | no, until trust or signature evidence changes | activation blocked; current active package set preserved | package_health | signer and trust refs redacted |
+| attestation/provenance blocked | `blocked` | no, until evidence changes | activation blocked; current active package set preserved | package_health | provenance refs redacted |
+| SBOM/license/vulnerability blocked | `blocked` | no, until SBOM or policy changes | activation blocked; current active package set preserved | package_health | raw SBOM bytes redacted |
+| compatibility blocked | `blocked` | no, until compatibility rows change | activation or rollback blocked; active set unchanged | package_health | failed axis visible when authorized |
+| deprecation window expired | `blocked` | no, until policy changes or verified rollback applies | new activation blocked | package_health | release refs redacted |
+| post-activation health failed | `blocked` | owner-defined | active-state evidence preserved; last-known-good not marked | package_health | health gate refs redacted |
+| last-known-good not marked | `blocked` | owner-defined | active but not rollback-eligible as LKG | package_health | health refs redacted |
+| rollback compatibility blocked | `blocked` | no, until rollback target or evidence changes | active set unchanged | package_health | rollback refs redacted |
+| quarantine blocked activation | `blocked` | no, until successor quarantine record permits | no artifact mutation and no activation output | package_health | quarantine target refs redacted |
+| emergency bypass forbidden | `error` | no | security error; no activation output | package_health | emergency override refs redacted |
+| VersionManifest package refs missing | `blocked` | no, until manifest changes | output rejected before visibility | package_health | missing ref classes visible; private refs redacted |
+
 ### Page token canonicalization
 
 API page tokens must be generated from `040.CanonicalJSON` over query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. Backend cursors or internal IDs are forbidden as page token identity.
@@ -568,6 +624,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-LIFECYCLE-ERROR-AC-002` | Lifecycle errors never collapse to `unknown`, `not_checked`, pass, or fail. |
 | `110-LIFECYCLE-HEALTH-AC-001` | Lifecycle health rows are diagnostic and do not mutate facts, graph state, package state, completeness, or watermarks. |
 | `110-OCSF-MAP-ERROR-AC-001` | Every new `050`, `060`, and `090` OCSF mapping, source-extension, external-schema non-authority, and flow-role evidence code appears in `ErrorCodeRegistry` with severity, retryability, redaction, owner, and caller-visible behavior. |
+| `110-PACKAGE-ERROR-AC-001` | Every `100` package activation, rollback, quarantine, last-known-good, and emergency error code appears in `ErrorCodeRegistry`. |
+| `110-PACKAGE-ERROR-AC-002` | Package activation errors expose audit refs but do not leak private artifact payloads, private source bindings, raw SBOM bytes, unauthorized package evidence, signer secrets, or private repository paths. |
+| `110-PACKAGE-HEALTH-AC-001` | Active-but-not-last-known-good, rollback-blocked, quarantine-blocked, and emergency-bypass-forbidden states render distinctly. |
 | `110-OCSF-MAP-ERROR-AC-002` | Mapping-blocked observations render as `error`, source-extension redaction failures render as security errors, and OCSF non-authority blocks never render as authorized negative facts or compliance pass/fail states. |
 | `110-IDENTITY-ERROR-AC-001` | Every new `070` resolver error appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible refs, and fixture ID. |
 | `110-IDENTITY-ERROR-AC-002` | Resolver errors must use the specific `070` code when applicable and must not collapse to generic validation, unknown, pass, or fail states. |

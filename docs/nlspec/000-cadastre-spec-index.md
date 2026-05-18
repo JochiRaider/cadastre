@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, and reachability-prohibition rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, or graph-serving output is in implementation scope. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, and reachability-prohibition rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, or graph-serving output is in implementation scope. Package activation handoff must include `120-PACKAGE-TYPE-*`, `120-PACKAGE-REPOSITORY-*`, `120-PACKAGE-TRUST-*`, `120-PACKAGE-ATTESTATION-SBOM-*`, `120-PACKAGE-COMPATIBILITY-*`, `120-PACKAGE-DEPRECATION-*`, `120-PACKAGE-LKG-*`, `120-PACKAGE-ROLLBACK-*`, `120-PACKAGE-QUARANTINE-*`, `120-PACKAGE-EMERGENCY-*`, and `120-PACKAGE-VERSION-MANIFEST-*` rows before authoritative handoff when `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -223,6 +223,31 @@ The following identity resolver artifacts and runtime state records must have ex
 | `ResolverActivationReport` | `runtime_state_record` | `070` | `070` | yes for activation and promotion | required when activation or promotion is in scope |
 | `ResolverShadowRun` | `runtime_state_record` | `070` | `070` | yes for shadow/canary promotion | required when promotion uses shadow or canary evidence |
 
+### Required package activation volatility classifications
+
+The following package activation contracts, row sets, policies, runtime state records, and release evidence classes must have exactly one volatility classification before authoritative package activation handoff. Runtime behavior remains owned by `100`; activation-controlled artifacts instantiate that behavior and must be referenced through `030.ActivationControlledArtifactRef` when output-affecting.
+
+| Artifact or contract | Volatility class | Owner spec | Stable core owner | VersionManifest requirement |
+| --- | --- | --- | --- | --- |
+| `PackageType` | `stable_core_contract` | `100` | `100` | required when package activation affects output |
+| `PackageTypePolicyRowSet` | `activation_controlled_artifact` | `100` | `100` | required |
+| `PackageRepositoryModelRowSet` | `activation_controlled_artifact` | `100` | `100` | required |
+| `PackageTrustPolicy` | `activation_controlled_artifact` | `100` | `100` | required |
+| `PackageTransparencyEvidencePolicy` | `activation_controlled_artifact` | `100` | `100` | required when policy consulted |
+| `PackageProvenancePolicy` | `activation_controlled_artifact` | `100` | `100` | required when provenance required |
+| `PackageSBOMPolicy` | `activation_controlled_artifact` | `100` | `100` | required when SBOM required |
+| `PackageDependencyLockPolicy` | `activation_controlled_artifact` | `100` | `100` | required when dependency lock required |
+| `PackageCompatibilityMatrix` | `activation_controlled_artifact` | `100` | `100` | required |
+| `PackageDeprecationWindowPolicy` | `activation_controlled_artifact` | `100` | `100` | required |
+| `LastKnownGoodHealthGate` | `activation_controlled_artifact` | `100` | `100` | required |
+| `RollbackCompatibilityPolicy` | `activation_controlled_artifact` | `100` | `100` | required for rollback |
+| `QuarantineScopePolicy` | `activation_controlled_artifact` | `100` | `100` | required when quarantine may affect activation |
+| `EmergencyPackageOverrideRecord` | `runtime_state_record` | `100` | `100` | required when emergency action affects eligibility |
+| `PackageSignatureVerificationResult` | `runtime_state_record` | `100` | `100` | required |
+| `PackageSBOMRef` | `runtime_state_record` or immutable release evidence | `100` | `100` | required when SBOM policy requires it |
+| `PackageBuildProvenance` | `runtime_state_record` or immutable release evidence | `100` | `100` | required when provenance policy requires it |
+| `PackageActivationFailureEvent` | `runtime_state_record` | `100` | `100` | required on failure |
+
 ## Document Registry
 
 | ID | Path | Document class | Status | Owner | May drive implementation | Source-of-truth role |
@@ -286,8 +311,8 @@ The following identity resolver artifacts and runtime state records must have ex
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | closed_local | validation rows required; concrete activation-controlled row instances remain blockers only when selected for production scope |
 | Graph projection and serving | `090` | 040,050,060,070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | active profile closure is owner-closed only when `090` has no graph-profile TODOs and `120` graph profile, query, eligibility, endpoint identity, page-token, apply-order, rebuild, and reachability-prohibition rows pass |
 | GraphApplyLifecycleMachine | `090` | `030`, `080`, `110`, `120` | derived_projection | `stable_core_contract` | 120 | closed_local | graph apply fixtures required |
-| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_validation | package lifecycle fixture checksums remain TODO |
-| PackageSetActivationLifecycleMachine | `100` | `030`, `110`, `120` | runtime_activation | `stable_core_contract` | 120 | closed_local | package lifecycle fixtures required |
+| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_validation | package type policy coverage, repository form closure, supply-chain evidence rows, rollback/quarantine/emergency rows, health gates, manifest completeness, and fixture checksums remain TODO |
+| PackageSetActivationLifecycleMachine | `100` | `030`, `110`, `120` | runtime_activation | `stable_core_contract` | 120 | closed_local | package lifecycle, LKG, rollback, quarantine, and emergency fixtures required |
 | API, errors, security | `110` | all owner specs | runtime_api | `stable_core_contract` | 120 | blocked_validation | page-token expiration bounds are closed locally; graph response context, reachability wording, and error-registry fixture checksums remain validation-blocked |
 | Validation and acceptance | `120` | 000 and all owner specs | validation | `stable_core_contract` | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
 | ValidationAcceptanceLifecycleMachine | `120` | `000`, `030`, domain | validation | `stable_core_contract` | 120 | closed_local | validation lifecycle fixtures required |
@@ -425,6 +450,9 @@ Archived documents are historical reference only and never implementation author
 | `000-STATUS-CONSISTENCY-AC-003` | `ValidateSpecSet` fails owner-spec runtime contradictions with `OWNER_SPEC_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-004` | ADR status values in files and registry rows are members of `SpecStatus` and use `accepted_rationale` for accepted non-runtime rationale. |
 | `000-STATUS-CONSISTENCY-AC-005` | Every manifest path has exactly one registry row or explicit non-registry reason. |
+
+| `000-PACKAGE-CLOSURE-AC-001` | Promotion fails when any required package activation validation group is absent, blocked, not run, failed, or contains `TODO` checksums. |
+| `000-PACKAGE-VOLATILITY-AC-001` | Every package activation contract, row set, policy, runtime state record, and release evidence class has exactly one volatility class. |
 
 ## Open Questions
 
