@@ -435,10 +435,18 @@ graph_rebuild_equivalence_policy
 event_sequence_validation_corpus
 bitemporal_query_mode_visibility_policy
 graph_projection_profile
+graph_projection_row_set
+graph_edge_semantics_row_set
+graph_traversal_class_row_set
+graph_object_output_eligibility_row_set
+graph_property_evidence_policy
 graph_backend_profile
+graph_backend_taxonomy_mapping_profile
 graph_read_model_schema_profile
 graph_query_translation_profile
 graph_apply_profile
+derived_view_lag_policy
+graph_rebuild_manifest_profile
 analysis_rule_bundle
 registry_governance_artifact
 package_release
@@ -569,10 +577,10 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Late-arrival output | late-arrival policy row ref, late-arrival route state, temporal resolution ref, authority/completeness/coverage/staleness refs, absence refs when applicable, quarantine refs when selected, and watermark refs when consulted. |
 | Replay output | `ReplayEquivalencePolicy` output-class row ref, `ReplayInputSufficiencyCheck` ref, replay equivalence checksum, required owner-specific included-field refs, excluded volatile-field list, and failure-precedence result. |
 | CDC-shaped feed replay output | CDC raw subtype refs, schema-history refs, offset refs, tombstone refs, heartbeat refs, replay sufficiency check, and non-authority diagnostics proving CDC metadata was not used as fact time or absence authority. |
-| Graph handoff output | `GoldFactChangeSet` ref, graph handoff effect ref, projection profile ref when known, `060.AbsenceDerivationResult` refs for expiry or cleanup, and validation refs. |
+| Graph handoff output | `GoldFactChangeSet` ref, graph handoff effect ref, projection profile ref when known, `070.GraphCorrectionHandoff` refs when identity split projection occurs, resolver explanation checksum when split-driven, `060.AbsenceDerivationResult` refs for expiry or cleanup, and validation refs. |
 | Absence, cleanup, retraction, or graph expiry output | requested effect token, `060.AbsenceDerivationResult`, `SourceAuthorityClosureMatrix` validation result ref or validation row ref, and all row-set refs consulted by `DeriveAbsenceOrUnknown`. |
 | Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, completeness decision refs, source-authority closure refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
-| Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, graph apply lifecycle transition evidence, apply result. |
+| Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, and derived-view state refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
 | Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs, package lifecycle transition evidence, and last-known-good evidence when applicable. |
@@ -597,6 +605,8 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | `replay_sufficiency_check_refs` | Required for replay output | One `080.ReplayInputSufficiencyCheck` ref per replay output class. |
 | `replay_equivalence_policy_refs` | Required for replay output | Output-class row refs and checksums for every replayed output class. |
 | `graph_handoff_effect_refs` | Required when graph projection depends on correction effects | Canonically sorted `080` graph handoff effect refs and related authority refs. |
+| `graph_profile_closure_refs` | Required when graph projection, graph apply, graph query, or graph rebuild affects output | Projection profile, projection rows, edge semantics, traversal classes, output eligibility, property policy, taxonomy mapping, query translation, schema profile, apply profile, lag policy, and validation refs. |
+| `graph_serving_state_refs` | Required when graph query serving or rebuild promotion affects output | Derived-view state, backend schema fingerprint, graph apply result, graph rebuild manifest, graph index consistency check, page-token policy refs, and canonical graph output checksum refs. |
 | `lifecycle_machine_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Machine ID, version, owner, and machine checksum refs. |
 | `lifecycle_transition_evidence_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Canonically sorted transition evidence refs and checksums. |
 | `lifecycle_state_artifact_refs` | Required when persisted lifecycle state artifacts affect output, replay, activation, graph apply, watermark eligibility, or CI gating | Subject refs, state artifact refs, and checksums. |
@@ -715,6 +725,10 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-CORRECTION-MANIFEST-AC-001` | Missing old snapshot ref, new snapshot ref, table-set checksum, or retention-protection ref fails before correction output. |
 | `030-REPLAY-MANIFEST-AC-001` | Missing replay equivalence row ref or replay sufficiency check ref fails before replay output. |
 | `030-GRAPH-HANDOFF-MANIFEST-AC-001` | Graph handoff refs appear in `VersionManifest` whenever graph projection depends on correction effects. |
+| `030-GRAPH-PROFILE-MANIFEST-AC-001` | Graph projection, apply, query, rebuild, or replay fails with `VERSION_MANIFEST_INCOMPLETE` when any graph profile closure artifact ref is omitted. |
+| `030-GRAPH-PROFILE-MANIFEST-AC-002` | Edge semantics, output eligibility, query translation, backend taxonomy mapping, property policy, and derived-view lag refs are manifest-included whenever they affect graph output or serving. |
+| `030-GRAPH-REBUILD-MANIFEST-AC-001` | Graph rebuild promotion fails unless manifest refs include rebuild manifest, index consistency check, schema fingerprint, and canonical output checksum inputs. |
+| `030-IDENTITY-SPLIT-GRAPH-HANDOFF-AC-001` | Identity split graph handoff output includes `070.GraphCorrectionHandoff` refs and resolver explanation checksum refs. |
 
 ## Definition of Done
 

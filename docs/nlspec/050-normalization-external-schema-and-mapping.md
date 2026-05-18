@@ -108,6 +108,20 @@ If a mapping bundle intends an external schema field to be considered by authori
 
 Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must fail with `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
 
+### FlowRoleEvidenceMappingHandoff
+
+`FlowRoleEvidence` is Cadastre-owned evidence outside OCSF `normalized_fields`. Mapping bundles may preserve OCSF endpoint fields as normalized observation metadata, but they must not synthesize `FlowRoleEvidence` from endpoint field order.
+
+| Source direction condition | Mapping behavior | Graph handoff effect |
+| --- | --- | --- |
+| Explicit source payload direction evidence accepted by a `050` mapping rule | Emit a `FlowRoleEvidence` item with source path refs, confidence, ambiguity state, NAT/proxy/aggregation flags when present, and field-quality metadata. | `090` may consume the item only if it qualifies under the active graph projection row. |
+| OCSF `src_endpoint` and `dst_endpoint` present without accepted explicit flow-role evidence | Preserve endpoints in `normalized_fields` when the OCSF mapping row permits them; emit no `FlowRoleEvidence` item. | `090` must emit no `observed_connection` direction from endpoint order. |
+| Ambiguous endpoint role, NAT uncertainty, proxy uncertainty, sensor aggregation, or collection-point uncertainty | Emit no qualifying `FlowRoleEvidence`; record field-quality or diagnostic metadata. | `090` must no-op or emit `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` when the projection attempt is observable. |
+| DNS or DHCP observation with endpoint-like fields | Emit no `FlowRoleEvidence` by default. | No `observed_connection` edge unless a later active graph projection row and qualifying flow-role evidence explicitly permit it. |
+| `cadastre_only` network-context row | May emit Cadastre-only context metadata when the row permits it. | No graph direction unless `090` consumes qualifying flow-role evidence. |
+
+Absent or ambiguous source direction emits no qualifying `FlowRoleEvidence` item. It must not be converted into inferred graph direction, inferred reachability, service access, or source authority.
+
 ### ObservationToOCSFMappingRow schema
 
 `ObservationToOCSFMappingRow` is the stable row interface for mapping one Cadastre observation subtype and discriminator state to one external schema output class. Concrete row instances are activation-controlled artifacts. A row instance may affect production output only through `030.ActivationControlledArtifactRef` with `artifact_class = observation_to_ocsf_mapping_row_set`.
@@ -455,6 +469,10 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-PROJECTION-REPLAY-AC-001` | Exact projection replay matches projection profile, mapping refs, redaction refs, output checksum, loss-manifest checksum, and `VersionManifest` ref. |
 | `050-PROJECTION-REPLAY-AC-002` | Projection profile mismatch, loss-manifest mismatch, redaction-policy mismatch, or output checksum mismatch blocks replay before output. |
 | `050-PROJECTION-REPLAY-AC-003` | Differences only in export job ID, request correlation ID, execution duration, or display timestamp are excluded volatile-field differences. |
+| `050-FLOW-ROLE-HANDOFF-AC-001` | Explicit source direction evidence accepted by a mapping rule emits `FlowRoleEvidence` with evidence refs and field-quality metadata. |
+| `050-FLOW-ROLE-HANDOFF-AC-002` | OCSF endpoint fields without explicit flow-role evidence emit no `FlowRoleEvidence` item and cannot determine graph direction. |
+| `050-FLOW-ROLE-HANDOFF-AC-003` | Ambiguous endpoint roles, NAT/proxy uncertainty, aggregation uncertainty, DNS, and DHCP defaults emit no observed-connection direction. |
+| `050-FLOW-ROLE-HANDOFF-AC-004` | `cadastre_only` network-context rows remain metadata unless `090` consumes qualifying flow-role evidence. |
 
 ## Definition of Done
 

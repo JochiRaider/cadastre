@@ -127,6 +127,79 @@ Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, que
 
 `ProjectGraphDeltas`, `ApplyGraphDelta`, `QueryGraph`, and `RebuildGraph` must validate required activation artifact refs through `030.ActivationControlledArtifactRef` and include every output-affecting ref in `VersionManifest`.
 
+### MVPActiveGraphProjectionProfile
+
+The only active MVP graph projection profile is `mvp-observed-flow-graph.v1`. A production graph projection profile with any other profile ID must remain inactive unless a later authoritative spec-set version adds its profile row, semantics rows, output eligibility rows, query translation rows, validation rows, and promotion refs.
+
+| Profile property | Required MVP value |
+| --- | --- |
+| `profile_id` | `mvp-observed-flow-graph.v1` |
+| Active edge type set | Exactly `observed_connection`. |
+| Active node output set | Exactly `projected_canonical_node`. |
+| Source fact family | Authorized `GoldFact` records with fact type `observed_network_flow_fact` and qualifying flow-role evidence. |
+| Endpoint identity | Both endpoints must resolve to `070.CanonicalEntity` refs through qualifying `070.IdentityDecision` output. |
+| Direction source | `FlowRoleEvidence` consumed under `mvp-flow-role-directed-v1`; OCSF endpoint order and backend edge convention are forbidden direction inputs. |
+| Structural globals | None emitted. `StructuralGlobalNode` rows are inactive for MVP. |
+| Generic external graph payload | Non-emitting by default and never pathfinding-eligible. |
+| Theoretical reachability | `has_theoretical_reachability`, modeled reachability facts, boolean reachability properties, and unqualified reachability wording are prohibited. |
+| Backend identity | Backend-native IDs must not appear in graph IDs, selectors, evidence refs, page tokens, query cursors, or drillback keys. |
+| Unsupported or missing input | Emit deterministic no-op or the most specific graph error; do not infer nodes, edges, traversal, expiry, cleanup, or reachability. |
+
+### GraphProjectionProfileRow schema
+
+A concrete graph projection profile row may affect output only through `030.ActivationControlledArtifactRef` with `artifact_class = graph_projection_profile`. Each row must be validated before any graph delta is persisted.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `profile_id` | Yes | none | Stable profile ID. MVP value is `mvp-observed-flow-graph.v1`. |
+| `input_fact_type` | Yes | none | Exact `GoldFact` fact type. Wildcards are forbidden. |
+| `source_predicate` | Yes | none | Exact predicate or fact-family discriminator consumed by the row. |
+| `allowed_assertion_states` | Yes | none | Closed set imported from `040` and `080`; omission rejects projection. |
+| `temporal_policy_ref` | Yes | none | Exact `080` temporal or correction policy ref that governs valid/known intervals. |
+| `authority_ref` | Yes | none | Exact `060.SourceAuthorityProfileRow` ref or authorized positive-fact source ref. |
+| `endpoint_identity_requirement` | Yes | `resolved_canonical_entity_required` | MVP requires resolved canonical endpoint identity for both endpoints. |
+| `node_projection_refs` | Yes | none | Refs to node projection rows; MVP allows only `projected_canonical_node`. |
+| `edge_projection_ref` | Yes for edge-emitting rows | none | Must name one active edge projection row and its `GraphEdgeSemanticsRegistry` row. |
+| `property_mapping_refs` | Yes | empty only when the row emits no object | Refs to `MVPGraphPropertyMapping` rows. |
+| `edge_semantics_row_ref` | Required for edges | none | Missing row emits `GRAPH_EDGE_SEMANTICS_ROW_MISSING`. |
+| `output_eligibility_refs` | Yes | none | Exact refs to closed `GraphObjectOutputEligibilityRow` rows. |
+| `backend_taxonomy_mapping_ref` | Yes | none | Active `GraphBackendTaxonomyMappingProfile` ref. |
+| `query_translation_profile_ref` | Yes | none | Active `GraphQueryTranslationProfile` ref for graph-serving output. |
+| `no_op_rules` | Yes | none | Must cover missing flow role, ambiguous flow role, unresolved endpoint, unsupported source fact, prohibited reachability, and generic external payload cases. |
+| `validation_refs` | Yes | none | Non-empty refs to passing `120.GraphActiveProfileClosureValidationMatrix` rows. |
+| `activation_scope` | Yes | none | Scope in which the row may affect graph output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### MVPGraphNodeProjectionRows
+
+| Node projection row | Input | Required identity | Emitted object | Default when unavailable | Validation rows |
+| --- | --- | --- | --- | --- | --- |
+| `mvp-project-canonical-node-v1` | Resolved endpoint canonical entity ref from `070` output | Qualifying `IdentityDecision` and `CanonicalEntity` ref | `projected_canonical_node` | Emit no node and block dependent edge with `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`. | `val-090-unresolved-endpoint-no-edge`, `val-070-graph-endpoint-requires-identity-decision` |
+| `mvp-structural-global-node-disabled-v1` | Any structural global request | n/a | none | Deterministic no-op; structural global output remains inactive. | `val-090-mvp-active-profile-exact-edge-set` |
+| `mvp-generic-external-payload-disabled-v1` | Source-native graph payload or graph key | n/a | none | Deterministic no-op; payload may be retained only outside pathfinding. | `val-090-generic-external-payload-not-pathfinding` |
+
+### MVPGraphEdgeProjectionRows
+
+| Edge projection row | Required inputs | Direction rule | Edge ID inputs | Confidence | Temporal fields | Evidence refs | Traversal class | Non-implication | No-op or error behavior |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `mvp-observed-connection-edge-v1` | `GoldFact` fact type `observed_network_flow_fact`; two resolved endpoint canonical entity refs; qualifying `FlowRoleEvidence`; source `GoldFact` ref | `mvp-flow-role-directed-v1`; source and target endpoint are selected only from qualifying flow-role evidence | projection profile ID, source gold fact key/ref, from canonical entity ref, to canonical entity ref, direction rule ref, valid interval, known interval, edge type | Import from source fact and serialize through `040.DecimalPrecisionPolicy.confidence_0_1`. | Import from source fact or correction handoff under `080` policies. | Source `GoldFact`, silver observation, raw metadata, temporal resolution, authority refs, and flow-role evidence refs. | `observed_connection_path` | Observed traffic only; not theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity access. | Missing flow-role evidence emits `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op; ambiguous flow-role evidence emits no edge; unresolved endpoint emits `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; OCSF endpoint order emits no edge. |
+
+### MVPGraphPropertyMapping
+
+Only the properties in this table may be emitted by the active MVP graph profile. Unknown graph properties fail before graph delta persistence unless a later active graph property policy row declares them.
+
+| Object class | Property | Required source | Serialization | Default or omission behavior |
+| --- | --- | --- | --- | --- |
+| `projected_canonical_node` | `canonical_entity_id` | `070.CanonicalEntity` ref | Cadastre ID string | Required. Omission blocks node projection. |
+| `projected_canonical_node` | `entity_type` | `070.CanonicalEntity` type | enum token | Required. Omission blocks node projection. |
+| `projected_canonical_node` | `display_label` | Redaction-approved label source | string | Optional; omitted when redaction blocks label. |
+| `observed_connection` | `source_gold_fact_id` | Source `GoldFact` ref | Cadastre ID string | Required. Omission blocks edge projection. |
+| `observed_connection` | `assertion_state` | Source `GoldFact.assertion_state` | enum token | Required. |
+| `observed_connection` | `confidence` | Source fact confidence | canonical six-fraction decimal string | Required when source confidence exists; null only when source fact has no confidence policy. |
+| `observed_connection` | `valid_from`, `valid_to`, `known_from`, `known_to` | Source fact temporal fields | RFC3339 UTC or null where owner permits | Required. |
+| `observed_connection` | `last_seen` | Source fact valid interval or observed time selected by `080` | RFC3339 UTC or null | Required for path ordering when present; null sorts last. |
+| `observed_connection` | `evidence_ref_ids` | Evidence refs | canonically sorted array | Required non-empty. |
+
 ## Graph Delta Identity
 
 Every graph node and edge must have a Cadastre-owned deterministic ID. Backend-generated node, edge, relationship, vertex, document, element, transaction, shard, or native cursor IDs are forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity and must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response, evidence ref generation, replay, or pagination.
@@ -283,12 +356,15 @@ Every graph-serving response using graph read-model state must include or refere
 
 ### GraphEdgeSemanticsRegistry
 
-| Edge type | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op | Validation rows | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only; OCSF endpoint order is not qualifying evidence | gold, silver, raw refs | active, stale when allowed | `080` | `090` imports confidence from source fact and `040.DecimalPrecisionPolicy` | `observed_connection_path` | does not imply theoretical reachability | no edge when `FlowRoleEvidence` is missing or ambiguous, even when OCSF endpoint fields are present | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role`, `val-090-ocsf-endpoint-order-no-direction` | active_mvp |
-| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | `val-090-theoretical-reachability-prohibited` | inactive_deferred |
+The registry is total for the declared MVP edge scope. `all_other_edge_types` is a closed reject row, not an extension point.
 
-The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a new `GraphEdgeSemanticsRegistry` row and validation fixtures before projection activation.
+| Edge type selector | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op or error behavior | Validation rows | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only; OCSF endpoint order and backend edge convention are not qualifying evidence | gold, silver, raw, temporal, authority, and flow-role refs | `active`; `stale` only when `060` and eligibility rows permit stale display | `080` | Import from source fact and serialize through `040.DecimalPrecisionPolicy.confidence_0_1` | `observed_connection_path` | Observed traffic only; no theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity-access implication. | No edge when `FlowRoleEvidence` is missing or ambiguous; unresolved endpoint blocks with `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; OCSF endpoint order emits no direction. | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role`, `val-090-observed-connection-ambiguous-flow-role`, `val-090-ocsf-endpoint-order-no-direction` | active_mvp |
+| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | Emit `THEORETICAL_REACHABILITY_SCOPE_ERROR`, `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN`, or deterministic no-op; emit no fact, edge, property, API claim, or traversal class. | `val-090-theoretical-reachability-prohibited`, `val-090-boolean-reachability-property-prohibited` | inactive_deferred |
+| `all_other_edge_types` | none | none | none | none | none | none | none | none | prohibited unless later active row set promotes the edge type | Reject activation or projection with `GRAPH_EDGE_SEMANTICS_ROW_MISSING`; emit no delta. | `val-090-mvp-active-profile-exact-edge-set` | inactive_unmapped |
+
+The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a later authoritative profile row, semantics row, output eligibility row, query translation row, and validation fixture set before projection activation.
 
 ### GraphTraversalClass table
 
@@ -311,15 +387,57 @@ The MVP active graph edge set is exactly `observed_connection`. Any additional a
 | `read_after_write_proof` | required | n/a | n/a | Missing proof blocks derived-view advancement. |
 | `schema_stale_behavior` | reject | n/a | n/a | Emit `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
 
+### GraphDeltaApplyCanonicalOrder
+
+`ApplyGraphDelta` must sort graph deltas before batching. The sort key is the tuple below; every value is compared lexically after canonical serialization except `class_rank`, which is compared numerically.
+
+| Class rank | Delta class | Applies to | Tie-break keys |
+| ---: | --- | --- | --- |
+| 10 | edge `expire` | Existing edges | `edge_type`, `from_graph_node_id`, `to_graph_node_id`, `graph_edge_id`, `graph_edge_delta_id` |
+| 20 | edge `cleanup` | Existing edges | `edge_type`, `from_graph_node_id`, `to_graph_node_id`, `graph_edge_id`, `graph_edge_delta_id` |
+| 30 | node `expire` | Existing nodes | `node_type`, `graph_node_id`, `graph_node_delta_id` |
+| 40 | node `cleanup` | Existing nodes | `node_type`, `graph_node_id`, `graph_node_delta_id` |
+| 50 | node `upsert` | New or refreshed nodes | `node_type`, `graph_node_id`, `graph_node_delta_id` |
+| 60 | edge `upsert` | New or refreshed edges | `edge_type`, `from_graph_node_id`, `to_graph_node_id`, `graph_edge_id`, `graph_edge_delta_id` |
+| 70 | node `update_visibility` | Node visibility only | `node_type`, `graph_node_id`, `graph_node_delta_id` |
+| 80 | edge `update_visibility` | Edge visibility only | `edge_type`, `from_graph_node_id`, `to_graph_node_id`, `graph_edge_id`, `graph_edge_delta_id` |
+| 90 | `no_op` | No backend mutation | `graph_node_delta_id` or `graph_edge_delta_id`; no backend call is made. |
+
+A delta operation not listed in this table fails with `CORE_FIELD_TYPE_INVALID` before apply. Same input delta set, same apply profile, and same backend schema fingerprint must produce byte-identical ordered batch membership.
+
 ### GraphQueryTranslationProfile observable contract
 
 | Field | Required behavior |
 | --- | --- |
-| stable page token fields | Query checksum, authorization context checksum, ordering keys, page boundary, derived-view state, expiration, and profile refs. |
-| backend candidate limit | Must be explicit per query class; TODO owner decision blocks production query activation. |
+| stable page token fields | Query checksum, authorization context checksum, ordering keys, page boundary, derived-view state, page-token expiry, and profile refs. |
+| backend candidate limit | Resolved from `GraphQueryCandidateLimitTable` by query class before backend execution. |
 | timeout behavior | Return `GRAPH_QUERY_TIMEOUT` unless partial results are explicitly permitted for the query class. |
-| empty traversal behavior | Empty `allowed_traversal_classes` returns no paths. |
+| path traversal-class omission | A bounded path query with omitted `allowed_traversal_classes` fails with `GRAPH_TRAVERSAL_CLASS_REQUIRED` before backend execution. |
+| empty traversal behavior | Empty `allowed_traversal_classes` returns no paths and emits no backend path query. |
 | authorization and redaction | Applied after backend candidate materialization and before response emission. |
+| output eligibility | Every returned object must pass `GraphObjectOutputEligibilityRow` for the response context. |
+
+#### GraphQueryCandidateLimitTable
+
+| Query class | Default candidate limit | Minimum | Maximum | Limit reached behavior |
+| --- | ---: | ---: | ---: | --- |
+| `node_detail` | 1 | 1 | 1 | More than one backend candidate for one Cadastre ID fails with `GRAPH_QUERY_TRANSLATION_ERROR`. |
+| `neighbor_expansion` | 5000 | 1 | 20000 | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`; return no partial result unless the query class explicitly permits partial output. |
+| `bounded_path` | 10000 | 1 | 50000 | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`; compliance and audit path queries reject rather than return partial paths. |
+| `evidence_drillback` | 1000 | 1 | 5000 | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` and return no raw payload expansion. |
+| `analysis_read_only` | 10000 | 1 | 50000 | Emit `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`; `130.RuleGraphCompatibilityMatrix` must name the expected result checksum. |
+
+#### GraphQueryPageTokenPolicy
+
+| Token rule | Required behavior |
+| --- | --- |
+| Default TTL | `900` seconds. |
+| Minimum TTL | `60` seconds. |
+| Maximum TTL | `3600` seconds. |
+| Identity inputs | Query checksum, authorization context checksum, derived-view state, ordering keys, page boundary, expiry, graph projection profile ref, query translation profile ref, backend taxonomy mapping profile ref, output eligibility row-set checksum, and redaction context checksum. |
+| Expired token | Reject with `GRAPH_PAGE_TOKEN_EXPIRED` before backend query execution. |
+| Mismatched token | Reject with `GRAPH_PAGE_TOKEN_INVALID` before backend query execution when any identity input mismatches the current request context. |
+| Backend cursor | Reject with `GRAPH_PAGE_TOKEN_INVALID`; backend cursors and internal IDs are forbidden token identity. |
 
 ### GraphRebuildManifest schema
 
@@ -328,20 +446,30 @@ The MVP active graph edge set is exactly `observed_connection`. Any additional a
 | `input_snapshot_refs` | Yes | Authoritative lakehouse snapshot or dataset refs. |
 | `graph_delta_set_refs` | Yes | Persisted graph delta set refs and checksums. |
 | `projection_profile_ref` | Yes | Active graph projection profile. |
+| `projection_row_set_checksum` | Yes | SHA-256 over active node, edge, and property projection rows. |
+| `edge_semantics_row_set_checksum` | Yes | SHA-256 over active `GraphEdgeSemanticsRegistry` rows. |
+| `output_eligibility_row_set_checksum` | Yes | SHA-256 over active `GraphObjectOutputEligibilityRow` rows. |
+| `backend_taxonomy_mapping_checksum` | Yes | SHA-256 over active `GraphBackendTaxonomyMappingProfile`. |
+| `query_translation_checksum` | Yes | SHA-256 over active `GraphQueryTranslationProfile`. |
+| `graph_property_policy_checksum` | Yes | SHA-256 over active `GraphPropertyEvidencePolicy`. |
 | `backend_profile_ref` | Yes | Active backend profile. |
 | `schema_fingerprint` | Yes | Current backend schema fingerprint. |
+| `index_consistency_check_ref` | Yes | Passing `GraphIndexConsistencyCheck` ref for the rebuilt read model. |
+| `canonical_output_checksum_inputs` | Yes | Canonical ordered list of included output classes and excluded volatile fields. |
 | `output_checksum` | Yes | SHA-256 over canonical rebuilt graph-serving output summary. |
 | `status` | Yes | success, failed, blocked, or not_run. |
 | `errors` | Yes | Default `[]`; owner-specific graph rebuild errors. |
 
 ### GraphObjectOutputEligibilityRow
 
-| Object class | Search | Neighbor expansion | Pathfinding | Analysis finding | Metrics | Identity influence |
-| --- | --- | --- | --- | --- | --- | --- |
-| projected canonical node | profile-defined | profile-defined | traversal-class-defined | read-only | allowed if profile permits | no direct identity mutation |
-| projected edge | profile-defined | profile-defined | traversal-class-defined | read-only | allowed if profile permits | no identity authority |
-| synthetic structural object | disabled by default | disabled by default | disabled by default | disabled by default | disabled by default | none |
-| generic external graph payload | disabled by default | disabled by default | disabled by default | disabled by default | disabled by default | none |
+The active MVP output eligibility rows are closed. Graph object existence alone never grants search, neighbor expansion, pathfinding, finding, metric, or identity influence eligibility.
+
+| Object class | Search | Neighbor expansion | Pathfinding | Analysis finding | Metrics | Identity influence | Default emission |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `projected_canonical_node` | allowed when authorization permits | allowed when query target includes the node type | path endpoint only when path query names an allowed traversal class | read-only when `130.RuleGraphCompatibilityMatrix` permits | allowed only when the active metric rule names this object class | none; must not create or merge identity | emitted only from resolved `CanonicalEntity` refs. |
+| `observed_connection` | detail and filter only | allowed when edge filter permits and traversal class is requested where needed | allowed only for `observed_connection_path` and only when explicitly requested | read-only when `130.RuleGraphCompatibilityMatrix` names `observed_connection_path` or an allowed detail query | allowed only when the metric rule names `observed_connection` | none | emitted only by `mvp-observed-connection-edge-v1`. |
+| `synthetic_structural_object` | disabled | disabled | disabled | disabled | disabled | none | non-emitting in MVP. |
+| `generic_external_graph_payload` | disabled | disabled | disabled | disabled | disabled | none | non-emitting in MVP; may be preserved outside graph serving only when another owner permits. |
 
 ### GraphDeltaIdempotencyKey inputs
 
@@ -406,6 +534,12 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | A projection attempts to emit an `observed_connection` edge from OCSF endpoint order or external schema endpoint fields without qualifying `FlowRoleEvidence`. |
 | `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED` | A graph expiry or cleanup delta lacks an exact `060` authorization ref and requested effect token. |
 | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` | A `GoldFactChangeSet` graph handoff effect is not covered by the active projection profile. |
+| `GRAPH_EDGE_SEMANTICS_ROW_MISSING` | An active profile attempts to emit or query an edge type with no exact active semantics row. |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | A graph endpoint lacks a qualifying `070.IdentityDecision` and resolved `CanonicalEntity` ref. |
+| `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | Backend candidate materialization reaches the active query-class candidate limit. |
+| `GRAPH_PAGE_TOKEN_EXPIRED` | A graph page token is past its declared expiry. |
+| `GRAPH_PAGE_TOKEN_INVALID` | A graph page token identity input mismatches the request context or contains backend cursor identity. |
+| `GRAPH_TRAVERSAL_CLASS_REQUIRED` | A bounded path query omits `allowed_traversal_classes`. |
 
 ### Acceptance Criteria
 
@@ -446,6 +580,14 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-IDENTITY-SPLIT-PROJECTION-AC-002` | The same split handoff, affected fact refs, projection profile, and version manifest produce byte-identical graph deltas across replay. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-003` | Missing split handoff metadata emits no graph delta and rejects before delta persistence. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-004` | `VersionManifest` includes graph correction handoff refs and resolver explanation checksum refs when identity split projection occurs. |
+| `090-GRAPH-PROFILE-CLOSURE-AC-001` | `mvp-observed-flow-graph.v1` has exactly one active edge type, `observed_connection`, and rejects all other edge types. |
+| `090-GRAPH-PROFILE-CLOSURE-AC-002` | Positive observed connection projection emits nodes and one edge only when both endpoint identities are resolved and qualifying `FlowRoleEvidence` exists. |
+| `090-GRAPH-PROFILE-CLOSURE-AC-003` | Missing or ambiguous `FlowRoleEvidence` emits no edge, no absence edge, no expiry, and no watermark. |
+| `090-GRAPH-PROFILE-CLOSURE-AC-004` | Generic external graph payloads and synthetic structural objects are non-emitting and not pathfinding-eligible in MVP. |
+| `090-GRAPH-QUERY-CLOSURE-AC-001` | Bounded path queries with omitted traversal classes fail, and empty traversal-class arrays return no paths. |
+| `090-GRAPH-QUERY-CLOSURE-AC-002` | Candidate-limit, expired-token, and token-mismatch cases fail before backend query execution with the declared graph error codes. |
+| `090-GRAPH-APPLY-ORDER-AC-001` | Same graph delta set and apply profile produce byte-identical canonical delta ordering and batch membership. |
+| `090-GRAPH-REBUILD-CLOSURE-AC-001` | Rebuild equivalence includes profile, edge semantics, output eligibility, taxonomy, query translation, property policy, schema, index consistency, and canonical output checksums. |
 
 ## Definition of Done
 
@@ -457,6 +599,9 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-AC-004` | Graph drift checks cannot repair or mutate state. |
 | `090-AC-005` | MVP graph profiles cannot emit `has_theoretical_reachability`, modeled reachability facts, or equivalent graph properties. |
 | `090-AC-006` | Graph direction for observed connections derives from Cadastre `FlowRoleEvidence`, not OCSF endpoint order or backend edge convention. |
+| `090-AC-007` | The active MVP graph profile is `mvp-observed-flow-graph.v1` and emits only resolved canonical nodes plus `observed_connection` edges. |
+| `090-AC-008` | Query translation enforces Cadastre-owned candidate limits, page-token TTLs, traversal-class behavior, output eligibility, authorization, and redaction. |
+| `090-AC-009` | Graph rebuild promotion compares the complete graph profile, schema, taxonomy, query translation, output eligibility, property policy, index consistency, and canonical output checksum inputs. |
 
 ## Open Questions
 

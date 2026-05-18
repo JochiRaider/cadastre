@@ -62,7 +62,9 @@ Analysis, enrichment, lineage, and registry records must not mutate facts, graph
 
 ## Analysis Rules
 
-`AnalysisRuleBundle` contains read-only rules. A rule may query declared read models only when `RuleGraphCompatibilityMatrix` passes for the active graph projection profile, query class, node types, edge types, edge directions, graph properties, temporal fields, and expected result hashes.
+`AnalysisRuleBundle` contains read-only rules. A rule may query declared read models only when `RuleGraphCompatibilityMatrix` passes for the active graph projection profile, graph edge semantics row refs, traversal class set, graph object output eligibility row refs, graph property refs, query translation profile, derived-view lag policy, query class, node types, edge types, edge directions, temporal fields, authorization/redaction refs, expected query checksum, expected result checksum, and read-only mutation proof.
+
+`observed_connection` is analysis-readable only when the compatibility matrix names `observed_connection_path` or a read-only detail query and the active output eligibility row permits that context. `generic_external_graph_payload` must not produce findings, metrics, identity influence, or pathfinding input.
 
 `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are workflow outputs. They must not represent remediation, risk reduction, fact retraction, graph edge removal, or source completeness change.
 
@@ -221,11 +223,27 @@ Registry governance artifacts require `030.ActivationControlledArtifactRef`. Reg
 
 | Field | Required behavior |
 | --- | --- |
-| required graph profile | Exact graph projection profile checksum. |
-| required node/edge types | Closed set; missing type blocks rule activation. |
-| expected query checksum | Canonical checksum over translated read-only graph query. |
-| stale graph behavior | Reject or label according to `090` and `110`; compliance/audit queries reject by default. |
-| read-only guarantee | Fixture must prove no raw, silver, identity, gold, graph-serving, completeness, watermark, or package mutation. |
+| graph projection profile checksum | Exact active `090.GraphProjectionProfile` checksum. |
+| graph edge semantics row refs | Exact rows for every queried edge type; missing row blocks rule activation. |
+| traversal class set | Closed set of `090.GraphTraversalClass` values. `observed_connection_path` must be named for observed-connection path reads. |
+| graph object output eligibility row refs | Exact eligibility rows for every returned object class and analysis context. |
+| graph property refs | Exact graph property policy refs for every property read by the rule. |
+| graph query translation profile ref | Exact active `090.GraphQueryTranslationProfile` ref and checksum. |
+| derived-view lag policy ref | Exact active `090.DerivedViewLagPolicy` ref; stale behavior must be reject or label per `090` and `110`. |
+| authorization/redaction refs | Required for every rule execution that reads graph or evidence data. |
+| expected query checksum | Canonical checksum over the translated read-only graph query. |
+| expected result checksum | Canonical checksum over the authorized, redacted result set. |
+| read-only mutation proof | Fixture must prove no raw, silver, identity, gold, graph-delta, graph-serving, completeness, watermark, package, or source-authority mutation. |
+
+Default graph compatibility rules:
+
+| Object or traversal | Default analysis behavior |
+| --- | --- |
+| `observed_connection` detail query | Readable only when the matrix names the edge type and output eligibility permits analysis read. |
+| `observed_connection_path` | Readable only when the matrix names the traversal class and query translation profile. |
+| `generic_external_graph_payload` | Cannot produce findings, metrics, identity influence, or pathfinding input. |
+| derived-view stale state | Rejected for compliance/audit analysis by default; otherwise labeled only when `110` permits. |
+| mutation attempt | Fails with `ANALYSIS_MUTATION_FORBIDDEN` before any owner state changes. |
 
 ### RiskScoringBoundary validation
 
@@ -248,6 +266,11 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
 | `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
 | `130-LIFECYCLE-AC-001` | Every analysis, enrichment, lineage, and registry activation-controlled artifact entering `active` status has generic artifact lifecycle transition evidence and owner-specific guard results. |
+| `130-GRAPH-COMPAT-AC-001` | Analysis rule activation fails when graph profile, traversal class, output eligibility, query translation, property, derived-view lag, or authorization refs mismatch. |
+| `130-GRAPH-COMPAT-AC-002` | `observed_connection` is readable only through a named detail query or `observed_connection_path` traversal class permitted by output eligibility. |
+| `130-GENERIC-PAYLOAD-AC-001` | Generic external graph payload cannot produce analysis findings, metrics, pathfinding input, or identity influence. |
+| `130-DERIVED-VIEW-STALE-AC-001` | Stale graph derived-view state rejects or labels according to `090` and `110`; compliance/audit analysis rejects by default. |
+| `130-ANALYSIS-MUTATION-AC-001` | Any analysis attempt to mutate authoritative or graph-serving state fails before mutation. |
 
 ## Definition of Done
 

@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, and reachability-prohibition rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, or graph-serving output is in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -178,6 +178,26 @@ The following source-authority closure artifacts must have exactly one volatilit
 | `TemporalObservationTimeResolution` | `runtime_state_record` | `080` | `080` | yes | required for gold, correction, graph handoff, audit, and replay when source observation time affects output |
 | `GoldFactChangeSet` | `runtime_state_record` | `080` | `080` | yes | required for correction output and graph handoff |
 | `ReplayInputSufficiencyCheck` | `runtime_state_record` | `080` | `080` | yes | required before replay output |
+
+### Required graph projection volatility classifications
+
+The following graph closure artifacts must have exactly one volatility classification before authoritative handoff. The rows classify artifact interfaces and runtime state, not backend product selection.
+
+| artifact_or_contract | volatility_class | owner_spec | stable_core_owner | may_affect_output | version_manifest_requirement |
+| --- | --- | --- | --- | --- | --- |
+| `GraphProjectionProfile` | `activation_controlled_artifact` | `090` | `090` | yes | required for graph projection, apply, query, rebuild, and replay |
+| `GraphProjectionProfileRowSet` | `activation_controlled_artifact` | `090` | `090` | yes | required for graph delta output |
+| `GraphEdgeSemantics` row set | `activation_controlled_artifact` | `090` | `090` | yes | required for every active edge type |
+| `GraphTraversalClass` row refs | stable semantics plus `activation_controlled_artifact` inclusion rows | `090` | `090` | yes | required for path queries and analysis compatibility |
+| `GraphObjectOutputEligibilityRow` row set | `activation_controlled_artifact` | `090` | `090` | yes | required for search, neighbor expansion, pathfinding, analysis, metrics, and identity-influence gates |
+| `GraphBackendTaxonomyMappingProfile` | `activation_controlled_artifact` | `090` | `090` | yes | required before backend labels, relationship types, collections, or properties are accepted |
+| `GraphQueryTranslationProfile` | `activation_controlled_artifact` | `090` | `090` | yes | required before query execution and page-token generation |
+| `GraphReadModelSchemaProfile` | `activation_controlled_artifact` | `090` | `090` | yes | required before apply, query serving, rebuild, or promotion |
+| `GraphApplyProfile` | `activation_controlled_artifact` | `090` | `090` | yes | required before graph apply |
+| `DerivedViewLagPolicy` | `activation_controlled_artifact` | `090` | `090` | yes | required before serving graph responses |
+| `GraphRebuildManifest` | `runtime_state_record` | `090` | `090` | yes for rebuild promotion | required when rebuild is involved |
+| `GraphIndexConsistencyCheck` | `runtime_state_record` | `090` | `090` | yes for apply/query/rebuild promotion | required after apply or rebuild |
+| `DerivedViewState` | `runtime_state_record` | `090` | `090` | yes | required for every graph-serving response |
 
 ### Required identity resolver volatility classifications
 
@@ -264,11 +284,11 @@ The following identity resolver artifacts and runtime state records must have ex
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
 | Identity resolution | `070` | 040,060,080,090,100,110,120,domain | runtime_identity | `stable_core_contract` | 120 | blocked_validation | stable resolver rows, candidate caps, review totality, confidence bands, split handoff, and weak-evidence defaults are closed by `070`; active row instances and fixture checksums remain validation-blocked |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | closed_local | validation rows required; concrete activation-controlled row instances remain blockers only when selected for production scope |
-| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | graph apply validation checksums remain TODO |
+| Graph projection and serving | `090` | 040,050,060,070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | active profile closure is owner-closed only when `090` has no graph-profile TODOs and `120` graph profile, query, eligibility, endpoint identity, page-token, apply-order, rebuild, and reachability-prohibition rows pass |
 | GraphApplyLifecycleMachine | `090` | `030`, `080`, `110`, `120` | derived_projection | `stable_core_contract` | 120 | closed_local | graph apply fixtures required |
 | Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_validation | package lifecycle fixture checksums remain TODO |
 | PackageSetActivationLifecycleMachine | `100` | `030`, `110`, `120` | runtime_activation | `stable_core_contract` | 120 | closed_local | package lifecycle fixtures required |
-| API, errors, security | `110` | all owner specs | runtime_api | `stable_core_contract` | 120 | blocked_owner_todo | page-token expiration bounds remain TODO |
+| API, errors, security | `110` | all owner specs | runtime_api | `stable_core_contract` | 120 | blocked_validation | page-token expiration bounds are closed locally; graph response context, reachability wording, and error-registry fixture checksums remain validation-blocked |
 | Validation and acceptance | `120` | 000 and all owner specs | validation | `stable_core_contract` | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
 | ValidationAcceptanceLifecycleMachine | `120` | `000`, `030`, domain | validation | `stable_core_contract` | 120 | closed_local | validation lifecycle fixtures required |
 | Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | `stable_core_contract` | 120 | blocked_validation | fixture checksums required |
@@ -351,6 +371,10 @@ A document that is not marked `authoritative` must not be used as product runtim
 
 `SpecSetVersion.validation_matrix_refs` must include lifecycle validation rows for every lifecycle machine that can affect production output, activation, graph apply, replay, watermark eligibility, or CI gating. Authoritative handoff must fail when lifecycle ownership or closure state is inconsistent with `domain.md` unresolved or resolved lifecycle status.
 
+`SpecSetVersion.validation_matrix_refs` must include graph closure validation rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, graph serving, analysis graph reads, or API graph responses are in implementation scope. Required row families are `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, and active reachability-prohibition rows.
+
+`ValidateSpecSet` must fail before promotion when a graph profile, edge semantics row set, output eligibility row set, backend taxonomy mapping profile, query translation profile, read-model schema profile, apply profile, lag policy, graph rebuild manifest, graph index consistency check, or derived-view state lacks a volatility classification, an activation-controlled artifact ref where required, or a matching `030.VersionManifest` requirement.
+
 `SpecSetVersion.validation_matrix_refs` must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when temporal, gold, correction, late-arrival, replay, export replay, analysis replay, or graph handoff behavior is in implementation scope.
 
 `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` or a more specific registry error when `000` marks temporal/gold/replay closed while `080` contains blocking placeholder rows in `TemporalSemanticsPolicy`, `GoldFactCorrectionPolicy`, `LateArrivalPolicy`, `ReplayEquivalencePolicy`, `CorrectionSnapshotRefPolicy`, or assertion-state transitions. It must also fail when `080` is closed but required `120` temporal/correction/replay validation rows are missing, or when a replay/correction artifact lacks a volatility class or `030.VersionManifest` representation.
@@ -390,6 +414,11 @@ Archived documents are historical reference only and never implementation author
 | `000-IDENTITY-CLOSURE-AC-001` | Promotion fails when identity output is in implementation scope and `SpecSetVersion.validation_matrix_refs` lacks required identity closure, replay, review, split, explanation, and package weakening validation rows. |
 | `000-IDENTITY-CLOSURE-AC-002` | Promotion fails when unresolved `070` identity TODOs exist or when `domain.md`, `040`, `070`, `110`, and `120` disagree on identity decision enum closure or review-state-machine closure. |
 | `000-IDENTITY-VOLATILITY-AC-001` | Every identity resolver row-set artifact is classified as activation-controlled and every identity runtime decision/explanation/handoff record is classified as runtime state in exactly one place. |
+| `000-GRAPH-PROFILE-CLOSURE-AC-001` | Promotion fails when graph projection, apply, query, rebuild, or serving is in scope and `SpecSetVersion.validation_matrix_refs` lacks required graph closure row families. |
+| `000-GRAPH-VOLATILITY-AC-001` | Every graph profile, edge semantics, output eligibility, taxonomy mapping, query translation, schema, apply, lag, rebuild, index consistency, and derived-view state artifact has exactly one volatility class. |
+| `000-PAGE-TOKEN-CLOSURE-AC-001` | Page-token default, minimum, and maximum expiration bounds are closed in `110`; promotion still requires passing page-token validation refs. |
+| `000-RESEARCH-RUNTIME-AUTHORITY-AC-001` | Research reports, ADRs, reference, and archive documents fail validation when referenced as runtime authority. |
+| `000-DOMAIN-GRAPH-STATUS-AC-001` | `domain.md` graph edge-family status agrees with `090` owner closure and `120` graph validation status. |
 
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |

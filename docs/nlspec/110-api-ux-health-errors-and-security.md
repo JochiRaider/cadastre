@@ -70,7 +70,44 @@ Define observable API behavior, user-facing states, health, shared error records
 | Graph query `max_depth` | 3 | 1 through 6. |
 | Graph query `page_size` | 100 | 1 through 1000. |
 | Graph query `timeout_seconds` | 30 | 1 through 300. |
+| Graph page token TTL seconds | 900 | 60 through 3600. |
 | `include_raw_payload` | false | Raw payload returned only with raw-evidence permission. |
+
+### GraphQueryRequest schema
+
+`GraphQueryRequest` must validate API bounds before calling `090.QueryGraph` or any backend adapter.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `query_class` | Yes | none | Closed token: `node_detail`, `neighbor_expansion`, `bounded_path`, `evidence_drillback`, `analysis_read_only`. |
+| `graph_projection_profile_ref` | Yes | none | Must match the active graph profile used by the derived view. |
+| `graph_query_translation_profile_ref` | Yes | none | Must be active and in scope. |
+| `backend_taxonomy_mapping_profile_ref` | Yes | none | Must be active and in scope. |
+| `allowed_traversal_classes` | Required for `bounded_path` | Omission fails with `GRAPH_TRAVERSAL_CLASS_REQUIRED`; empty array returns no paths. | Values must be closed `090.GraphTraversalClass` tokens. |
+| `max_depth` | Required for path queries | `3` | Bounds from API table. |
+| `page_size` | No | `100` | Bounds from API table. |
+| `timeout_seconds` | No | `30` | Bounds from API table. |
+| `page_token` | No | null | Must be a Cadastre page token; backend cursors are rejected. |
+| `include_evidence` | No | `false` | Evidence metadata only unless authorization permits more. |
+| `include_raw_payload` | No | `false` | Raw payload returned only with raw-evidence permission. |
+
+### GraphQueryResponse graph profile context
+
+Every graph response must include or reference the profile and state context that determined observable output.
+
+| Response field | Required behavior |
+| --- | --- |
+| `derived_view_state_ref` | Required for every response using graph read-model state. |
+| `graph_projection_profile_ref` | Required and must match the profile used to project the served graph objects. |
+| `graph_query_translation_profile_ref` | Required and must match request and manifest refs. |
+| `backend_taxonomy_mapping_profile_ref` | Required and must match backend materialization refs. |
+| `output_eligibility_context_ref` | Required row-set checksum or refs proving search, neighbor, pathfinding, analysis, metrics, and identity-influence eligibility. |
+| `redaction_context_ref` | Required authorization/redaction checksum. |
+| `page_token` | Cadastre token only; token identity must include profile refs, derived-view state, ordering keys, page boundary, authorization context, and expiry. |
+
+`observed_connection` detail text must state that the edge represents observed traffic only. It must not imply theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity access.
+
+MVP API and UI text must not use unqualified `reachable`, `not reachable`, `allowed path`, `service accessible`, or `lateral movement path` for graph output unless `200` is promoted and the active owner policies authorize the exact claim.
 
 ## Source and Export State Labels
 
@@ -344,6 +381,18 @@ Caller-visible output must not reveal private source bindings, private routes, r
 | package-set artifact mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | package-set ref and release manifest refs | Health state only. |
 | owner spec mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | declared and required owner specs | Health state only. |
 
+### GraphQueryErrorRegistryRows
+
+| Error code | Owner | Severity | Retryability | Caller-visible behavior | Audit-visible refs |
+| --- | --- | --- | --- | --- | --- |
+| `GRAPH_EDGE_SEMANTICS_ROW_MISSING` | `090` | error | no, until graph profile changes | graph output blocked | graph profile ref, edge type, validation refs |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090`, with identity evidence from `070` | diagnostic or error by query class | yes after identity resolution | no endpoint node or dependent edge | unresolved target refs, redacted identity decision context |
+| `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | `090` | error | yes after narrower query | no partial output unless query class permits | query checksum, candidate limit, profile refs |
+| `GRAPH_PAGE_TOKEN_EXPIRED` | `090`, observable handling by `110` | error | yes with fresh request | no backend query execution | token checksum, expiry, request checksum |
+| `GRAPH_PAGE_TOKEN_INVALID` | `090`, observable handling by `110` | security | no for supplied token | no backend query execution and no existence leak | token checksum, mismatch class, authorization checksum |
+| `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090`, observable handling by `110` | error | yes with corrected request | request rejected before backend query | query class and request checksum |
+| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `200`, observable handling by `110` | error | no until wording or policy changes | output wording rejected | output checksum and owner policy refs |
+
 ### Shared error codes
 
 | Error code | Owner | Emitted when |
@@ -444,9 +493,11 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | Policy field | Required behavior |
 | --- | --- |
 | token input fields | Query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. |
-| default expiration | TODO: owner decision required before authoritative promotion. |
-| maximum expiration | TODO: owner decision required before authoritative promotion. |
-| promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` cannot pass while default or maximum expiration remains `TODO:`. |
+| default expiration | `900` seconds. |
+| minimum expiration | `60` seconds. |
+| maximum expiration | `3600` seconds. |
+| expired token behavior | Fail with `GRAPH_PAGE_TOKEN_EXPIRED` or `PAGE_TOKEN_EXPIRED` before owner query execution. |
+| promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` passes only when token bounds are materialized in this table and in `090.GraphQueryPageTokenPolicy`. |
 | stale derived-view behavior | If token references a stale derived-view state and query class requires current state, fail with `DERIVED_VIEW_LAG_ERROR`. |
 | authorization context mismatch | Fail with `PAGE_TOKEN_INVALID`; do not reveal whether the original result still exists. |
 | backend cursor supplied | Reject with `PAGE_TOKEN_INVALID`; backend cursors are not Cadastre token identity. |
@@ -479,6 +530,10 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | graph query | graph max depth out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `090`, `110` |
 | graph query | graph timeout | none unless partial allowed | `GRAPH_QUERY_TIMEOUT` | applied | required | owner label | partial only when allowed | canonical token | `090`, `110` |
 | graph query | derived view stale and compliance/audit class | reject | `DERIVED_VIEW_LAG_ERROR` | applied | required | reject by default | owner label | canonical token | `090`, `110` |
+| graph query | bounded path omits traversal classes | none | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | n/a | required | n/a | n/a | n/a | `090`, `110` |
+| graph query | empty traversal classes | empty path result | none | applied | required | owner label | no paths | canonical token | `090`, `110` |
+| graph query | candidate limit reached | none unless partial explicitly permitted | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | applied | required | owner label | no partial by default | canonical token | `090`, `110` |
+| graph query | expired or mismatched graph page token | none | `GRAPH_PAGE_TOKEN_EXPIRED` or `GRAPH_PAGE_TOKEN_INVALID` | no backend cursor leak | required | n/a | n/a | n/a | `090`, `110` |
 | compliance query | stale source or derived view | reject unless owner permits non-authoritative state | `DERIVED_VIEW_LAG_ERROR` or owner stale code | applied | required | reject by default | n/a | canonical token | `060`, `090`, `110` |
 | export | private binding detected | none | `PRIVATE_BINDING_LEAK` | fail closed | export permission required | owner label | owner label | n/a | `010`, `110` |
 
@@ -518,6 +573,11 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-IDENTITY-ERROR-AC-002` | Resolver errors must use the specific `070` code when applicable and must not collapse to generic validation, unknown, pass, or fail states. |
 | `110-IDENTITY-REDACTION-AC-001` | Resolver error responses redact private source bindings, concrete tenant inventories, credentials, raw payload values, and environment-specific source target lists. |
 | `110-IDENTITY-NO-MUTATION-AC-001` | Resolver error rendering does not mutate identity, graph, package, completeness, watermark, or source-authority state. |
+| `110-GRAPH-RESPONSE-CONTEXT-AC-001` | Every graph response includes derived-view state, graph profile, query translation, backend taxonomy mapping, output eligibility, and redaction context refs. |
+| `110-GRAPH-TRAVERSAL-AC-001` | Path query traversal omission rejects with `GRAPH_TRAVERSAL_CLASS_REQUIRED`; empty traversal classes return no paths. |
+| `110-GRAPH-PAGE-TOKEN-AC-001` | Expired and invalid graph page tokens reject before backend query execution. |
+| `110-GRAPH-WORDING-AC-001` | MVP graph output cannot render unqualified reachability, service accessibility, allowed path, lateral movement, or equivalent claims. |
+| `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
 
 ## Definition of Done
 

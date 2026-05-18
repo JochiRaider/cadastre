@@ -248,6 +248,19 @@ Manual review must not mutate canonical identity directly. `IdentityReviewCase` 
 
 OpenGraph-style property matching, name matching, source-kind matching, environment-scoped matching, cross-source reference matching, or mapped-target matching must not create canonical identity without a qualifying identity decision. Deprecated name matching is forbidden in production.
 
+### GraphEndpointIdentityHandoff
+
+A graph endpoint may become `090.projected_canonical_node` only after a qualifying `IdentityDecision` creates or references a `CanonicalEntity` allowed by the active resolver profile. Graph projection must treat unresolved endpoint identity as a projection blocker, not as an identity mutation request.
+
+| Endpoint input class | MVP graph endpoint identity behavior | Required `090` handoff |
+| --- | --- | --- |
+| `CanonicalEntity` ref produced or referenced by qualifying `IdentityDecision` | Eligible for `projected_canonical_node` when the active graph profile permits the node type. | Include canonical entity ref and selected identity decision ref in graph projection inputs. |
+| `UnresolvedTargetReference` | Hint only; no endpoint identity. | Emit no endpoint node and block dependent edge with `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`. |
+| Mapped target reference, graph key, OpenGraph property match, hostname/IP/DNS/PTR selector-only evidence, learned candidate, or source-native merge history | No canonical graph endpoint identity in MVP. | Emit no endpoint node unless a later resolver run emits a qualifying identity decision. |
+| Identity split handoff | Resolver emits `GraphCorrectionHandoff` metadata only. | `090` routes affected facts through projection; resolver must not mutate graph state. |
+
+Handoff records consumed by graph projection must include endpoint canonical refs, selected identity decision refs, and resolver explanation checksum refs when those fields affect projection, replay, or audit. Omitted handoff fields block graph delta persistence with the most specific `070`, `090`, or manifest error.
+
 ## Identity Resolution Contract Details
 
 ### ResolverProfileCoverageMatrix
@@ -401,6 +414,7 @@ Split execution must sort source assets by lexical source asset ID, compute each
 | `IDENTITY_REVIEW_AUTHORITY_MISSING` | Reviewer lacks authority for the requested review event. |
 | `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
 | `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | Graph projection requests endpoint identity from unresolved target hints, selector-only evidence, graph keys, or non-qualifying identity material. |
 
 ### CandidateGenerationProfile bounds
 
@@ -461,6 +475,15 @@ Missing any required included field emits `RESOLVER_EXPLANATION_INCOMPLETE` befo
 | graph key | selector only | graph profile and owner row | No | no identity influence | no-op |
 | hostname/IP/DNS selector | candidate hint | temporal source scope | No | no graph edge by itself | candidate or no_decision |
 
+### GraphEndpointIdentityHandoff validation rows
+
+| Validation row | Required behavior |
+| --- | --- |
+| `val-070-graph-endpoint-requires-identity-decision` | A projected graph endpoint requires a qualifying `IdentityDecision` and `CanonicalEntity` ref. |
+| `val-070-unresolved-target-no-graph-endpoint` | `UnresolvedTargetReference` emits no graph endpoint and no edge. |
+| `val-070-opengraph-property-match-no-graph-identity` | OpenGraph-style property matching remains selector-only and cannot create endpoint identity. |
+| `val-070-split-handoff-no-resolver-graph-mutation` | Split handoff routes affected facts to `090` and the resolver emits no graph mutation. |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
@@ -486,6 +509,10 @@ Missing any required included field emits `RESOLVER_EXPLANATION_INCOMPLETE` befo
 | `070-PACKAGE-WEAKENING-AC-001` | Package-supplied resolver artifacts that weaken stable weak-evidence defaults or redefine identity semantics fail activation before production output. |
 | `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, resolver artifact checksum mismatch, and package artifact core conflict fail before identity mutation. |
 | `070-LIFECYCLE-AC-001` | Resolver profile activation emits generic artifact lifecycle transition evidence and resolver-specific guard results before identity mutation. |
+
+| `070-GRAPH-ENDPOINT-HANDOFF-AC-001` | Graph endpoint projection requires a qualifying identity decision and canonical entity ref. |
+| `070-GRAPH-ENDPOINT-HANDOFF-AC-002` | Selector-only, graph-key-only, mapped-target-only, and OpenGraph property-match-only inputs cannot create graph endpoint identity. |
+| `070-GRAPH-ENDPOINT-HANDOFF-AC-003` | Unresolved endpoint identity is reported to `090` as a projection blocker and never mutates identity. |
 
 ## Definition of Done
 

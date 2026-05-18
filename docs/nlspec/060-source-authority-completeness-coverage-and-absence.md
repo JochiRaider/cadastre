@@ -70,6 +70,23 @@ A broad source-category ranking must not act as fallback authority when the exac
 
 `060` decides whether negative, stale, cleanup, tombstone, or no-change evidence is authorized for a requested effect. `080` decides the correction operation. `090` decides projection and apply output. A correction or graph projection that consumes negative evidence directly, without an `AbsenceDerivationResult` ref for the requested effect, must fail before mutation.
 
+### GraphEffectAuthorizationHandoff
+
+`060` authorizes graph expiry and graph cleanup only. It does not emit graph edges, decide graph traversal, define graph direction, decide endpoint identity, or advance derived-view state.
+
+Positive `observed_connection` graph output consumes an already authorized positive `GoldFact`; it is not an absence-sensitive effect and does not require `AbsenceDerivationResult` unless the projection also attempts expiry, cleanup, retraction, absence, or watermark behavior.
+
+| Graph-adjacent input or requested effect | `060` authorization behavior | Required downstream behavior |
+| --- | --- | --- |
+| `positive_observed_connection_source_fact` | No new graph effect authorization. The positive fact must already have exact source authority for the fact itself. | `090` may project only through the active graph profile and qualifying flow-role plus identity handoffs. |
+| `graph_expiry` | Requires `AbsenceDerivationResult.requested_effect = graph_expiry` and `allowed_effects` containing `graph_expiry`. | `090` may emit expiry only when the result ref is present and checksum-valid. |
+| `cleanup` | Requires `AbsenceDerivationResult.requested_effect = cleanup` and `allowed_effects` containing `cleanup`. | `090` may emit cleanup only when the result ref is present and checksum-valid. |
+| `missing_flow_role_evidence` | Maps to `unknown` or deterministic no-op. | Must not authorize absence edges, graph expiry, cleanup, retraction, or watermark advancement. |
+| `ambiguous_flow_role_evidence` | Maps to `ambiguous`, `unknown`, or deterministic no-op according to the owner row. | Must not authorize graph mutation. |
+| `flow_non_observation` | May be considered only through normal absence evaluation for a requested effect. | Without exact authorization, emits no absence edge, expiry, cleanup, retraction, or watermark. |
+
+Graph derived-view lag, missing graph objects, graph apply success, graph index state, backend cleanup, destination cleanup, graph drift checks, and graph query results are progress or derived-view signals only. They must not authorize source absence, graph expiry, cleanup, retraction, or watermark advancement unless an active `060` row explicitly maps the exact signal and requested effect.
+
 ### SourceAuthorityProfileRow schema
 
 `SourceAuthorityProfileRow` is the stable row interface for fact authority and absence-sensitive effect authority. Concrete row instances are activation-controlled artifacts. Wildcards for `fact_type`, `predicate`, `source_dataset`, and requested effect are forbidden. Dataset-default rows may match only when `instance_default_allowed = true`.
@@ -634,6 +651,10 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-SOURCE-CLOSURE-AC-011` | Weak-signal combinations cannot authorize absence unless exactly one active policy row grants the exact combined signal set and requested effect. |
 | `060-SOURCE-CLOSURE-AC-012` | All output-affecting closure refs appear in `VersionManifest`; omission fails with `VERSION_MANIFEST_INCOMPLETE` or a more specific owner code. |
 | `060-SOURCE-CLOSURE-AC-013` | `SourceAuthorityClosureMatrix` fails closure when a row chain is absent, ambiguous, inactive, checksum-mismatched, out of scope, stale, or unvalidated. |
+| `060-GRAPH-EFFECT-AUTH-AC-001` | Graph expiry requires `AbsenceDerivationResult.requested_effect = graph_expiry` and no graph-derived signal can authorize it by itself. |
+| `060-GRAPH-EFFECT-AUTH-AC-002` | Graph cleanup requires `AbsenceDerivationResult.requested_effect = cleanup` and destination or backend cleanup summaries do not authorize it. |
+| `060-GRAPH-EFFECT-AUTH-AC-003` | Missing or ambiguous flow-role evidence maps to unknown, ambiguous, or deterministic no-op and emits no graph mutation. |
+| `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
 
 ## Definition of Done
 

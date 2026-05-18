@@ -170,8 +170,8 @@ Each `one_of` field must use a tagged object with `kind` plus exactly one member
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `GoldFact.subject_ref` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null and omission forbidden. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
 | `GoldFact.object_value` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null permitted only when the owning fact predicate declares null-object semantics. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
-| `GraphNodeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
-| `GraphEdgeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `GraphNodeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | `canonical_entity_ref`; `structural_synthetic_ref` inactive until `090` activates structural output; `generic_external_graph_ref` forbidden in MVP. | Exactly one value member matching `kind`; MVP projected canonical nodes must use `canonical_entity_ref`. | Null and omission forbidden. `structural_synthetic_ref` may be used only when a future active `090` structural row permits it. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | closed_mvp_graph |
+| `GraphEdgeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | `gold_fact_ref` only for MVP `observed_connection`; structural and generic external graph refs are forbidden in MVP. | Exactly one value member matching `kind`; MVP observed-connection edges must use `gold_fact_ref`. | Null and omission forbidden. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | closed_mvp_graph |
 | `EvidenceRef.artifact_id` | `040`, behavior imported by `110` and `120` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`; raw payload bytes are forbidden. | Null and omission forbidden. | Included in evidence-ref ID and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
 
 ### CommonRecordHeader
@@ -411,7 +411,7 @@ Shape validation materializes required defaults before checksum computation. Unk
 | `properties` | `canonical_object` | yes | `{}`; every property declared by `090.GraphPropertyEvidencePolicy` | no | no | scalar default | n/a | no | yes | `090.GraphPropertyEvidencePolicy` | `110` | `CORE_REQUIRED_FIELD_MISSING` | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` |
 | `evidence_refs` | `array<cadastre_id>` | yes | `[]` only when `090` permits structural synthetic output | no | no | scalar default | lexical by ref ID | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `assertion_state` | `enum_token` | yes | none | no | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `confidence` | `decimal_string` | yes | null when edge type has no confidence policy | yes | no | 0 through 1 inclusive; TODO: precision scale must be closed before authoritative promotion | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+| `confidence` | `decimal_string` | yes | null when edge type has no confidence policy | yes | no | `040.DecimalPrecisionPolicy.confidence_0_1`; canonical six fractional digits when present | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_DECIMAL_PRECISION_INVALID` |
 | `valid_from` | `timestamp_utc` | yes | null when validity is unknown | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `valid_to` | `timestamp_utc` | yes | null means open interval | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `known_from` | `timestamp_utc` | yes | null when unknown and `090` permits | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
@@ -616,6 +616,21 @@ Graph, API, export, and analysis paths must treat no-op correction evidence as n
 
 This spec owns only the primitive record shape of `GraphNodeDeltaShape` and `GraphEdgeDeltaShape`. Projection rules, graph apply, backend mapping, traversal, runtime delta ID inputs, and query behavior are owned by `090`. A graph delta primitive shape that contains a backend-generated ID must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response materialization, evidence ref generation, replay, drillback, or pagination identity is emitted.
 
+### GraphDeltaOperationEnum
+
+`GraphNodeDeltaShape.delta_operation` and `GraphEdgeDeltaShape.delta_operation` use the closed graph delta operation token set below. Projection semantics remain owned by `090`; this table owns only primitive token validity.
+
+| Operation token | Primitive validity | Additional owner rule |
+| --- | --- | --- |
+| `upsert` | Allowed for node and edge deltas. | `090` must define projection and apply ordering. |
+| `update_visibility` | Allowed for node and edge deltas. | `090.GraphObjectOutputEligibilityRow` must permit the visibility transition. |
+| `expire` | Allowed for node and edge deltas. | Requires `060` authorization before projection/apply when absence-sensitive. |
+| `cleanup` | Allowed for node and edge deltas. | Requires `060` authorization before projection/apply. |
+| `no_op` | Allowed only as a persisted diagnostic delta when `090` declares no backend mutation. | Must not call the graph backend. |
+| all other tokens | Rejected. | Emit `CORE_FIELD_TYPE_INVALID` before graph apply. |
+
+Graph delta operation values are canonically serialized as lowercase snake-case enum tokens. Null, omission, unknown operation, or backend-native operation aliases fail before graph delta ID or checksum computation.
+
 ## Canonical Model Contract Details
 
 ### CanonicalChecksumPolicy
@@ -705,6 +720,10 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-SOURCE-EXT-SHAPE-AC-001` | A minimal valid `SourceExtensionFieldRuleShape` fixture validates with byte-stable canonical ordering and checksum. |
 | `040-SOURCE-EXT-SHAPE-AC-002` | Missing required, unknown-field, non-canonical ordering, invalid bounds, and checksum-replay fixtures fail or pass exactly as declared by `SourceExtensionFieldRuleShape`. |
 | `040-SOURCE-EXT-SHAPE-AC-003` | Invalid source-extension rule shape is rejected before `050` activation behavior evaluates the rule. |
+| `040-GRAPH-SOURCE-REF-AC-001` | MVP graph node deltas accept `canonical_entity_ref` source refs and reject null, generic external graph refs, and inactive structural refs. |
+| `040-GRAPH-SOURCE-REF-AC-002` | MVP observed-connection edge deltas accept `gold_fact_ref` source refs and reject null, generic external graph refs, and structural refs. |
+| `040-GRAPH-CONFIDENCE-AC-001` | Graph edge confidence uses `DecimalPrecisionPolicy.confidence_0_1` and rejects non-canonical persisted spellings or more than six fractional digits. |
+| `040-GRAPH-DELTA-OPERATION-AC-001` | Graph delta operations are limited to `upsert`, `update_visibility`, `expire`, `cleanup`, and `no_op`; all other tokens fail before apply. |
 
 ## Definition of Done
 

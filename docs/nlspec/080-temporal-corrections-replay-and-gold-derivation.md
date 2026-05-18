@@ -351,9 +351,9 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `identity` | evidence refs, resolver profile, candidate profile, identity decision bytes, resolver explanation checksum | reviewer display labels, request correlation ID | `sha256` | decision ID | compare only | active default |
 | `gold` | temporal resolution, authority refs, evidence refs, fact bytes, absence refs, correction policy refs, consulted `060` row refs | processing timestamp, run correlation ID | `sha256` | fact ID then known interval | compare only | active default |
 | `gold_correction` | `GoldFactChangeSet`, correction policy, snapshot refs, table-set checksum, temporal refs, authority refs, transition row, graph handoff effect | execution timestamp, diagnostic display order | `sha256` | changeset ID then operation order | compare only | active default |
-| `graph_delta` | imported `090` delta included fields, graph handoff refs, projection profile, delta checksum | backend transient IDs, runtime duration | `sha256` | delta ID | compare only | active default |
-| `graph_apply` | imported `090` apply included fields, idempotency key, apply profile, backend evidence, derived-view state refs | backend physical IDs, runtime duration | `sha256` | apply result ID | compare only | active default |
-| `graph_rebuild` | imported `090` rebuild included fields, rebuild manifest, schema fingerprint, index consistency, output checksum | backend import job ID, runtime duration | `sha256` | rebuild manifest ID | compare only | active default |
+| `graph_delta` | imported `090` delta included fields, graph handoff refs, projection profile checksum, edge semantics row-set checksum, output eligibility row-set checksum, property mapping refs, graph correction handoff refs, resolver explanation checksum when split-driven, and graph delta checksum | backend transient IDs, runtime duration | `sha256` | delta ID | compare only | active default |
+| `graph_apply` | imported `090` apply included fields, idempotency key, apply profile, backend taxonomy mapping profile, query translation profile, schema profile, backend evidence, index consistency refs, and derived-view state refs | backend physical IDs, runtime duration | `sha256` | apply result ID | compare only | active default |
+| `graph_rebuild` | imported `090` rebuild included fields, rebuild manifest, projection profile checksum, edge semantics row-set checksum, output eligibility row-set checksum, backend taxonomy mapping profile, query translation profile, schema fingerprint, index consistency, derived-view state, and output checksum | backend import job ID, runtime duration | `sha256` | rebuild manifest ID | compare only | active default |
 | `api_response` | imported `110` response included fields, authorization/redaction refs, page-token policy, output checksum | request correlation ID, display timestamp | `sha256` | owner-defined response ID | compare only | active default |
 | `export_projection` | imported `050` projection included fields, projection profile, input refs, mapping refs, redaction refs, loss manifest checksum, output checksum | export job ID, request correlation ID, execution duration, display timestamp | `sha256` | export projection ID | compare only | active default |
 | `analysis_output` | imported `130` analysis included fields, analysis rule bundle, graph derived-view refs, authorization/redaction refs, output checksum | request correlation ID, UI display label, runtime duration | `sha256` | analysis output ID | compare only | active default |
@@ -489,7 +489,7 @@ Global replay failure precedence:
 | `expire_projected_object` | authorized retraction may expire graph object and `060` permits `graph_expiry` | emit expiry only through `090.GraphExpirySourceAuthorityGate` |
 | `cleanup_projected_object` | authorized cleanup may remove projection object and `060` permits `cleanup` | emit cleanup only through `090.GraphExpirySourceAuthorityGate` |
 | `conflict_visibility_update` | stale or conflicted assertion visibility changes without fact-key replacement | update visibility only when graph semantics and eligibility rows permit |
-| `identity_split_handoff` | `070.GraphCorrectionHandoff` validates split decision ref, split policy ref, retained and new canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and version manifest ref | route through `090.ProjectGraphDeltas`; missing or checksum-mismatched handoff refs fail before correction/projection with no graph mutation |
+| `identity_split_handoff` | `070.GraphCorrectionHandoff` validates split decision ref, split policy ref, retained and new canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and version manifest ref | route through `090.ProjectGraphDeltas` only when the active `090.GraphProjectionProfile` supports the handoff; unsupported profile handoff emits no graph delta and records the owner error; missing or checksum-mismatched handoff refs fail before correction/projection with no graph mutation |
 
 ### Temporal artifact errors
 
@@ -545,6 +545,10 @@ Global replay failure precedence:
 | `080-IDENTITY-SPLIT-HANDOFF-AC-002` | Missing identity split handoff metadata fails before correction or projection and emits no graph handoff effect except `none`. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-003` | Checksum drift in `070.GraphCorrectionHandoff` or resolver explanation rejects replay before output. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-004` | `080` treats identity split handoff as immutable metadata and never mutates graph state. |
+| `080-GRAPH-DELTA-REPLAY-HANDOFF-AC-001` | Graph delta replay imports `090` profile, edge semantics, output eligibility, property mapping, graph correction handoff, resolver explanation, and delta checksum fields. |
+| `080-GRAPH-HANDOFF-PROFILE-AC-001` | Unsupported active graph profile handoff emits no graph delta and does not restate graph projection behavior. |
+| `080-GRAPH-HANDOFF-CHECKSUM-AC-001` | Identity split handoff checksum drift rejects replay before graph output. |
+| `080-GRAPH-HANDOFF-DENIED-EXPIRY-AC-001` | Denied expiry or cleanup authorization emits no graph handoff effect other than no-op. |
 
 ## Definition of Done
 
