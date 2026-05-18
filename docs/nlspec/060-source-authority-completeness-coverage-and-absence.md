@@ -54,6 +54,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `WatermarkCommitRecord`
 - `EvaluateLakehouseFeedCompleteness`
 - `SourceAuthorityArtifactLifecycleGuardRows`
+- `SourceAuthorityClosureMatrix`
 
 ## Source Authority Contract
 
@@ -62,6 +63,69 @@ Gold derivation must use an active `SourceAuthorityProfileRow` for the exact fac
 A broad source-category ranking must not act as fallback authority when the exact row is missing.
 
 `DeriveAbsenceOrUnknown` may populate `040.GoldFact.absence_outcome` only through `040.GoldFactSchema` and only after exact authority, completeness, staleness, and coverage gates pass. Coverage-sensitive fact types or predicates must emit a `GoldFact` with non-empty `coverage_assertion_refs`; `coverage_assertion_refs = []` fails with `GOLD_FACT_COVERAGE_REQUIRED` for coverage-sensitive output.
+
+### SourceAuthorityProfileRow schema
+
+`SourceAuthorityProfileRow` is the stable row interface for fact authority and absence-sensitive effect authority. Concrete row instances are activation-controlled artifacts. Wildcards for `fact_type`, `predicate`, `source_dataset`, and requested effect are forbidden. Dataset-default rows may match only when `instance_default_allowed = true`.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the active row set. |
+| `fact_type` | Yes | none | Exact fact type. Wildcards are forbidden. |
+| `predicate` | Yes | none | Exact predicate. Wildcards are forbidden. |
+| `source_category` | Yes | none | Vendor-neutral source category. |
+| `source_dataset` | Yes | none | Vendor-neutral source dataset. Wildcards are forbidden. |
+| `source_instance_selector` | Yes | `dataset_default` only when `instance_default_allowed = true` | Exact source instance selector or dataset-default selector. |
+| `instance_default_allowed` | Yes | `false` | `true` permits dataset-default matching only when no exact source-instance row exists. |
+| `subject_scope_selector` | Yes | none | Canonical selector covering the subject scope. |
+| `object_scope_selector` | Yes | none | Canonical selector covering the object scope. |
+| `authority_mode` | Yes | none | One of `positive_only`, `positive_and_absence`, `control_result_only`, `history_only`, `non_authoritative`. |
+| `allowed_effects` | Yes | `[]` | Closed array of `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Empty permits positive observations only. |
+| `required_completeness_profile_row_refs` | Yes when any effect is allowed | `[]` only for `positive_only` | Exact `LakehouseFeedCompletenessProfileRow` refs. |
+| `required_coverage_dimension_profile_refs` | Yes when coverage-sensitive | `[]` only for non-coverage-sensitive positive output | Exact `CoverageDimensionProfile` refs. |
+| `required_staleness_policy_refs` | Yes when output or effect depends on stale state | none | Exact `SourceStalenessPolicy` refs. |
+| `required_progress_signal_policy_refs` | Yes when progress signals are consulted | `[]` | Exact `ProgressSignalInterpretationPolicy` refs. |
+| `required_control_result_mapping_refs` | Required for `control_result_only` or control output | `[]` for other modes | Exact `ControlResultMappingRowSet` refs. |
+| `required_source_history_retention_refs` | Required for `history_only` or source-history no-change | `[]` for other modes | Exact `SourceHistoryRetentionProfile` refs. |
+| `required_supplier_visibility_profile_refs` | Required for permission-sensitive absence | `[]` when visibility cannot affect the effect | Exact `SupplierCollectionVisibilityProfile` refs. |
+| `absence_source_state_mapping` | Required when `allowed_effects` is non-empty | none | Map from source state to `040.FactAbsenceOutcome` token or blocking reason. |
+| `validation_refs` | Yes | none | Non-empty refs proving positive, blocked, missing-row, ambiguous-row, and manifest behavior. |
+| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+Closed `authority_mode` values are:
+
+```text
+positive_only
+positive_and_absence
+control_result_only
+history_only
+non_authoritative
+```
+
+Closed `allowed_effects` values are:
+
+```text
+absence
+cleanup
+retraction
+graph_expiry
+watermark
+```
+
+### ResolveSourceAuthorityProfileRow
+
+```text
+ResolveSourceAuthorityProfileRow(request, active_row_set):
+1. Validate row-set ref through `030.ActivationControlledArtifactRef`.
+2. Keep only active rows whose activation scope covers the request.
+3. Match exact fact_type, predicate, source_category, source_dataset, requested effect, subject scope, and object scope.
+4. If request names a source instance, select only rows for that exact instance unless no specific row exists.
+5. Permit a dataset-default row only when `instance_default_allowed = true`.
+6. If zero rows remain, return `SOURCE_AUTHORITY_ROW_MISSING`.
+7. If more than one equally specific row remains, return `SOURCE_AUTHORITY_ROW_AMBIGUOUS`.
+8. Return the selected row and require its ref and checksum in `VersionManifest`.
+```
 
 ## Completeness Contract
 
@@ -89,6 +153,8 @@ A broad source-category ranking must not act as fallback authority when the exac
 | `activation_scope` | Yes | none | Scope in which the row may affect output. |
 
 A row with `completeness_decision in {complete, empty_complete}` may enter absence evaluation only when `allowed_effects` contains the requested effect and all exact authority, coverage, and staleness refs validate.
+
+For every active absence-sensitive feed profile, source dataset, scope selector, read target kind, requested effect, and upstream evidence class, the active row set must cover every `LakehouseReadCompletenessReceipt` state and every `upstream_evidence_state`. Missing combinations emit `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING`. Receipt states are `read_complete`, `read_partial_known_gap`, `read_partial_unknown_gap`, `read_unavailable`, `schema_unavailable`, and `manifest_invalid`. Upstream evidence states are `sufficient`, `insufficient`, `missing`, `permission_limited`, `scope_unavailable`, `source_unavailable`, `stale`, and `not_applicable`.
 
 | Completeness decision | Absence authority default | Cleanup/retraction default |
 | --- | --- | --- |
@@ -118,11 +184,13 @@ Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derive
 | Destination stale delete | Non-authoritative; no source absence. |
 | Live source probe result | Validation/exploration only. |
 
+Two or more progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, or live-probe signals that individually lack authority must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
+
 ## Coverage Contract
 
 Coverage-sensitive facts require `CoverageDimensionProfile` and a current `CoverageAssertion` before absence, pass/fail/unknown, no-change, or negative claims may be emitted.
 
-Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions; source-specific unresolved rows remain blocking until closed in the gap artifact and validation matrix.
+Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions. Concrete active source-specific row instances are activation-controlled and validation-blocked until present; missing rows fail closed through `SourceAuthorityClosureMatrix` and `120` validation rows.
 
 ## Source authority artifact activation boundary
 
@@ -144,6 +212,16 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `WatermarkCommitRecord` | `runtime_state_record` | Records attempted watermark outcome; does not grant authority. |
 | `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` | `stable_core_contract` | Algorithms validate activation refs before output. |
 
+### SourceAuthorityClosureMatrix
+
+`SourceAuthorityClosureMatrix` is a stable validation view over active `060` activation-controlled row sets and imported `020` feed-category closure rows. It is not a runtime authority class and must not substitute for the underlying row refs.
+
+For every active `LakehouseFeedProfile` and requested absence-sensitive effect, the matrix must prove that exactly one active validated row chain exists for fact type, predicate, source category, source dataset, source instance override when present, subject scope, object scope, completeness, coverage, staleness, progress-signal interpretation, control-result mapping when applicable, source-history retention when applicable, absence derivation, and watermark policy when applicable.
+
+If the row chain is absent, ambiguous, inactive, checksum-mismatched, out of scope, stale, or unvalidated, the effect must not execute. The result must be `unknown`, `not_applicable`, `source_stale`, `no_op`, or the most specific deterministic error. It must not emit absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement.
+
+The matrix output must include the requested effect token, feed category, source dataset, selected row refs, row checksums, validation refs, blocking reason when blocked, and a `VersionManifest` ref. A closure validation result may be referenced by `030.VersionManifest`, but the underlying activation-controlled artifact refs and checksums remain required.
+
 ### SourceAuthorityArtifactLifecycleGuardRows
 
 `060` policy row sets use `030.ActivationControlledArtifactLifecycleMachine.v1` for activation. Runtime completeness, absence, and watermark decisions remain algorithmic unless a future owner patch defines a lifecycle subject, closed states, closed events, a total transition matrix, and validation rows.
@@ -156,6 +234,7 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `ProgressSignalInterpretationPolicy` | Generic artifact lifecycle | Signal class, default non-authority, exact granted effect, and weak-signal combination fixture. |
 | `ProjectionWatermarkPolicy` | Generic artifact lifecycle | Required completeness, apply status, and no advancement after failed or partial apply. |
 | `AbsenceDerivationPolicy` | Generic artifact lifecycle | Absence, no-op, stale, error result mapping, and blocking precedence fixture. |
+| `SourceAuthorityClosureMatrix` | Stable validation view | Exact row-chain coverage, ambiguity detection, checksum validation, deterministic block rows, and validation refs. |
 
 ### Pure algorithm lifecycle non-substitution rule
 
@@ -201,7 +280,7 @@ Only `complete` and `empty_complete` may enter absence evaluation, and only when
 DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_set, completeness_profile, authority_profile, coverage_assertions, staleness_policy):
 1. Validate every required activation artifact ref through `030.ActivationControlledArtifactRef`.
 2. Fail before absence, cleanup, retraction, graph expiry, or watermark advancement when an authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact is missing, inactive, checksum-mismatched, out of scope, or unvalidated.
-3. Reject when no active SourceAuthorityProfileRow covers the fact type, predicate, source dataset, scopes, and requested absence authority.
+3. Resolve exactly one active `SourceAuthorityProfileRow` through `ResolveSourceAuthorityProfileRow`; missing or ambiguous rows block the requested effect.
 4. Reject when required LakehouseReadCompletenessReceipt is missing or not tied to the active feed profile and manifest refs.
 5. Evaluate UpstreamCompletenessEvidence and the read receipt through `EvaluateLakehouseFeedCompleteness` for the requested effect.
 6. If the completeness decision is not `complete` or `empty_complete`, return unknown, not applicable, stale, no-op, or deterministic error with the selected blocking reason.
@@ -210,7 +289,7 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 9. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
 10. Reject weak progress signals unless one active ProgressSignalInterpretationPolicy row grants the exact effect.
 11. Reject external-schema classification, status, severity, confidence, observables, enrichments, field presence, field absence, or endpoint order as authority unless an active `060` row maps the exact signal to the exact requested effect.
-12. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
+12. Emit exactly one `AbsenceDerivationResult` whose `result_state` maps one-to-one to `040.FactAbsenceOutcome` when a fact-level outcome is produced.
 13. Include authority profile row refs, completeness row refs, policy refs, artifact checksums, feed manifest refs, requested effect, and validation refs in the result and `VersionManifest`.
 ```
 
@@ -218,7 +297,7 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 
 | Field | Required | Rule |
 | --- | ---: | --- |
-| `result_state` | Yes | Closed token: absence authorized, unknown, not applicable, stale, no-op, or deterministic error. |
+| `result_state` | Yes | Closed token from `040.FactAbsenceOutcome` when fact-level outcome is produced; `no_op` or owner error when no fact-level outcome is produced. |
 | `absence_authorized` | Yes | Boolean; true only when authority, completeness, staleness, and coverage gates pass. |
 | `blocking_reason` | Required when `absence_authorized = false` | Most specific blocking code. |
 | `authority_row_ref` | Required when evaluated | Exact `SourceAuthorityProfileRow` ref or null when missing. |
@@ -232,6 +311,22 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 | Error/no-op code | Emitted when |
 | --- | --- |
 | `SOURCE_AUTHORITY_ROW_MISSING` | No exact active authority row covers fact type, predicate, dataset, scopes, and requested absence authority. |
+| `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | More than one equally specific active authority row covers the requested fact, predicate, dataset, scopes, and requested effect. |
+| `SOURCE_STALENESS_POLICY_ROW_MISSING` | No active staleness policy row covers the requested source dataset, fact type, predicate, scope, and effect. |
+| `SOURCE_STALENESS_POLICY_ROW_AMBIGUOUS` | More than one equally specific staleness policy row covers the request. |
+| `COVERAGE_DIMENSION_ROW_MISSING` | No source-specific coverage dimension row covers the requested coverage domain, dataset, fact type, predicate, and scope. |
+| `COVERAGE_DIMENSION_ROW_AMBIGUOUS` | More than one equally specific coverage dimension row covers the request. |
+| `CONTROL_RESULT_MAPPING_ROW_MISSING` | No active control-result mapping row covers the external vocabulary, rule polarity, external state, fact type, predicate, and scope. |
+| `CONTROL_RESULT_MAPPING_ROW_AMBIGUOUS` | More than one equally specific control-result mapping row covers the request. |
+| `PROGRESS_SIGNAL_POLICY_ROW_MISSING` | A progress or weak-signal effect is requested without an active exact progress-signal policy row. |
+| `PROGRESS_SIGNAL_POLICY_ROW_AMBIGUOUS` | More than one equally specific progress-signal policy row covers the request. |
+| `SOURCE_HISTORY_RETENTION_ROW_MISSING` | Source-history interpretation is requested without an active retention row covering dataset, scope, and history window. |
+| `SOURCE_HISTORY_RETENTION_ROW_AMBIGUOUS` | More than one equally specific source-history retention row covers the request. |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_MISSING` | Permission-sensitive absence is requested without an active visibility profile row. |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_AMBIGUOUS` | More than one equally specific visibility profile row covers the request. |
+| `SOURCE_STATE_MAPPING_ROW_MISSING` | No active absence source-state mapping covers the selected source state and requested effect. |
+| `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `SourceAuthorityClosureMatrix` cannot prove exactly one validated row chain for an active absence-sensitive request. |
+| `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `SourceAuthorityClosureMatrix` finds more than one equally specific validated row chain. |
 | `COVERAGE_ASSERTION_REQUIRED` | Coverage-sensitive output lacks a current coverage assertion. |
 | `COVERAGE_DIMENSION_UNRESOLVED` | Required coverage dimension has no active source-specific row. |
 | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | Progress/liveness/freshness/lineage signal is used without an active policy row granting the effect. |
@@ -263,7 +358,6 @@ Every attempted production source, projection, graph-apply, or presence-only wat
 
 Missing rows, stale states, partial states, permission-limited states, weak progress signals, destination cleanup, omitted fields, missing lakehouse rows, and OCSF field absence must remain unable to create absence by themselves.
 
-
 ### External schema non-authority boundary
 
 OCSF class, category, activity, type, object paths, observables, enrichments, status, severity, confidence, endpoint order, field presence, and field absence are normalized observation metadata only. They must not satisfy `SourceAuthorityProfileRow`, `CoverageAssertion`, `SourceStalenessPolicy`, `LakehouseFeedCompletenessProfileRow`, `AbsenceDerivationPolicy`, or `ControlResultMappingRow` requirements unless an active `060`-owned row explicitly maps the exact signal to the exact effect.
@@ -275,6 +369,28 @@ Vulnerability Finding status must not become Cadastre `assertion_state` without 
 ## Source Authority Contract Details
 
 ### CoverageDimensionProfile catalog
+
+`CoverageDimensionProfile` rows are stable at the schema level and activation-controlled at the source-specific row level.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `coverage_profile_row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `coverage_domain` | Yes | none | One of the domains declared in the catalog below or a deferred domain with explicit inactive status. |
+| `source_category` | Yes | none | Vendor-neutral source category. |
+| `source_dataset` | Yes | none | Vendor-neutral source dataset. |
+| `fact_type` | Yes | none | Exact fact type. |
+| `predicate` | Yes | none | Exact predicate. |
+| `scope_selector` | Yes | none | Canonical source/feed scope selector. |
+| `required_dimensions` | Yes | none | Non-empty ordered set of required dimensions for the domain. |
+| `authorized_dimension_states` | Yes | `covered` only | Authorized states are `covered` and explicitly permitted `empty_covered` only. |
+| `blocking_dimension_states` | Yes | all blocking states | Must include `permission_limited`, `partial_known_gap`, `partial_unknown_gap`, `source_unavailable`, `scope_unavailable`, `stale`, `unsupported`, `not_checked`, and `error` unless a narrower owner row maps a non-negative result. |
+| `freshness_policy_ref` | Yes | none | Exact `SourceStalenessPolicy` ref for coverage freshness. |
+| `visibility_profile_ref` | Required when permissions affect visibility | null only when permissions cannot affect coverage | Exact `SupplierCollectionVisibilityProfile` ref. |
+| `validation_refs` | Yes | none | Non-empty positive and negative validation refs. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`ResolveCoverageDimensionProfile(request, active_row_set)` must validate the row set through `030.ActivationControlledArtifactRef`, select active rows whose activation scope covers the request, match exact coverage domain, source category, source dataset, fact type, predicate, and scope selector, return `COVERAGE_DIMENSION_ROW_MISSING` when no row matches, return `COVERAGE_DIMENSION_ROW_AMBIGUOUS` when more than one equally specific row matches, and include the selected ref and checksum in `VersionManifest`.
 
 | Row ID | Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output | CoverageClosureStatus |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -355,28 +471,69 @@ This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without 
 | table commit success | lakehouse write evidence only | No |
 | graph rebuild success | derived-view rebuild evidence only | No |
 
-Weak progress signals must not combine into stronger authority.
+Two or more weak progress signals must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
 
 ### SourceStalenessPolicy
 
-| Policy field | Required behavior |
-| --- | --- |
-| Time-input precedence | Declared per source category, dataset, fact type, predicate, and scope. |
-| Missing-time behavior | Emit stale/unknown/error as policy states; no implicit current time. |
-| Expiry behavior | May mark facts stale; must not authorize absence unless authority and completeness permit. |
-| Output effects | API labels import `110`; graph lag remains separate from source staleness. |
+`SourceStalenessPolicy` rows must keep source event time, known time, table time, connector time, watermark time, replay time, and graph apply time distinct. Graph derived-view lag must not become source staleness.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `policy_row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `source_category` | Yes | none | Vendor-neutral source category. |
+| `source_dataset` | Yes | none | Vendor-neutral source dataset. |
+| `fact_type` | Yes | none | Exact fact type. |
+| `predicate` | Yes | none | Exact predicate. |
+| `scope_selector` | Yes | none | Canonical scope selector. |
+| `time_input_precedence` | Yes | none | Ordered time-input list. Current platform time is forbidden unless explicitly named and validation-covered for a non-authority diagnostic. |
+| `required_time_inputs` | Yes | none | Non-empty set unless `staleness_not_applicable = true`. |
+| `max_age_seconds` or `expiry_rule` | Yes | none | Exactly one staleness bound mechanism must be present unless `staleness_not_applicable = true`. |
+| `staleness_not_applicable` | No | `false` | `true` maps staleness to `not_applicable` for the row scope only. |
+| `missing_time_behavior` | Yes | `unknown` | Closed enum: `unknown`, `stale`, `deterministic_error`. |
+| `stale_effects` | Yes | block all absence-sensitive effects | Default blocks `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark`. |
+| `version_manifest_inclusion` | Yes | required | Selected row ref, checksum, and selected time input must appear in `VersionManifest`. |
+| `validation_refs` | Yes | none | Non-empty refs for missing, malformed, stale, current, and replay cases. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+Closed `missing_time_behavior` values are:
+
+```text
+unknown
+stale
+deterministic_error
+```
+
+Missing time input must never fall back to current platform time. A stale result blocks `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark` unless a narrower exact owner row explicitly maps a non-negative result.
 
 ### ControlResultMappingRow
 
-| External state | Cadastre state | Default compliance export |
+`ControlResultMappingRow` must map external control states without collapsing unknown, error, not evaluated, not checked, or not applicable into pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `mapping_row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `external_vocabulary` | Yes | none | External vocabulary or profile identifier. |
+| `rule_polarity` | Yes | none | Exact control polarity or owner-defined polarity token. |
+| `external_state` | Yes | none | Exact source state token. |
+| `cadastre_state` | Yes | none | One closed Cadastre state from the default table or owner extension. |
+| `applicability_condition` | Yes | none | Exact condition under which the mapping applies. |
+| `required_coverage_refs` | Yes | `[]` only when the control is not coverage-sensitive | Exact coverage refs. |
+| `required_authority_refs` | Yes | none | Exact authority refs. |
+| `required_staleness_refs` | Yes | none | Exact staleness refs. |
+| `validation_refs` | Yes | none | Non-empty refs for each mapped and unmapped state. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+| External state | Cadastre state | Default effect |
 | --- | --- | --- |
-| pass | pass fact only when authority and coverage permit | pass |
-| fail | fail fact only when authority and coverage permit | fail |
-| unknown | unknown | unknown |
-| error | error | error |
-| not evaluated | not_checked | not checked |
-| not checked | not_checked | not checked |
-| not applicable | not_applicable | not applicable |
+| `pass` | `pass` | Output only when exact authority, coverage, staleness, applicability, and completeness rows pass. |
+| `fail` | `fail` | Output only when exact authority, coverage, staleness, applicability, and completeness rows pass. |
+| `unknown` | `unknown` | No pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark. |
+| `error` | `error` | No pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark. |
+| `not evaluated` | `not_checked` | No pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark. |
+| `not checked` | `not_checked` | No pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark. |
+| `not applicable` | `not_applicable` | No pass/fail unless a row explicitly permits a not-applicable fact. |
 
 ### SourceHistoryRetentionProfile
 
@@ -427,6 +584,19 @@ Weak progress signals must not combine into stronger authority.
 | `060-OCSF-NONAUTH-AC-002` | Vulnerability Finding status does not become Cadastre `assertion_state` without a `060` or `080` owned derivation path. |
 | `060-OCSF-NONAUTH-AC-003` | DNS or DHCP field absence does not become absence without exact completeness, coverage, staleness, and authority rows. |
 | `060-LIFECYCLE-AC-001` | Source authority, completeness, coverage, progress, absence, and watermark artifacts can become active only through `030.LifecycleTransitionEvidence`, while `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` remain pure deterministic algorithms. |
+| `060-SOURCE-CLOSURE-AC-001` | Missing exact source-authority row blocks the requested effect and emits no absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement. |
+| `060-SOURCE-CLOSURE-AC-002` | Ambiguous equally specific source-authority row blocks the requested effect with `SOURCE_AUTHORITY_ROW_AMBIGUOUS`. |
+| `060-SOURCE-CLOSURE-AC-003` | Dataset-default authority rows do not match a source-instance-specific request unless `instance_default_allowed = true` and no exact instance row exists. |
+| `060-SOURCE-CLOSURE-AC-004` | Missing source-specific coverage row blocks negative, pass/fail, not-checked, not-applicable, and no-change output. |
+| `060-SOURCE-CLOSURE-AC-005` | Missing staleness time input never falls back to current platform time. |
+| `060-SOURCE-CLOSURE-AC-006` | OVAL, XCCDF, or similar `unknown`, `error`, `not evaluated`, `not checked`, and `not applicable` states never become pass, fail, absence, remediation, cleanup, retraction, graph expiry, or watermark by default. |
+| `060-SOURCE-CLOSURE-AC-007` | DNS TTL expiry maps to stale or unknown, not domain deletion, host deletion, or negative DNS fact. |
+| `060-SOURCE-CLOSURE-AC-008` | DHCP lease expiry maps to stale or expired assignment state, not host absence. |
+| `060-SOURCE-CLOSURE-AC-009` | Missing flow evidence maps to `unknown` and emits no absence edge. |
+| `060-SOURCE-CLOSURE-AC-010` | Directory permission gaps, hidden-membership gaps, AD primary-group gaps, direct-only membership queries, delta resets, and page incompletion block nonmembership. |
+| `060-SOURCE-CLOSURE-AC-011` | Weak-signal combinations cannot authorize absence unless exactly one active policy row grants the exact combined signal set and requested effect. |
+| `060-SOURCE-CLOSURE-AC-012` | All output-affecting closure refs appear in `VersionManifest`; omission fails with `VERSION_MANIFEST_INCOMPLETE` or a more specific owner code. |
+| `060-SOURCE-CLOSURE-AC-013` | `SourceAuthorityClosureMatrix` fails closure when a row chain is absent, ambiguous, inactive, checksum-mismatched, out of scope, stale, or unvalidated. |
 
 ## Definition of Done
 
@@ -443,3 +613,5 @@ Weak progress signals must not combine into stronger authority.
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+TODO: Concrete active source-specific row instances for vendor-neutral `source_dataset` values remain outside this stable contract. Missing row instances are deterministic activation or validation blockers and must not be inferred from source category, vendor product, research report, or private inventory.

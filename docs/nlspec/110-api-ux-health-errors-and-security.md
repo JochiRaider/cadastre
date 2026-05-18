@@ -99,6 +99,28 @@ These labels must not be rendered as authorized negative facts or compliance pas
 
 Mapping-blocked observations must surface as `error`, not `unknown`. Source-extension redaction failures must surface as security errors. OCSF non-authority blocks must not render as `authorized_not_observed`, compliance pass, compliance fail, remediation, risk reduction, or graph mutation.
 
+### SourceAuthorityClosureStateMapping
+
+Each `060` closure outcome or error class must map to exactly one caller-visible label for the response context. A mapping row must not render a blocked, unknown, stale, permission-limited, not-checked, not-applicable, error, or ambiguous state as an authorized negative fact.
+
+| `060` outcome/error class | Caller label | Authorized negative? | Compliance export behavior | Graph query behavior | Health severity | Required audit fields |
+| --- | --- | ---: | --- | --- | --- | --- |
+| `authorized_absent` | `authorized_not_observed` or owner-specific absence label | Yes, only for predicates permitting negative facts. | owner fact result | graph effect only when `060` and `090` authorize | informational | authority, completeness, coverage, staleness, effect refs |
+| `authorized_not_observed` | `authorized_not_observed` | Yes, only for predicates permitting negative facts. | owner fact result | graph effect only when `060` and `090` authorize | informational | authority, completeness, coverage, staleness, effect refs |
+| `SOURCE_AUTHORITY_ROW_MISSING` | `unknown` | No | not pass and not fail | no absence edge, no expiry | blocked | row selector, requested effect, redacted refs |
+| `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | `ambiguous` | No | not pass and not fail | no absence edge, no expiry | error | matching row refs when authorized |
+| `COVERAGE_DIMENSION_ROW_MISSING` | `unknown` or `partial_unknown_gap` by owner mapping | No | not pass and not fail | no absence edge, no expiry | blocked | coverage domain and redacted refs |
+| `COVERAGE_ASSERTION_REQUIRED` | `unknown` | No | not pass and not fail | no absence edge, no expiry | blocked | coverage assertion refs |
+| `SOURCE_STALENESS_POLICY_ROW_MISSING` | `source_stale` or `unknown` by `060` blocking reason | No | stale or unknown, not pass/fail | no absence edge, no expiry | blocked | time basis and policy refs |
+| `permission_limited` state | `permission_limited` | No | not pass and not fail | no absence edge, no expiry | blocked | visibility row refs |
+| `partial_known_gap` | `partial_known_gap` | No | not pass and not fail | no absence edge, no expiry | blocked | known-gap refs |
+| `partial_unknown_gap` | `partial_unknown_gap` | No | not pass and not fail | no absence edge, no expiry | blocked | unknown-gap refs |
+| `CONTROL_RESULT_MAPPING_ROW_MISSING` | `error` | No | error | no control graph effect | error | external vocabulary, state, redacted refs |
+| `not_checked` | `not_checked` | No | not checked | no absence edge, no expiry | diagnostic | mapping row refs |
+| `not_applicable` | `not_applicable` | No | not applicable | no absence edge, no expiry | diagnostic | applicability refs |
+| `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `unknown` with owner context | No | not pass and not fail | no absence edge, no expiry | diagnostic | signal refs and requested effect |
+| `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | health diagnostic only | No | no export effect | no graph effect | blocked | watermark target, blocking reason, refs |
+
 ## Error Model
 
 `ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
@@ -160,7 +182,6 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `EVIDENCE_REF_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | security error | no | payload redacted |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | `040`/`090` | security error | no | backend ID redacted unless admin audit permits |
-
 
 The generated error registry must include the following mapping, source-extension, external-schema non-authority, and graph-direction codes.
 
@@ -234,6 +255,30 @@ The generated `ErrorCodeRegistry` must include the following owner-specific rows
 | `COMPLETENESS_BLOCKING_PRECEDENCE_APPLIED` | `060` | diagnostic | no | blocking reason visible; private refs redacted | `fixture-060-blocking-precedence` |
 | `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | `060` | blocked | no, until profile row changes | scope redacted | `feed-category-empty-complete-*` |
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | `060` | blocked | owner-defined | watermark target redacted | `feed-category-watermark-blocked-*` |
+
+### SourceAuthorityClosureErrorRegistryRows
+
+The generated `ErrorCodeRegistry` must include every `060` source-authority closure code with owner, severity, retryability, redaction, and fixture ID. These rows extend the feed closure rows and must be selected before generic activation, validation, or unknown-state codes.
+
+| Error code | Owner | Severity | Retryability | Redaction | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| `SOURCE_AUTHORITY_ROW_MISSING` | `060` | blocked | no, until row set changes | selector redacted | `source-authority-row-resolution-missing` |
+| `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | `060` | error | no, until row set changes | matching rows redacted unless audit permits | `source-authority-row-resolution-ambiguous` |
+| `SOURCE_STALENESS_POLICY_ROW_MISSING` | `060` | blocked | no, until policy activates | policy selector redacted | `staleness-policy-missing-time-input` |
+| `SOURCE_STALENESS_POLICY_ROW_AMBIGUOUS` | `060` | error | no, until policy rows change | matching rows redacted | `staleness-policy-ambiguous` |
+| `COVERAGE_DIMENSION_ROW_MISSING` | `060` | blocked | no, until coverage row activates | coverage selector redacted | `coverage-dimension-missing-source-specific` |
+| `COVERAGE_DIMENSION_ROW_AMBIGUOUS` | `060` | error | no, until coverage rows change | matching rows redacted | `coverage-dimension-ambiguous` |
+| `CONTROL_RESULT_MAPPING_ROW_MISSING` | `060` | error | no, until mapping row activates | external state visible; private refs redacted | `control-result-mapping-unmapped` |
+| `CONTROL_RESULT_MAPPING_ROW_AMBIGUOUS` | `060` | error | no, until mapping rows change | matching rows redacted | `control-result-mapping-ambiguous` |
+| `PROGRESS_SIGNAL_POLICY_ROW_MISSING` | `060` | blocked | no, until policy activates | signal refs redacted | `progress-signal-weak-combination-blocked` |
+| `PROGRESS_SIGNAL_POLICY_ROW_AMBIGUOUS` | `060` | error | no, until policy rows change | matching rows redacted | `progress-signal-ambiguous` |
+| `SOURCE_HISTORY_RETENTION_ROW_MISSING` | `060` | blocked | no, until retention row activates | history scope redacted | `staleness-policy-source-history-outside-window` |
+| `SOURCE_HISTORY_RETENTION_ROW_AMBIGUOUS` | `060` | error | no, until retention rows change | matching rows redacted | `source-history-retention-ambiguous` |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_MISSING` | `060` | blocked | no, until visibility row activates | scope redacted | `directory-visibility-hidden-membership` |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_AMBIGUOUS` | `060` | error | no, until visibility rows change | matching rows redacted | `directory-visibility-ambiguous` |
+| `SOURCE_STATE_MAPPING_ROW_MISSING` | `060` | blocked | no, until mapping row activates | source state visible; refs redacted | `source-authority-state-mapping-missing` |
+| `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `060` | blocked | no, until closure rows and validation refs exist | closure refs redacted | `manifest-closure-omitted-authority-row-set-ref` |
+| `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `060` | error | no, until closure rows change | matching rows redacted | `source-authority-row-resolution-ambiguous` |
 
 ### Activation artifact error handling
 
@@ -403,6 +448,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-PAGE-TOKEN-DEFAULTS-AC-001` | Page-token default and maximum expiration are explicit or promotion is blocked. |
 | `110-FEED-CLOSURE-AC-001` | `not_authoritative_for_absence` renders as `unknown` with owner context and never as an authorized negative fact. |
 | `110-FEED-CLOSURE-AC-002` | `partial_known_gap` remains caller-visible as `partial_known_gap` and does not collapse to `unknown` when that owner state is available. |
+| `110-SOURCE-CLOSURE-STATE-AC-001` | Every `060` closure outcome maps to exactly one caller-visible label and never to authorized negative unless `060` authorized it. |
+| `110-SOURCE-CLOSURE-ERROR-AC-001` | Every new `060` error code appears in `ErrorCodeRegistry`. |
+| `110-SOURCE-CLOSURE-COMPLIANCE-AC-001` | `unknown`, `error`, `not_checked`, and `not_applicable` never render as pass or fail by default. |
 | `110-FEED-CLOSURE-AC-003` | Every new `020`, `030`, and `060` feed-closure error code appears in the generated registry with severity, retryability, redaction, owner, and fixture ID. |
 | `110-FEED-CLOSURE-AC-004` | Feed activation, category closure, upstream completeness, effect-blocked, and watermark-blocked health rows are diagnostics only and do not mutate source authority, facts, graph state, or watermarks. |
 

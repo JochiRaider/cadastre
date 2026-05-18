@@ -86,6 +86,29 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 | `malformed` | Source value was present but invalid for the target field. |
 | `redacted` | Value exists but must not be exposed to caller or downstream projection. |
 
+### FactAbsenceOutcome
+
+`FactAbsenceOutcome` is the closed fact-level outcome vocabulary for `GoldFact.absence_outcome`. It is distinct from `OmissionState` and from caller-visible labels owned by `110`.
+
+| Token | Meaning | May imply authorized negative fact | Required producer |
+| --- | --- | ---: | --- |
+| `authorized_absent` | Exact authority, completeness, coverage, and staleness gates authorize fact absence. | Yes | `060.DeriveAbsenceOrUnknown` |
+| `authorized_not_observed` | Exact rows authorize not-observed-within-complete-scope without object deletion semantics. | Only if predicate permits it | `060.DeriveAbsenceOrUnknown` |
+| `unknown` | Absence cannot be determined. | No | `060.DeriveAbsenceOrUnknown` |
+| `not_applicable` | The fact or control does not apply under an active row. | No | `060.DeriveAbsenceOrUnknown` or `060.ControlResultMappingRow` |
+| `source_stale` | Source evidence is stale under active staleness policy. | No | `060.SourceStalenessPolicy` through `060` |
+| `source_unavailable` | Required source or feed evidence is unavailable. | No | `060` |
+| `scope_unavailable` | Required scope is unavailable. | No | `060` |
+| `permission_limited` | Permission or visibility limits block absence. | No | `060` |
+| `partial_known_gap` | Known coverage or completeness gap blocks absence. | No | `060` |
+| `partial_unknown_gap` | Unknown completeness gap blocks absence. | No | `060` |
+| `not_checked` | Required control or evaluation was not checked. | No | `060.ControlResultMappingRow` |
+| `no_op` | Requested effect produced no fact-level outcome. | No | `060` |
+| `error` | Deterministic owner error blocked the outcome. | No | owner error through `060` |
+| `ambiguous` | More than one equally specific row or state matched. | No | `060` |
+
+`FactAbsenceOutcome` must not be inferred from `OmissionState`. Parser, normalizer, resolver, graph projection, API, and analysis stages must not set `GoldFact.absence_outcome`. `GoldFact.absence_outcome = null` means no fact-level absence outcome was produced; it must not mean `unknown`.
+
 ## Core Record Schema Registry
 
 `040` is the sole normative registry for the field schemas of `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `GoldFact`, `EvidenceRef`, `GraphNodeDeltaShape`, and `GraphEdgeDeltaShape`. Downstream specs may import these schemas by exact name and must not restate field-level schema authority.
@@ -130,6 +153,7 @@ Every `enum_token` field must be governed by exactly one closed enum owner befor
 | --- | --- | --- | --- |
 | core record tokens and schema record types | `040` | `CommonRecordHeader.record_type` and core schema selectors | closed by exported core record set |
 | omission states | `040` | `OmissionState` | closed by `040.Omission Semantics` |
+| fact absence outcomes | `040` | `FactAbsenceOutcome` and `GoldFact.absence_outcome` | closed by `040.FactAbsenceOutcome`; production derivation owned by `060` |
 | assertion states | `040`, `080` | `GoldFact.assertion_state` and correction transitions | closed for default states; owner-specific transitions in `080` |
 | raw import and payload enums | `020`, `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | owner enum row required before promotion |
 | silver observation enums | `050`, `040` | observation type, source category, field quality, external profile state | owner enum row required before promotion |
@@ -236,7 +260,6 @@ Every field schema table in this registry uses the following columns and meaning
 | `identity_inputs` | `array<canonical_object>` | yes | `[]` | no | no | scalar default | canonical JSON bytes | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `flow_role_evidence` | `canonical_object` | yes | null unless observation type can carry flow direction evidence | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `redaction_summary` | `canonical_object` | yes | `{}` | no | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-
 
 ### SourceExtensionFieldRuleShape
 
@@ -666,6 +689,9 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-VOLATILITY-AC-001` | Activation artifacts cannot alter core record fields or ID/checksum behavior. |
 | `040-VOLATILITY-AC-002` | Source-extension fields remain owner-declared through `050`. |
 | `040-VOLATILITY-AC-003` | Core schemas remain byte-stable for the same input after changing only an activation-controlled mapping/profile artifact. |
+| `040-FACT-ABSENCE-AC-001` | Every `GoldFact.absence_outcome` token is either null or one closed `FactAbsenceOutcome` value. |
+| `040-FACT-ABSENCE-AC-002` | Parser-generated or mapping-generated absence outcomes fail before persistence. |
+| `040-FACT-ABSENCE-AC-003` | Null absence outcome is not rendered as `unknown` without `110` owner mapping. |
 | `040-SOURCE-EXT-SHAPE-AC-001` | A minimal valid `SourceExtensionFieldRuleShape` fixture validates with byte-stable canonical ordering and checksum. |
 | `040-SOURCE-EXT-SHAPE-AC-002` | Missing required, unknown-field, non-canonical ordering, invalid bounds, and checksum-replay fixtures fail or pass exactly as declared by `SourceExtensionFieldRuleShape`. |
 | `040-SOURCE-EXT-SHAPE-AC-003` | Invalid source-extension rule shape is rejected before `050` activation behavior evaluates the rule. |

@@ -106,11 +106,15 @@ Implicit current-time fallback is forbidden.
 
 `DeriveFacts` must validate required temporal, authority, correction, late-arrival, and replay artifact refs before output. It must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, and active derivation profiles. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error, and every emitted `GoldFact` must pass `040.GoldFactSchema`. It must not mutate existing `GoldFact` rows in place.
 
+When a candidate gold fact depends on missing evidence, stale evidence, source-declared deletion, cleanup, retraction, source-history no-change, control result absence, vulnerability fixed state, DNS absence, DHCP/IPAM lease expiry, flow non-observation, or cloud-resource disappearance, `DeriveFacts` must call `060.DeriveAbsenceOrUnknown` before emitting `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error.
+
 ## Correction Contract
 
 Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must emit `GoldFactChangeSet` operations and must not mutate original `GoldFact` bytes. Effective `known_to` closure must be materialized from `GoldFactChangeSet` at read or replay time; base `GoldFact.known_to` remains the value written in the immutable record.
 
 `CorrectionSnapshotRefPolicy` must require old and new lakehouse snapshot refs for every correction class. The contract table below defines default correction classes and records remaining source-specific blocker rows. Missing temporal resolution fails before gold ID computation. Missing authority row fails before fact creation. Schema validation fails before graph projection.
+
+`fact_retraction`, `interval_split`, and cleanup-derived corrections require `AbsenceDerivationResult.absence_authorized = true` and `allowed_effects` containing the requested correction effect. Missing or unsafe source-authority closure produces no correction and must emit the most specific `060` blocking reason.
 
 ## Assertion-State Transition Matrix
 
@@ -119,6 +123,8 @@ Every correction policy must define a total transition matrix across assertion s
 ## Late Arrival
 
 Late evidence must be routed through `EvaluateLateArrival` using an active late-arrival policy artifact, temporal resolution, source authority, completeness, and watermark state. Silently discarding late authoritative evidence in production is forbidden.
+
+Late evidence may reopen, replace, or retract a fact only after temporal resolution and `060` source-authority closure validate for the correction class. A late stale or incomplete negative observation must be preserved as evidence or diagnostic state, not silently discarded and not emitted as retraction.
 
 ## Replay Contract
 
@@ -197,7 +203,7 @@ Production default is `current_import`. Historical known-time reconstruction is 
 | raw | manifest refs, raw IDs, payload hashes, import profile | run correlation ID | `sha256` | canonical record ID | missing refs before checksum mismatch | compare only | active draft |
 | silver | raw refs, mapping bundle, schema profile, normalized checksum | diagnostics correlation ID | `sha256` | observation ID | schema mismatch before output mismatch | compare only | active draft |
 | identity | evidence refs, resolver profile, decision, explanation checksum | reviewer display labels | `sha256` | decision ID | blocker mismatch before output mismatch | compare only | active draft |
-| gold | temporal resolution, authority, evidence, fact bytes, correction policy | processing timestamp | `sha256` | fact ID and known interval | authority mismatch before output mismatch | compare only | active draft |
+| gold | temporal resolution, authority, evidence, fact bytes, correction policy, `AbsenceDerivationResult`, `SourceAuthorityClosureMatrix` validation result, and every consulted `060` row ref | processing timestamp | `sha256` | fact ID and known interval | authority or closure mismatch before output mismatch | compare only | active draft |
 | graph delta/apply/rebuild | projection profile, delta set, idempotency, backend evidence, rebuild manifest | backend transient IDs | `sha256` | delta ID and path order | schema mismatch before output mismatch | compare only | active draft |
 | projections/API/analysis | owner refs, labels, authorization/redaction policy, output checksum | request correlation ID | `sha256` | owner-defined | authorization mismatch before output mismatch | compare only | TODO rows required |
 
@@ -268,6 +274,9 @@ Replay-equivalence ownership split:
 | `080-VOLATILITY-AC-001` | Inactive temporal policy, missing knowledge-time policy, correction policy checksum mismatch, late-arrival row manifest omission, and replay policy row absence fail before gold or replay output. |
 | `080-VOLATILITY-AC-002` | Current `TODO:` temporal and replay rows block affected production outputs until active artifact rows and validation refs exist. |
 | `080-LIFECYCLE-REPLAY-AC-001` | Replay rejects output when required lifecycle machine checksum or transition evidence refs are absent, mutable-only, checksum-mismatched, or excluded from the active replay equivalence policy. |
+| `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |
+| `080-SOURCE-CLOSURE-CORRECTION-AC-001` | Source deletion evidence without exact `060` closure emits no retraction. |
+| `080-SOURCE-CLOSURE-REPLAY-AC-001` | Replay rejects gold output when any consulted `060` row checksum differs. |
 
 ## Definition of Done
 

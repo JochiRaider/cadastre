@@ -75,6 +75,16 @@ Graph state is a derived read model. It must be rebuildable from authoritative l
 
 A graph backend must not create authoritative facts, infer identity, decide source completeness, decide fact retraction, define bitemporal semantics, repair drift by itself, or expose backend internal IDs as Cadastre IDs.
 
+### GraphExpirySourceAuthorityGate
+
+`GraphProjectionProfile` may emit graph expiry or cleanup deltas only when the source `GoldFactChangeSet` or `060.AbsenceDerivationResult` authorizes `graph_expiry` or `cleanup` for the requested effect token.
+
+`GraphApplyResult`, `GraphIndexConsistencyCheck`, `DerivedViewState`, graph backend import success, graph drift check, missing graph object, graph apply time, graph backend cleanup, or derived-view lag must not authorize graph expiry or cleanup.
+
+`source_stale`, `derived_view_stale`, `unknown`, `permission_limited`, `partial_known_gap`, `partial_unknown_gap`, `source_unavailable`, `scope_unavailable`, `not_checked`, `error`, and `ambiguous` must produce no graph expiry unless an exact active `060` row authorizes the requested effect.
+
+Missing flow evidence must not emit an observed-connection absence edge or graph expiry. It maps to `unknown` and produces no graph mutation.
+
 ## Graph artifact activation boundary
 
 Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, query contract, and projection non-authority are stable core contracts. Projection rows, backend profiles, schema profiles, query translation rows, apply profiles, and lag policies are activation-controlled artifacts.
@@ -125,14 +135,15 @@ ApplyGraphDelta(delta_set, apply_profile):
 1. Validate graph projection, backend, schema, taxonomy, query translation, apply, and lag artifact refs through `030.ActivationControlledArtifactRef`.
 2. Validate every node and edge delta against `040.GraphNodeDeltaShape`, `040.GraphEdgeDeltaShape`, and `040.ValidateCoreRecord`.
 3. Reject backend-generated IDs and raw payload leakage before backend execution.
-4. Verify delta_set checksum and GraphDeltaIdempotencyKey.
-5. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
-6. Reject when backend schema is missing, stale, or fingerprint-mismatched.
-7. Sort deltas by apply_profile canonical order.
-8. Apply batches only at declared transaction boundaries.
-9. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
-10. On failure, record committed batch IDs or prove no committed writes.
-11. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
+4. Reject graph expiry or cleanup deltas that lack an exact `060` authorization ref and requested effect token.
+5. Verify delta_set checksum and GraphDeltaIdempotencyKey.
+6. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
+7. Reject when backend schema is missing, stale, or fingerprint-mismatched.
+8. Sort deltas by apply_profile canonical order.
+9. Apply batches only at declared transaction boundaries.
+10. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
+11. On failure, record committed batch IDs or prove no committed writes.
+12. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
 ```
 
 ## Graph Apply Lifecycle
@@ -363,6 +374,7 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_ARTIFACT_SCOPE_MISMATCH` | Required graph artifact does not cover the graph execution, backend, projection, query, or serving scope. |
 | `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | A graph projection artifact attempts to redefine core IDs, core schema, identity semantics, temporal semantics, or product authority. |
 | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | A projection attempts to emit an `observed_connection` edge from OCSF endpoint order or external schema endpoint fields without qualifying `FlowRoleEvidence`. |
+| `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED` | A graph expiry or cleanup delta lacks an exact `060` authorization ref and requested effect token. |
 
 ### Acceptance Criteria
 
@@ -388,6 +400,9 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-LIFECYCLE-AC-004` | Failed, partial, aborted, or schema-preflight-failed apply never advances derived-view or watermark state. |
 | `090-GRAPH-APPLY-DEFAULTS-AC-001` | Graph apply defaults and maximums are explicit. |
 | `090-OCSF-DIRECTION-AC-001` | OCSF endpoint order alone never determines `observed_connection` edge direction. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-001` | Graph expiry delta without `060` requested-effect authorization fails before apply. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-002` | Graph derived-view lag never maps to source staleness or source absence. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-003` | Missing flow evidence emits no absence edge and no expiry. |
 | `090-OCSF-DIRECTION-AC-002` | A `network_activity_observation` with valid OCSF Network Activity fields but missing or ambiguous `FlowRoleEvidence` emits no `observed_connection` edge. |
 | `090-OCSF-DIRECTION-AC-003` | DNS and DHCP observations do not emit `observed_connection` edges unless a graph projection row and `FlowRoleEvidence` explicitly permit the edge. |
 

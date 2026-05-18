@@ -84,6 +84,16 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 | `PrivateCompletenessEvidenceInventory` | Private only. |
 | `PrivateGoldenCorpus` | Private only unless redacted into `LakehouseFeedFixture`. |
 
+### SourceAuthorityRowPublicBindingRule
+
+Public source-authority row catalogs may contain only vendor-neutral `source_category`, `source_dataset`, row IDs, redacted artifact refs, canonical scope selectors, lifecycle status, validation refs, and checksummed public policy refs.
+
+`SourceAuthorityProfileRow`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ControlResultMappingRow`, `SupplierCollectionVisibilityProfile`, `SourceHistoryRetentionProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, and `LakehouseFeedCompletenessProfileRow` public instances must not contain concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventory, zone inventory, account lists, or environment-specific source target lists.
+
+A public row, validation report, export, API response, or persisted public artifact that contains a concrete product name, tenant ID, private route, credential, host list, scanner site name, directory tenant inventory, zone inventory, account list, or environment-specific source target list must fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, or validation-report materialization.
+
+Private source binding artifacts may map concrete upstream systems to public vendor-neutral datasets. Private mappings must not alter the public `060` row-resolution algorithm, matching specificity, default omission behavior, error precedence, or allowed effect semantics.
+
 ## Cross-Domain Invariants
 
 - Missing lakehouse rows must not imply source absence.
@@ -94,6 +104,7 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 - Graph apply success must not imply fact correctness.
 - Package signature verification must not imply package activation eligibility.
 - Analysis findings must not mutate facts, graph state, watermarks, or completeness.
+- A missing source-authority closure row must not imply source absence, cleanup permission, graph expiry, retraction, pass/fail state, source-history no-change, or watermark advancement.
 
 ## Required Errors
 
@@ -182,6 +193,7 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-VOLATILITY-AC-001` | No activation-controlled artifact can define product authority. |
 | `010-VOLATILITY-AC-002` | Activation artifacts that conflict with stable core fail before production output. |
 | `010-VOLATILITY-AC-003` | Product authority, identity semantics, temporal semantics, and projection boundaries remain stable-core owned. |
+| `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-001` | A public source-authority row containing a private route or concrete tenant inventory fails before persistence, publication, export, or validation-report materialization. |
 
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
 

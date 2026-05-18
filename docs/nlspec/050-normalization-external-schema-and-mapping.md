@@ -100,6 +100,13 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 | Observables and enrichments | Non-authoritative by default. |
 | Deprecated fields | Rejected by default unless a non-expired waiver is recorded. |
 
+### ExternalSchemaSignalAuthorityHandoff
+
+`ObservationToOCSFMappingRow` must not grant source authority, coverage, staleness, control-result, absence, cleanup, retraction, graph expiry, or watermark permission.
+
+If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060` external-schema signal mapping row must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
+
+Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must fail with `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
 
 ### ObservationToOCSFMappingRow schema
 
@@ -426,6 +433,8 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-OCSF-MAP-AC-004` | Unknown enum and source-action values do not invent OCSF enum IDs. |
 | `050-OCSF-MAP-AC-005` | Authentication has no default activity. |
 | `050-OCSF-MAP-AC-006` | IPAM-only assignment rows do not map to OCSF DHCP Activity. |
+| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-001` | An OCSF status or field absence attempt to authorize absence fails unless an active `060` row grants the exact effect. |
+| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-002` | Normalized fields remain persisted as observation metadata even when authority use is rejected, subject to existing mapping validity. |
 | `050-SOURCE-EXT-AC-002` | The default `SourceExtensionFieldRuleSet` is empty. |
 | `050-SOURCE-EXT-AC-003` | Wildcard source-extension paths are rejected. |
 | `050-BASE-FIELD-AC-001` | `raw_data`, `raw_data_hash`, and `unmapped` remain absent unless an explicit bounded policy permits them. |

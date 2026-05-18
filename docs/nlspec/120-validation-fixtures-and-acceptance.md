@@ -65,7 +65,7 @@ Every active domain spec must include at least one negative validation case for 
 | Direct source calls | Production package attempts enterprise source API call and fails before output. |
 | Feed completeness | Missing feed row attempts absence and fails. |
 | Feed profile closure | Missing feed profile field, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
-| Source authority | Missing exact authority row attempts gold derivation and fails. |
+| Source authority | Missing exact authority row, ambiguous authority row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | IP-only/hostname-only/DNS-only/PTR-only/graph-key-only merge attempt fails. |
 | Graph | Backend internal ID appears in response or selector and fails; OCSF endpoint order attempts graph direction without `FlowRoleEvidence` and emits no edge. |
@@ -114,6 +114,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `SPECSET-AC-012` | No activation-controlled artifact can define new runtime behavior not exported by a stable core contract. |
 | `SPECSET-AC-013` | Every output-affecting activation-controlled artifact is represented by `030.ActivationControlledArtifactRef` and appears in `VersionManifest`. |
 | `SPECSET-AC-014` | Stable core specs contain no production-active volatile rows except non-normative examples or blocking `TODO:` rows. |
+| `SPECSET-AC-015` | Every active absence-sensitive feed category has `SourceAuthorityClosureMatrix` validation rows or deterministic block rows. |
 
 ## Validation Contract Details
 
@@ -194,7 +195,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `030` | DAG execution | forbidden output | safe subset no-op | lifecycle illegal transition | manifest replay | n/a | n/a | subset authority | required when owner declares activation-controlled artifacts. |
 | `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection | required when owner declares activation-controlled artifacts. |
 | `050` | OCSF mapping row success by row family | missing row, ambiguous row, missing discriminator, forbidden field, deprecated field, unknown enum, IPAM split, artifact mismatch | cadastre-only null-profile no-op when row permits | unknown enum and mapping discriminator branches | mapping replay | source extension redaction | n/a | undeclared extension and source-extension wildcard | required when owner declares activation-controlled artifacts. |
-| `060` | absence authorized and empty-complete authorized | missing authority row, missing completeness row, missing upstream evidence, external-schema authority attempt | weak signal no-op, effect-not-allowed no-op, and OCSF non-authority no-op | blocking precedence and partial completeness | watermark replay and watermark blocked | n/a | n/a | missing coverage, weak-signal combination, and OCSF status/severity/confidence non-authority | required when owner declares activation-controlled artifacts. |
+| `060` | absence authorized and empty-complete authorized | missing authority row, ambiguous authority row, missing completeness row, missing upstream evidence, missing coverage row, missing staleness row, missing control-result mapping, and external-schema authority attempt | weak signal no-op, weak-signal combination blocked, effect-not-allowed no-op, OCSF non-authority no-op, DNS TTL no deletion, DHCP lease no host absence, and missing-flow unknown | blocking precedence, partial completeness, source-history outside-window, and directory visibility gaps | watermark replay, closure-manifest replay, and watermark blocked | n/a | n/a | missing coverage, weak-signal combination, source-history no-change, DNS/DHCP/flow negative non-authority, and OCSF status/severity/confidence non-authority | required when owner declares activation-controlled artifacts. |
 | `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality | required when owner declares activation-controlled artifacts. |
 | `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
 | `090` | graph query/apply and flow-role edge direction | backend ID rejection and OCSF endpoint-order direction rejection | empty traversal no-path and missing-flow-role no-edge | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition and endpoint-order non-authority | required when owner declares activation-controlled artifacts. |
@@ -202,7 +203,6 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
-
 
 ### ObservationTypeExternalMappingValidationMatrix
 
@@ -300,6 +300,25 @@ Each fixture family in this matrix applies to every active feed category in `020
 | `cloud_asset_inventory` | Positive and negative closure fixtures required, including permission-limited inventory. |
 | `source_history` | Positive and negative closure fixtures required, including outside-window no-proof. |
 | `future_reachability` | MVP block/no-op fixture required; positive reachability output forbidden. |
+
+### SourceAuthorityClosureValidationMatrix
+
+Every fixture family in this matrix is required before `SourceAuthorityClosureMatrix` may satisfy promotion for an active absence-sensitive feed category. `120` validates owner behavior; it must not define source-authority behavior beyond validation artifact shapes, fixture IDs, expected outputs, and acceptance aggregation.
+
+| Fixture family | Required cases |
+| --- | --- |
+| `source-authority-row-resolution-*` | exact match success, missing row, ambiguous row, dataset-default allowed, dataset-default forbidden, source-instance override exact match, source-instance mismatch |
+| `lakehouse-feed-completeness-totality-*` | all six `020` receipt states crossed with all eight upstream evidence states for at least one absence-sensitive category |
+| `coverage-dimension-*` | missing source-specific coverage row, missing required dimension, permission-limited dimension, partial known gap, stale coverage, covered success |
+| `staleness-policy-*` | declared time precedence, missing time input, malformed time input, TTL expiry, DHCP lease expiry, source-history outside-window, no current-time fallback |
+| `control-result-mapping-*` | pass, fail, unknown, error, not evaluated, not checked, not applicable, unmapped external state |
+| `progress-signal-*` | cursor exhaustion alone, ack success alone, queue drain alone, CDC heartbeat alone, graph apply success alone, destination cleanup alone, weak-signal combination blocked, exact combined policy success |
+| `dns-dhcp-flow-*` | DNS TTL expiry not deletion, DHCP lease expiry not host absence, missing flow unknown |
+| `directory-visibility-*` | hidden membership, limited-information rows, direct-only membership query, AD primary-group gap, delta reset, page incompletion |
+| `manifest-closure-*` | omitted authority row set ref, omitted staleness ref, omitted coverage ref, omitted progress policy, omitted control mapping, omitted source-history retention, checksum mismatch |
+| `graph-expiry-*` | expiry authorized success, expiry missing `060` effect ref rejected, derived-view stale does not expire graph object |
+
+A validation row in this matrix must include fixture checksum, expected `AbsenceDerivationResult` checksum when applicable, expected `VersionManifest` checksum or expected manifest error, expected output checksum when output is allowed, expected no-op when output is blocked, expected error code when rejected, and mutation-prohibition proof for raw, silver, identity, gold, graph, watermark, compliance export, and API label mutation classes affected by the case.
 
 ### TwoIndependentImplementersCheck
 
@@ -503,6 +522,10 @@ replay_same_event
 | `120-FEED-CLOSURE-AC-002` | Every profile-dependent branch in `020`, `030`, and `060` has a validation row with expected receipt state, error/no-op, user-facing label, and mutation prohibition. |
 | `120-FEED-CLOSURE-AC-003` | Every active feed category has positive and negative fixtures for complete, partial, stale, permission-limited, missing-profile-row, missing-upstream-evidence, weak-progress, empty-complete, and watermark-blocked cases. |
 | `120-FEED-CLOSURE-AC-004` | Every absence-sensitive output has exact authority, completeness, coverage, staleness, and watermark fixtures where applicable. |
+| `120-SOURCE-CLOSURE-AC-001` | Every active absence-sensitive feed category has closure validation rows or deterministic block rows. |
+| `120-SOURCE-CLOSURE-AC-002` | Every missing, ambiguous, inactive, or checksum-mismatched source-authority closure component produces the expected owner error or no-op and no forbidden mutation. |
+| `120-SOURCE-CLOSURE-AC-003` | Two independent implementations produce byte-identical `AbsenceDerivationResult`, `VersionManifest`, and expected output checksums for the same closure fixtures. |
+| `120-SOURCE-CLOSURE-AC-004` | `ValidateSpecSet` fails promotion when `domain.md`, `000`, `020`, `030`, `040`, `060`, `080`, `090`, or `110` disagree on source-authority closure state. |
 
 | `120-LIFECYCLE-AC-001` | Every production-affecting lifecycle machine has executable event-sequence fixtures. |
 | `120-LIFECYCLE-AC-002` | Aggregate `AcceptanceReport` cannot pass while any required lifecycle fixture is blocked, not run, failed, missing checksum, or missing expected output. |

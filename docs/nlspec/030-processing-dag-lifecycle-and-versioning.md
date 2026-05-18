@@ -358,6 +358,8 @@ A production output without a complete immutable `VersionManifest` must fail wit
 
 When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
 
+A `SourceAuthorityClosureMatrix` validation result may be referenced in `VersionManifest`, but it must not substitute for the underlying activation-controlled artifact refs and checksums. Absence-sensitive output must include every consulted `060` row-set ref even when the closure validation result is also included.
+
 ## Activation-Controlled Artifact Reference Contract
 
 `ActivationControlledArtifactRef` is the canonical reference shape for every output-affecting activation-controlled artifact. Owner specs may require additional artifact payload fields, but they must not redefine this reference shape.
@@ -540,9 +542,9 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
 | Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
-| Gold output | temporal policy, exact source authority refs, lakehouse feed completeness profile row refs, coverage refs, staleness refs, absence policy refs when absence-sensitive, correction policy, source refs, snapshot refs. |
-| Absence, cleanup, retraction, or graph expiry output | `060` completeness decision refs, authority refs, coverage refs, staleness refs, absence derivation result refs, and requested effect token. |
-| Watermark output | projection watermark policy, completeness decision refs, authority refs, coverage refs where applicable, staleness refs, and `WatermarkCommitRecord`. |
+| Gold output | temporal policy, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, correction policy, source refs, snapshot refs, and validation refs. |
+| Absence, cleanup, retraction, or graph expiry output | requested effect token, `060.AbsenceDerivationResult`, `SourceAuthorityClosureMatrix` validation result ref or validation row ref, and all row-set refs consulted by `DeriveAbsenceOrUnknown`. |
+| Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, completeness decision refs, source-authority closure refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
 | Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, graph apply lifecycle transition evidence, apply result. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
@@ -663,6 +665,8 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-FEED-CLOSURE-AC-004` | Same DAG bytes, same requested subset, same subset profile, and same activation refs produce byte-identical stage order and manifest refs. |
 
 | `030-OCSF-MAP-ARTIFACT-AC-001` | Silver output fails with `VERSION_MANIFEST_INCOMPLETE` when any output-affecting OCSF mapping row set, enum rule set, base-event field policy set, profile-resolution manifest, source-extension rule set, or observation-type validation matrix ref is missing from `VersionManifest`. |
+| `030-SOURCE-CLOSURE-MANIFEST-AC-001` | Absence-sensitive output fails with `VERSION_MANIFEST_INCOMPLETE` when any consulted `060` row-set ref is omitted. |
+| `030-SOURCE-CLOSURE-MANIFEST-AC-002` | Same refs and same row bytes produce the same `version_manifest_id`; changing one closure row checksum changes the manifest checksum or blocks output. |
 | `030-LIFECYCLE-AC-001` | All required lifecycle machines have closed states and closed events. |
 | `030-LIFECYCLE-AC-002` | Every state/event pair selects exactly one transition row. |
 | `030-LIFECYCLE-AC-003` | Illegal transitions emit evidence, mutate no state, and write no production output. |

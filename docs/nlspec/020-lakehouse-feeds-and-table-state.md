@@ -116,11 +116,18 @@ Profile validation must materialize defaults before checksum computation. Unknow
 | `required_authority_refs` | No | `[]` | Exact `060.SourceAuthorityProfileRow` refs or row-set refs required by the category. |
 | `required_staleness_refs` | No | `[]` | Exact `060.SourceStalenessPolicy` refs required by the category. |
 | `allowed_effects` | No | `[]` | Closed effect tokens imported from `060`: `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Empty means positive observations only. |
+| `required_060_closure_refs` | Required when `allowed_effects` is non-empty | `[]` only when the row permits positive observations only | Canonically sorted refs to required `060` row-set artifacts for completeness, authority, coverage, staleness, progress signals, control results, source history, absence policy, and watermark policy. |
+| `effect_closure_requirements` | Required when `allowed_effects` is non-empty | none | Map from each allowed effect to the exact `060` artifact classes that must resolve before the effect may execute. Omission blocks the effect. |
+| `visibility_profile_refs` | Required when category depends on permissions or hidden objects | `[]` | Exact `060.SupplierCollectionVisibilityProfile` refs required for permission-sensitive absence. |
+| `control_result_mapping_required` | Required for `control_evaluation` | `false` for all other categories | `true` requires an active `060.ControlResultMappingRowSet` before control output. |
+| `source_history_retention_required` | Required for `source_history` and history-backed cloud inventory | `false` | `true` requires `060.SourceHistoryRetentionProfile`. |
 | `default_missing_row_result` | Yes | none | Deterministic result when a required upstream object, partition, row, or source-scope record is missing. It must not be `absence` by default. |
 | `deterministic_block_code` | Required when category is blocked | null | Error or no-op code used when the category exists but is intentionally blocked for MVP. |
 | `validation_refs` | Yes | none | Non-empty refs to category-specific positive and negative validation rows. |
 
 A missing active row for a known feed category fails with `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING`. A known category that product governance removes from MVP must still have an active closure row with `allowed_effects = []`, a deterministic block code, and validation refs.
+
+`020.allowed_effects` is necessary but not sufficient. It permits `060` to evaluate the effect; it must not authorize the effect without exact active `060` closure rows.
 
 ## Raw Import Contract
 
@@ -314,6 +321,25 @@ This table defines the MVP feed-category closure catalog. It does not activate a
 | `source_history` | Any closed read target kind when the active row permits it. | No-change proof only within supported source-native history window. | history window, retention profile, query scope, outside-window evidence. | source history | `unknown`; outside-window no-result is not proof. | Requires active closure row. |
 | `future_reachability` | none | none in MVP. | inactive deferred reachability evidence only. | deferred reachability | deterministic no-op/block. | Blocked for MVP with `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or owner no-op. |
 
+### FeedCategoryToSourceAuthorityClosureRequirements
+
+This table maps every feed category in `LakehouseFeedCategoryClosureRequirementTable` to the `060` artifact classes required before an absence-sensitive effect may execute. The table contains no concrete vendor, product, tenant, route, scanner-site, zone, account, or private inventory rows.
+
+| Feed category | Required `060` artifact classes before absence-sensitive effects | Additional condition |
+| --- | --- | --- |
+| `endpoint_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `SupplierCollectionVisibilityProfile` is required when enrollment or inventory visibility is permission-limited. |
+| `configuration_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Coverage domain is selected by the active row for the affected configuration fact. |
+| `vulnerability_scan` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Scanner target, credential, plugin/check, and scan-window coverage must resolve through `060`. |
+| `control_evaluation` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ControlResultMappingRowSet`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Pass, fail, unknown, not checked, and not applicable output require control-result mapping. |
+| `directory_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SupplierCollectionVisibilityProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Hidden-object and limited-information states block negative output unless exact rows authorize. |
+| `directory_membership` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SupplierCollectionVisibilityProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Direct/transitive mode, hidden membership, page completion, delta reset, and AD primary-group handling must resolve through exact rows. |
+| `dns_record_set` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | TTL expiry maps to stale or unknown unless exact rows authorize a narrower effect. |
+| `dhcp_ipam_assignment` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Lease expiry maps to stale or expired assignment state, not host absence, unless exact rows authorize. |
+| `network_flow` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Missing flow defaults to `unknown`; absence effects are blocked unless exact rows authorize the requested effect. |
+| `cloud_asset_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SupplierCollectionVisibilityProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `SourceHistoryRetentionProfile` is required when source-history no-change or disappearance is consulted. |
+| `source_history` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `SourceStalenessPolicy`, `SourceHistoryRetentionProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | Outside-window no-result must not become no-change proof. |
+| `future_reachability` | none while deferred | MVP behavior is deterministic no-op or deferred reachability error. |
+
 ### LakehouseReadPolicy payload limits
 
 | Field | Required behavior | Default | Bounds |
@@ -506,6 +532,9 @@ ComputeRawFeedManifestId(manifest):
 | `020-FEED-CLOSURE-AC-004` | Omitted or invalid target-kind input never defaults to a table, object, partition, manifest, or dataset read. |
 | `020-FEED-CLOSURE-AC-005` | Declared subset reads fail before output unless an active `030.DeclaredDAGSubsetProfile` covers requested outputs and effects. |
 | `020-FEED-CLOSURE-AC-006` | Partial known gaps, partial unknown gaps, empty scopes under the default policy, and missing lakehouse rows never authorize absence, cleanup, retraction, graph expiry, or watermark advancement. |
+| `020-SOURCE-CLOSURE-AC-001` | Every category row with non-empty `allowed_effects` declares `effect_closure_requirements`. |
+| `020-SOURCE-CLOSURE-AC-002` | `allowed_effects` without matching `060` row refs permits no absence-sensitive effect. |
+| `020-SOURCE-CLOSURE-AC-003` | Each feed category in `LakehouseFeedCategoryClosureRequirementTable` appears exactly once in `FeedCategoryToSourceAuthorityClosureRequirements`. |
 
 | `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |

@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -141,7 +141,6 @@ Rules:
 | `ACTIVATION_ARTIFACT_OWNER_MISMATCH` | An activation-controlled artifact does not reference the stable core owner contract that exports its behavior. |
 | `ACTIVATION_ARTIFACT_RUNTIME_RESTATEMENT` | An activation-controlled artifact restates or defines runtime behavior instead of instantiating owner-exported behavior. |
 
-
 ### Required OCSF mapping volatility classifications
 
 The following mapping artifacts must have exactly one volatility classification before authoritative handoff. The rows classify the artifact interface, not concrete row bytes.
@@ -155,6 +154,23 @@ The following mapping artifacts must have exactly one volatility classification 
 | `ProfileResolutionManifest` | `activation_controlled_artifact` | `050` | `050` | yes | required for OCSF output |
 | `SourceExtensionFieldRuleSet` | `activation_controlled_artifact` | `050` | `050` | yes | required when source extensions may emit |
 | `ObservationTypeExternalMappingValidationMatrix` | `activation_controlled_artifact` | `050` and `120` | `050` and `120` | yes for promotion | required for mapping activation |
+
+### Required source-authority closure volatility classifications
+
+The following source-authority closure artifacts must have exactly one volatility classification before authoritative handoff. The rows classify artifact interfaces and validation views, not concrete private source bindings.
+
+| artifact_or_contract | volatility_class | owner_spec | stable_core_owner | may_affect_output | version_manifest_requirement |
+| --- | --- | --- | --- | --- | --- |
+| `SourceAuthorityClosureMatrix` | `stable_core_contract` | `060` | `060` | yes for promotion and blocking decisions | closure validation result may be referenced, but underlying row refs remain required |
+| `SourceAuthorityProfileRow` | `activation_controlled_artifact` | `060` | `060` | yes | required when authority affects output |
+| `SourceAuthorityProfileRowSet` | `activation_controlled_artifact` | `060` | `060` | yes | required when authority affects output |
+| `CoverageDimensionProfile` source-specific rows | `activation_controlled_artifact` | `060` | `060` | yes | required for coverage-sensitive output |
+| `SourceStalenessPolicy` row set | `activation_controlled_artifact` | `060` | `060` | yes | required when stale state can affect output |
+| `ProgressSignalInterpretationPolicy` row set | `activation_controlled_artifact` | `060` | `060` | yes | required when progress signals are consulted |
+| `ControlResultMappingRowSet` | `activation_controlled_artifact` | `060` | `060` | yes | required for control-state output |
+| `SourceHistoryRetentionProfile` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for source-history interpretation |
+| `SupplierCollectionVisibilityProfile` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for permission-sensitive absence |
+| `AbsenceDerivationPolicy` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for absence-sensitive output |
 
 ## Document Registry
 
@@ -212,7 +228,8 @@ The following mapping artifacts must have exactly one volatility classification 
 | ObservationToOCSFMappingRowSet | `050` | 030,040,060,090,110,120 | runtime_normalization | `activation_controlled_artifact` | 120 | blocked_validation | every active row requires exact discriminator, compiled OCSF refs, object-path policy, enum refs, base-event policy refs, source-extension refs, fixtures, and manifest refs |
 | SourceExtensionFieldRuleSet | `050` | 030,040,110,120 | runtime_normalization | `activation_controlled_artifact` | 120 | blocked_validation | every emitted source-extension path requires exact rule, redaction, secret-scan, collision, and reserved-name fixtures |
 | ObservationTypeExternalMappingValidationMatrix | `050`, `120` | 000,030,050,060,090,110 | validation | `activation_controlled_artifact` | 120 | blocked_validation | required OCSF mapping fixture checksums, expected output checksums, expected errors, and version-manifest refs remain blocking until filled |
-| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_owner_todo | exact feed completeness row schema, source-specific category/effect rows, and source-specific coverage rows remain TODO |
+| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_validation | stable schemas, matching algorithms, error precedence, and fail-closed behavior are closed by `060`; active source-specific row instances and fixture checksums remain validation-blocked |
+| `SourceAuthorityClosureMatrix` | `060` | `020`, `030`, `080`, `090`, `110`, `120`, `domain` | `runtime_authority_validation` | `stable_core_contract` | 120 | blocked_validation | open until every active absence-sensitive feed category has exact active authority, completeness, coverage, staleness, progress, control-result, source-history, absence, and watermark row coverage or an explicit deterministic block row |
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
 | Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
@@ -293,6 +310,8 @@ Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMat
 
 `SpecSetVersion.validation_matrix_refs` must include `020-FEED-CLOSURE-AC-*`, `030-FEED-CLOSURE-AC-*`, `060-FEED-CLOSURE-AC-*`, `110-FEED-CLOSURE-AC-*`, and `120-FEED-CLOSURE-AC-*` rows before authoritative handoff when any production feed category is active.
 
+`SpecSetVersion.validation_matrix_refs` must include `120-SOURCE-CLOSURE-*` rows and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any active feed profile has non-empty `absence_sensitive_domains` or any category row has non-empty `allowed_effects`.
+
 `SpecSetVersion.validation_matrix_refs` must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows before authoritative handoff when any MVP observation-to-OCSF mapping row set is active.
 
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
@@ -329,6 +348,7 @@ Archived documents are historical reference only and never implementation author
 | `000-FEED-CLOSURE-AC-002` | `SpecSetVersion.validation_matrix_refs` includes the feed-closure acceptance rows before authoritative handoff for any active feed category. |
 | `000-OCSF-MAP-AC-001` | `ValidateSpecSet` fails when a new mapping row set lacks a volatility classification, an artifact class exists in `030` but not in `000`, a validation row exists in `120` but is missing from required promotion refs, or a research report is referenced as runtime authority. |
 | `000-OCSF-MAP-AC-002` | Every new OCSF mapping row set and policy set is classified as activation-controlled and tied to required `120` validation refs before authoritative handoff. |
+| `000-SOURCE-CLOSURE-AC-001` | Promotion fails when an active absence-sensitive feed category lacks `120` validation refs for `SourceAuthorityClosureMatrix`. |
 
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |
