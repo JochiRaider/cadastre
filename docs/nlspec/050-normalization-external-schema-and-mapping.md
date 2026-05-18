@@ -52,6 +52,11 @@ Define how parsed raw records become silver observations and how external schema
 - `CanonicalValidationOutput`
 - `MappingValidationRule`
 - `ObservationTypeExternalMappingValidationMatrix`
+- `ObservationToOCSFMappingRow`
+- `ObservationToOCSFMappingRowSet`
+- `ResolveOCSFMapping`
+- `SourceExtensionFieldRule`
+- `SourceExtensionFieldRuleSet`
 - `MappingArtifactLifecycleGuardRows`
 
 ## Parser Contract
@@ -70,9 +75,9 @@ Parser output must classify each raw record as exactly one of:
 
 ## Silver Normalization Contract
 
-`NormalizeObservation(parse_result, mapping_bundle, external_schema_profile) -> CadastreSilverObservation | MappingDiagnostic` must emit a Cadastre silver envelope that passes `040.CadastreSilverObservationSchema` and `040.ValidateCoreRecord` before persistence. `normalized_fields` must align to the active OCSF profile unless the observation type is declared `cadastre_only` by an active mapping row.
+`NormalizeObservation(parse_result, mapping_bundle, external_schema_profile) -> CadastreSilverObservation | MappingDiagnostic` must emit a Cadastre silver envelope that passes `040.CadastreSilverObservationSchema` and `040.ValidateCoreRecord` before persistence. `NormalizeObservation` must call `ResolveOCSFMapping` before emitting `normalized_fields`. `normalized_fields` must align to the active OCSF profile unless the observation type is declared `cadastre_only` by exactly one active `ObservationToOCSFMappingRow`.
 
-`normalized_payload_checksum` must be computed from canonical OCSF class metadata plus `normalized_fields` canonical bytes. `external_schema_profile_id` may be null only when `observation_type` is declared `cadastre_only`. `source_extension_fields` defaults to `{}` and every path must have an active `SourceExtensionFieldRule`. `field_quality` must contain rows for any field with omission, redaction, parser quality, or source-quality state.
+`normalized_payload_checksum` must be computed from canonical OCSF class metadata plus `normalized_fields` canonical bytes. `external_schema_profile_id` may be null only when `observation_type` is declared `cadastre_only` by exactly one active row. `source_extension_fields` defaults to `{}`. Every non-empty source-extension path must match exactly one active `SourceExtensionFieldRule` in the selected `SourceExtensionFieldRuleSet`. `field_quality` must contain rows for any field with omission, redaction, parser quality, or source-quality state.
 
 Cadastre-owned fields for omission, lineage, source identity, confidence, temporal semantics, identity inputs, and flow-role evidence must remain outside OCSF `normalized_fields`. OCSF fields must not override `040` omission states, `070` identity evidence, `080` temporal resolution, or `090` graph direction.
 
@@ -88,12 +93,78 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 
 | Mapping element | Required behavior |
 | --- | --- |
-| Category/class/activity/type | Every MVP observation type must have an exact row or a `TODO:` blocker. |
+| Category/class/activity/type | Every MVP observation type must resolve to exactly one active `ObservationToOCSFMappingRow` or fail before normalized output. |
 | Enum ID/name sibling | Must use `ExternalEnumMappingRule`; unknown values must not invent enum IDs. |
 | `Other` enum values | Allowed only when compiled OCSF enum contains `Other` and active rule permits it. |
 | `raw_data` and `unmapped` | Disabled by default unless `OCSFBaseEventFieldPolicy` allows a bounded use. |
 | Observables and enrichments | Non-authoritative by default. |
 | Deprecated fields | Rejected by default unless a non-expired waiver is recorded. |
+
+
+### ObservationToOCSFMappingRow schema
+
+`ObservationToOCSFMappingRow` is the stable row interface for mapping one Cadastre observation subtype and discriminator state to one external schema output class. Concrete row instances are activation-controlled artifacts. A row instance may affect production output only through `030.ActivationControlledArtifactRef` with `artifact_class = observation_to_ocsf_mapping_row_set`.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable unique ID within the row set. |
+| `observation_type` | Yes | none | Must match `040.CadastreSilverObservationSchema.observation_type`. |
+| `mapping_discriminator` | Yes | none | Canonical predicate over normalized parse fields, source metadata, and declared mapping-bundle inputs. It must not inspect graph, gold, identity, or API state. |
+| `external_schema_profile_ref` | Required unless `cadastre_only` | null only when the row explicitly sets `cadastre_only = true` | Must reference an active `ExternalSchemaProfile`. |
+| `ocsf_category_name` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact. |
+| `ocsf_category_uid` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact. |
+| `ocsf_class_name` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact and active class allowlist. |
+| `ocsf_class_uid` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact and active class allowlist. |
+| `ocsf_activity_id` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled class activity enum. |
+| `ocsf_activity_name` | Required for OCSF rows | null for `cadastre_only` | Must be the compiled name for `ocsf_activity_id`. |
+| `ocsf_type_uid` | Required for OCSF rows | null for `cadastre_only` | Must match compiled type UID rules for class and activity. |
+| `ocsf_type_name` | Required for OCSF rows | null for `cadastre_only` | Must be the compiled name for `ocsf_type_uid`. |
+| `required_normalized_paths` | Yes | `[]` only for `cadastre_only` | Every listed path must be present after mapping unless field quality marks a permitted OCSF omission state. |
+| `forbidden_normalized_paths` | No | `[]` | Emitting any listed path fails before output. |
+| `enum_rule_refs` | Yes | `[]` only when no enum mapping affects output | Refs to active `ExternalEnumMappingRuleSet` rows. |
+| `base_event_field_policy_ref` | Yes | none | Ref to an active `OCSFBaseEventFieldPolicySet`. |
+| `source_extension_rule_set_ref` | Yes | empty rule set when omitted by explicit row policy | Ref to an active `SourceExtensionFieldRuleSet`; omitted means no source-extension fields may be emitted. |
+| `cadastre_owned_field_policy_refs` | Yes | `[]` | Refs to owner policies for Cadastre-owned envelope fields used by the row. |
+| `validation_fixture_refs` | Yes | none | Non-empty refs to positive and negative fixtures before activation. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Imported from `030.LifecycleStatus`; production mapping requires `active`. |
+
+Unknown fields in `ObservationToOCSFMappingRow` fail before row-set activation. Row-set canonical bytes sort rows by ascending lexical `row_id`.
+
+### ResolveOCSFMapping algorithm
+
+```text
+ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
+1. Validate ExternalSchemaProfile, ExternalSchemaArtifactRef, ProfileResolutionManifest, ExternalEnumMappingRuleSet, OCSFBaseEventFieldPolicySet, SourceExtensionFieldRuleSet, and ObservationToOCSFMappingRowSet through 030.ActivationControlledArtifactRef.
+2. Load active ObservationToOCSFMappingRow rows whose observation_type equals observation.observation_type.
+3. Evaluate mapping_discriminator rows in ascending lexical row_id order.
+4. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
+5. If more than one row matches, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
+6. Validate category_uid, class_uid, activity_id, type_uid, and type_name against the compiled OCSF artifact.
+7. Reject any class_uid outside the active class_allowlist with OCSF_CLASS_NOT_ALLOWED.
+8. Validate required_normalized_paths and forbidden_normalized_paths.
+9. Apply ExternalEnumMappingRule rows; unknown enum values must not invent enum IDs.
+10. Validate every source_extension_fields path against exactly one active SourceExtensionFieldRule.
+11. Emit CadastreSilverObservation only after 040.CadastreSilverObservationSchema passes.
+```
+
+Missing discriminator inputs fail before output. Authentication rows must emit `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` when activity cannot be resolved to one compiled activity. Source-action or enum values not present in the compiled artifact must be preserved through declared diagnostics or declared source-extension fields; they must not create OCSF enum IDs.
+
+### MVP OCSF class allowlist
+
+The active MVP OCSF class allowlist must contain exactly the class UIDs used by active OCSF mapping rows. The default MVP class targets are closed to the following class UID set until a later profile upgrade activates additional classes.
+
+| Class name | Class UID | Required mapping use |
+| --- | ---: | --- |
+| Device Inventory Info | `5001` | `inventory_observation` rows. |
+| Software Inventory Info | `5020` | `software_inventory_observation` rows. |
+| Vulnerability Finding | `2002` | `vulnerability_finding_observation` rows. |
+| Authentication | `3002` | `authentication_observation` rows. |
+| DNS Activity | `4003` | `dns_observation` rows. |
+| DHCP Activity | `4004` | DHCP-discriminated `dhcp_ipam_observation` rows only. |
+| Network Activity | `4001` | `network_activity_observation` rows. |
+
+A `cadastre_only` row has no OCSF category, class, activity, or type and must not contribute to the class allowlist.
 
 ## Source Extension Fields
 
@@ -151,9 +222,10 @@ OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`,
 | `ExternalSchemaProfile` | stable schema/interface plus activation-controlled instances | Interface is stable; concrete profile rows are activation-controlled. |
 | `ExternalSchemaArtifactRef` | `activation_controlled_artifact` | Must carry exact artifact identity and checksum. |
 | `ProfileResolutionManifest` | `activation_controlled_artifact` | Must be active for profile inheritance/resolution effects. |
-| `ExternalEnumMappingRule` rows | `activation_controlled_artifact` | Must not invent enum IDs or restate OCSF behavior. |
-| `OCSFBaseEventFieldPolicy` rows | `activation_controlled_artifact` | Must not grant Cadastre authority without owner contract. |
-| `SourceExtensionFieldRule` rows | `activation_controlled_artifact` | Must declare extension paths, types, bounds, and redaction behavior. |
+| `ObservationToOCSFMappingRowSet` | `activation_controlled_artifact` | Must resolve each emitted mapped observation to exactly one active row. |
+| `ExternalEnumMappingRuleSet` | `activation_controlled_artifact` | Must not invent enum IDs or restate OCSF behavior. |
+| `OCSFBaseEventFieldPolicySet` | `activation_controlled_artifact` | Must not grant Cadastre authority without owner contract. |
+| `SourceExtensionFieldRuleSet` | `activation_controlled_artifact` | Must declare extension paths, types, bounds, and redaction behavior. |
 | `CIMProjectionProfile` rows | `activation_controlled_artifact` | Must remain projection-only. |
 | `MappingProjectManifest` and concrete compiler config | `activation_controlled_artifact` | Must be included in validation and replay refs. |
 | `MappingCompilerPipeline` phase-order contract | `stable_core_contract` | Concrete compiler config remains activation-controlled. |
@@ -168,9 +240,10 @@ Concrete rows in `### Observation-to-OCSF mapping matrix` are activation-control
 | Artifact class | Required guard before `validated` | Required guard before `active` | Quarantine trigger |
 | --- | --- | --- | --- |
 | parser profile | Parser fixtures pass, malformed/unsupported/duplicate cases pass, and no authoritative output attempt occurs. | Package set active, parser stage binding active, and validation refs non-expired. | Parser emits forbidden output or raw evidence leak. |
-| mapping bundle | `CanonicalValidationOutput` passes, no core override occurs, and no undeclared source roots exist. | Observation mapping matrix rows are complete or non-active TODO blockers; mapping package is in the active package set. | Core field override, undeclared extension field, or OCSF artifact mismatch. |
-| external schema profile/artifact | Artifact checksum, compiler, validator, class allowlist, profile set, and extension set validate. | `OCSFBaseEventFieldPolicy`, enum rules, profile resolution, and observation-type fixtures pass. | Schema artifact checksum mismatch or dev/main schema used in production. |
-| source-extension rule set | Namespace, type, bounds, redaction, collision, and secret-scan validation pass. | Rule refs are present in mapping bundle and manifest. | Raw secret exposure or reserved-name collision. |
+| mapping bundle | `CanonicalValidationOutput` passes, no core override occurs, and no undeclared source roots exist. | `ObservationToOCSFMappingRowSet` resolves every emitted mapped observation, required row-set refs are manifest-included, and the mapping package is in the active package set. | Core field override, undeclared extension field, ambiguous mapping row, missing mapping row, or OCSF artifact mismatch. |
+| external schema profile/artifact | Artifact checksum, compiler, validator, class allowlist, profile set, and extension set validate. | `OCSFBaseEventFieldPolicySet`, enum rule set, profile resolution, and observation-type fixtures pass. | Schema artifact checksum mismatch or dev/main schema used in production. |
+| observation-to-OCSF mapping row set | Row schema, discriminator totality, class allowlist, object-path policy, enum refs, base-event policy refs, source-extension refs, fixture refs, and activation scope validate. | Every active row has positive and negative fixtures and appears in `VersionManifest`. | Missing row, ambiguous row, class not allowed, forbidden field emitted, or object path missing. |
+| source-extension rule set | Namespace, type, bounds, redaction, collision, and secret-scan validation pass. | Rule refs are present in mapping bundle and manifest; omitted rule set means empty rule set. | Raw secret exposure, wildcard namespace, undeclared field, or reserved-name collision. |
 | CIM projection profile | Projection-loss manifest fixtures pass. | Projection remains non-authoritative. | CIM output attempts to become raw, silver, gold, or identity authority. |
 
 A mapping artifact entering `active` status must have `030.LifecycleTransitionEvidence` for `030.ActivationControlledArtifactLifecycleMachine.v1` and the relevant mapping-specific guard rows.
@@ -193,18 +266,33 @@ A mapping artifact entering `active` status must have `030.LifecycleTransitionEv
 
 ### Observation-to-OCSF mapping matrix
 
-The following rows define the active MVP mapping scope at MVP mapping scope. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
+The matrix below defines required row families for active `ObservationToOCSFMappingRowSet` artifacts. It does not embed production-active volatile rows in stable core text. A row family is complete only when concrete active row instances provide exact row IDs, discriminator predicates, OCSF category/class/activity/type values, object-path policy, enum refs, base-event policy refs, source-extension refs, fixture refs, activation scope, lifecycle status, and manifest refs.
 
-| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Blocked outputs while TODO | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
-| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
-| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, vulnerability gold candidates | blocking |
-| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, identity/gold candidates | blocking |
-| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DNS gold candidates | blocking |
-| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DHCP/IPAM gold candidates | blocking |
-| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, observed-connection graph candidates | blocking |
-| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | none when mapping row explicitly allows null profile | allowed only by mapping row |
+| Cadastre observation type | Required row family |
+| --- | --- |
+| `inventory_observation` | Device Inventory Info `5001`. Include `Log` and `Collect` rows. Default to `Collect` only for snapshot/export inventory feeds. Use `Log` only when a log-origin discriminator is present. |
+| `software_inventory_observation` | Software Inventory Info `5020`. Include `Log` and `Collect` rows. Require `device` and `sbom`; forbid deprecated `package` unless a non-expired waiver exists. |
+| `vulnerability_finding_observation` | Vulnerability Finding `2002`. Include create, update, and close lifecycle rows. Default to update for current-state scanner/export feeds. `Create` and `Close` require explicit source lifecycle evidence. |
+| `authentication_observation` | Authentication `3002`. Include one row per compiled OCSF 1.8.0 authentication activity. No default activity is allowed. Missing or ambiguous authentication activity fails before output. |
+| `dns_observation` | DNS Activity `4003`. Include Query, Response, and Traffic rows. Response rows require response-code handling and explicit quality behavior when answers are empty. |
+| `dhcp_ipam_observation` | DHCP Activity `4004` only when `assignment_source = dhcp`. Include rows for the compiled DHCP activity enum. `assignment_source = ipam` must not map to DHCP Activity. It must either map to an explicit `cadastre_only` row or fail with `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED`. |
+| `network_activity_observation` | Network Activity `4001`. Include Open, Close, Reset, Fail, Refuse, Traffic, and Listen rows. Default to Traffic only for aggregate flow feeds. Graph direction remains governed by `FlowRoleEvidence`, not OCSF endpoint order. |
+| `cadastre_only` | No OCSF category, class, activity, or type. Null `external_schema_profile_id` is allowed only by an active row. |
+
+### OCSF object-path matrix
+
+| Observation type | Required normalized paths |
+| --- | --- |
+| `inventory_observation` | OCSF base event fields plus `device`. |
+| `software_inventory_observation` | OCSF base event fields plus `device` and `sbom`; deprecated `package` forbidden by default. |
+| `vulnerability_finding_observation` | OCSF base event fields plus `finding_info`, `vulnerabilities`, and at least one affected-resource path such as `resources`. |
+| `authentication_observation` | OCSF base event fields plus `user` and at least one of `service` or `dst_endpoint`. |
+| `dns_observation` | OCSF base event fields plus `query`; response rows require response-code handling. |
+| `dhcp_ipam_observation` with DHCP discriminator | OCSF base event fields plus DHCP endpoint context and `transaction_uid` when present. |
+| `network_activity_observation` | OCSF base event fields plus endpoint paths satisfying the compiled network constraint. |
+| `cadastre_only` | Cadastre envelope only. |
+
+A required path may be absent only when the active row declares a field-quality behavior that the compiled profile permits. A forbidden path must not be emitted even when the source supplies the value.
 
 ### OCSFBaseEventFieldPolicy
 
@@ -230,10 +318,37 @@ The following rows define the active MVP mapping scope at MVP mapping scope. Mis
 
 ### Source extension field matrix
 
-| Namespace | Field path | Type | Bounds | Redaction | Collision policy | Secret-scan behavior | OCSF-reserved-name behavior | Owner | Validation fixture |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `source.<source_category>` | `source.<namespace>.<field_name>` where each segment is lowercase snake case and non-empty | scalar: string, boolean, uint64, int64, decimal string, timestamp, sha256; container: array or map of allowed scalar | string max 4096 scalar values; arrays max 1024 elements; maps max 4096 entries; canonical object max 65536 bytes | owner row must state caller-visible, audit-only, or redacted | reject path collision and type collision by default | reject secret-like value before output unless redaction policy permits audit-only storage | reject any path equal to or prefixed by an OCSF reserved base-event field unless policy permits non-authoritative metadata | `050` | `fixture-050-source-extension-declared` |
-| undeclared namespace or path | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `050` | `fixture-050-source-extension-undeclared` emits `SOURCE_EXTENSION_FIELD_UNDECLARED` |
+`SourceExtensionFieldRuleSet` is an activation-controlled artifact. The default rule set is empty. An empty or missing rule set permits no `source_extension_fields` output.
+
+| `SourceExtensionFieldRule` field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `rule_id` | Yes | none | Stable row ID scoped to `050`. |
+| `namespace` | Yes | none | Must be a declared namespace matching the path prefix. Wildcards are forbidden. |
+| `field_path` | Yes | none | Must be exact; wildcard field paths are forbidden. |
+| `type` | Yes | none | Closed scalar or container token permitted by `040.SourceExtensionFieldRuleShape` and narrowed by `050`. |
+| `bounds` | Yes | none | Must state every applicable length, element, map-entry, numeric, and canonical-byte bound. |
+| `redaction` | Yes | no default | One of `caller_visible`, `audit_only`, or `redacted`. |
+| `collision_policy` | Yes | `reject_path_collision` and `reject_type_collision` | Must reject path and type collision unless a narrower owner policy exists. |
+| `secret_scan_policy` | Yes | `reject_before_output` | Audit-only storage requires an active redaction policy. |
+| `ocsf_reserved_name_policy` | Yes | reject | Reject when path equals or is prefixed by an OCSF reserved base-event field unless an active row permits non-authoritative metadata. |
+| `permitted_observation_types` | Yes | `[]` | Empty means no observation type may emit the field. |
+| `permitted_mapping_bundle_refs` | Yes | `[]` | Empty means no mapping bundle may emit the field. |
+| `validation_fixture_refs` | Yes | none | Non-empty before activation. |
+| `activation_scope` | Yes | none | Scope in which the rule may affect output. |
+| `lifecycle_status` | Yes | none | Imported from `030.LifecycleStatus`; production mapping requires `active`. |
+
+| Case | Required behavior |
+| --- | --- |
+| Missing rule set | Use empty rule set. No source-extension fields may be emitted. |
+| Missing exact field rule | Fail with `SOURCE_EXTENSION_FIELD_UNDECLARED`. |
+| Wildcard namespace | Forbidden. |
+| Unknown namespace | Forbidden. |
+| Path grammar | `source.<source_category>.<field_name>` or a stricter declared source-category grammar; segments must be lowercase snake case and non-empty. |
+| Bounds | Strings max 4096 Unicode scalar values; arrays max 1024 elements; maps max 4096 entries; canonical objects max 65536 bytes unless the row narrows the bound. |
+| Redaction | No implicit default; each rule must declare `caller_visible`, `audit_only`, or `redacted`. |
+| Collision policy | Default `reject_path_collision` and `reject_type_collision`. |
+| Secret scan | Default `reject_before_output`; audit-only storage requires an active redaction policy. |
+| OCSF reserved-name collision | Default reject when path equals or is prefixed by an OCSF reserved base-event field. |
 
 ### MappingValidationRule severity defaults
 
@@ -258,6 +373,17 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `MAPPING_CORE_CONTRACT_OVERRIDE_FORBIDDEN` | A mapping artifact attempts to redefine core fields, omission states, identity semantics, temporal semantics, graph semantics, or source-authority semantics. |
 | `OCSF_ARTIFACT_MISMATCH` | Active profile refs do not match the compiled artifact checksum, source tag, source commit, compiler, or validator evidence. |
 | `OCSF_CLASS_NOT_ALLOWED` | A mapping emits an OCSF class outside the active class allowlist. |
+| `MAP_OCSF_ROW_MISSING` | No active `ObservationToOCSFMappingRow` matches the observation type and discriminator. |
+| `MAP_OCSF_ROW_AMBIGUOUS` | More than one active `ObservationToOCSFMappingRow` matches the observation type and discriminator. |
+| `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | Required activity discriminator evidence is absent or ambiguous for a class with no default activity. |
+| `OCSF_REQUIRED_OBJECT_PATH_MISSING` | A row's required OCSF object path is absent after mapping and no permitted field-quality state explains the absence. |
+| `OCSF_FORBIDDEN_FIELD_EMITTED` | A mapping emits a forbidden OCSF path, deprecated field without waiver, disabled base-event field, or disallowed reserved field. |
+| `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED` | One Cadastre observation type contains source cases that cannot safely map to one OCSF class family without a discriminator split. |
+| `SOURCE_EXTENSION_RULESET_MISSING` | A non-empty `source_extension_fields` output is attempted while the selected row has no active source-extension rule set. |
+| `SOURCE_EXTENSION_NAMESPACE_INVALID` | A source-extension namespace is unknown, wildcarded, malformed, or outside the declared source category. |
+| `SOURCE_EXTENSION_REDACTION_POLICY_MISSING` | A source-extension rule omits required redaction behavior. |
+| `SOURCE_EXTENSION_SECRET_SCAN_FAILED` | A source-extension value matches the active secret scan rejection policy. |
+| `SOURCE_EXTENSION_OCSF_RESERVED_COLLISION` | A source-extension path collides with an OCSF reserved base-event field path. |
 | `EXTERNAL_ENUM_UNKNOWN` | Source enum value is not mapped and no unknown-value policy applies. |
 | `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | Mapping attempts OCSF `Other` without an active rule preserving the raw value. |
 | `EXTERNAL_ENUM_DEPRECATED` | Mapping emits a deprecated enum or field without a non-expired waiver. |
@@ -294,6 +420,16 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-VOLATILITY-AC-001` | Every production mapping-related artifact validates through `030.ActivationControlledArtifactRef` before silver output. |
 | `050-VOLATILITY-AC-002` | OCSF artifact checksum mismatch, inactive enum rule sets, omitted source-extension row refs, and mapping core overrides fail before production output. |
 | `050-VOLATILITY-AC-003` | `cadastre_only` mapping with null schema profile is allowed only by an active mapping row. |
+| `050-OCSF-MAP-AC-001` | Every active MVP observation mapping resolves to exactly one `ObservationToOCSFMappingRow` or fails before normalized output. |
+| `050-OCSF-MAP-AC-002` | Every active row's category UID, class UID, activity ID, and type UID match the compiled OCSF 1.8.0 artifact recorded by `ExternalSchemaArtifactRef`. |
+| `050-OCSF-MAP-AC-003` | The active class allowlist contains exactly the class UIDs used by active mapping rows. |
+| `050-OCSF-MAP-AC-004` | Unknown enum and source-action values do not invent OCSF enum IDs. |
+| `050-OCSF-MAP-AC-005` | Authentication has no default activity. |
+| `050-OCSF-MAP-AC-006` | IPAM-only assignment rows do not map to OCSF DHCP Activity. |
+| `050-SOURCE-EXT-AC-002` | The default `SourceExtensionFieldRuleSet` is empty. |
+| `050-SOURCE-EXT-AC-003` | Wildcard source-extension paths are rejected. |
+| `050-BASE-FIELD-AC-001` | `raw_data`, `raw_data_hash`, and `unmapped` remain absent unless an explicit bounded policy permits them. |
+| `050-NONAUTH-AC-001` | OCSF observables, enrichments, status, severity, confidence, and endpoint ordering cannot create identity, source authority, omission, gold, temporal, graph, or reachability effects. |
 | `050-LIFECYCLE-AC-001` | Every `050` activation-controlled artifact entering `active` status has a `030.LifecycleTransitionEvidence` ref for the generic artifact lifecycle and mapping-specific guard rows. |
 
 ## Definition of Done
@@ -304,7 +440,8 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-AC-002` | OCSF-aligned observations validate against the exact compiled external schema artifact. |
 | `050-AC-003` | Undeclared source extension fields fail before production output. |
 | `050-AC-004` | CIM projection records every lossy or unsupported mapping and never becomes authoritative input. |
-| `050-AC-005` | Every external mapping table is exhaustive for its declared MVP observation scope or carries a blocking `TODO:` row. |
+| `050-AC-005` | Every active external mapping row set is exhaustive for its declared MVP observation scope and every non-active unresolved mapping remains a blocking owner `TODO:` outside production output. |
+| `050-AC-006` | Every emitted `source_extension_fields` path has exactly one active source-extension rule, and the default rule set emits no fields. |
 
 ## Open Questions
 

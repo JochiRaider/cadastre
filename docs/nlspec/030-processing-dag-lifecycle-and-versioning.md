@@ -394,7 +394,13 @@ external_schema_profile
 external_schema_artifact
 mapping_bundle
 parser_profile
+observation_to_ocsf_mapping_row_set
+external_enum_mapping_rule_set
+ocsf_base_event_field_policy_set
+profile_resolution_manifest
+ocsf_profile_upgrade_report
 source_extension_field_rule_set
+observation_type_external_mapping_validation_matrix
 source_authority_profile
 source_authority_row_set
 source_staleness_policy
@@ -532,7 +538,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | --- | --- |
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
-| Silver output | raw refs, parser package, mapping bundle, external schema profile, validation output. |
+| Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
 | Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
 | Gold output | temporal policy, exact source authority refs, lakehouse feed completeness profile row refs, coverage refs, staleness refs, absence policy refs when absence-sensitive, correction policy, source refs, snapshot refs. |
 | Absence, cleanup, retraction, or graph expiry output | `060` completeness decision refs, authority refs, coverage refs, staleness refs, absence derivation result refs, and requested effect token. |
@@ -656,6 +662,7 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-FEED-CLOSURE-AC-003` | A subset profile that permits raw replay but omits watermark behavior does not advance a watermark. |
 | `030-FEED-CLOSURE-AC-004` | Same DAG bytes, same requested subset, same subset profile, and same activation refs produce byte-identical stage order and manifest refs. |
 
+| `030-OCSF-MAP-ARTIFACT-AC-001` | Silver output fails with `VERSION_MANIFEST_INCOMPLETE` when any output-affecting OCSF mapping row set, enum rule set, base-event field policy set, profile-resolution manifest, source-extension rule set, or observation-type validation matrix ref is missing from `VersionManifest`. |
 | `030-LIFECYCLE-AC-001` | All required lifecycle machines have closed states and closed events. |
 | `030-LIFECYCLE-AC-002` | Every state/event pair selects exactly one transition row. |
 | `030-LIFECYCLE-AC-003` | Illegal transitions emit evidence, mutate no state, and write no production output. |

@@ -68,9 +68,9 @@ Every active domain spec must include at least one negative validation case for 
 | Source authority | Missing exact authority row attempts gold derivation and fails. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | IP-only/hostname-only/DNS-only/PTR-only/graph-key-only merge attempt fails. |
-| Graph | Backend internal ID appears in response or selector and fails. |
+| Graph | Backend internal ID appears in response or selector and fails; OCSF endpoint order attempts graph direction without `FlowRoleEvidence` and emits no edge. |
 | Package | Unauthorized signer with valid cryptographic signature fails activation. |
-| Mapping | Undeclared source extension field fails validation. |
+| Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis rule attempts mutation and fails. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
@@ -84,8 +84,8 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | core/artifact boundary | Mapping bundle attempts to define a new core field. | Fails before persistence. |
 | artifact activation | Inactive resolver profile is referenced. | Fails before identity output. |
 | artifact checksum | Source-authority row checksum mismatch. | Fails before gold derivation. |
-| artifact omission | Graph projection profile omitted from `VersionManifest`. | Fails before graph delta output. |
-| external schema non-authority | OCSF profile attempts to treat observables as graph node authority. | Fails before graph projection. |
+| artifact omission | Graph projection profile or OCSF mapping row set omitted from `VersionManifest`. | Fails before dependent output. |
+| external schema non-authority | OCSF profile attempts to treat observables, status, severity, confidence, field absence, or endpoint order as authority. | Fails before authority or graph effect. |
 | package/artifact mismatch | Active package set includes artifact checksum that does not match the artifact ref. | Package activation fails and current active set remains. |
 | appendix/reference non-authority | Research or ADR text is referenced as runtime authority. | Spec-set validation fails. |
 | stable core conflict | Activation artifact attempts to redefine identity, temporal, omission, or graph authority. | Fails with volatility-boundary error before production output. |
@@ -133,6 +133,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `040-backend-id-rejection` | Backend-generated graph IDs fail. |
 | `040-gold-fact-key-id-separation` | Comparable semantic fact key remains stable while immutable fact record ID changes across knowledge versions. |
 | `040-two-independent-implementers` | Two implementations produce byte-identical IDs and checksums for every core record fixture. |
+| `040-source-extension-rule-shape` | Valid, missing-field, unknown-field, bounds, non-canonical ordering, checksum replay, and pre-activation rejection fixtures for `SourceExtensionFieldRuleShape`. |
 
 ### CoreRecordSchema fixture families
 
@@ -192,15 +193,81 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `020` | feed read/import and category closure | malformed manifest, profile schema incomplete, category row missing | partial no-absence, empty-scope no-absence | CDC metadata and closure branch behavior | raw ID replay | private binding | n/a | no direct source call and unresolved profile branch | required when owner declares activation-controlled artifacts. |
 | `030` | DAG execution | forbidden output | safe subset no-op | lifecycle illegal transition | manifest replay | n/a | n/a | subset authority | required when owner declares activation-controlled artifacts. |
 | `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection | required when owner declares activation-controlled artifacts. |
-| `050` | OCSF mapping | artifact mismatch | unmapped no-op | unknown enum | mapping replay | source extension redaction | n/a | undeclared extension | required when owner declares activation-controlled artifacts. |
-| `060` | absence authorized and empty-complete authorized | missing authority row, missing completeness row, missing upstream evidence | weak signal no-op and effect-not-allowed no-op | blocking precedence and partial completeness | watermark replay and watermark blocked | n/a | n/a | missing coverage and weak-signal combination | required when owner declares activation-controlled artifacts. |
+| `050` | OCSF mapping row success by row family | missing row, ambiguous row, missing discriminator, forbidden field, deprecated field, unknown enum, IPAM split, artifact mismatch | cadastre-only null-profile no-op when row permits | unknown enum and mapping discriminator branches | mapping replay | source extension redaction | n/a | undeclared extension and source-extension wildcard | required when owner declares activation-controlled artifacts. |
+| `060` | absence authorized and empty-complete authorized | missing authority row, missing completeness row, missing upstream evidence, external-schema authority attempt | weak signal no-op, effect-not-allowed no-op, and OCSF non-authority no-op | blocking precedence and partial completeness | watermark replay and watermark blocked | n/a | n/a | missing coverage, weak-signal combination, and OCSF status/severity/confidence non-authority | required when owner declares activation-controlled artifacts. |
 | `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality | required when owner declares activation-controlled artifacts. |
 | `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
-| `090` | graph query/apply | backend ID rejection | empty traversal no-path | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition | required when owner declares activation-controlled artifacts. |
+| `090` | graph query/apply and flow-role edge direction | backend ID rejection and OCSF endpoint-order direction rejection | empty traversal no-path and missing-flow-role no-edge | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition and endpoint-order non-authority | required when owner declares activation-controlled artifacts. |
 | `100` | package activation | unauthorized signer | failed candidate keep-current | rollback | package-set replay | n/a | promotion auth | emergency no trust bypass | required when owner declares activation-controlled artifacts. |
 | `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
+
+
+### ObservationTypeExternalMappingValidationMatrix
+
+Every active `ObservationToOCSFMappingRow` must have one validation row in this matrix for a positive mapping case and one or more negative rows for discriminator, enum, object-path, forbidden-field, source-extension, and non-authority boundaries that the row can encounter.
+
+| Row field | Required content |
+| --- | --- |
+| `owner_spec` | `050` for mapping behavior; `060` or `090` when the row proves a non-authority or graph-direction boundary. |
+| `contract` | `ResolveOCSFMapping`, `SourceExtensionFieldRuleSet`, `DeriveAbsenceOrUnknown`, or `ProjectGraphDeltas`. |
+| `scenario` | `success`, `rejection`, `no-op`, `redaction`, `replay`, or `negative authority-boundary`. |
+| `fixture` | Exact fixture ID and checksum. |
+| `expected_outputs` | Expected silver output checksum for success; omitted for rejection/no-op. |
+| `expected_error` | Exact owner error code for rejection. |
+| `mutation_prohibition` | `no silver output` for mapping rejection; `no authoritative mutation` for non-authority; `no graph mutation` for direction rejection. |
+| `version_manifest_refs` | Every artifact ref required by `030.VersionManifestCompletenessMatrix` for the scenario. |
+| `acceptance_criterion` | Exact `050-OCSF-*`, `050-SOURCE-EXT-*`, `060-OCSF-*`, or `090-OCSF-*` criterion. |
+| `blocking_status` | `blocking` until fixture checksum, expected output checksum or expected error, and version-manifest refs are filled. |
+
+Required `050` fixture families:
+
+```text
+ocsf-mapping-row-success-*
+ocsf-mapping-row-missing-*
+ocsf-mapping-row-ambiguous-*
+ocsf-activity-discriminator-missing-*
+ocsf-required-object-path-missing-*
+ocsf-forbidden-field-*
+ocsf-unknown-enum-*
+ocsf-other-enum-not-permitted-*
+ocsf-deprecated-field-*
+source-extension-rule-success-*
+source-extension-rule-undeclared-*
+source-extension-wildcard-rejected-*
+source-extension-secret-scan-*
+cadastre-only-null-profile-*
+dhcp-ipam-split-required-*
+```
+
+Required `060` fixture families:
+
+```text
+ocsf-status-non-authority-*
+ocsf-severity-non-authority-*
+ocsf-confidence-non-authority-*
+ocsf-observable-non-authority-*
+ocsf-field-absence-non-authority-*
+```
+
+Required `090` fixture families:
+
+```text
+ocsf-endpoint-order-no-graph-direction-*
+flow-role-evidence-required-*
+```
+
+### SourceExtensionFieldRuleShapeValidationRows
+
+| Fixture family | Required coverage | Expected result |
+| --- | --- | --- |
+| `source-extension-shape-valid-*` | Minimal valid `040.SourceExtensionFieldRuleShape`. | Valid canonical bytes and checksum. |
+| `source-extension-shape-missing-field-*` | Each required field omitted. | `CORE_REQUIRED_FIELD_MISSING`; no activation. |
+| `source-extension-shape-unknown-field-*` | Unknown field outside the shape. | `CORE_UNKNOWN_FIELD`; no activation. |
+| `source-extension-shape-noncanonical-*` | Non-canonical ordering or sort keys. | Checksum mismatch or canonicalization failure. |
+| `source-extension-shape-invalid-bounds-*` | Bounds exceed `040` primitive limits. | `CORE_FIELD_BOUNDS_INVALID`; no activation. |
+| `source-extension-shape-checksum-replay-*` | Same rule shape input replayed. | Byte-identical checksum. |
 
 ### FeedCategoryClosureValidationMatrix
 
@@ -283,6 +350,14 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `040` | one-of invalid | `fixture-040-one-of-invalid` | TODO | `CORE_ONE_OF_INVALID` | TODO | no record commit | `120-SCHEMA-PATCH-AC-001` | blocking |
 | `050` | undeclared extension | `fixture-050-source-extension-undeclared` | TODO | `SOURCE_EXTENSION_FIELD_UNDECLARED` | TODO | no silver output | `050-CLEANUP-AC-002` | blocking |
 | `050` | OCSF artifact mismatch | `fixture-050-ocsf-artifact-mismatch` | TODO | `OCSF_ARTIFACT_MISMATCH` | TODO | no normalized output | `050-OCSF-BASELINE-AC-001` | blocking |
+| `050` | missing OCSF mapping row | `ocsf-mapping-row-missing-*` | TODO | `MAP_OCSF_ROW_MISSING` | TODO | no silver output | `050-OCSF-MAP-AC-001` | blocking |
+| `050` | ambiguous OCSF mapping row | `ocsf-mapping-row-ambiguous-*` | TODO | `MAP_OCSF_ROW_AMBIGUOUS` | TODO | no silver output | `050-OCSF-MAP-AC-001` | blocking |
+| `050` | missing OCSF activity discriminator | `ocsf-activity-discriminator-missing-*` | TODO | `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | TODO | no silver output | `050-OCSF-MAP-AC-005` | blocking |
+| `050` | OCSF required object path missing | `ocsf-required-object-path-missing-*` | TODO | `OCSF_REQUIRED_OBJECT_PATH_MISSING` | TODO | no silver output | `050-OCSF-MAP-AC-002` | blocking |
+| `050` | OCSF forbidden field emitted | `ocsf-forbidden-field-*` | TODO | `OCSF_FORBIDDEN_FIELD_EMITTED` | TODO | no silver output | `050-BASE-FIELD-AC-001` | blocking |
+| `050` | DHCP/IPAM split required | `dhcp-ipam-split-required-*` | TODO | `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED` | TODO | no silver output | `050-OCSF-MAP-AC-006` | blocking |
+| `050` | source-extension wildcard rejected | `source-extension-wildcard-rejected-*` | TODO | `SOURCE_EXTENSION_NAMESPACE_INVALID` | TODO | no silver output | `050-SOURCE-EXT-AC-003` | blocking |
+| `050` | source-extension secret scan | `source-extension-secret-scan-*` | TODO | `SOURCE_EXTENSION_SECRET_SCAN_FAILED` | TODO | no caller-visible secret output | `050-SOURCE-EXTENSION-AC-001` | blocking |
 | `060` | weak progress absence | `fixture-060-weak-progress-absence` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no absence, no cleanup, no watermark | `060-CLEANUP-AC-003` | blocking |
 | `060` | missing coverage | `fixture-060-coverage-required` | TODO | `COVERAGE_ASSERTION_REQUIRED` | TODO | no coverage-sensitive fact | `060-COVERAGE-CLOSURE-AC-001` | blocking |
 | `060` | missing completeness profile row | `feed-category-missing-profile-row-*` | TODO | `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | TODO | no absence-sensitive effect | `060-FEED-CLOSURE-AC-001` | blocking |
@@ -290,6 +365,8 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `060` | effect not allowed | `fixture-060-effect-not-allowed` | TODO | `COMPLETENESS_EFFECT_NOT_ALLOWED` | TODO | no absence, cleanup, retraction, graph expiry, or watermark | `060-FEED-CLOSURE-AC-003` | blocking |
 | `060` | weak-signal combination | `feed-category-weak-progress-*` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no stronger authority | `060-CLEANUP-AC-003` | blocking |
 | `060` | watermark blocked by completeness | `feed-category-watermark-blocked-*` | TODO | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | TODO | no watermark advancement | `060-FEED-CLOSURE-AC-004` | blocking |
+| `060` | OCSF status as authority | `ocsf-status-non-authority-*` | TODO | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | TODO | no authoritative mutation | `060-OCSF-NONAUTH-AC-001` | blocking |
+| `060` | OCSF field absence as absence | `ocsf-field-absence-non-authority-*` | TODO | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | TODO | no absence, cleanup, retraction, graph expiry, or watermark | `060-OCSF-NONAUTH-AC-003` | blocking |
 | `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
 | `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
 | `080` | current-time fallback | `fixture-080-current-time-fallback` | TODO | temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
@@ -298,6 +375,8 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `090` | backend internal ID | `fixture-090-backend-id` | TODO | `GRAPH_BACKEND_ID_FORBIDDEN` | TODO | no graph response identity leak | `090-CLEANUP-AC-003` | blocking |
 | `090` | graph apply unsafe resume | `fixture-090-lifecycle-graph-apply-resume-unsafe` | TODO | `GRAPH_APPLY_RESUME_UNSAFE` | TODO | no graph mutation and no derived-view advancement | `090-LIFECYCLE-AC-003` | blocking |
 | `090` | graph apply identical reapply | `fixture-090-lifecycle-identical-reapply` | TODO | idempotent no-op | TODO | no duplicate graph object | `090-LIFECYCLE-AC-002` | blocking |
+| `090` | OCSF endpoint order no graph direction | `ocsf-endpoint-order-no-graph-direction-*` | TODO | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op | TODO | no graph mutation | `090-OCSF-DIRECTION-AC-001` | blocking |
+| `090` | missing flow-role evidence | `flow-role-evidence-required-*` | TODO | `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op | TODO | no graph mutation | `090-OCSF-DIRECTION-AC-002` | blocking |
 | `100` | unauthorized signer | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
 | `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
 | `100` | canary output isolation | `fixture-100-lifecycle-canary-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` or no-op | TODO | no current production output, no watermark, no last-known-good | `100-LIFECYCLE-AC-003` | blocking |
@@ -390,11 +469,11 @@ replay_same_event
 | --- | --- |
 | `020` | feed read, feed lifecycle event derivation, manifest validation, read completeness, raw ID replay, omitted object, partial known gap, feed category closure, feasibility assessment, missing profile field, target-kind omission, declared subset, empty-scope, object/partition known gap, unknown gap, private-binding leak. |
 | `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
-| `050` | OCSF mapping, enum handling, source extension, disabled base-event fields, cadastre-only null profile. |
-| `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating. |
+| `050` | OCSF mapping row success, missing row, ambiguous row, activity discriminator missing, required object path missing, forbidden field, unknown enum, OCSF Other not permitted, deprecated field, source extension rule success, undeclared source extension, wildcard rejection, secret scan, cadastre-only null profile, DHCP/IPAM split required. |
+| `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating, OCSF status non-authority, OCSF severity non-authority, OCSF confidence non-authority, OCSF observable non-authority, OCSF field absence non-authority. |
 | `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
 | `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
-| `090` | edge semantics, graph apply lifecycle, graph apply resume, identical reapply, query ordering, reachability prohibition, backend ID rejection. |
+| `090` | edge semantics, graph apply lifecycle, graph apply resume, identical reapply, query ordering, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, flow-role evidence required. |
 | `100` | package activation lifecycle, trust, canary and shadow isolation, rollback, quarantine, emergency behavior, deprecation window expiry, repository unsupported form. |
 | `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
 | `130` | analysis mutation, lineage facet, registry non-authority, threat-intel no-identity, risk scoring boundary. |
@@ -428,6 +507,12 @@ replay_same_event
 | `120-LIFECYCLE-AC-001` | Every production-affecting lifecycle machine has executable event-sequence fixtures. |
 | `120-LIFECYCLE-AC-002` | Aggregate `AcceptanceReport` cannot pass while any required lifecycle fixture is blocked, not run, failed, missing checksum, or missing expected output. |
 | `120-LIFECYCLE-AC-003` | Validation acceptance lifecycle matrix is total and idempotent. |
+| `120-OCSF-MAP-AC-001` | `AcceptanceReport` cannot pass while any active `ObservationToOCSFMappingRow` lacks positive and negative fixtures. |
+| `120-OCSF-MAP-AC-002` | `AcceptanceReport` cannot pass while any mapping fixture checksum or expected output checksum is `TODO`. |
+| `120-OCSF-MAP-AC-003` | `AcceptanceReport` cannot pass while any active mapping row lacks `VersionManifest` artifact refs. |
+| `120-SOURCE-EXT-AC-001` | `AcceptanceReport` cannot pass while any emitted source-extension path lacks a matching rule fixture and undeclared-path rejection fixture. |
+| `120-OCSF-NONAUTH-AC-001` | `AcceptanceReport` cannot pass unless OCSF status, severity, confidence, observables, enrichments, and field absence non-authority fixtures pass. |
+| `120-OCSF-DIRECTION-AC-001` | `AcceptanceReport` cannot pass unless OCSF endpoint-order graph-direction rejection fixtures pass. |
 | `120-LIFECYCLE-AC-004` | Domain/owner lifecycle closure status contradiction fails with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 
 ## Definition of Done

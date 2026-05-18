@@ -237,6 +237,30 @@ Every field schema table in this registry uses the following columns and meaning
 | `flow_role_evidence` | `canonical_object` | yes | null unless observation type can carry flow direction evidence | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `redaction_summary` | `canonical_object` | yes | `{}` | no | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 
+
+### SourceExtensionFieldRuleShape
+
+`SourceExtensionFieldRuleShape` is the `040`-owned primitive shape for a source-extension field rule payload. It defines field names, scalar types, canonical serialization, checksum inclusion, and unknown-field rejection. It does not decide whether a rule is active, whether a path is permitted, or whether a mapping bundle may emit the field; those behaviors are owned by `050`.
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds |
+| --- | --- | ---: | --- | --- | --- | --- |
+| `rule_id` | `cadastre_id` or `external_ref_id` | yes | none | no | no | stable within `050` |
+| `namespace` | `field_path` | yes | none | no | no | max 512 |
+| `field_path` | `field_path` | yes | none | no | no | max 512 |
+| `type` | `enum_token` | yes | none | no | no | closed by `050` |
+| `bounds` | `canonical_object` | yes | none | no | no | max 65536 bytes |
+| `redaction` | `enum_token` | yes | none | no | no | closed by `050` |
+| `collision_policy` | `enum_token` | yes | none | no | no | closed by `050` |
+| `secret_scan_policy` | `enum_token` | yes | none | no | no | closed by `050` |
+| `ocsf_reserved_name_policy` | `enum_token` | yes | none | no | no | closed by `050` |
+| `permitted_observation_types` | `array<enum_token>` | yes | `[]` | no | no | sorted lexical |
+| `permitted_mapping_bundle_refs` | `array<cadastre_id>` | yes | `[]` | no | no | sorted lexical |
+| `validation_fixture_refs` | `array<external_ref_id>` | yes | none | no | no | non-empty before activation |
+| `activation_scope` | `canonical_object` | yes | none | no | no | max 65536 bytes |
+| `lifecycle_status` | `enum_token` | yes | none | no | no | imported from `030` |
+
+Shape validation materializes required defaults before checksum computation. Unknown fields fail with `CORE_UNKNOWN_FIELD`. Non-canonical ordering fails checksum validation. `040` validates shape and canonical bytes only. `050` validates whether the rule permits a `source_extension_fields` path.
+
 ### CanonicalEntitySchema
 
 | field_path | type | required | default | null_allowed | omit_allowed | bounds | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | missing_error | invalid_error |
@@ -515,7 +539,7 @@ ComputeEvidenceRefId(evidence_ref):
 | Raw payload boundary | Raw payload bytes must remain in raw/bronze lakehouse storage. `RawRecord` stores hashes, byte lengths, and bounded refs. `EvidenceRef` and graph delta shapes must not inline payload bytes. |
 | External schema authority | OCSF may validate `CadastreSilverObservation.normalized_fields`; it must not define Cadastre identity, authority, omission, temporal, graph, or gold semantics. |
 | Forward compatibility | Unknown fields fail closed. New fields require a new `schema_version`, migration row, and validation fixtures. |
-| Extensibility | Extension maps must be owner-declared. Undeclared extension fields fail before production output. |
+| Extensibility | Extension maps must be owner-declared. `040` validates `SourceExtensionFieldRuleShape` bytes and unknown-field behavior; `050` validates activation and path permission. Undeclared extension fields fail before production output. |
 | Minimal coupling | `040` defines record bytes and validation behavior only. It must not define parser mechanisms, resolver scoring, graph backend products, package runtimes, or source-specific mappings. |
 
 ### Core schema volatility boundary
@@ -642,6 +666,9 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-VOLATILITY-AC-001` | Activation artifacts cannot alter core record fields or ID/checksum behavior. |
 | `040-VOLATILITY-AC-002` | Source-extension fields remain owner-declared through `050`. |
 | `040-VOLATILITY-AC-003` | Core schemas remain byte-stable for the same input after changing only an activation-controlled mapping/profile artifact. |
+| `040-SOURCE-EXT-SHAPE-AC-001` | A minimal valid `SourceExtensionFieldRuleShape` fixture validates with byte-stable canonical ordering and checksum. |
+| `040-SOURCE-EXT-SHAPE-AC-002` | Missing required, unknown-field, non-canonical ordering, invalid bounds, and checksum-replay fixtures fail or pass exactly as declared by `SourceExtensionFieldRuleShape`. |
+| `040-SOURCE-EXT-SHAPE-AC-003` | Invalid source-extension rule shape is rejected before `050` activation behavior evaluates the rule. |
 
 ## Definition of Done
 
@@ -652,6 +679,7 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-AC-003` | Graph delta primitive records cannot be created from backend internal IDs. |
 | `040-AC-004` | Every `GoldFact` carries valid-time, known-time, assertion-state, evidence, confidence, and authority references. |
 | `040-AC-005` | Unknown fields are rejected unless declared through a namespaced extension field rule owned by `050`. |
+| `040-AC-007` | `SourceExtensionFieldRuleShape` validates primitive row bytes while `050` remains the sole owner of runtime source-extension permission. |
 | `040-AC-006` | The spec cannot become authoritative while any `TODO:` row remains in the core schema registry, ID policy, enum registry, one-of registry, decimal precision policy, or validation fixture set. |
 
 ## Open Questions

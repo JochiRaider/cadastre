@@ -97,6 +97,8 @@ These labels must not be rendered as authorized negative facts or compliance pas
 
 `not_authoritative_for_absence` is an owner completeness decision, not an authorized negative fact. Caller-visible output must map it to `unknown` with owner context unless an endpoint exposes owner diagnostics separately.
 
+Mapping-blocked observations must surface as `error`, not `unknown`. Source-extension redaction failures must surface as security errors. OCSF non-authority blocks must not render as `authorized_not_observed`, compliance pass, compliance fail, remediation, risk reduction, or graph mutation.
+
 ## Error Model
 
 `ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
@@ -130,6 +132,8 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 - API responses must not leak existence of an inaccessible asset through partial detail responses.
 - Public artifacts must not expose private source bindings, route names, credentials, or environment-specific inventories.
 - Audit events must record caller, authorization context checksum, operation, input checksum, output object classes, redaction summary, and error code when emitted.
+- Source-extension values that fail redaction, secret scan, namespace validation, or OCSF reserved-name policy must be redacted from caller-visible errors.
+- External-schema non-authority failures must expose owner, external field path, and redaction state without exposing raw source values.
 
 ## API, UX, Health, Error, and Security Contract Details
 
@@ -157,17 +161,36 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | security error | no | payload redacted |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | `040`/`090` | security error | no | backend ID redacted unless admin audit permits |
 
+
+The generated error registry must include the following mapping, source-extension, external-schema non-authority, and graph-direction codes.
+
+| Error code | Owner | Severity | Retryability | Redaction |
+| --- | --- | --- | --- | --- |
+| `MAP_OCSF_ROW_MISSING` | `050` | error | no, until mapping bundle/profile changes | observation type visible; source values redacted |
+| `MAP_OCSF_ROW_AMBIGUOUS` | `050` | error | no, until mapping rows change | row IDs visible; raw source values redacted |
+| `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | `050` | error | no, until parser/mapping changes | field path visible |
+| `OCSF_REQUIRED_OBJECT_PATH_MISSING` | `050` | error | no, until mapping/input changes | object path visible |
+| `OCSF_FORBIDDEN_FIELD_EMITTED` | `050` | security error | no | field path visible; value redacted |
+| `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED` | `050` | error | no, until observation type or mapping changes | observation type visible |
+| `SOURCE_EXTENSION_RULESET_MISSING` | `050` | error | no, until mapping row or rule set changes | source-extension path visible; value redacted |
+| `SOURCE_EXTENSION_NAMESPACE_INVALID` | `050` | security error | no | path visible; value redacted |
+| `SOURCE_EXTENSION_REDACTION_POLICY_MISSING` | `050` | security error | no | path visible |
+| `SOURCE_EXTENSION_SECRET_SCAN_FAILED` | `050` | security error | no | path visible; value redacted |
+| `SOURCE_EXTENSION_OCSF_RESERVED_COLLISION` | `050` | security error | no | path visible |
+| `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `060` | error | no, until derivation policy changes | external field path visible |
+| `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | `090` | diagnostic | no, until evidence or projection changes | graph IDs visible only when authorized |
+
 | Owner spec | Error prefix or namespace | Shared shape fields | Owner-specific codes | Retryability owner | Redaction owner | Validation fixture |
 | --- | --- | --- | --- | --- | --- | --- |
 | `010` | boundary/authority | `ErrorRecord` | `DIRECT_SOURCE_CALL_FORBIDDEN`, `PROJECTION_AUTHORITY_VIOLATION`, `PRIVATE_BINDING_LEAK`, `UNDECLARED_AUTHORITY_CLASS` | owner row | `110` | boundary negative rows |
 | `020` | feed/table | `ErrorRecord` | feed read, manifest, raw identity, availability, maintenance errors | owner row | `110` | feed fixture rows |
 | `030` | dag/lifecycle | `ErrorRecord` | `FORBIDDEN_STAGE_OUTPUT`, lifecycle, run-lock, manifest errors, `ACTIVATION_ARTIFACT_INCOMPLETE` | owner row | `110` | DAG negative rows |
 | `040` | canonical data | `ErrorRecord` | `CORE_UNKNOWN_FIELD`, `CORE_REQUIRED_FIELD_MISSING`, `CORE_NULL_FORBIDDEN`, `CORE_FIELD_TYPE_INVALID`, `CORE_FIELD_BOUNDS_INVALID`, `CORE_RECORD_ID_MISMATCH`, `CORE_RECORD_CHECKSUM_MISMATCH`, `CORE_SCHEMA_VERSION_UNSUPPORTED`, record collision errors, `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`, `GRAPH_BACKEND_ID_FORBIDDEN` | owner row | `110` | core schema rows |
-| `050` | mapping/schema | `ErrorRecord` | OCSF, enum, extension, CIM errors | owner row | `110` | mapping rows |
-| `060` | authority/completeness | `ErrorRecord` | authority, coverage, progress, watermark errors | owner row | `110` | absence rows |
+| `050` | mapping/schema | `ErrorRecord` | OCSF row resolution, enum, source extension, base-event field, and CIM errors | owner row | `110` | mapping rows |
+| `060` | authority/completeness | `ErrorRecord` | authority, coverage, progress, watermark, and external-schema non-authority errors | owner row | `110` | absence rows |
 | `070` | identity | `ErrorRecord` | resolver, review, selector errors | owner row | `110` | identity rows |
 | `080` | temporal/replay | `ErrorRecord` | temporal, correction, replay errors | owner row | `110` | event sequence rows |
-| `090` | graph | `ErrorRecord` | backend, query, rebuild, drift errors | owner row | `110` | graph rows |
+| `090` | graph | `ErrorRecord` | backend, query, rebuild, drift, and flow-role evidence errors | owner row | `110` | graph rows |
 | `100` | package | `ErrorRecord` | activation, trust, rollback, quarantine errors | owner row | `110` | package rows |
 | `120` | validation | `ErrorRecord` | validation and acceptance errors | owner row | `110` | validation rows |
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
@@ -386,6 +409,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-LIFECYCLE-ERROR-AC-001` | Lifecycle errors appear in `ErrorCodeRegistry` with owner, severity, retryability, redaction, and fixture ID. |
 | `110-LIFECYCLE-ERROR-AC-002` | Lifecycle errors never collapse to `unknown`, `not_checked`, pass, or fail. |
 | `110-LIFECYCLE-HEALTH-AC-001` | Lifecycle health rows are diagnostic and do not mutate facts, graph state, package state, completeness, or watermarks. |
+| `110-OCSF-MAP-ERROR-AC-001` | Every new `050`, `060`, and `090` OCSF mapping, source-extension, external-schema non-authority, and flow-role evidence code appears in `ErrorCodeRegistry` with severity, retryability, redaction, owner, and caller-visible behavior. |
+| `110-OCSF-MAP-ERROR-AC-002` | Mapping-blocked observations render as `error`, source-extension redaction failures render as security errors, and OCSF non-authority blocks never render as authorized negative facts or compliance pass/fail states. |
 
 ## Definition of Done
 

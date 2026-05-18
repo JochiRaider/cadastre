@@ -112,6 +112,8 @@ Every active graph edge type must have exactly one `GraphEdgeSemantics` row. The
 
 `GraphTraversalClass` is the only traversal eligibility authority. Parallel fields such as `traversal_eligibility`, `reverse_traversal_eligibility`, or `pathfinding_role` are forbidden.
 
+OCSF `src_endpoint`, `dst_endpoint`, `network_endpoint`, DNS endpoint, DHCP endpoint, or any external schema endpoint order is not `FlowRoleEvidence`. A projection row that has OCSF endpoint fields but lacks qualifying `FlowRoleEvidence` must emit no `observed_connection` edge and must emit `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` when the projection attempt is observable.
+
 ## Backend Preflight
 
 A `GraphBackendProfile` must be active before graph mutation, query, rebuild import, drift check, or graph-serving promotion. `GraphBackendPreflightResult` must validate backend, driver, dialect, topology, storage mode, feature availability, raw-write bypass controls, schema profile, and query translation readiness.
@@ -242,7 +244,7 @@ Every graph-serving response using graph read-model state must include or refere
 
 | Edge type | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op | Validation rows | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | `090` imports confidence from source fact and `040.DecimalPrecisionPolicy` | `observed_connection_path` | does not imply theoretical reachability | no edge when `FlowRoleEvidence` is missing or ambiguous | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role` | active_mvp |
+| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only; OCSF endpoint order is not qualifying evidence | gold, silver, raw refs | active, stale when allowed | `080` | `090` imports confidence from source fact and `040.DecimalPrecisionPolicy` | `observed_connection_path` | does not imply theoretical reachability | no edge when `FlowRoleEvidence` is missing or ambiguous, even when OCSF endpoint fields are present | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role`, `val-090-ocsf-endpoint-order-no-direction` | active_mvp |
 | `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | `val-090-theoretical-reachability-prohibited` | inactive_deferred |
 
 The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a new `GraphEdgeSemanticsRegistry` row and validation fixtures before projection activation.
@@ -360,6 +362,7 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` | Required graph artifact checksum mismatches the active ref or manifest. |
 | `GRAPH_ARTIFACT_SCOPE_MISMATCH` | Required graph artifact does not cover the graph execution, backend, projection, query, or serving scope. |
 | `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | A graph projection artifact attempts to redefine core IDs, core schema, identity semantics, temporal semantics, or product authority. |
+| `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | A projection attempts to emit an `observed_connection` edge from OCSF endpoint order or external schema endpoint fields without qualifying `FlowRoleEvidence`. |
 
 ### Acceptance Criteria
 
@@ -384,6 +387,9 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-LIFECYCLE-AC-003` | Partial apply without committed-batch proof fails with `GRAPH_APPLY_RESUME_UNSAFE`. |
 | `090-LIFECYCLE-AC-004` | Failed, partial, aborted, or schema-preflight-failed apply never advances derived-view or watermark state. |
 | `090-GRAPH-APPLY-DEFAULTS-AC-001` | Graph apply defaults and maximums are explicit. |
+| `090-OCSF-DIRECTION-AC-001` | OCSF endpoint order alone never determines `observed_connection` edge direction. |
+| `090-OCSF-DIRECTION-AC-002` | A `network_activity_observation` with valid OCSF Network Activity fields but missing or ambiguous `FlowRoleEvidence` emits no `observed_connection` edge. |
+| `090-OCSF-DIRECTION-AC-003` | DNS and DHCP observations do not emit `observed_connection` edges unless a graph projection row and `FlowRoleEvidence` explicitly permit the edge. |
 
 ## Definition of Done
 
@@ -394,6 +400,7 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-AC-003` | Graph apply rejects stale schema fingerprints and missing constraints before mutation. |
 | `090-AC-004` | Graph drift checks cannot repair or mutate state. |
 | `090-AC-005` | MVP graph profiles cannot emit `has_theoretical_reachability`, modeled reachability facts, or equivalent graph properties. |
+| `090-AC-006` | Graph direction for observed connections derives from Cadastre `FlowRoleEvidence`, not OCSF endpoint order or backend edge convention. |
 
 ## Open Questions
 
