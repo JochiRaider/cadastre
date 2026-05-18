@@ -33,6 +33,7 @@ Define observable API behavior, user-facing states, health, shared error records
 - `CoreRecordErrorCodeSet`
 - `EvidenceRef`
 - `CommonRecordHeader`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -158,7 +159,7 @@ The generated error registry must include every code exported by `040.CoreRecord
 | --- | --- | --- | --- | --- | --- | --- |
 | `010` | boundary/authority | `ErrorRecord` | `DIRECT_SOURCE_CALL_FORBIDDEN`, `PROJECTION_AUTHORITY_VIOLATION`, `PRIVATE_BINDING_LEAK`, `UNDECLARED_AUTHORITY_CLASS` | owner row | `110` | boundary negative rows |
 | `020` | feed/table | `ErrorRecord` | feed read, manifest, raw identity, availability, maintenance errors | owner row | `110` | feed fixture rows |
-| `030` | dag/lifecycle | `ErrorRecord` | `FORBIDDEN_STAGE_OUTPUT`, lifecycle, run-lock, manifest errors | owner row | `110` | DAG negative rows |
+| `030` | dag/lifecycle | `ErrorRecord` | `FORBIDDEN_STAGE_OUTPUT`, lifecycle, run-lock, manifest errors, `ACTIVATION_ARTIFACT_INCOMPLETE` | owner row | `110` | DAG negative rows |
 | `040` | canonical data | `ErrorRecord` | `CORE_UNKNOWN_FIELD`, `CORE_REQUIRED_FIELD_MISSING`, `CORE_NULL_FORBIDDEN`, `CORE_FIELD_TYPE_INVALID`, `CORE_FIELD_BOUNDS_INVALID`, `CORE_RECORD_ID_MISMATCH`, `CORE_RECORD_CHECKSUM_MISMATCH`, `CORE_SCHEMA_VERSION_UNSUPPORTED`, record collision errors, `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`, `GRAPH_BACKEND_ID_FORBIDDEN` | owner row | `110` | core schema rows |
 | `050` | mapping/schema | `ErrorRecord` | OCSF, enum, extension, CIM errors | owner row | `110` | mapping rows |
 | `060` | authority/completeness | `ErrorRecord` | authority, coverage, progress, watermark errors | owner row | `110` | absence rows |
@@ -169,6 +170,22 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `120` | validation | `ErrorRecord` | validation and acceptance errors | owner row | `110` | validation rows |
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
+
+### Activation artifact error handling
+
+Artifact activation failures must use the most specific owner code when available. `030.ACTIVATION_ARTIFACT_INCOMPLETE` is the generic fallback only when no domain-specific code exists.
+
+Caller-visible activation artifact errors must include owner spec, affected artifact class, redaction state, retryability, and error correlation ID. Audit-visible errors may include artifact ID, checksum, package-set ref, activation scope, validation refs, and secure diagnostic refs.
+
+Caller-visible output must not reveal private source bindings, private routes, raw fixture bytes, unauthorized package evidence, or unauthorized artifact payload locations.
+
+| Error source | Caller-visible required fields | Audit-visible additional fields | Source-state label rule |
+| --- | --- | --- | --- |
+| inactive artifact | owner spec, artifact class, retryability, redaction state, correlation ID | artifact ID, lifecycle status, validation refs | Health state only; do not add a source-state label. |
+| checksum mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | expected checksum, actual checksum, package-set ref | Health state only. |
+| validation refs missing | owner spec, artifact class, retryability, redaction state, correlation ID | missing validation refs and activation scope | Health state only. |
+| package-set artifact mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | package-set ref and release manifest refs | Health state only. |
+| owner spec mismatch | owner spec, artifact class, retryability, redaction state, correlation ID | declared and required owner specs | Health state only. |
 
 ### Shared error codes
 
@@ -226,6 +243,11 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | derived view lag | `derived_view_stale` | retryable after graph apply/rebuild | blocks compliance/audit graph queries | graph_health | backend details redacted |
 | package activation failure | `error` | owner-defined | preserves current active package set | package_health | supply-chain evidence redacted |
 | validation acceptance | `blocked`, `not_run`, or `fail` | owner-defined | prevents promotion | validation_health | fixture bytes redacted |
+| inactive activation artifact | `blocked` | no, until artifact lifecycle changes | blocks dependent production output | activation_health | artifact payload refs redacted |
+| activation artifact checksum mismatch | `error` | no, until artifact or manifest changes | blocks dependent production output | activation_health | checksums visible only when policy permits |
+| activation artifact validation refs missing | `blocked` | owner-defined | prevents activation or stage output | activation_health | fixture refs redacted |
+| package-set artifact mismatch | `error` | no, until package set changes | preserves current active package set | package_health | package evidence redacted |
+| activation artifact owner spec mismatch | `error` | no, until artifact metadata changes | blocks activation or stage output | activation_health | owner names visible; private refs redacted |
 
 ### Page token canonicalization
 
@@ -238,6 +260,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | token input fields | Query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. |
 | default expiration | TODO: owner decision required before authoritative promotion. |
 | maximum expiration | TODO: owner decision required before authoritative promotion. |
+| promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` cannot pass while default or maximum expiration remains `TODO:`. |
 | stale derived-view behavior | If token references a stale derived-view state and query class requires current state, fail with `DERIVED_VIEW_LAG_ERROR`. |
 | authorization context mismatch | Fail with `PAGE_TOKEN_INVALID`; do not reveal whether the original result still exists. |
 | backend cursor supplied | Reject with `PAGE_TOKEN_INVALID`; backend cursors are not Cadastre token identity. |
@@ -287,6 +310,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 | `110-ERROR-RECORD-AC-001` | `ErrorRecord` has no duplicate field definitions, has `error_correlation_id` and `owner_error_context`, and separates caller-visible from audit-visible fields. |
 | `110-PAGE-TOKEN-AC-001` | Page tokens reject backend cursors, authorization-context mismatches, expired tokens, and stale derived-view state when the query class requires current state. |
+| `110-ACTIVATION-ERROR-AC-001` | Activation artifact errors expose owner, artifact class, retryability, and redaction state. |
+| `110-ACTIVATION-ERROR-AC-002` | Activation artifact errors never collapse into `unknown`, `not_checked`, pass, or fail. |
+| `110-PAGE-TOKEN-DEFAULTS-AC-001` | Page-token default and maximum expiration are explicit or promotion is blocked. |
 
 ## Definition of Done
 

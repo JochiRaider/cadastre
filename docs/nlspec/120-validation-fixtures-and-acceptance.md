@@ -71,6 +71,22 @@ Every active domain spec must include at least one negative validation case for 
 | Analysis | Analysis rule attempts mutation and fails. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 
+## Required Volatility Boundary Test Classes
+
+Validation must prove that volatile material cannot redefine stable behavior and cannot affect production output without activation refs.
+
+| Volatility boundary | Required negative case | Expected result |
+| --- | --- | --- |
+| core/artifact boundary | Mapping bundle attempts to define a new core field. | Fails before persistence. |
+| artifact activation | Inactive resolver profile is referenced. | Fails before identity output. |
+| artifact checksum | Source-authority row checksum mismatch. | Fails before gold derivation. |
+| artifact omission | Graph projection profile omitted from `VersionManifest`. | Fails before graph delta output. |
+| external schema non-authority | OCSF profile attempts to treat observables as graph node authority. | Fails before graph projection. |
+| package/artifact mismatch | Active package set includes artifact checksum that does not match the artifact ref. | Package activation fails and current active set remains. |
+| appendix/reference non-authority | Research or ADR text is referenced as runtime authority. | Spec-set validation fails. |
+| stable core conflict | Activation artifact attempts to redefine identity, temporal, omission, or graph authority. | Fails with volatility-boundary error before production output. |
+| runtime state substitution | `GraphRebuildManifest`, `LakehouseCommitRef`, lineage facet, or validation report is used as source truth. | Fails before authority effect. |
+
 ## Acceptance Aggregation
 
 `RunValidationMatrix` must produce a deterministic `AcceptanceReport` containing row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref.
@@ -90,6 +106,10 @@ Every active domain spec must include at least one negative validation case for 
 | `SPECSET-AC-008` | Domain unresolved/resolved status and owner-local closure states are consistent. |
 | `SPECSET-AC-009` | ADR statuses are members of `000.SpecStatus` and accepted ADRs use `accepted_rationale`. |
 | `SPECSET-AC-010` | Every manifest path has exactly one registry row or explicit non-registry reason. |
+| `SPECSET-AC-011` | Every implementation-relevant contract, profile, row set, package, fixture, registry object, and runtime state record has exactly one volatility class. |
+| `SPECSET-AC-012` | No activation-controlled artifact can define new runtime behavior not exported by a stable core contract. |
+| `SPECSET-AC-013` | Every output-affecting activation-controlled artifact is represented by `030.ActivationControlledArtifactRef` and appears in `VersionManifest`. |
+| `SPECSET-AC-014` | Stable core specs contain no production-active volatile rows except non-normative examples or blocking `TODO:` rows. |
 
 ## Validation Contract Details
 
@@ -142,6 +162,12 @@ Every active domain spec must include at least one negative validation case for 
 | `mutation_prohibition` | Yes | Production mutation classes forbidden by the row. |
 | `checksums` | Yes | Input, fixture, expected, and actual checksums. |
 | `pass_fail_evidence` | Yes after run | `pass`, `fail`, `blocked`, or `not_run`. |
+| `volatility_class` | No | Required when the row validates a volatility boundary. |
+| `activation_artifact_refs` | No | Required refs and checksums for output-affecting activation-controlled artifacts. |
+| `stable_core_owner` | No | Owner stable contract when validating activation artifacts. |
+| `artifact_owner_spec` | No | Artifact owner spec when different from stable core owner. |
+| `version_manifest_requirement` | No | Expected `VersionManifest` inclusion rule. |
+| `artifact_mutation_prohibition` | No | Artifact classes and stable-core fields that the row forbids mutating. |
 
 ### OwnerLocalStatusConsistencyRule validation rows
 
@@ -156,21 +182,21 @@ Every active domain spec must include at least one negative validation case for 
 
 ### ValidationCoverageMatrix
 
-| Owner spec | Required success | Required rejection | Required no-op | Required edge | Required replay | Required redaction | Required authorization | Required negative authority-boundary |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `010` | authority class | direct source call | validation exploration no-op | private/public boundary | n/a | private leak | API/private boundary | direct source, projection authority |
-| `020` | feed read/import | malformed manifest | partial no-absence | CDC metadata | raw ID replay | private binding | n/a | no direct source call |
-| `030` | DAG execution | forbidden output | safe subset no-op | lifecycle illegal transition | manifest replay | n/a | n/a | subset authority |
-| `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection |
-| `050` | OCSF mapping | artifact mismatch | unmapped no-op | unknown enum | mapping replay | source extension redaction | n/a | undeclared extension |
-| `060` | absence authorized | missing authority row | weak signal no-op | partial completeness | watermark replay | n/a | n/a | missing coverage |
-| `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality |
-| `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback |
-| `090` | graph query/apply | backend ID rejection | empty traversal no-path | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition |
-| `100` | package activation | unauthorized signer | failed candidate keep-current | rollback | package-set replay | n/a | promotion auth | emergency no trust bypass |
-| `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse |
-| `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority |
-| `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability |
+| Owner spec | Required success | Required rejection | Required no-op | Required edge | Required replay | Required redaction | Required authorization | Required negative authority-boundary | Required volatility-boundary |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `010` | authority class | direct source call | validation exploration no-op | private/public boundary | n/a | private leak | API/private boundary | direct source, projection authority | required when owner declares activation-controlled artifacts. |
+| `020` | feed read/import | malformed manifest | partial no-absence | CDC metadata | raw ID replay | private binding | n/a | no direct source call | required when owner declares activation-controlled artifacts. |
+| `030` | DAG execution | forbidden output | safe subset no-op | lifecycle illegal transition | manifest replay | n/a | n/a | subset authority | required when owner declares activation-controlled artifacts. |
+| `040` | canonical ID/checksum | unknown field | omission distinction | collision | checksum replay | redaction state | n/a | backend ID rejection | required when owner declares activation-controlled artifacts. |
+| `050` | OCSF mapping | artifact mismatch | unmapped no-op | unknown enum | mapping replay | source extension redaction | n/a | undeclared extension | required when owner declares activation-controlled artifacts. |
+| `060` | absence authorized | missing authority row | weak signal no-op | partial completeness | watermark replay | n/a | n/a | missing coverage | required when owner declares activation-controlled artifacts. |
+| `070` | resolver decision | weak merge rejection | selector no-merge | hard blocker | identity replay | n/a | n/a | manual review terminality | required when owner declares activation-controlled artifacts. |
+| `080` | fact derivation | temporal missing | duplicate correction no-op | late arrival | replay mismatch | n/a | n/a | no current-time fallback | required when owner declares activation-controlled artifacts. |
+| `090` | graph query/apply | backend ID rejection | empty traversal no-path | edge semantics | rebuild equivalence | raw property redaction | graph auth | reachability prohibition | required when owner declares activation-controlled artifacts. |
+| `100` | package activation | unauthorized signer | failed candidate keep-current | rollback | package-set replay | n/a | promotion auth | emergency no trust bypass | required when owner declares activation-controlled artifacts. |
+| `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
+| `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority | required when owner declares activation-controlled artifacts. |
+| `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
 
 ### TwoIndependentImplementersCheck
 
@@ -228,6 +254,7 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `130` | analysis mutation | `fixture-130-analysis-mutation` | TODO | `ANALYSIS_MUTATION_FORBIDDEN` | TODO | no mutation | `130-CLEANUP-AC-003` | blocking |
 | `130` | lineage facet checksum mismatch | `fixture-130-lineage-facet-checksum-mismatch` | TODO | `LINEAGE_FACET_CHECKSUM_MISMATCH` | TODO | no lineage activation | `130-AC-003` | blocking |
 | `200` | active reachability output | `fixture-200-active-reachability-output` | TODO | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | TODO | no gold, graph, API output | `200-CLEANUP-AC-003` | blocking |
+| volatility | activation artifact redefines stable core behavior; activation artifact omitted from `VersionManifest`; runtime state substituted as source truth | `fixture-120-volatility-boundary` | TODO | owner-specific volatility error or no-op | TODO | no production mutation | `120-VOLATILITY-AC-001` | blocking |
 
 ### ExpectedMutationProhibition rows
 
@@ -274,6 +301,8 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-STATUS-CONSISTENCY-AC-001` | Owner/domain status contradiction, domain runtime restatement, owner-spec contradiction, ADR status, and manifest path mismatch validation rows exist and fail with exact codes. |
 | `120-MUTATION-PROHIBITION-AC-001` | Every negative validation row has a mutation-prohibition proof for each affected mutation class. |
 | `120-ACCEPTANCE-PRECEDENCE-AC-001` | Aggregate `AcceptanceReport` cannot pass while any non-deferred required row is `fail`, `blocked`, or `not_run`, or while any required fixture checksum or expected output checksum is `TODO`. |
+| `120-VOLATILITY-AC-001` | Aggregate `AcceptanceReport` fails while any non-deferred volatility row is `fail`, `blocked`, `not_run`, or missing expected checksum. |
+| `120-VOLATILITY-AC-002` | Validation rows cover inactive, missing, mismatched, out-of-scope, and runtime-restating activation artifacts. |
 
 ## Definition of Done
 

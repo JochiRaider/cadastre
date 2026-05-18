@@ -33,6 +33,7 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `GraphEdgeDeltaShape`
 - `EvidenceRef`
 - `CoreRecordValidationAlgorithm`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -73,6 +74,33 @@ Graph state is a derived read model. It must be rebuildable from authoritative l
 
 A graph backend must not create authoritative facts, infer identity, decide source completeness, decide fact retraction, define bitemporal semantics, repair drift by itself, or expose backend internal IDs as Cadastre IDs.
 
+## Graph artifact activation boundary
+
+Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, query contract, and projection non-authority are stable core contracts. Projection rows, backend profiles, schema profiles, query translation rows, apply profiles, and lag policies are activation-controlled artifacts.
+
+| Artifact or contract | Volatility class | Required handling |
+| --- | --- | --- |
+| `GraphProjectionProfile` | `activation_controlled_artifact` | Required before graph deltas are projected. |
+| `GraphEdgeSemantics` row set | `activation_controlled_artifact` | Must instantiate stable edge semantics contract. |
+| `GraphTraversalClass` | stable closed semantics plus activation-controlled inclusion rows where applicable | Parallel traversal eligibility fields are forbidden. |
+| `GraphTaxonomyTranslationPolicy` | `activation_controlled_artifact` | Required before external graph taxonomy labels are used. |
+| `StructuralGlobalNode` rows | `activation_controlled_artifact` | Disabled by default. |
+| `StructuralGlobalNodeAliasPolicy` | `activation_controlled_artifact` | Required before aliases or wildcard-like globals. |
+| `GraphBackendProfile` | `activation_controlled_artifact` | Required before mutation, query, rebuild, drift check, or serving promotion. |
+| `GraphBackendPreflightResult` | `runtime_state_record` | Runtime validation state. |
+| `BackendSchemaFingerprint` | `runtime_state_record` | Runtime schema state. |
+| `GraphBackendTaxonomyMappingProfile` | `activation_controlled_artifact` | Required before backend labels/properties are accepted. |
+| `GraphQueryTranslationProfile` | `activation_controlled_artifact` | Required before query execution. |
+| `GraphReadModelSchemaProfile` | `activation_controlled_artifact` | Required before apply or rebuild promotion. |
+| `GraphApplyProfile` | `activation_controlled_artifact` | Required before graph apply. |
+| `GraphApplyResult` | `runtime_state_record` | Runtime apply state. |
+| `GraphRebuildManifest` | `runtime_state_record` | Rebuild evidence, not authority by itself. |
+| `GraphIndexConsistencyCheck` | `runtime_state_record` | Runtime validation state. |
+| `DerivedViewLagPolicy` | `activation_controlled_artifact` | Required before serving stale or current graph state. |
+| `DerivedViewState` | `runtime_state_record` | Runtime serving state. |
+
+`ProjectGraphDeltas`, `ApplyGraphDelta`, `QueryGraph`, and `RebuildGraph` must validate required activation artifact refs through `030.ActivationControlledArtifactRef` and include every output-affecting ref in `VersionManifest`.
+
 ## Graph Delta Identity
 
 Every graph node and edge must have a Cadastre-owned deterministic ID. Backend-generated node, edge, relationship, vertex, document, element, transaction, shard, or native cursor IDs are forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity and must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response, evidence ref generation, replay, or pagination.
@@ -91,16 +119,17 @@ A `GraphBackendProfile` must be active before graph mutation, query, rebuild imp
 
 ```text
 ApplyGraphDelta(delta_set, apply_profile):
-1. Validate every node and edge delta against `040.GraphNodeDeltaShape`, `040.GraphEdgeDeltaShape`, and `040.ValidateCoreRecord`.
-2. Reject backend-generated IDs and raw payload leakage before backend execution.
-3. Verify delta_set checksum and GraphDeltaIdempotencyKey.
-4. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
-5. Reject when backend schema is missing, stale, or fingerprint-mismatched.
-6. Sort deltas by apply_profile canonical order.
-7. Apply batches only at declared transaction boundaries.
-8. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
-9. On failure, record committed batch IDs or prove no committed writes.
-10. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, and derived view state update eligibility.
+1. Validate graph projection, backend, schema, taxonomy, query translation, apply, and lag artifact refs through `030.ActivationControlledArtifactRef`.
+2. Validate every node and edge delta against `040.GraphNodeDeltaShape`, `040.GraphEdgeDeltaShape`, and `040.ValidateCoreRecord`.
+3. Reject backend-generated IDs and raw payload leakage before backend execution.
+4. Verify delta_set checksum and GraphDeltaIdempotencyKey.
+5. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
+6. Reject when backend schema is missing, stale, or fingerprint-mismatched.
+7. Sort deltas by apply_profile canonical order.
+8. Apply batches only at declared transaction boundaries.
+9. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
+10. On failure, record committed batch IDs or prove no committed writes.
+11. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
 ```
 
 ## QueryGraph Contract
@@ -172,8 +201,8 @@ The MVP active graph edge set is exactly `observed_connection`. Any additional a
 
 | Setting | Default | Maximum | Required behavior |
 | --- | --- | --- | --- |
-| batch size | TODO: owner decision required before authoritative promotion | TODO | Missing default blocks production graph apply activation. |
-| retry count | TODO: owner decision required before authoritative promotion | TODO | Retryable error classes must be explicit. |
+| batch size | TODO: owner decision required before authoritative promotion | TODO | Missing default blocks production graph apply activation. Do not infer batch size from backend defaults. |
+| retry count | TODO: owner decision required before authoritative promotion | TODO | Retryable error classes must be explicit. Do not infer retry count from driver defaults. |
 | transaction boundary | one declared batch | n/a | Partial apply must record committed batch IDs or prove no committed writes. |
 | partial apply behavior | fail closed unless resume evidence is complete | n/a | Unsafe resume emits `GRAPH_APPLY_RESUME_UNSAFE`. |
 | read-after-write proof | required | n/a | Graph apply result must include proof or block derived-view advancement. |
@@ -262,6 +291,16 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | query translation parity | expected result checksums | `GRAPH_QUERY_TRANSLATION_ERROR` | no | block query serving | parity fixture |
 | rebuild equivalence | rebuild checksums and index consistency | `GRAPH_REBUILD_EQUIVALENCE_FAILED` | yes after rebuild | block promotion | rebuild mismatch |
 
+### Graph artifact errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `GRAPH_ARTIFACT_MISSING` | Required graph projection, backend, schema, query translation, apply, taxonomy, edge semantics, or lag artifact ref is missing. |
+| `GRAPH_ARTIFACT_INACTIVE` | Required graph artifact is not active for production execution. |
+| `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` | Required graph artifact checksum mismatches the active ref or manifest. |
+| `GRAPH_ARTIFACT_SCOPE_MISMATCH` | Required graph artifact does not cover the graph execution, backend, projection, query, or serving scope. |
+| `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | A graph projection artifact attempts to redefine core IDs, core schema, identity semantics, temporal semantics, or product authority. |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
@@ -278,6 +317,8 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
 | `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |
 | `090-REBUILD-MANIFEST-AC-001` | Every graph rebuild promotion has a `GraphRebuildManifest` with input refs, profile refs, schema fingerprint, output checksum, status, and errors. |
+| `090-VOLATILITY-AC-001` | Inactive graph projection profile, query translation checksum mismatch, apply profile manifest omission, backend ID exposure, and attempted `has_theoretical_reachability` activation fail before mutation or serving. |
+| `090-VOLATILITY-AC-002` | Graph apply batch and retry defaults remain blocking `TODO:` rows until owner-supplied default, maximum, and retryable error classes are defined. |
 
 ## Definition of Done
 

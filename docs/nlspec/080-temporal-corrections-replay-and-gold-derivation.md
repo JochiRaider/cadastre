@@ -35,6 +35,7 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ComputeGoldFactKeyId`
 - `ComputeGoldFactId`
 - `CoreRecordValidationAlgorithm`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -62,23 +63,47 @@ Cadastre must keep source event time, source observation time, supplier collecti
 
 A `GoldFact` candidate may be created only after `ResolveFactTime` emits exactly one `TemporalObservationTimeResolution` row or a deterministic temporal error.
 
+## Temporal and replay artifact activation boundary
+
+Temporal, gold, correction, late-arrival, and replay algorithms are stable core contracts. Source/fact-specific temporal rows, correction rows, late-arrival rows, and replay output-class rows are activation-controlled artifacts.
+
+| Artifact or contract | Volatility class | Required handling |
+| --- | --- | --- |
+| `TemporalSemanticsPolicy` | `activation_controlled_artifact` | Required before fact-time resolution. |
+| `KnowledgeTimeImportPolicy` | stable mode definitions plus activation-controlled policy rows | Production default remains `current_import`; rows must be active for non-default modes. |
+| `TemporalObservationTimeResolution` | `runtime_state_record` | Must be persisted or a deterministic temporal error emitted before gold candidate creation. |
+| `LateArrivalPolicy` | `activation_controlled_artifact` | Required before late evidence routing. |
+| `BitemporalQueryMode` | `stable_core_contract` | Query mode semantics are stable; owner rows may control visibility. |
+| `GoldFactCorrectionPolicy` | `activation_controlled_artifact` | Required before correction class behavior. |
+| `GoldFactChangeSet` | `runtime_state_record` | System-of-record change record. |
+| `CorrectionSnapshotRefPolicy` | `activation_controlled_artifact` | Required before old/new snapshot role handling. |
+| `ReplayEquivalencePolicy` | stable checksum algorithm plus activation-controlled output-class rows | Missing output-class rows block replay. |
+| `ReplayInputSufficiencyCheck` | `stable_core_contract` | Preflight algorithm; concrete required rows are owner-controlled. |
+| `GraphRebuildEquivalencePolicy` | split ownership with `090`; row instances activation-controlled where output-specific | Must remain consistent with graph rebuild owner. |
+| `EventSequenceValidationCorpus` | `activation_controlled_artifact` | Validation artifact with checksummed fixtures. |
+| `ResolveFactTime`, `EvaluateLateArrival`, `ApplyGoldCorrection`, `DeriveFacts`, `ComputeReplayEquivalenceChecksum` | `stable_core_contract` | Algorithms validate required activation refs before output. |
+
+Current `TODO:` rows remain owner-decision blockers. Production outputs affected by unresolved temporal, correction, late-arrival, or replay policy rows remain blocked until artifact rows exist, validate, and appear in `VersionManifest`.
+
 ## ResolveFactTime Algorithm
 
 ```text
 ResolveFactTime(observation, temporal_policy, knowledge_time_policy):
-1. Validate temporal_policy covers source dataset, observation type, and fact type.
-2. Select valid-time input using declared precedence.
-3. Reject absent, malformed, ambiguous, or non-authoritative time unless policy names an explicit fallback.
-4. Select known-time input using KnowledgeTimeImportPolicy.
-5. Reject reconstructed historical known time unless policy permits and required source-known-time evidence validates.
-6. Emit TemporalObservationTimeResolution with selected fields, quality, source refs, policy refs, and checksum.
+1. Validate required temporal and knowledge-time artifact refs through `030.ActivationControlledArtifactRef`.
+2. Validate temporal_policy covers source dataset, observation type, and fact type.
+3. Select valid-time input using declared precedence.
+4. Reject absent, malformed, ambiguous, or non-authoritative time unless policy names an explicit fallback.
+5. Select known-time input using KnowledgeTimeImportPolicy.
+6. Reject reconstructed historical known time unless policy permits and required source-known-time evidence validates.
+7. Emit TemporalObservationTimeResolution with selected fields, quality, source refs, policy refs, and checksum.
+8. Include temporal policy checksums in `VersionManifest` before gold output.
 ```
 
 Implicit current-time fallback is forbidden.
 
 ## Gold Derivation
 
-`DeriveFacts` must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, and active derivation profiles. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error, and every emitted `GoldFact` must pass `040.GoldFactSchema`. It must not mutate existing `GoldFact` rows in place.
+`DeriveFacts` must validate required temporal, authority, correction, late-arrival, and replay artifact refs before output. It must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, and active derivation profiles. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, no-op, conflict, or deterministic error, and every emitted `GoldFact` must pass `040.GoldFactSchema`. It must not mutate existing `GoldFact` rows in place.
 
 ## Correction Contract
 
@@ -92,11 +117,11 @@ Every correction policy must define a total transition matrix across assertion s
 
 ## Late Arrival
 
-Late evidence must be routed through `EvaluateLateArrival` using late-arrival policy, temporal resolution, source authority, completeness, and watermark state. Silently discarding late authoritative evidence in production is forbidden.
+Late evidence must be routed through `EvaluateLateArrival` using an active late-arrival policy artifact, temporal resolution, source authority, completeness, and watermark state. Silently discarding late authoritative evidence in production is forbidden.
 
 ## Replay Contract
 
-Production replay must run `ReplayInputSufficiencyCheck`, `ReplayEquivalencePolicy`, `DecideReplayMode`, and `ComputeReplayEquivalenceChecksum` before any replay output is written.
+Production replay must validate required replay policy artifact refs, then run `ReplayInputSufficiencyCheck`, `ReplayEquivalencePolicy`, `DecideReplayMode`, and `ComputeReplayEquivalenceChecksum` before any replay output is written.
 
 `ReplayEquivalencePolicy` must define included fields, excluded volatile fields, hash algorithms, canonical ordering, failure precedence, and shadow-output behavior by output class. The contract table below defines active draft output classes and explicit remaining blocker rows.
 
@@ -197,11 +222,21 @@ Replay-equivalence ownership split:
 
 | Output class | Required refs | Failure code | Mutable-ref behavior | Retention-ineligible behavior | Schema mismatch behavior |
 | --- | --- | --- | --- | --- | --- |
+| activation-controlled policy artifacts | temporal, knowledge-time, late-arrival, correction, snapshot-ref, replay-equivalence, and output-class rows | owner-specific artifact error | reject before replay output | reject before replay output | reject before replay output |
 | raw | feed profile, manifest, object/table refs, import profile | `REPLAY_INPUT_MISSING` | reject | reject | reject |
 | silver | raw refs, parser/mapping, external schema artifact | `REPLAY_SCHEMA_MISMATCH` | reject | reject | reject |
 | identity | resolver profile, evidence refs, version manifest | `REPLAY_AUTHORITY_MISMATCH` | reject | reject | reject |
 | gold/correction | temporal, authority, correction, snapshot refs | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph | projection, delta, apply, rebuild, schema refs | `REPLAY_GRAPH_MISMATCH` | reject | reject | reject |
+
+### Temporal artifact errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `TEMPORAL_ARTIFACT_MISSING` | Required temporal, knowledge-time, late-arrival, correction, snapshot-ref, or replay artifact ref is missing. |
+| `TEMPORAL_ARTIFACT_INACTIVE` | Required temporal artifact is not active for production execution. |
+| `TEMPORAL_ARTIFACT_CHECKSUM_MISMATCH` | Required temporal artifact checksum mismatches the active ref or manifest. |
+| `REPLAY_POLICY_ARTIFACT_MISSING` | Required replay equivalence or output-class policy artifact is absent before replay. |
 
 ### Acceptance Criteria
 
@@ -218,6 +253,8 @@ Replay-equivalence ownership split:
 
 | `080-KNOWLEDGE-TIME-AC-001` | Production known time defaults to `current_import`, and historical known-time reconstruction is rejected unless policy and persisted source-known-time evidence permit it. |
 | `080-REPLAY-SPLIT-AC-001` | Projection, API, and analysis replay rows import owner-specific included/excluded fields and use `080` only for checksum algorithm and preflight ordering. |
+| `080-VOLATILITY-AC-001` | Inactive temporal policy, missing knowledge-time policy, correction policy checksum mismatch, late-arrival row manifest omission, and replay policy row absence fail before gold or replay output. |
+| `080-VOLATILITY-AC-002` | Current `TODO:` temporal and replay rows block affected production outputs until active artifact rows and validation refs exist. |
 
 ## Definition of Done
 

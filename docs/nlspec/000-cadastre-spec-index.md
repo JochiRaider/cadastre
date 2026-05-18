@@ -35,6 +35,9 @@ Define the self-contained Cadastre documentation set, source-of-truth ownership,
 - `SpecSetVersion`
 - `PromotionGate`
 - `DocumentRegistryConsistencyRule`
+- `VolatilityClass`
+- `VolatilityClassificationRow`
+- `VolatilityRegistryConsistencyRule`
 
 ## Document Status Vocabulary
 
@@ -96,9 +99,47 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `supersedes` | string or null | No | null | Must reference the prior spec-set version when replacing it. |
 | `effective_from` | timestamp or null | Yes for authoritative handoff | null | RFC3339 UTC timestamp assigned when the spec-set version becomes authoritative. |
 | `open_exclusions` | array | Yes | empty | Explicit deferred or unresolved issues implementation must not infer. |
+| `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
+| `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
+| `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
 | `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
+
+## Volatility Classification Governance
+
+`VolatilityClass` is a closed governance vocabulary. Every implementation-relevant exported contract, profile, row set, package, fixture, validation artifact, registry artifact, and runtime state class must have exactly one volatility classification.
+
+| Volatility class | May define runtime behavior | May be separately activated | Must appear in `VersionManifest` | Must have lifecycle status | May appear in `ProductionPackageSetManifest` | Required owner |
+| --- | --- | --- | --- | --- | --- | --- |
+| `stable_core_contract` | Yes, only through the authoritative owner NLSpec. | No. | Yes when the contract version affects output or replay. | Yes when promotion or runtime eligibility depends on lifecycle. | No. | Owner NLSpec registered in `000`. |
+| `activation_controlled_artifact` | No. It may instantiate exported stable behavior only. | Yes. | Yes when it can affect output, validation, visibility, replay, or activation. | Yes. | Yes when package-supplied. | Stable owner NLSpec plus artifact owner row. |
+| `runtime_state_record` | No. It records execution, replay, commit, snapshot, lifecycle, health, or validation state. | No. | Yes when output-affecting or replay-affecting. | Only when the state record itself has production eligibility semantics. | No, except as referenced evidence. | Domain owner and `030.VersionManifest`. |
+| `reference_evidence` | No. | No. | No, except as cited non-runtime evidence in acceptance material. | No. | No. | `000`. |
+| `rationale` | No. | No. | No. | No. | No. | `000`. |
+| `inactive_future_domain` | No while inactive. | No while inactive. | Deferred docs must be recorded in `SpecSetVersion.deferred_docs`. | Future activation requires owner assignment. | No while inactive. | `000` and deferred owner. |
+
+Rules:
+
+- `stable_core_contract` may define runtime behavior only when its owner NLSpec is authoritative.
+- `activation_controlled_artifact` must not define new runtime behavior. It may instantiate behavior exported by a stable core contract.
+- `runtime_state_record` records execution, replay, commit, snapshot, lifecycle, or health state and must not create authority by itself.
+- `reference_evidence`, `rationale`, and `inactive_future_domain` must not drive runtime behavior.
+- Every `Owner Contract Registry` row must include `volatility_class`.
+- Every exported contract, profile, row set, package, fixture, validation artifact, registry artifact, and runtime state class must have exactly one volatility classification.
+- If an activation-controlled artifact requires behavior not exported by its owner stable core contract, promotion or activation must fail.
+
+`VolatilityClassificationRow` fields are `artifact_or_contract`, `volatility_class`, `owner_spec`, `stable_core_owner`, `may_affect_output`, `version_manifest_requirement`, `package_set_manifest_requirement`, `lifecycle_requirement`, and `validation_row_refs`.
+
+`VolatilityRegistryConsistencyRule` must fail before promotion using the most specific failure code.
+
+| Failure code | Emitted when |
+| --- | --- |
+| `VOLATILITY_CLASS_MISSING` | An implementation-relevant artifact or contract lacks a volatility class. |
+| `VOLATILITY_CLASS_CONFLICT` | More than one volatility class is assigned to the same artifact or contract. |
+| `VOLATILE_ROW_IN_STABLE_CORE` | A stable core spec contains production-active volatile row instances rather than non-normative examples or blocking `TODO:` rows. |
+| `ACTIVATION_ARTIFACT_OWNER_MISMATCH` | An activation-controlled artifact does not reference the stable core owner contract that exports its behavior. |
+| `ACTIVATION_ARTIFACT_RUNTIME_RESTATEMENT` | An activation-controlled artifact restates or defines runtime behavior instead of instantiating owner-exported behavior. |
 
 ## Document Registry
 
@@ -132,27 +173,28 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 
 ## Owner Contract Registry
 
-| Contract | Owner spec | Imported by | Runtime authority class | Validation owner | Owner-local closure state | Open blocker status |
-| --- | --- | --- | --- | --- | --- | --- |
-| Documentation governance | `000` | `MANIFEST.md` and registered documentation artifacts | governance | 120 | blocked_validation | open until registry consistency rows pass |
-| Root domain vocabulary | `domain` | all owner specs | vocabulary | 120 | blocked_owner_todo | open until domain TODOs close |
-| Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | 120 | closed_local | validation rows required |
-| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | 120 | blocked_validation | open until manifest fixtures and checksum rows close |
-| RawFeedManifest | `020` | 030,040,060,120 | runtime_data_input | 120 | closed_local | validation fixture checksums required |
-| Raw record identity import | `020` | 040,120,domain | runtime_data_input | 120 | closed_local | imports `040.ComputeRawRecordId`; no local ID order blocker |
-| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | 120 | blocked_owner_todo | run-lock lease timing and lifecycle transition rows remain TODO |
-| Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | 120 | blocked_validation | owner enum and one-of validation rows required |
-| ComputeRawRecordId | `040` | 020,120,domain | runtime_data_shape | 120 | closed_local | validation fixture checksums required |
-| External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | 120 | blocked_owner_todo | exact OCSF rows and artifact checksums remain TODO |
-| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | 120 | blocked_owner_todo | source-specific coverage rows remain TODO |
-| Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
-| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
-| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | 120 | blocked_owner_todo | graph apply numeric defaults and validation checksums remain TODO |
-| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | 120 | blocked_owner_todo | package deprecation windows remain TODO |
-| API, errors, security | `110` | all owner specs | runtime_api | 120 | blocked_owner_todo | page-token expiration bounds remain TODO |
-| Validation and acceptance | `120` | 000 and all owner specs | validation | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
-| Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | 120 | blocked_validation | fixture checksums required |
-| Deferred reachability | `200` | 090,110,120 | inactive_future_domain | 120 | inactive_deferred | deferred |
+| Contract | Owner spec | Imported by | Runtime authority class | Volatility class | Validation owner | Owner-local closure state | Open blocker status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Documentation governance | `000` | `MANIFEST.md` and registered documentation artifacts | governance | `stable_core_contract` | 120 | blocked_validation | open until registry consistency rows pass |
+| Root domain vocabulary | `domain` | all owner specs | vocabulary | `stable_core_contract` | 120 | blocked_owner_todo | open until domain TODOs close |
+| Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | `stable_core_contract` | 120 | closed_local | validation rows required |
+| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | `stable_core_contract` | 120 | blocked_validation | open until manifest fixtures and checksum rows close |
+| RawFeedManifest | `020` | 030,040,060,120 | runtime_data_input | `runtime_state_record` | 120 | closed_local | validation fixture checksums required |
+| Raw record identity import | `020` | 040,120,domain | runtime_data_input | `stable_core_contract` | 120 | closed_local | imports `040.ComputeRawRecordId`; no local ID order blocker |
+| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | `stable_core_contract` | 120 | blocked_owner_todo | run-lock lease timing and lifecycle transition rows remain TODO |
+| ActivationControlledArtifactRef | `030` | 020,050,060,070,080,090,100,110,120,130 | runtime_orchestration | `stable_core_contract` | 120 | blocked_validation | activation artifact ref validation rows required |
+| Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | `stable_core_contract` | 120 | blocked_validation | owner enum and one-of validation rows required |
+| ComputeRawRecordId | `040` | 020,120,domain | runtime_data_shape | `stable_core_contract` | 120 | closed_local | validation fixture checksums required |
+| External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | `stable_core_contract` | 120 | blocked_owner_todo | exact OCSF rows and artifact checksums remain TODO |
+| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_owner_todo | source-specific coverage rows remain TODO |
+| Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
+| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
+| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_owner_todo | graph apply numeric defaults and validation checksums remain TODO |
+| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_owner_todo | package deprecation windows remain TODO |
+| API, errors, security | `110` | all owner specs | runtime_api | `stable_core_contract` | 120 | blocked_owner_todo | page-token expiration bounds remain TODO |
+| Validation and acceptance | `120` | 000 and all owner specs | validation | `stable_core_contract` | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
+| Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | `stable_core_contract` | 120 | blocked_validation | fixture checksums required |
+| Deferred reachability | `200` | 090,110,120 | inactive_future_domain | `inactive_future_domain` | 120 | inactive_deferred | deferred |
 
 Owner-local closure states are closed values: `closed_local`, `blocked_owner_todo`, `blocked_validation`, `inactive_deferred`, and `candidate_not_promoted`. A `closed_local` owner contract may still be prevented from promotion by candidate document status or missing validation evidence.
 
@@ -196,6 +238,11 @@ No non-040 file may define a field schema for a core record exported by `040`. A
 | `OWNER_SPEC_CONTRADICTION` | Two owner specs define incompatible runtime behavior for the same named contract. |
 | `ADR_STATUS_UNREGISTERED` | An ADR file or registry row uses a status outside `SpecStatus`. |
 | `REGISTRY_MANIFEST_PATH_MISMATCH` | A manifest path lacks exactly one registry row or explicit non-registry reason. |
+| `VOLATILITY_CLASS_MISSING` | An implementation-relevant artifact or contract lacks exactly one volatility class. |
+| `VOLATILITY_CLASS_CONFLICT` | An artifact or contract has conflicting volatility classes. |
+| `VOLATILE_ROW_IN_STABLE_CORE` | A stable core spec contains production-active volatile rows rather than non-normative examples or blocking `TODO:` rows. |
+| `ACTIVATION_ARTIFACT_OWNER_MISMATCH` | An activation-controlled artifact lacks a matching owner stable core contract. |
+| `ACTIVATION_ARTIFACT_RUNTIME_RESTATEMENT` | An activation-controlled artifact defines runtime behavior instead of instantiating exported owner behavior. |
 
 Required consistency checks:
 
@@ -215,6 +262,8 @@ No document may be marked `authoritative` when it has unresolved owner `TODO:` r
 Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMatrix` rows for every `040` exported record in `SpecSetVersion.validation_matrix_refs`. Unresolved owner `TODO:` rows in core schemas, owner error codes, fixture checksums, expected output checksums, or downstream cross-references remain implementation exclusions.
 
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
+
+`ValidateSpecSet` must fail before promotion when any exported implementation-relevant artifact lacks a volatility class, an activation-controlled artifact has no owner spec, a volatile production row is embedded in a stable core section without being marked example-only or `TODO:`, or a reference, ADR, or archive document is used as runtime authority.
 
 ## Archival Policy
 
@@ -236,6 +285,10 @@ Archived documents are historical reference only and never implementation author
 | `000-SCHEMA-PATCH-AC-001` | The owner registry names `040` as the sole owner of exported core record schemas. |
 | `000-SCHEMA-PATCH-AC-002` | No downstream spec is registered as owner of a 040 core record field schema. |
 | `000-SCHEMA-PATCH-AC-003` | Promotion to `authoritative` depends on passing 040 schema validation rows in `120`. |
+| `000-VOLATILITY-AC-001` | Every implementation-relevant artifact has exactly one volatility class. |
+| `000-VOLATILITY-AC-002` | Activation-controlled artifacts reference an owner stable core contract. |
+| `000-VOLATILITY-AC-003` | Stable core specs do not contain production-active volatile row instances. |
+| `000-VOLATILITY-AC-004` | Research, ADR, reference, and archive documents remain non-runtime even when cited as evidence. |
 
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |

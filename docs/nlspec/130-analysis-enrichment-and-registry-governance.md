@@ -28,6 +28,7 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `GraphQueryResponse`
 - `RedactionPolicy`
 - `ValidationMatrix`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -84,6 +85,27 @@ They must not become identity, source completeness, source authority, gold fact,
 
 `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, and `RegistryClassificationPolicy` manage owners, domains, classifications, glossary labels, policies, approval, lifecycle, custom properties, and checksums. Registry metadata must not define Cadastre fact authority, source authority, graph edge semantics, evidence refs, source completeness, or production approval by itself.
 
+## Registry and analysis artifact volatility boundary
+
+Analysis, enrichment, lineage, and registry artifacts may be active only through owner-governed activation refs. Registry metadata cannot create authority unless an owner stable core contract grants the specific behavior.
+
+| Artifact or record | Volatility class | Required handling |
+| --- | --- | --- |
+| `AnalysisRuleBundle` | `activation_controlled_artifact` | Must be active and compatible before analysis execution. |
+| `AnalysisRule` | `activation_controlled_artifact` | Row inside a bundle; read-only by default. |
+| `AnalysisFinding`, `AnalysisMetric`, `RiskAcceptanceRecord` | non-authoritative `runtime_state_record` | Workflow records; no mutation authority. |
+| `DerivationRuleBundle` | `activation_controlled_artifact` | Gold output only through `080`. |
+| `DerivedGraphEdgeRule` | `activation_controlled_artifact` | Graph deltas only through `090`. |
+| `RuleGraphCompatibilityMatrix` | `activation_controlled_artifact` | Validation artifact. |
+| `ThreatIntelEnrichmentProfile` | `activation_controlled_artifact` | Enrichment only unless another owner grants behavior. |
+| `ThreatIntelArtifactRef` | activation-controlled artifact or runtime evidence ref depending on role | Must be immutable and checksummed. |
+| `RunDatasetIOContract` | `runtime_state_record` | Runtime lineage state; not evidence authority by itself. |
+| `LineageFacetMappingPolicy` | `activation_controlled_artifact` | Must be active before lineage facet effects. |
+| `ArtifactClassPolicy` | stable governance contract plus activation-controlled owner-specific rows | Prevents artifact substitution. |
+| `RegistryArtifactGovernance` | `activation_controlled_artifact` | Governance metadata with no fact authority by itself. |
+| `RegistryCustomPropertySchema` | `activation_controlled_artifact` | Defines typed custom-property metadata only. |
+| `RegistryClassificationPolicy` | `activation_controlled_artifact` | Classification metadata only. |
+
 ## Analysis, Enrichment, and Registry Contract Details
 
 ### RiskScoringBoundary
@@ -120,21 +142,21 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 
 ### ArtifactClassPolicy substitution matrix
 
-| Artifact class | Must not substitute for |
-| --- | --- |
-| static DAG artifact | executed run, validation, freshness, table snapshot, graph rebuild |
-| executed run artifact | static DAG, source completeness, validation, table snapshot |
-| freshness artifact | completeness, absence, authority, table snapshot |
-| semantic artifact | identity, gold, graph, source authority |
-| validation artifact | production evidence, source evidence, source completeness |
-| lineage artifact | evidence, completeness, table snapshot, graph rebuild |
-| table snapshot artifact | fact time, source time, graph rebuild correctness by itself |
-| table commit artifact | fact time, source authority, source completeness by itself |
-| graph rebuild artifact | source truth, identity truth, completeness, validation by itself |
+| Artifact class | Volatility class | Required owner spec | Must not substitute for |
+| --- | --- | --- | --- |
+| static DAG artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | executed run, validation, freshness, table snapshot, graph rebuild |
+| executed run artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | static DAG, source completeness, validation, table snapshot |
+| freshness artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | completeness, absence, authority, table snapshot |
+| semantic artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | identity, gold, graph, source authority |
+| validation artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | production evidence, source evidence, source completeness |
+| lineage artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | evidence, completeness, table snapshot, graph rebuild |
+| table snapshot artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source time, graph rebuild correctness by itself |
+| table commit artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source authority, source completeness by itself |
+| graph rebuild artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | source truth, identity truth, completeness, validation by itself |
 
 ### RegistryActivationPolicy
 
-Registry governance artifacts may become active only when owner, domain, classification, glossary labels, lifecycle, checksum, approval, custom-property schema, and validation rows are present. Registry metadata remains governance metadata unless another active spec grants authority.
+Registry governance artifacts require `030.ActivationControlledArtifactRef`. Registry governance artifacts may become active only when owner, domain, classification, glossary labels, lifecycle, checksum, approval, custom-property schema, validation rows, activation scope, and package-set ref when package-supplied are present. Registry metadata remains governance metadata unless another active spec grants authority. Registry metadata cannot grant authority unless an owner stable core contract grants the specific behavior.
 
 ### Analysis output authority table
 
@@ -159,6 +181,9 @@ Registry governance artifacts may become active only when owner, domain, classif
 
 | Error code | Emitted when |
 | --- | --- |
+| `REGISTRY_ARTIFACT_INACTIVE` | Required analysis, lineage, enrichment, registry, classification, or custom-property artifact is not active. |
+| `REGISTRY_ARTIFACT_OWNER_MISMATCH` | Registry artifact owner does not match the stable core behavior owner. |
+| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | Registry metadata, lineage facet, analysis rule, or threat-intel artifact attempts to become fact, identity, graph, source, completeness, package, or watermark authority without owner contract. |
 | `ANALYSIS_MUTATION_FORBIDDEN` | Analysis, enrichment, lineage, or registry output attempts forbidden mutation. |
 | `LINEAGE_FACET_SCHEMA_MUTABLE` | Facet schema URL is mutable or not immutable under policy. |
 | `LINEAGE_FACET_CHECKSUM_MISMATCH` | Schema bytes or facet bytes do not match recorded checksum. |
@@ -190,6 +215,8 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 
 | `130-LINEAGE-FACET-AC-001` | Lineage facet rows define schema URL immutability, schema bytes, checksum, collision behavior, raw-facet storage, mapped fields, and rejection behavior. |
 | `130-RISK-SCORING-AC-001` | Numeric scoring is disabled by default and cannot emit authoritative risk scores without a future accepted scoring policy. |
+| `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
+| `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
 
 ## Definition of Done
 

@@ -47,6 +47,7 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `VersionManifest`
 - `ExecuteProcessingStageDAG`
 - `ValidateLifecycleStateMachine`
+- `ActivationControlledArtifactRef`
 
 ## Stage Graph Contract
 
@@ -111,9 +112,86 @@ Every production stage output whose record class is imported from `040.CoreRecor
 
 `VersionManifest` must include every output-affecting profile, policy, package artifact, package-set manifest, source/feed config hash, stage state hash, lakehouse ref, completeness receipt, coverage assertion, schema artifact, temporal policy, resolver profile, graph profile, graph apply result, and acceptance report that can affect output or replay.
 
-A production output without a complete immutable `VersionManifest` must fail with `VERSION_MANIFEST_INCOMPLETE`.
+A production output without a complete immutable `VersionManifest` must fail with `VERSION_MANIFEST_INCOMPLETE`. `activation_artifact_refs` must be present in `VersionManifest.included_refs` for every output-affecting activation-controlled artifact.
 
 When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
+
+## Activation-Controlled Artifact Reference Contract
+
+`ActivationControlledArtifactRef` is the canonical reference shape for every output-affecting activation-controlled artifact. Owner specs may require additional artifact payload fields, but they must not redefine this reference shape.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `artifact_class` | Yes | Closed token from the artifact class registry below. |
+| `owner_spec` | Yes | Stable core owner spec that exports the behavior instantiated by the artifact. |
+| `artifact_id` | Yes | Stable artifact identifier scoped by owner spec and artifact class. |
+| `artifact_version` | Yes | Owner-defined immutable version string. |
+| `artifact_checksum` | Yes | SHA-256 over the canonical artifact payload or registry row set. |
+| `lifecycle_status` | Yes | Must be allowed for the execution mode. |
+| `activation_scope` | Yes | Scope in which the artifact may affect output. |
+| `validation_refs` | Yes | Non-empty refs to passing validation rows required by the owner. |
+| `package_set_ref` | Required when package-supplied | Immutable `ProductionPackageSetManifest` ref. |
+| `supersedes` | No | Prior artifact refs replaced by this artifact. Default `[]`. |
+| `effective_from` | No | RFC3339 UTC or null. Default null. |
+| `effective_to` | No | RFC3339 UTC or null. Default null. |
+| `artifact_payload_location_ref` | Yes | Ref to immutable payload bytes or registry snapshot. |
+| `artifact_registry_ref` | Yes | Registry row or snapshot containing owner, class, lifecycle, checksum, and scope. |
+
+Closed `artifact_class` values are:
+
+```text
+lakehouse_feed_profile
+raw_supplier_profile
+lakehouse_read_policy
+lakehouse_table_profile
+replay_retention_policy
+table_maintenance_policy
+external_schema_profile
+external_schema_artifact
+mapping_bundle
+parser_profile
+source_extension_field_rule_set
+source_authority_profile
+source_authority_row_set
+source_staleness_policy
+coverage_dimension_profile
+progress_signal_policy
+resolver_profile
+candidate_generation_profile
+temporal_semantics_policy
+knowledge_time_policy
+late_arrival_policy
+gold_correction_policy
+graph_projection_profile
+graph_backend_profile
+graph_read_model_schema_profile
+graph_query_translation_profile
+graph_apply_profile
+analysis_rule_bundle
+registry_governance_artifact
+package_release
+production_package_set
+validation_matrix
+lakehouse_feed_fixture
+golden_corpus
+```
+
+### ValidateActivationControlledArtifactRef
+
+```text
+ValidateActivationControlledArtifactRef(ref, execution_scope, required_owner_spec):
+1. If ref is missing, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
+2. If `ref.owner_spec != required_owner_spec`, fail with `ACTIVATION_ARTIFACT_OWNER_MISMATCH`.
+3. If `artifact_class` is not in the closed registry, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
+4. If checksum validation fails, fail with the owner checksum code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
+5. If lifecycle status is not allowed for execution mode, fail with the owner lifecycle code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
+6. If activation scope does not cover execution_scope, fail with the owner scope code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
+7. If required validation refs are missing, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
+8. If package-set membership is required and mismatched, fail with the package owner code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
+9. If a superseded artifact is selected, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
+```
+
+Failure precedence is missing ref, owner mismatch, invalid artifact class, checksum mismatch, lifecycle invalid, activation scope mismatch, validation refs missing, package set mismatch, then superseded artifact selected.
 
 ## Declared Subset Contract
 
@@ -124,17 +202,17 @@ A production stage subset may execute only with an active `DeclaredDAGSubsetProf
 ```text
 ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 1. Validate duplicate stage IDs, dag acyclicity, and active lifecycle state.
-2. Resolve active package set and stage bindings.
+2. Resolve active package set, stage bindings, and all stage-required activation-controlled artifact refs.
 3. Validate requested subset or full DAG mode.
 4. Acquire RunLockSet.
 5. For each stage in canonical topological order, sorting simultaneously ready stages by lexical `stage_id`:
-   a. Validate imported profiles and state refs.
+   a. Validate imported profiles, activation-controlled artifact refs, and state refs before stage execution.
    b. Validate permitted outputs.
    c. Execute package role or pure product algorithm.
    d. Persist StageStateRecord for output-affecting state.
    e. Persist ProcessingStageLifecycleResult.
    f. Stop on non-isolated failure and emit deterministic error.
-6. Emit VersionManifest before any output is externally visible.
+6. Emit VersionManifest with every output-affecting activation artifact ref before any output is externally visible.
 7. Release locks only after commit refs and lifecycle results are persisted.
 ```
 
@@ -198,6 +276,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | `snapshot_refs` | Yes when lakehouse reads affect output | `LakehouseSnapshotRef` and `DatasetVersionRef` refs. |
 | `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
 | `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
+| `activation_artifact_refs` | Required when activation-controlled artifacts affect output | Canonically sorted `ActivationControlledArtifactRef` rows and checksums. |
 | `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
 | `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
 
@@ -242,6 +321,12 @@ RunLockKeyDerivation(scope):
 | `graph_rebuild` | graph rebuild manifest and graph apply result | raw/silver/gold mutation | no absence | no source cleanup | allowed from persisted deltas | projection only if `060` permits | rebuild equivalence rows |
 | `package_canary` | canary output and activation evidence | current production output | no absence | no cleanup | canary only | no production advancement | package canary rows |
 
+### Activation artifact errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `ACTIVATION_ARTIFACT_INCOMPLETE` | A required activation-controlled artifact ref is missing required fields, invalid, unvalidated, out of scope, superseded, or otherwise incomplete after more specific owner codes are unavailable. |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
@@ -257,6 +342,9 @@ RunLockKeyDerivation(scope):
 | `030-DAG-ORDER-AC-001` | Duplicate stage IDs fail with `DAG_STAGE_ID_DUPLICATE`, cycles fail with `DAG_CYCLE_DETECTED`, and ready-stage ties sort lexically by `stage_id`. |
 | `030-RUNLOCK-AC-001` | Run lock acquisition is all-or-nothing and partial acquisition failure releases acquired locks before returning `RUN_LOCK_ACQUISITION_FAILED`. |
 | `030-VERSION-MANIFEST-AC-001` | Same included refs and manifest kind produce the same `version_manifest_id`; checksum includes `created_at` but ID does not. |
+| `030-ACTIVATION-AC-001` | Every output-affecting activation-controlled artifact appears in `VersionManifest`. |
+| `030-ACTIVATION-AC-002` | Inactive, checksum-mismatched, scope-mismatched, or unvalidated artifacts fail with deterministic precedence. |
+| `030-ACTIVATION-AC-003` | Two implementations given the same refs produce byte-identical `version_manifest_id`. |
 
 ## Definition of Done
 

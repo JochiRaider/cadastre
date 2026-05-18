@@ -32,6 +32,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `GoldFactSchema`
 - `FactAbsenceOutcome`
 - `EvidenceRef`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -98,18 +99,41 @@ Coverage-sensitive facts require `CoverageDimensionProfile` and a current `Cover
 
 Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions; source-specific unresolved rows remain blocking until closed in the gap artifact and validation matrix.
 
+## Source authority artifact activation boundary
+
+`060` algorithms are stable core contracts. Source-specific authority, staleness, coverage, completeness, progress, control-result, history, watermark, and absence rows are activation-controlled artifacts.
+
+| Artifact or contract | Volatility class | Required handling |
+| --- | --- | --- |
+| `SourceAuthorityProfile` and `SourceAuthorityProfileRow` row sets | `activation_controlled_artifact` | Must be active and exact before authority or absence effects. |
+| `SourceStalenessPolicy` | `activation_controlled_artifact` | Must be checksummed and scoped before stale effects. |
+| `SupplierCollectionVisibilityProfile` | `activation_controlled_artifact` | Must be active before visibility-dependent absence. |
+| `ControlResultMappingRow` | `activation_controlled_artifact` | Must be active before control-state output. |
+| `SourceHistoryRetentionProfile` | `activation_controlled_artifact` | Must be active before source-history interpretation. |
+| `AbsenceDerivationPolicy` | `activation_controlled_artifact` | Must be active before absence/no-op/stale result selection. |
+| `CoverageDimensionProfile` | stable catalog plus activation-controlled source-specific rows | Source-specific rows must be active before coverage-sensitive output. |
+| `CoverageAssertion` | `runtime_state_record` | Evidence record consumed only through active profiles. |
+| `LakehouseFeedCompletenessProfile` | `activation_controlled_artifact` | Must evaluate feed-read and upstream evidence before absence effects. |
+| `ProgressSignalInterpretationPolicy` | `activation_controlled_artifact` | Weak signals remain non-authoritative unless an active row grants the exact effect. |
+| `ProjectionWatermarkPolicy` | `activation_controlled_artifact` | Must be active before watermark advancement. |
+| `WatermarkCommitRecord` | `runtime_state_record` | Records attempted watermark outcome; does not grant authority. |
+| `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` | `stable_core_contract` | Algorithms validate activation refs before output. |
+
 ## DeriveAbsenceOrUnknown Algorithm
 
 ```text
 DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_set, completeness_profile, authority_profile, coverage_assertions, staleness_policy):
-1. Reject when no active SourceAuthorityProfileRow covers the fact type, predicate, source dataset, scopes, and requested absence authority.
-2. Reject when required LakehouseReadCompletenessReceipt is missing or not tied to the active feed profile and manifest refs.
-3. Evaluate UpstreamCompletenessEvidence through LakehouseFeedCompletenessProfile.
-4. If any blocking unsafe completeness decision is present, return unknown with the most specific unsafe state.
-5. Evaluate SourceStalenessPolicy using declared time-input precedence.
-6. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
-7. Reject weak progress signals unless an active ProgressSignalInterpretationPolicy grants the exact effect.
-8. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
+1. Validate every required activation artifact ref through `030.ActivationControlledArtifactRef`.
+2. Fail before absence, cleanup, retraction, graph expiry, or watermark advancement when an authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact is missing, inactive, checksum-mismatched, out of scope, or unvalidated.
+3. Reject when no active SourceAuthorityProfileRow covers the fact type, predicate, source dataset, scopes, and requested absence authority.
+4. Reject when required LakehouseReadCompletenessReceipt is missing or not tied to the active feed profile and manifest refs.
+5. Evaluate UpstreamCompletenessEvidence through LakehouseFeedCompletenessProfile.
+6. If any blocking unsafe completeness decision is present, return unknown with the most specific unsafe state.
+7. Evaluate SourceStalenessPolicy using declared time-input precedence.
+8. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
+9. Reject weak progress signals unless one active ProgressSignalInterpretationPolicy row grants the exact effect.
+10. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
+11. Include authority profile row refs, policy refs, artifact checksums, feed manifest refs, and validation refs in the result and `VersionManifest`.
 ```
 
 ### AbsenceDerivationResult schema
@@ -134,6 +158,10 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 | `COVERAGE_DIMENSION_UNRESOLVED` | Required coverage dimension has no active source-specific row. |
 | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | Progress/liveness/freshness/lineage signal is used without an active policy row granting the effect. |
 | `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | Completeness decision is partial, unavailable, permission-limited, not attempted, not authoritative, or otherwise unsafe. |
+| `SOURCE_AUTHORITY_ARTIFACT_MISSING` | A required source authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact ref is missing. |
+| `SOURCE_AUTHORITY_ARTIFACT_INACTIVE` | A required source authority artifact is not active for production execution. |
+| `SOURCE_AUTHORITY_ARTIFACT_CHECKSUM_MISMATCH` | A required source authority artifact checksum mismatches the active ref or manifest. |
+| `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` | An active source authority row set exists but no row covers the requested scope. |
 
 ## Watermarks
 
@@ -275,6 +303,8 @@ Weak progress signals must not combine into stronger authority.
 
 | `060-COVERAGE-CLOSURE-AC-001` | Every coverage catalog row has a `CoverageDimensionProfileRowId` and `CoverageClosureStatus`. |
 | `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, and manifest refs or a specific blocking reason. |
+| `060-VOLATILITY-AC-001` | Missing exact source-authority row, inactive row set, staleness checksum mismatch, coverage row absence, and weak-signal combination cases fail or no-op with no absence, cleanup, retraction, graph expiry, or watermark advancement. |
+| `060-VOLATILITY-AC-002` | Every output-affecting source-authority artifact ref appears in `VersionManifest` with checksum and validation refs. |
 
 ## Definition of Done
 

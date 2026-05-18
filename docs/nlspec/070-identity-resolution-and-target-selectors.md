@@ -33,6 +33,7 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `SourceAssetSchema`
 - `IdentifierSchema`
 - `CoreRecordValidationAlgorithm`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -59,6 +60,28 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before candidate generation, blocker evaluation, review routing, merge, split, reject, conflict, or no-decision output.
 
 A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier` records only by emitting records that pass the corresponding `040` schema and `040.ValidateCoreRecord`. `creation_identity_decision_id`, `resolver_profile_id`, and `identity_policy_version` must be present when a `CanonicalEntity` is created. `SourceAsset.source_scope`, `SourceAsset.source_native_identity`, and `SourceAsset.source_asset_type` must be sufficient for `040.SourceAssetSchema`; under-scoped source identity fails before candidate generation. `Identifier` outputs must include typed scope, quality, validity, known time, and evidence refs. `ResolverExplanation` must reference core record IDs and checksums rather than duplicate core fields.
+
+## Resolver artifact activation boundary
+
+Stable identity semantics, weak-evidence defaults, hard-blocker precedence, review terminality, and selector safety are owned by this spec. Resolver profiles, decision rows, candidate bounds, and selector policy material are activation-controlled artifacts.
+
+| Artifact or contract | Volatility class | Required handling |
+| --- | --- | --- |
+| `ResolverProfile` | `activation_controlled_artifact` | Sole production resolver behavior authority; must validate before candidate generation. |
+| `IdentifierEvidenceClass` row set | stable default semantics plus activation-controlled extensions | Extensions must not allow weak evidence auto-merge unless stable semantics permit. |
+| `IdentityEvidenceItem` | `runtime_state_record` | Materialized evidence input. |
+| `IdentifierScope` row set | `activation_controlled_artifact` | Scope registry under stable canonicalization rules. |
+| `CandidateGenerationProfile` | `activation_controlled_artifact` | Must define bounds or remain `blocked_owner_todo`. |
+| `AssetGenerationBoundary` row set | `activation_controlled_artifact` | Must preserve stable blocker semantics. |
+| `IdentityDecision` | `runtime_state_record` | System-of-record output governed by resolver profile. |
+| `IdentityReviewCase` | `runtime_state_record` | Review state; mutation only through terminal identity decisions. |
+| `ResolverActivationReport` | `runtime_state_record` | Validation/activation state record. |
+| `ResolverShadowRun` | `runtime_state_record` | Non-mutating comparison state. |
+| `ResolverExplanation` | `runtime_state_record` | Runtime explanation output. |
+| `GraphCorrectionHandoff` | `runtime_state_record` | Handoff record; resolver does not mutate graph. |
+| `UnresolvedTargetReference` | `runtime_state_record` | Runtime hint record; no identity by itself. |
+| `TargetSelectorSafetyPolicy` | `activation_controlled_artifact` | Must validate before selectors influence resolver or projection behavior. |
+| `ResolveIdentity` | `stable_core_contract` | Algorithm validates artifact refs before candidate generation. |
 
 ## Evidence Roles
 
@@ -102,18 +125,21 @@ Hard blockers and lifecycle generation boundaries must be evaluated before confi
 
 ```text
 ResolveIdentity(evidence_items, resolver_profile, source_authority_context, version_manifest):
-1. Validate active resolver_profile coverage for entity type, source scopes, run mode, evidence classes, and lifecycle boundaries.
-2. Normalize identifiers into IdentifierScope-aware IdentityEvidenceItem rows.
-3. Reject uncovered or under-scoped evidence with the most specific resolver error.
-4. Generate candidate pairs through CandidateGenerationProfile.
-5. Sort candidate pairs by deterministic pair ordering.
-6. Evaluate hard blockers and lifecycle generation boundaries.
-7. Select decision matrix rows only after blocker evaluation.
-8. Compute deterministic confidence band or governed score as profile defines.
-9. Emit one IdentityDecision per candidate: auto_merged, candidate, rejected, split, conflicted, or no_decision.
-10. Persist IdentityReviewCase when manual review is required.
-11. Persist exactly one ResolverExplanation per IdentityDecision.
-12. Emit GraphCorrectionHandoff for every split that affects prior gold facts or graph output.
+1. Validate `ResolverProfile`, `CandidateGenerationProfile`, `IdentifierScope`, `IdentifierEvidenceClass`, `AssetGenerationBoundary`, and `TargetSelectorSafetyPolicy` refs through `030.ActivationControlledArtifactRef`.
+2. Fail before candidate generation when any required artifact is inactive, missing, checksum-mismatched, out of scope, or unvalidated.
+3. Validate active resolver_profile coverage for entity type, source scopes, run mode, evidence classes, and lifecycle boundaries.
+4. Normalize identifiers into IdentifierScope-aware IdentityEvidenceItem rows.
+5. Reject uncovered or under-scoped evidence with the most specific resolver error.
+6. Generate candidate pairs through CandidateGenerationProfile.
+7. Sort candidate pairs by deterministic pair ordering.
+8. Evaluate hard blockers and lifecycle generation boundaries.
+9. Select decision matrix rows only after blocker evaluation.
+10. Compute deterministic confidence band or governed score as profile defines.
+11. Emit one IdentityDecision per candidate: auto_merged, candidate, rejected, split, conflicted, or no_decision.
+12. Persist IdentityReviewCase when manual review is required.
+13. Persist exactly one ResolverExplanation per IdentityDecision.
+14. Emit GraphCorrectionHandoff for every split that affects prior gold facts or graph output.
+15. Include every output-affecting resolver artifact ref in `VersionManifest`.
 ```
 
 ## Review Contract
@@ -202,6 +228,10 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 
 | Error code | Emitted when |
 | --- | --- |
+| `RESOLVER_ARTIFACT_MISSING` | A required resolver, candidate, scope, evidence-class, boundary, or selector policy artifact ref is missing. |
+| `RESOLVER_ARTIFACT_INACTIVE` | A required resolver artifact is not active for production execution. |
+| `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | A resolver artifact checksum mismatches the active ref or manifest. |
+| `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | A resolver artifact does not cover resolver run mode, entity type, source scope, evidence class, or lifecycle boundary. |
 | `RESOLVER_PROFILE_MISSING` | No active resolver profile covers run mode, entity type, source scopes, evidence classes, and lifecycle boundaries. |
 | `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | Entity type maps to the unsupported row. |
 | `IDENTITY_EVIDENCE_UNDER_SCOPED` | Required scope keys are absent or non-canonical. |
@@ -215,7 +245,7 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 
 | Field | Default | Maximum | Overflow behavior | Closure state |
 | --- | --- | --- | --- | --- |
-| `candidate_cap` | TODO: owner decision required | TODO: owner decision required | Sort candidate pairs by deterministic pair ordering, emit overflow output state, and do not auto-merge overflowed candidates. | blocked_owner_todo |
+| `candidate_cap` | TODO: owner decision required | TODO: owner decision required | Sort candidate pairs by deterministic pair ordering, emit overflow output state, and do not auto-merge overflowed candidates. Missing owner values block authoritative resolver promotion. | blocked_owner_todo |
 
 ### ResolverExplanation required fields
 
@@ -273,6 +303,9 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 
 | `070-REVIEW-TOTALITY-AC-001` | Every `IdentityReviewCase` state/event pair has an allowed transition or emits `IDENTITY_REVIEW_TRANSITION_INVALID` without identity mutation. |
 | `070-EXPLANATION-AC-001` | Every `IdentityDecision` has exactly one `ResolverExplanation` with decision row, blockers, evidence refs, confidence band, review routing, and checksum. |
+| `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, and resolver artifact checksum mismatch fail before identity mutation. |
+| `070-VOLATILITY-AC-002` | Candidate cap overflow does not auto-merge overflowed candidates and blocks authoritative promotion while numeric caps remain `TODO:`. |
+| `070-VOLATILITY-AC-003` | A resolver profile that attempts graph-key-only auto-merge fails before candidate decision output. |
 
 ## Definition of Done
 

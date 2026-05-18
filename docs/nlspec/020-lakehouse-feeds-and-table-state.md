@@ -29,6 +29,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `RawRecord`
 - `ComputeRawRecordId`
 - `CoreRecordValidationAlgorithm`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -97,6 +98,33 @@ Every authoritative read that can affect production output, replay, graph rebuil
 | `DatasetVersionRef` | Names logical dataset or table-set version consumed or produced by a run. |
 | `LakehouseCommitRef` | Names attempted or completed write and its table-format-native commit evidence. |
 
+## Feed and Table Volatility Classification
+
+Feed and table contracts split stable behavior from activatable profiles and runtime state.
+
+| Artifact or record | Volatility class | Authority class | Required production handling |
+| --- | --- | --- | --- |
+| `RawSupplierProfile` | `activation_controlled_artifact` | supporting evidence | Must be active before dependent feed profiles execute. |
+| `LakehouseFeedProfile` | `activation_controlled_artifact` | supporting evidence | Must be referenced by `030.ActivationControlledArtifactRef`. |
+| `LakehouseFeedProfileSchema` | `stable_core_contract` | runtime data input | Owned by `020`; package or profile rows must not redefine it. |
+| `LakehouseFeedAvailabilityCheck` | `runtime_state_record` | supporting evidence | Must be recorded when required by the active profile. |
+| `RawFeedManifest` | `runtime_state_record` | supporting evidence | Must be included in `VersionManifest` when output-affecting. |
+| `LakehouseReadPolicy` | `activation_controlled_artifact` | supporting evidence | Must be active and manifest-recorded before read. |
+| `RawRecordImportRun` | `runtime_state_record` | supporting evidence | Must record deterministic import inputs and refs. |
+| `LakehouseReadCompletenessReceipt` | `runtime_state_record` | supporting evidence | Necessary but not sufficient for absence, cleanup, retraction, graph expiry, or watermark. |
+| `UpstreamCompletenessEvidence` | `runtime_state_record` | supporting evidence | May be consumed only through `060` policy. |
+| `LakehouseTableProfile` | `activation_controlled_artifact` | system of record table governance | Must be active before production table read/write. |
+| `LakehouseSnapshotRef` | `runtime_state_record` | table-state evidence | Must identify table-format-native read state. |
+| `DatasetVersionRef` | `runtime_state_record` | table-state evidence | Must identify logical dataset or table-set version. |
+| `LakehouseCommitRef` | `runtime_state_record` | table-state evidence | Must identify attempted or completed write state. |
+| `ReplayRetentionPolicy` | `activation_controlled_artifact` | replay governance | Must be active before retention-sensitive maintenance. |
+| `TableMaintenancePolicy` | `activation_controlled_artifact` | maintenance governance | Must be active before destructive or rewrite maintenance. |
+| `ReplayRetentionDecision` | `runtime_state_record` | maintenance evidence | Must be persisted for each maintenance candidate set. |
+| `CrossTableCommitProfile` | `activation_controlled_artifact` | table-set governance | Must be active when coherent table-set reads are required. |
+| `CatalogBranchPromotionPolicy` | `activation_controlled_artifact` | catalog promotion governance | Must be active when catalog versioning controls production visibility. |
+
+Production feed reads and table maintenance decisions must fail closed when any required activation-controlled artifact is inactive, checksum-mismatched, outside activation scope, missing validation refs, or omitted from `VersionManifest`.
+
 ## Maintenance Safety
 
 `TableMaintenancePolicy` must evaluate snapshot expiration, vacuum, cleaner, orphan deletion, checkpoint or transaction-log cleanup, object garbage collection, restore, rollback, compaction deletion, and catalog garbage collection before execution.
@@ -107,16 +135,17 @@ Every authoritative read that can affect production output, replay, graph rebuil
 
 ```text
 ReadLakehouseFeed(profile, read_policy, target_ref):
-1. Verify profile lifecycle status is active.
-2. Verify no direct enterprise source endpoint is referenced.
-3. Verify LakehouseFeedAvailabilityCheck is current when required by profile.
-4. Validate target_ref against read_policy target kind and checksum rules.
-5. Read only declared table snapshots, dataset versions, objects, partitions, or manifests.
-6. Persist read checkpoints as StageStateRecord when output-affecting.
-7. Persist RawRecordImportRun inputs.
-8. Persist only `RawRecord` rows that pass `040.ValidateCoreRecord`, or persist deterministic import errors.
-9. Persist LakehouseReadCompletenessReceipt.
-10. Persist VersionManifest refs for every output-affecting profile, policy, target, schema, state, and manifest.
+1. Validate `030.ActivationControlledArtifactRef` for `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, and every required table, retention, maintenance, cross-table, or catalog policy artifact.
+2. Fail before read when any required artifact ref is missing, inactive, checksum-mismatched, outside activation scope, missing validation refs, or omitted from `VersionManifest`.
+3. Verify no direct enterprise source endpoint is referenced.
+4. Verify LakehouseFeedAvailabilityCheck is current when required by profile.
+5. Validate target_ref against read_policy target kind and checksum rules.
+6. Read only declared table snapshots, dataset versions, objects, partitions, or manifests.
+7. Persist read checkpoints as StageStateRecord when output-affecting.
+8. Persist RawRecordImportRun inputs.
+9. Persist only `RawRecord` rows that pass `040.ValidateCoreRecord`, or persist deterministic import errors.
+10. Persist LakehouseReadCompletenessReceipt.
+11. Persist VersionManifest refs for every output-affecting activation artifact, profile, policy, target, schema, state, and manifest.
 ```
 
 ## Feed and Table State Contract Details
@@ -288,6 +317,7 @@ ComputeRawFeedManifestId(manifest):
 
 | Fixture class | Required fixture ID | Required owner validation row | Expected outcome |
 | --- | --- | --- | --- |
+| activation artifacts | `feed-020-activation-artifacts` | `val-020-activation-artifacts` | Inactive feed profile, stale read policy artifact, table profile checksum mismatch, maintenance policy omitted from `VersionManifest`, and replay retention policy inactive during maintenance fail before output or destructive action. |
 | minimal valid object-batch manifest | `feed-020-valid-object-batch-manifest` | `val-020-manifest-valid-object-batch` | Manifest ID and checksum match expected TODO checksum. |
 | malformed manifest | `feed-020-malformed-manifest` | `val-020-manifest-malformed` | `manifest_invalid`; no raw import commit. |
 | manifest checksum mismatch | `feed-020-manifest-checksum-mismatch` | `val-020-manifest-checksum-mismatch` | `manifest_invalid`; no raw import commit. |
@@ -298,6 +328,14 @@ ComputeRawFeedManifestId(manifest):
 | no absence from manifest | `feed-020-no-absence-from-manifest` | `val-020-no-absence-from-manifest` | Missing object or row yields no absence without `060` gates. |
 | CDC tombstone | `feed-020-cdc-tombstone-non-authority` | `val-020-cdc-tombstone-non-authority` | No retraction without `060` and `080` policy. |
 | no direct source call | `feed-010-direct-source-call` | `neg-010-direct-source-call` | `DIRECT_SOURCE_CALL_FORBIDDEN`. |
+
+### Feed activation artifact errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_MISSING` | A required feed, table, read, retention, maintenance, cross-table, or catalog policy artifact ref is missing. |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | A required artifact exists but lifecycle status is not allowed for production execution. |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | A required artifact checksum differs from the active artifact ref or manifest. |
 
 ### Acceptance Criteria
 
@@ -314,6 +352,9 @@ ComputeRawFeedManifestId(manifest):
 
 | `020-DOMAIN-CONSISTENCY-AC-001` | `domain.md` routes raw feed manifest and raw record ID behavior to `020` and `040` without marking them unresolved or restating `040` ID input order. |
 | `020-MANIFEST-AC-001` | `ComputeRawFeedManifestId` and `manifest_checksum` produce byte-identical values across replay from the same manifest bytes. |
+| `020-VOLATILITY-AC-001` | A production feed read with an inactive `LakehouseFeedProfile` emits no `RawRecord`. |
+| `020-VOLATILITY-AC-002` | Identical feed bytes with different active `LakehouseReadPolicy` checksums produce different `VersionManifest` refs or fail before output. |
+| `020-VOLATILITY-AC-003` | Table maintenance fails before destructive action when the required policy artifact is inactive or omitted from `VersionManifest`. |
 
 ## Definition of Done
 

@@ -26,6 +26,7 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `LifecycleStatus`
 - `ValidationMatrix`
 - `VersionManifest`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -71,6 +72,12 @@ Production package runtime behavior may activate only through an immutable `Prod
 
 Partial package-set activation is forbidden unless a future accepted NLSpec defines partial semantics, output boundaries, rollback rules, and acceptance criteria.
 
+## Package-supplied activation artifact boundary
+
+`ProductionPackageSetManifest` may include activation-controlled artifact refs only as immutable `030.ActivationControlledArtifactRef` rows. A package set grants execution eligibility, not product authority. Runtime behavior still comes from owner specs and active artifact rows.
+
+Package manifests must not define new canonical fields, authority classes, identity semantics, temporal semantics, graph semantics, API states, validation report shapes, or trust semantics. A package set that contains a valid package release but invalid artifact refs must fail activation or block the dependent stage before output.
+
 ## Trust Verification
 
 `PackageSignatureVerificationResult` must be structured evidence. Scalar summaries such as `signature_status = verified` must not authorize activation.
@@ -100,11 +107,14 @@ ActivatePackageSet(candidate_set, current_active_set):
 5. Verify required attestations, build provenance, SBOM, license, vulnerability, and dependency-graph gates.
 6. Verify package compatibility matrix rows.
 7. Verify package developer contracts and package stage bindings.
-8. Verify validation matrix and required negative fixtures.
-9. Persist PackagePromotionRecord.
-10. If any check fails, keep current_active_set active, write no candidate production output, and emit PackageActivationFailureEvent.
-11. If all checks pass, activate package set and record PackageDeploymentRevision.
-12. Mark LastKnownGoodPackageSet only after post-activation health gates pass.
+8. Verify every package-supplied activation-controlled artifact ref through `030.ActivationControlledArtifactRef`.
+9. Verify each artifact owner spec and artifact class is permitted by the package type compatibility table.
+10. Verify artifact checksums, lifecycle status, validation refs, activation scope, and package-set membership.
+11. Verify validation matrix and required negative fixtures.
+12. Persist PackagePromotionRecord with artifact refs.
+13. If any check fails, keep current_active_set active, write no candidate production output, and emit PackageActivationFailureEvent.
+14. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
+15. Mark LastKnownGoodPackageSet only after post-activation health gates pass.
 ```
 
 ## Rollback and Emergency Behavior
@@ -190,10 +200,17 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | projection package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-projection` | blocked_owner_todo |
 | validation package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-validation` | blocked_owner_todo |
 
+Missing package deprecation window values block package promotion for affected package types. Do not infer deprecation windows from external package managers, deployment controllers, or prior releases.
+
 ### Package activation failure codes
 
 | Error code | Emitted when |
 | --- | --- |
+| `PACKAGE_ACTIVATION_ARTIFACT_MISSING` | A required package-supplied activation artifact ref is missing. |
+| `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` | A package-supplied artifact class is not permitted by the owner spec or package type compatibility table. |
+| `PACKAGE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | A package-supplied artifact checksum mismatches the release, artifact ref, or package-set manifest. |
+| `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | A package-supplied artifact does not cover the activation scope. |
+| `PACKAGE_ACTIVATION_ARTIFACT_VALIDATION_MISSING` | Required artifact validation refs are missing or not passing. |
 | `PACKAGE_SET_CHECKSUM_MISMATCH` | Candidate package set checksum or release manifest checksum mismatches. |
 | `PACKAGE_COHESION_INCOMPLETE` | A cohesion group is incomplete. |
 | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | Repository form is inactive or unsupported for MVP. |
@@ -212,6 +229,12 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | `cohesion_groups` | Yes | Every group complete before activation. |
 | `environment` | Yes | Target environment token. |
 | `activation_mode` | Yes | production, canary, shadow, rollback, or emergency bounded action. |
+| `activation_artifact_refs` | Yes | Immutable `030.ActivationControlledArtifactRef` rows for package-supplied artifacts. |
+| `artifact_owner_specs` | Yes | Stable core owner specs for package-supplied artifacts. |
+| `artifact_validation_refs` | Yes | Passing validation refs for package-supplied artifacts. |
+| `artifact_compatibility_refs` | Yes | Package/artifact compatibility rows. |
+| `artifact_scope` | Yes | Activation scope covered by artifact refs. |
+| `artifact_registry_snapshot_ref` | Yes | Immutable registry snapshot containing artifact rows and checksums. |
 | `trust_refs` | Yes | Trust policies and verification results. |
 | `validation_refs` | Yes | Required validation report refs. |
 | `compatibility_refs` | Yes | Compatibility matrix refs. |
@@ -255,6 +278,8 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, approval refs, and checksum. |
+| `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
+| `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
 
 ## Definition of Done
 

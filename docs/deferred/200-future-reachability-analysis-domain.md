@@ -13,6 +13,16 @@ This document is inactive. It preserves future reachability contract material an
 
 This document may become active only after a new accepted NLSpec promotion updates `docs/nlspec/000-cadastre-spec-index.md`, assigns authoritative owners, resolves all reachability open decisions, and adds passing validation fixtures in `docs/nlspec/120-validation-fixtures-and-acceptance.md`.
 
+## Volatility rule while deferred
+
+All current reachability content remains `inactive_future_domain` and has no MVP implementation effect.
+
+Future stable reachability contracts must be promoted into active owner specs before implementation. Future solver profiles, reachability source dataset profiles, completeness profiles, capability matrices, query/result policies, claim policies, and fixtures must be separately classified by volatility class before activation.
+
+Future graph or fact effects must require active `GraphProjectionProfile`, `SourceAuthorityProfile`, `TemporalSemanticsPolicy`, and `ReachabilityClaimPolicy` artifact refs where applicable.
+
+This document must not define production activation behavior while deferred.
+
 ## Explicit Non-Scope While Deferred
 
 - MVP graph projection.
@@ -116,6 +126,7 @@ This document must not define production solver behavior, source authority, grap
 | `200-CLEANUP-AC-002` | The document remains `inactive_deferred`. |
 | `200-CLEANUP-AC-003` | Active graph and gold specs still cannot emit theoretical reachability facts, graph edges, graph properties, or unqualified reachability claims from this document. |
 | `200-CLEANUP-AC-004` | Future activation still requires accepted NLSpec promotion, assigned owners, resolved future activation decisions, and passing validation fixtures. |
+| `200-VOLATILITY-AC-001` | Deferred reachability candidates remain inactive and cannot become production behavior without volatility classification, owner assignment, and validation rows. |
 
 | `200-DEFERRED-CONSISTENCY-AC-001` | `ValidateSpecSet` fails when `000` status and this document's activation rule disagree, or when any active spec emits prohibited reachability output. |
 

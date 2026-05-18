@@ -56,6 +56,7 @@ This document is not an API reference, schema reference, persistence spec, graph
 | Workflow vocabulary | Domain distinction between processing stages, lifecycle states, validation artifacts, analysis outputs, and user-facing states. |
 | Spec-owner routing | The primary owner spec for each domain concept and boundary. |
 | Review discipline | Rules for agents and reviewers when terminology or ownership is unresolved. |
+| Volatility vocabulary | Canonical names and owner routing for stable core contracts, activatable artifacts, runtime state records, reference evidence, rationale, and inactive future material. |
 
 ### 3.2 Root domain document does not own
 
@@ -75,6 +76,7 @@ This document is not an API reference, schema reference, persistence spec, graph
 | Fixtures, validation matrices, golden corpus, acceptance reports, validation acceptance | `120-validation-fixtures-and-acceptance.md` |
 | Analysis rules, enrichment, lineage mapping, artifact-class boundaries, registry governance | `130-analysis-enrichment-and-registry-governance.md` |
 | Future theoretical reachability candidate contracts | `200-future-reachability-analysis-domain.md`, inactive until promoted |
+| Volatility activation algorithms, artifact schemas, package-set behavior, and version-manifest field schemas | `000`, `010`, `030`, `100`, `120`, and the domain owner specs named for the artifact class |
 | Implementation code structure, package/module names, route names, database schemas, CSS classes, local config, private source binding artifacts | Implementation repository and private artifacts; not domain authority by default |
 
 ## 4. Domain overview
@@ -193,6 +195,32 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Package verification and package activation | Verification evidence supports activation decisions. Activation is package-set governed. | Treating valid signature, SBOM, provenance, or dependency lock as activation. | `100` |
 | Future reachability and MVP graph behavior | Future reachability is inactive and graph-neutral by default. MVP graph must not emit theoretical reachability. | Emitting `has_theoretical_reachability`, boolean reachability, or unqualified reachable wording. | `090`, `200` |
 
+### 8.1 Volatility class versus authority class
+
+`volatility_class` is not the same concept as `AuthorityClass`.
+
+`AuthorityClass` answers whether an output may determine product truth. `volatility_class` answers whether material is stable core contract text, separately activatable row/profile/package/fixture material, runtime state, reference evidence, rationale, or inactive future material.
+
+`domain.md` may name volatility terms and route them to owners. It must not define activation algorithms, artifact field schemas, package-set behavior, or version-manifest behavior.
+
+| Volatility class | Required interpretation | Forbidden interpretation | Primary owner route | Runtime authority effect | Status |
+| --- | --- | --- | --- | --- | --- |
+| `stable_core_contract` | Long-lived owner NLSpec text that defines product boundaries, interfaces, defaults, algorithms, errors, and acceptance criteria. | Treating mutable row instances or package payloads as stable contract definitions. | `000` for governance and `010` for product authority boundary. | May define runtime behavior only for contracts exported by the authoritative owner spec. | canonical |
+| `activation_controlled_artifact` | Versioned row set, profile, package release, fixture, mapping table, or registry artifact that instantiates exported behavior. | Defining new authority classes, core fields, identity rules, temporal axes, graph semantics, API states, or trust semantics. | `030` for manifest refs, `100` for package-supplied activation, and the domain owner spec for behavior. | No authority by itself; output effect exists only through the owner stable contract. | canonical |
+| `runtime_state_record` | Persisted execution, replay, commit, snapshot, lifecycle, health, validation, or derived-view state. | Source truth, production activation, or product authority by mere existence. | Domain owner and `030.VersionManifest`. | No authority by itself; may be replay or audit evidence when owner permits. | canonical |
+| `reference_evidence` | Research, standards, reports, examples, and evidence used to support owner-spec decisions. | Runtime authority, profile activation, or behavior definition. | `000` as non-runtime evidence. | None. | canonical |
+| `rationale` | ADR or decision explanation that records why a choice was made. | Field shape, algorithm, default, error, or acceptance criterion. | `000` as non-runtime ADR rationale. | None. | canonical |
+| `inactive_future_domain` | Deferred candidate material with no MVP production effect. | Active behavior, production output, solver selection, or graph/gold authority. | `000` and `200`. | None while deferred. | canonical |
+
+| Volatility class | Owner-routing rule |
+| --- | --- |
+| `stable_core_contract` | Route to `000` for governance and `010` for product authority boundary. |
+| `activation_controlled_artifact` | Route to `030` for manifest refs, `100` for package-set activation when package-supplied, and the domain owner spec for behavior. |
+| `runtime_state_record` | Route to the domain owner and `030.VersionManifest`. |
+| `reference_evidence` | Route to `000` as non-runtime evidence. |
+| `rationale` | Route to `000` as non-runtime ADR rationale. |
+| `inactive_future_domain` | Route to `000` and `200`. |
+
 ## 9. Bounded contexts
 
 | Bounded context | Owns domain language for | Must not own | Primary owner |
@@ -290,6 +318,13 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | `package_set` | Immutable coherent activation target for production packages. | Single package artifact, version string, signature scalar, dependency lock. | `100` | `100` | `120` | canonical |
 | `validation_matrix` | Executable row set proving success, rejection, no-op, edge, replay, redaction, authorization, and negative authority-boundary behavior. | Test-plan prose or aggregate acceptance claim. | `120` | `120` | `120` | canonical |
 | `deferred_reachability` | Future theoretical reachability domain preserved inactive with no MVP graph or gold effect. | Observed connection, graph traversal, provider analyzer truth. | `200` | none while deferred. | `120` | deferred |
+
+| `stable_core_contract` | Long-lived owner NLSpec contract text that defines product behavior. | Profile row, mapping table, package payload, fixture, runtime state, or research report. | `000`, `010`, and named owner spec | Owner spec only. | `120` | canonical |
+| `activation_controlled_artifact` | Versioned artifact that instantiates stable owner behavior through rows, profiles, packages, fixtures, or registries. | New runtime behavior, new authority class, or override of core semantics. | `030`, `100` when package-supplied, and named owner spec | No authority except through owner contract. | `120` | canonical |
+| `runtime_state_record` | Persisted execution, replay, commit, snapshot, lifecycle, health, derived-view, or validation state. | Source truth or activation authority by existence. | Domain owner and `030` | No authority except as owner-permitted state evidence. | `120` | canonical |
+| `reference_evidence` | Non-runtime evidence such as research reports, standards, examples, or source notes. | Implementation authority or production behavior. | `000` | none. | `120` | canonical |
+| `rationale` | Non-runtime decision explanation such as an ADR. | Runtime field, algorithm, default, error, or acceptance criterion. | `000` | none. | `120` | canonical |
+| `inactive_future_domain` | Deferred future material with no MVP implementation effect. | Active product behavior or production output. | `000`, `200` | none while deferred. | `120` | canonical |
 
 ## 10B. RootDomainConflictRule
 
@@ -680,6 +715,7 @@ Root-domain-owned requirements only:
 | `DOM-REQ-008` | `domain.md` must define identity naming classes without permitting weak evidence to auto-merge. | `domain.md`, `070` | Section 15 matches resolver boundaries. |
 | `DOM-REQ-009` | `domain.md` must define external-system boundaries without allowing external schema, taxonomy, lineage, registry, package, or analyzer terms to become Cadastre authority by default. | `domain.md` | Section 20 table. |
 | `DOM-REQ-010` | `domain.md` must include binary Definition of Done criteria sufficient to judge root-domain completeness. | `domain.md` | Section 26. |
+| `DOM-REQ-011` | `domain.md` must route volatility classes to owner specs and must not define activation algorithms, artifact schemas, version-manifest schemas, or package-set behavior. | `domain.md`, `000`, `010`, `030`, `100`, `120` | Sections 8.1, 10A, and 24. |
 
 ## 22. Intentional implementation latitude
 
@@ -739,6 +775,7 @@ Drift-control rules:
 - Research report language must be translated through owner specs before it appears as active Cadastre language.
 - External product names must remain external references unless an owner spec declares a vendor-neutral contract mapping.
 - `TODO:` rows must not be deleted without an owner decision or source update that resolves them.
+- Any change that reclassifies a contract, profile, row set, package, fixture, registry object, or runtime state by volatility class must update `000`, `010`, `030`, `100` when package activation is involved, and `120` validation rows. `domain.md` must route the change and must not define the runtime behavior.
 
 ## 25. Unresolved questions
 
@@ -788,3 +825,5 @@ Unresolved rows in this section are valid only when the named owner spec contain
 | `DOMAIN-CLEANUP-AC-003` | Conflict handling uses local `TODO:` rows or validation failure. |
 | `DOMAIN-CLEANUP-AC-004` | No external-draft evidence table remains. |
 | `DOMAIN-CLEANUP-AC-005` | Private implementation artifacts are described without deprecated artifact-index wording. |
+| `DOM-VOLATILITY-AC-001` | Every volatility term in `domain.md` has a canonical definition, forbidden interpretation, owner route, and non-runtime boundary. |
+| `DOM-VOLATILITY-AC-002` | `domain.md` contains no activation algorithm, artifact field schema, version-manifest field schema, or package-set activation behavior. |

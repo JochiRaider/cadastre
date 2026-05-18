@@ -25,6 +25,7 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 
 - `AuthorityClass`
 - `VersionManifest`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -503,6 +504,7 @@ ComputeEvidenceRefId(evidence_ref):
 | `EVIDENCE_REF_ID_COLLISION` | Different evidence-ref ID inputs produce the same evidence-ref ID. |
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `EvidenceRef` embeds raw payload bytes. |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | Backend-generated ID appears in graph delta shape, graph response, selector, evidence ref, replay key, drillback key, or pagination identity. |
+| `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | Activation-controlled artifact attempts to modify stable core schema behavior. |
 | `PRIVATE_BINDING_LEAK` | A core record or public core-shaped artifact exposes concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories. |
 
 ### Core schema security and extensibility constraints
@@ -516,6 +518,20 @@ ComputeEvidenceRefId(evidence_ref):
 | Extensibility | Extension maps must be owner-declared. Undeclared extension fields fail before production output. |
 | Minimal coupling | `040` defines record bytes and validation behavior only. It must not define parser mechanisms, resolver scoring, graph backend products, package runtimes, or source-specific mappings. |
 
+### Core schema volatility boundary
+
+`CanonicalJSON`, `OmissionState`, `ScalarType`, `CoreRecordFieldRow`, core record schemas, ID policies, checksum policies, validation precedence, and core error codes are `stable_core_contract` material owned by `040`.
+
+Activation-controlled artifacts must not add, remove, rename, reinterpret, or override core fields. They must not change ID inputs, checksum inputs, nullability, omission semantics, redaction ownership, scalar bounds, canonical sort keys, or extension-map policy.
+
+Source-specific values may appear only in declared extension maps whose activation is owned by `050`. `EvidenceRef` may reference activation-controlled artifacts only by artifact class, artifact ID, checksum, evidence role, and field paths; it must not inline artifact payload bytes.
+
+If a record carries an activation-artifact value outside a declared extension map or allowed ref field, validation must fail before persistence using `CORE_UNKNOWN_FIELD`, `CORE_FIELD_TYPE_INVALID`, the owner-specific extension error, or `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` when the attempted override itself is observable.
+
+| Error code | Emitted when |
+| --- | --- |
+| `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | An activation-controlled artifact attempts to change core fields, omission states, ID inputs, checksum inputs, scalar bounds, nullability, canonical sort keys, or extension-map policy. |
+
 ### Core schema closure rows
 
 `040` closes decimal precision and validation precedence. Owner-specific enum and one-of value sets remain explicit owner-local blockers and must be represented in `120` validation rows; downstream implementations must not invent missing enum tokens or union members.
@@ -526,6 +542,7 @@ ComputeEvidenceRefId(evidence_ref):
 | one-of members | Use `CoreOneOfRegistry`; any row with TODO allowed kinds blocks authoritative promotion for affected outputs. | blocked_owner_todo |
 | enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_owner_todo |
 | private binding error | `PRIVATE_BINDING_LEAK` is available to core schema and imported from `010`/`110` for public artifact rejection. | closed_local |
+| core schema volatility | Core schemas, omission states, ID/checksum policies, scalar bounds, and validation precedence are stable core; activation artifacts cannot alter them. | closed_local |
 
 ## Assertion States
 
@@ -622,6 +639,9 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-SCHEMA-PATCH-AC-006` | `EvidenceRef` and graph delta shapes reject raw payload bytes. |
 | `040-SCHEMA-PATCH-AC-007` | Backend-generated IDs fail in graph delta shapes with `GRAPH_BACKEND_ID_FORBIDDEN`. |
 | `040-SCHEMA-PATCH-AC-008` | `ValidateCoreRecord` produces byte-identical canonical bytes and checksums for the same inputs across two independent implementations. |
+| `040-VOLATILITY-AC-001` | Activation artifacts cannot alter core record fields or ID/checksum behavior. |
+| `040-VOLATILITY-AC-002` | Source-extension fields remain owner-declared through `050`. |
+| `040-VOLATILITY-AC-003` | Core schemas remain byte-stable for the same input after changing only an activation-controlled mapping/profile artifact. |
 
 ## Definition of Done
 

@@ -31,6 +31,7 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 - `ProjectionAuthorityRule`
 - `DirectSourceProhibition`
 - `SourceOfRecordRule`
+- `VolatilityBoundaryRule`
 
 ## Boundary Contract
 
@@ -59,6 +60,14 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 ## Projection Authority Rule
 
 Graph state, Splunk CIM output, OCSF export output, metadata graphs, lineage graphs, analysis outputs, and registry labels must not create or modify authoritative facts. A projection may be served only when its derivation profile, input refs, output checksum, and lag state are persisted.
+
+## Volatility Boundary Rule
+
+`stable_core_contract` owns the product boundary, authority classes, source-of-record rule, direct-source prohibition, canonical record semantics, temporal axes, identity semantics, graph projection boundary, package activation boundary, API state-label boundary, and validation ownership boundary.
+
+`activation_controlled_artifact` may instantiate exported behavior through versioned rows, profiles, package refs, registry records, fixtures, and mapping tables. It must not define new authority classes, omission states, canonical fields, ID algorithms, temporal axes, identity semantics, graph authority, API state labels, or package trust semantics.
+
+If an activation-controlled artifact conflicts with a stable core contract, the artifact fails activation before any production output. If two stable core contracts conflict, the spec set fails validation. If a stable core spec embeds concrete volatile rows, the rows must be non-normative examples or `TODO:` blockers unless represented as an activation-controlled artifact.
 
 ## Public and Private Source Binding
 
@@ -94,6 +103,9 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 | `PROJECTION_AUTHORITY_VIOLATION` | A derived projection attempts to create authoritative records. |
 | `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
+| `VOLATILITY_BOUNDARY_VIOLATION` | An activation-controlled artifact attempts to define product authority or stable core semantics. |
+| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | An activation-controlled artifact conflicts with the owner stable core contract. |
+| `VOLATILE_ROW_IN_CORE_SPEC` | A stable core spec embeds production-active volatile rows without artifact classification, example-only marking, or blocking `TODO:`. |
 
 Error precedence:
 
@@ -102,6 +114,7 @@ Error precedence:
 | Caller is not authorized to know the object exists and the response could reveal a private binding | `AUTHORIZATION_ERROR` must precede `PRIVATE_BINDING_LEAK` in caller-visible API responses. |
 | Public docs, exports, validation reports, or persisted public artifacts contain private binding data | `PRIVATE_BINDING_LEAK` must precede generic validation errors. |
 | Projection attempts authoritative mutation | `PROJECTION_AUTHORITY_VIOLATION` must precede generic validation errors. |
+| Activation artifact attempts stable-core override | `VOLATILITY_BOUNDARY_VIOLATION` or `ACTIVATION_ARTIFACT_CORE_CONFLICT` must precede owner-specific artifact validation errors. |
 | Production code attempts direct enterprise source access | `DIRECT_SOURCE_CALL_FORBIDDEN` must precede package-local, transport, or source-client errors. |
 
 ## Authority Validation Contracts
@@ -139,6 +152,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `PRIVATE_BINDING_LEAK` | `neg-010-private-binding-leak-public-artifact` | Reject or redact according to artifact class and `110` response rules. |
 | `PROJECTION_AUTHORITY_VIOLATION` | `neg-010-projection-authority-violation` | No authoritative mutation and no projection commit. |
 | `UNDECLARED_AUTHORITY_CLASS` | `neg-010-undeclared-authority-class` | Reject record write before persistence. |
+| `VOLATILITY_BOUNDARY_VIOLATION` | `neg-010-activation-artifact-core-override` | Reject artifact activation before production output. |
+| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `neg-010-activation-artifact-core-conflict` | Reject artifact activation before production output. |
+| `VOLATILE_ROW_IN_CORE_SPEC` | `neg-010-volatile-row-in-core-spec` | Fail spec-set validation before promotion. |
 
 ### Error ownership export
 
@@ -148,6 +164,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `PROJECTION_AUTHORITY_VIOLATION` | `010` | `110` |
 | `PRIVATE_BINDING_LEAK` | `010` | `110` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
+| `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `110` |
+| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `110` |
+| `VOLATILE_ROW_IN_CORE_SPEC` | `010` | `110` |
 
 ### Acceptance Criteria
 
@@ -160,6 +179,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-SCHEMA-PATCH-AC-001` | Every 040 exported record maps to exactly one authority class. |
 | `010-SCHEMA-PATCH-AC-002` | `EvidenceRef` remains supporting evidence and cannot become raw payload storage or fact authority by itself. |
 | `010-SCHEMA-PATCH-AC-003` | Graph delta primitive shapes remain derived projection records. |
+| `010-VOLATILITY-AC-001` | No activation-controlled artifact can define product authority. |
+| `010-VOLATILITY-AC-002` | Activation artifacts that conflict with stable core fail before production output. |
+| `010-VOLATILITY-AC-003` | Product authority, identity semantics, temporal semantics, and projection boundaries remain stable-core owned. |
 
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
 

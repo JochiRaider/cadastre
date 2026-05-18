@@ -30,6 +30,7 @@ Define how parsed raw records become silver observations and how external schema
 
 - `CoreRecordValidationAlgorithm`
 - `CadastreSilverObservationSchema`
+- `ActivationControlledArtifactRef`
 
 ## Exports
 
@@ -103,14 +104,18 @@ Undeclared `source_extension_fields` must fail before production output with the
 
 ```text
 ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
-1. Canonicalize source roots and dependency lock refs.
-2. Reject undeclared source roots, mutable dependency refs, and user-local config.
-3. Resolve source schema import profiles and semantic overlays.
-4. Compile mappings in declared phase order.
-5. Validate external schema profile refs and compiled artifact checksums.
-6. Run MappingValidationRule rows with deterministic severities.
-7. Run observation-type validation matrix cases.
-8. Emit CanonicalValidationOutput with deterministic diagnostics and checksum.
+1. Validate every mapping-related artifact ref through `030.ActivationControlledArtifactRef`.
+2. Verify package-set inclusion when artifacts are package-supplied.
+3. Canonicalize source roots and dependency lock refs.
+4. Reject undeclared source roots, mutable dependency refs, and user-local config.
+5. Resolve source schema import profiles and semantic overlays.
+6. Compile mappings in declared phase order.
+7. Validate external schema profile refs and compiled artifact checksums.
+8. Reject any artifact that attempts to define a core field, core omission state, identity rule, temporal rule, graph rule, or source-authority rule.
+9. Run MappingValidationRule rows with deterministic severities.
+10. Run observation-type validation matrix cases.
+11. Emit CanonicalValidationOutput with deterministic diagnostics and checksum.
+12. Include all output-affecting mapping artifact refs in `VersionManifest` before silver output.
 ```
 
 ## CIM Projection Contract
@@ -131,6 +136,29 @@ CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must def
 | `redaction_summary` | `040` shape | `110` exposes or redacts |
 
 OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`, and `confidence` remain non-authoritative unless an active policy grants a bounded use.
+
+### Mapping artifact volatility boundary
+
+`050` stable text defines interfaces, validation requirements, compiler phase ordering, error behavior, and activation boundaries. Concrete parser profiles, mapping rows, external schema artifacts, enum rows, profile-resolution rows, source-extension rows, and compiler configuration are activation-controlled artifacts.
+
+| Artifact or interface | Volatility class | Required handling |
+| --- | --- | --- |
+| `ParseRawBatch` interface | `stable_core_contract` | Must preserve evidence and emit no authoritative truth. |
+| parser profile instance | `activation_controlled_artifact` | Must validate through `030.ActivationControlledArtifactRef`. |
+| `NormalizeObservation` interface | `stable_core_contract` | Must emit only `040.CadastreSilverObservation` or diagnostics. |
+| mapping bundle instance | `activation_controlled_artifact` | Must be active, scoped, checksummed, and manifest-recorded. |
+| `ExternalSchemaProfile` | stable schema/interface plus activation-controlled instances | Interface is stable; concrete profile rows are activation-controlled. |
+| `ExternalSchemaArtifactRef` | `activation_controlled_artifact` | Must carry exact artifact identity and checksum. |
+| `ProfileResolutionManifest` | `activation_controlled_artifact` | Must be active for profile inheritance/resolution effects. |
+| `ExternalEnumMappingRule` rows | `activation_controlled_artifact` | Must not invent enum IDs or restate OCSF behavior. |
+| `OCSFBaseEventFieldPolicy` rows | `activation_controlled_artifact` | Must not grant Cadastre authority without owner contract. |
+| `SourceExtensionFieldRule` rows | `activation_controlled_artifact` | Must declare extension paths, types, bounds, and redaction behavior. |
+| `CIMProjectionProfile` rows | `activation_controlled_artifact` | Must remain projection-only. |
+| `MappingProjectManifest` and concrete compiler config | `activation_controlled_artifact` | Must be included in validation and replay refs. |
+| `MappingCompilerPipeline` phase-order contract | `stable_core_contract` | Concrete compiler config remains activation-controlled. |
+| `CanonicalValidationOutput` | `runtime_state_record` | Records deterministic validation state and checksum. |
+
+Concrete rows in `### Observation-to-OCSF mapping matrix` are activation-controlled row examples or blocking `TODO:` rows. They are not production-active rows unless represented by an active artifact ref.
 
 ### ExternalSchemaArtifactRef field table
 
@@ -209,6 +237,10 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 
 | Error code | Emitted when |
 | --- | --- |
+| `MAPPING_ARTIFACT_INACTIVE` | A required mapping, parser, schema, enum, profile, extension, CIM, or compiler artifact is not active for the execution mode. |
+| `MAPPING_ARTIFACT_SCOPE_MISMATCH` | A required mapping artifact does not cover the execution scope. |
+| `MAPPING_ARTIFACT_CHECKSUM_MISMATCH` | A required mapping artifact checksum does not match the active ref or manifest. |
+| `MAPPING_CORE_CONTRACT_OVERRIDE_FORBIDDEN` | A mapping artifact attempts to redefine core fields, omission states, identity semantics, temporal semantics, graph semantics, or source-authority semantics. |
 | `OCSF_ARTIFACT_MISMATCH` | Active profile refs do not match the compiled artifact checksum, source tag, source commit, compiler, or validator evidence. |
 | `OCSF_CLASS_NOT_ALLOWED` | A mapping emits an OCSF class outside the active class allowlist. |
 | `EXTERNAL_ENUM_UNKNOWN` | Source enum value is not mapped and no unknown-value policy applies. |
@@ -244,6 +276,9 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 
 | `050-OCSF-BASELINE-AC-001` | MVP OCSF production activation is blocked until exact `OCSF 1.8.0` artifact identity, compiled artifact checksum, class allowlist, profile set, extension set, enum rules, and validation fixtures are recorded. |
 | `050-SOURCE-EXTENSION-AC-001` | Undeclared, namespace-invalid, unbounded, secret-scan-failing, or OCSF-reserved-colliding source extension fields fail before production output. |
+| `050-VOLATILITY-AC-001` | Every production mapping-related artifact validates through `030.ActivationControlledArtifactRef` before silver output. |
+| `050-VOLATILITY-AC-002` | OCSF artifact checksum mismatch, inactive enum rule sets, omitted source-extension row refs, and mapping core overrides fail before production output. |
+| `050-VOLATILITY-AC-003` | `cadastre_only` mapping with null schema profile is allowed only by an active mapping row. |
 
 ## Definition of Done
 
