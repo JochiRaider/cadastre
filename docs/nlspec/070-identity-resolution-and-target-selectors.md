@@ -33,6 +33,7 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `SourceAssetSchema`
 - `IdentifierSchema`
 - `CoreRecordValidationAlgorithm`
+
 ## Exports
 
 - `ResolverProfile`
@@ -134,7 +135,7 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
 | `host` | `production` | provider/account/tenant/site/cluster as applicable | durable IDs plus weak evidence classes | reimage, clone, VDI, reinstall, delete/recreate, reuse | auto_merged, candidate, rejected, split, conflicted, no_decision | weak evidence rejection, hard blocker, split handoff |
 | `user` | `production` | directory tenant/domain/source | directory IDs plus names and memberships | delete/recreate, reenrollment | candidate, rejected, conflicted, no_decision unless profile permits merge | permission-limited and hidden-membership cases |
 | `service_account` | `production` | provider/account/tenant | durable provider IDs and directory IDs | delete/recreate, rekey | candidate, rejected, no_decision | scope mismatch cases |
-| TODO | TODO | TODO | TODO | TODO | TODO | blocking until owner row exists |
+| `unsupported_entity_type` | any | any | any | any | no_decision only | emit `RESOLVER_ENTITY_TYPE_UNSUPPORTED`; no identity mutation |
 
 ### IdentifierScope canonicalization
 
@@ -185,6 +186,48 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
 
 Manual review must never mutate canonical identity outside terminal `IdentityDecision` records.
 
+`IdentityReviewCase` transition coverage is total. Any state/event pair not listed as an allowed transition must reject mutation, preserve the current state, and emit `IDENTITY_REVIEW_TRANSITION_INVALID`. Expiration routes the case to `expired` and must not mutate canonical identity.
+
+### Identity closed enum tables
+
+| Enum family | Closed values |
+| --- | --- |
+| identity decision states | `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` |
+| review case states | `opened`, `in_review`, `blocked`, `expired`, `terminal_decision_emitted` |
+| review events | `assign`, `approve_merge`, `reject_merge`, `request_more_evidence`, `evidence_supplied`, `expire`, `cancel` |
+| evidence roles | `positive_evidence`, `negative_evidence`, `candidate_hint`, `selector`, `lineage_only`, `correlation_hint` |
+| selector mechanisms | `mapped_target`, `opengraph_property_matching`, `graph_key`, `hostname`, `ip_address`, `dns_name`, `ptr_name` |
+
+### Resolver error codes
+
+| Error code | Emitted when |
+| --- | --- |
+| `RESOLVER_PROFILE_MISSING` | No active resolver profile covers run mode, entity type, source scopes, evidence classes, and lifecycle boundaries. |
+| `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | Entity type maps to the unsupported row. |
+| `IDENTITY_EVIDENCE_UNDER_SCOPED` | Required scope keys are absent or non-canonical. |
+| `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | Evidence class lacks a covering resolver profile row. |
+| `IDENTITY_HARD_BLOCKER_TRIGGERED` | Hard blocker or generation boundary prevents auto-merge. |
+| `IDENTITY_REVIEW_TRANSITION_INVALID` | Review event is illegal for the current state. |
+| `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
+| `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
+
+### CandidateGenerationProfile bounds
+
+| Field | Default | Maximum | Overflow behavior | Closure state |
+| --- | --- | --- | --- | --- |
+| `candidate_cap` | TODO: owner decision required | TODO: owner decision required | Sort candidate pairs by deterministic pair ordering, emit overflow output state, and do not auto-merge overflowed candidates. | blocked_owner_todo |
+
+### ResolverExplanation required fields
+
+| Field | Required behavior |
+| --- | --- |
+| decision row | Reference the selected resolver decision matrix row. |
+| blockers evaluated | Include fired and non-fired blocker row IDs. |
+| evidence refs | Reference `IdentityEvidenceItem` rows and source evidence refs. |
+| confidence band | Include deterministic band or governed score inputs. |
+| review routing | Include review case ref when manual review is required. |
+| checksum | SHA-256 over canonical explanation bytes. |
+
 ### ResolverActivationReport requirements
 
 | Requirement | Default |
@@ -228,6 +271,9 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | `070-SCHEMA-PATCH-AC-002` | `070` does not restate core record fields except by exact schema name reference. |
 | `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity or identifier merge by bypassing the `040` and `070` validation sequence. |
 
+| `070-REVIEW-TOTALITY-AC-001` | Every `IdentityReviewCase` state/event pair has an allowed transition or emits `IDENTITY_REVIEW_TRANSITION_INVALID` without identity mutation. |
+| `070-EXPLANATION-AC-001` | Every `IdentityDecision` has exactly one `ResolverExplanation` with decision row, blockers, evidence refs, confidence band, review routing, and checksum. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -237,7 +283,6 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
 | `070-AC-003` | Hard blockers and lifecycle boundaries override confidence scores and reviewer notes. |
 | `070-AC-004` | Manual review cannot mutate identity without terminal `IdentityDecision`, `IdentityReviewCase`, `ResolverExplanation`, and `VersionManifest` refs. |
 | `070-AC-005` | Every identity split that affects gold or graph output emits `GraphCorrectionHandoff`. |
-
 
 ## Open Questions
 

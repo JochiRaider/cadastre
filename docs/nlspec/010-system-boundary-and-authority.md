@@ -95,6 +95,15 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 | `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 
+Error precedence:
+
+| Condition | Required precedence |
+| --- | --- |
+| Caller is not authorized to know the object exists and the response could reveal a private binding | `AUTHORIZATION_ERROR` must precede `PRIVATE_BINDING_LEAK` in caller-visible API responses. |
+| Public docs, exports, validation reports, or persisted public artifacts contain private binding data | `PRIVATE_BINDING_LEAK` must precede generic validation errors. |
+| Projection attempts authoritative mutation | `PROJECTION_AUTHORITY_VIOLATION` must precede generic validation errors. |
+| Production code attempts direct enterprise source access | `DIRECT_SOURCE_CALL_FORBIDDEN` must precede package-local, transport, or source-client errors. |
+
 ## Authority Validation Contracts
 
 ### PrivateBindingLeakValidationRule
@@ -122,6 +131,15 @@ Public artifacts must be scanned before publication, API response emission, expo
 
 `source_exploration` and validation-only probe modes may emit only `SourceExplorationResult`, `ProbeDiagnosticRecord`, validation diagnostics, or redacted fixture candidates. They must not satisfy production raw, completeness, silver, identity, gold, graph, health, watermark, manifest, or acceptance-report contracts.
 
+### BoundaryValidationTraceability
+
+| Error code | Required `120` validation row | Expected result |
+| --- | --- | --- |
+| `DIRECT_SOURCE_CALL_FORBIDDEN` | `neg-010-direct-source-call` | Fail before output and before source transport side effects. |
+| `PRIVATE_BINDING_LEAK` | `neg-010-private-binding-leak-public-artifact` | Reject or redact according to artifact class and `110` response rules. |
+| `PROJECTION_AUTHORITY_VIOLATION` | `neg-010-projection-authority-violation` | No authoritative mutation and no projection commit. |
+| `UNDECLARED_AUTHORITY_CLASS` | `neg-010-undeclared-authority-class` | Reject record write before persistence. |
+
 ### Error ownership export
 
 | Error code | Owning spec | Shared registry owner |
@@ -143,6 +161,8 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-SCHEMA-PATCH-AC-002` | `EvidenceRef` remains supporting evidence and cannot become raw payload storage or fact authority by itself. |
 | `010-SCHEMA-PATCH-AC-003` | Graph delta primitive shapes remain derived projection records. |
 
+| `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -151,7 +171,6 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `010-AC-002` | Every output class is classified as `system_of_record`, `derived_projection`, `supporting_evidence`, `non_authoritative_analysis`, or `inactive_future_domain`. |
 | `010-AC-003` | No active spec permits graph, CIM, OCSF export, analysis, enrichment, lineage, registry, or package tooling output to become authoritative without an imported named authority contract. |
 | `010-AC-004` | Public artifacts fail validation when they contain private source binding artifacts, route names, credential fields, or environment-specific source target lists. |
-
 
 ## Open Questions
 

@@ -30,6 +30,7 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `CoreRecordSchema`
 - `CoreRecordValidationAlgorithm`
 - `CoreRecordChecksumPolicy`
+
 ## Exports
 
 - `ProcessingStageDAG`
@@ -65,6 +66,24 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 | `validation` | `ValidationScenario` outputs, validation reports, diagnostics only. |
 
 Any stage emitting a record class outside its permitted set must fail with `FORBIDDEN_STAGE_OUTPUT` before the output is committed.
+
+Deterministic stage ordering rules:
+
+| Condition | Required behavior |
+| --- | --- |
+| Duplicate `stage_id` | Reject the DAG with `DAG_STAGE_ID_DUPLICATE`. |
+| Cycle detected | Reject the DAG with `DAG_CYCLE_DETECTED`. |
+| Multiple ready stages | Execute ready stages in ascending lexical `stage_id` order. |
+| Stage order replay | Same DAG bytes and requested subset must produce byte-identical ordered stage ID list. |
+
+Failure-isolation precedence:
+
+| Precedence | Condition | Required behavior |
+| ---: | --- | --- |
+| 1 | Core schema validation fails | Reject before owner algorithm execution. |
+| 2 | Stage emits forbidden output | Reject before persistence. |
+| 3 | Non-isolated stage failure | Stop all downstream stages and emit deterministic error. |
+| 4 | Isolated stage failure | Continue only for declared outputs; watermarks must not advance. |
 
 Every production stage output whose record class is imported from `040.CoreRecordSchema` must pass `040.ValidateCoreRecord` before commit and before external visibility. Schema validation failure must occur before source authority, identity, gold derivation, graph projection, API, export, or analysis behavior can consume the record. A package, parser, resolver, or projector must not bypass `040` by emitting package-local DTOs as production records.
 
@@ -104,11 +123,11 @@ A production stage subset may execute only with an active `DeclaredDAGSubsetProf
 
 ```text
 ExecuteProcessingStageDAG(dag, requested_scope, package_set):
-1. Validate dag acyclicity and active lifecycle state.
+1. Validate duplicate stage IDs, dag acyclicity, and active lifecycle state.
 2. Resolve active package set and stage bindings.
 3. Validate requested subset or full DAG mode.
 4. Acquire RunLockSet.
-5. For each stage in canonical topological order:
+5. For each stage in canonical topological order, sorting simultaneously ready stages by lexical `stage_id`:
    a. Validate imported profiles and state refs.
    b. Validate permitted outputs.
    c. Execute package role or pure product algorithm.
@@ -166,6 +185,34 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
 | Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs. |
 
+### VersionManifestSchema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `version_manifest_id` | Yes | Deterministic ID computed from `manifest_kind` and canonical included refs. |
+| `manifest_kind` | Yes | Closed token for run, replay, validation, graph rebuild, or package activation. |
+| `included_refs` | Yes | Canonically sorted refs for every output-affecting artifact. |
+| `schema_registry_checksum` | Yes | Active `040` core schema registry checksum. |
+| `package_set_checksum` | Yes when packages affect output | Immutable `ProductionPackageSetManifest` checksum. |
+| `stage_state_refs` | Yes | Stage state refs and checksums sorted by state kind then ID. |
+| `snapshot_refs` | Yes when lakehouse reads affect output | `LakehouseSnapshotRef` and `DatasetVersionRef` refs. |
+| `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
+| `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
+| `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
+| `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
+
+`version_manifest_id` must be `vm_` plus SHA-256 lowercase hex over `040.CanonicalJSON` of `manifest_kind` and `included_refs`. `created_at` must not affect `version_manifest_id`.
+
+### RequiredLifecycleMachineBindings
+
+| Production lifecycle | Required owner | Transition table status | Validation row |
+| --- | --- | --- | --- |
+| package/profile activation | `100` plus package/profile owner | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-package-activation` |
+| production run execution | `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-production-run` |
+| feed stage execution | `020`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-feed-stage` |
+| graph apply | `090`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-graph-apply` |
+| validation acceptance | `120`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-validation-acceptance` |
+
 ### RunLockKeyDerivation
 
 ```text
@@ -175,6 +222,16 @@ RunLockKeyDerivation(scope):
 3. Hash with SHA-256 and prefix with `runlock_`.
 4. If two non-identical tuples produce the same lock key, fail with `RUN_LOCK_COLLISION`.
 ```
+
+### RunLockSet acquisition semantics
+
+| Condition | Required behavior |
+| --- | --- |
+| All lock keys available | Acquire the complete lock set before any production output write. |
+| One or more lock keys unavailable | Acquire no locks or release every acquired lock before returning `RUN_LOCK_ACQUISITION_FAILED`. |
+| Partial acquisition failure | Emit `RUN_LOCK_ACQUISITION_FAILED`; write no production output and advance no watermark. |
+| Lock lost during run | Stop before next output commit and emit `RUN_LOCK_LOST`; downstream stages must not run. |
+| Stale lock | TODO: product governance must define default lease TTL, heartbeat interval, and stale-lock recovery condition before authoritative promotion. |
 
 ### DeclaredDAGSubsetProfile matrix
 
@@ -197,6 +254,10 @@ RunLockKeyDerivation(scope):
 | `030-SCHEMA-PATCH-AC-002` | `VersionManifest` records the active core schema registry checksum for every output-affecting run. |
 | `030-SCHEMA-PATCH-AC-003` | A forbidden or malformed core record fails before downstream domain algorithms execute. |
 
+| `030-DAG-ORDER-AC-001` | Duplicate stage IDs fail with `DAG_STAGE_ID_DUPLICATE`, cycles fail with `DAG_CYCLE_DETECTED`, and ready-stage ties sort lexically by `stage_id`. |
+| `030-RUNLOCK-AC-001` | Run lock acquisition is all-or-nothing and partial acquisition failure releases acquired locks before returning `RUN_LOCK_ACQUISITION_FAILED`. |
+| `030-VERSION-MANIFEST-AC-001` | Same included refs and manifest kind produce the same `version_manifest_id`; checksum includes `created_at` but ID does not. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -206,7 +267,6 @@ RunLockKeyDerivation(scope):
 | `030-AC-003` | Every production-affecting lifecycle has closed states, closed events, total transitions, illegal-transition behavior, and validation criteria. |
 | `030-AC-004` | Every output-affecting state record is hashable, replayable, and included in `VersionManifest`. |
 | `030-AC-005` | Production replay rejects missing, mutable-only, checksum-mismatched, or retention-ineligible manifest refs before writing output. |
-
 
 ## Open Questions
 

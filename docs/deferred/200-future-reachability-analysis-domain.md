@@ -65,18 +65,36 @@ This document may become active only after a new accepted NLSpec promotion updat
 - Unqualified `reachable` or `not reachable` wording.
 - Any graph property that implies packet, session, service, or identity-conditioned access.
 
+Expected active-spec failure codes:
+
+| Code | Required use |
+| --- | --- |
+| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | Active graph, gold, or analysis code attempts theoretical reachability behavior in MVP. |
+| `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | Active spec attempts to emit a deferred reachability fact, edge, property, or API output. |
+| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | API/UI/export wording uses unqualified reachable/not-reachable language. |
+
 ## Deferred Reachability Validation Contracts
 
 ### ReachabilityDeferredValidationPointer
 
 `120` must include negative validation rows proving that active MVP specs fail or no-op for the following prohibited outputs.
 
-| Prohibited output | Required active-spec validation pointer | Expected result |
+| Prohibited output | Required active-spec validation row ID | Expected result |
 | --- | --- | --- |
-| `has_theoretical_reachability` edge | `090` and `120` negative graph projection row | fail or no-op |
-| `modeled_reachability_fact` | `080`, `090`, and `120` negative derivation/projection row | fail or no-op |
-| Boolean reachability property | `090`, `110`, and `120` API/projection row | fail or no-op |
-| unqualified `reachable` or `not reachable` wording | `110` API wording row | reject wording or qualify as unsupported/deferred |
+| `has_theoretical_reachability` edge | `val-090-theoretical-reachability-prohibited`; `fixture-090-theoretical-reachability-edge` | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op |
+| `modeled_reachability_fact` | `val-080-modeled-reachability-fact-prohibited`; `fixture-200-active-reachability-output` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or no-op |
+| Boolean reachability property | `val-090-boolean-reachability-property-prohibited`; `val-110-reachability-wording-prohibited` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` |
+| unqualified `reachable` or `not reachable` wording | `val-110-reachability-wording-prohibited` | `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` |
+
+### DeferredStatusConsistency
+
+| Condition | Required behavior |
+| --- | --- |
+| `000` status is `inactive_deferred` | This document remains non-runtime and active specs must reject prohibited outputs. |
+| `000` status is not `inactive_deferred` | Activation rule in this document must be satisfied before any reachability runtime behavior can execute. |
+| Any active spec emits prohibited MVP output | `ValidateSpecSet` fails before promotion. |
+
+This document must not define production solver behavior, source authority, graph effect, or result semantics beyond preserved future candidates.
 
 ### Future Activation Required Decisions
 
@@ -99,6 +117,8 @@ This document may become active only after a new accepted NLSpec promotion updat
 | `200-CLEANUP-AC-003` | Active graph and gold specs still cannot emit theoretical reachability facts, graph edges, graph properties, or unqualified reachability claims from this document. |
 | `200-CLEANUP-AC-004` | Future activation still requires accepted NLSpec promotion, assigned owners, resolved future activation decisions, and passing validation fixtures. |
 
+| `200-DEFERRED-CONSISTENCY-AC-001` | `ValidateSpecSet` fails when `000` status and this document's activation rule disagree, or when any active spec emits prohibited reachability output. |
+
 ## Definition of Done for Future Activation
 
 | ID | Criterion |
@@ -107,4 +127,3 @@ This document may become active only after a new accepted NLSpec promotion updat
 | `200-AC-002` | Capability matrix fixtures cover unsupported, unknown partial, conditional, positive, and negative cases. |
 | `200-AC-003` | User-facing wording distinguishes observed traffic, modeled-within-scope analysis, representative paths, diagnostic probes, unknown partial evidence, and unsupported model components. |
 | `200-AC-004` | Graph and gold outputs remain disabled until `ReachabilityClaimPolicy` authorizes a narrower output and validation passes. |
-

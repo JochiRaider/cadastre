@@ -1,0 +1,1503 @@
+diff --git a/MANIFEST.md b/MANIFEST.md
+index aa8e918716d2c7fa07880a6dc368b50a80e8fd12..78563dda1425b4dcd39c5226cadd2fe49509366c 100644
+--- a/MANIFEST.md
++++ b/MANIFEST.md
+@@ -1,6 +1,6 @@
+ # Artifact Manifest
+ 
+-The manifest defines the current documents for the Cadasre project.
++The manifest defines the current documents for the Cadastre project.
+ 
+ If a file is not currently uploaded, it can be added to the context on request.
+ 
+diff --git a/docs/adr/ADR-0001-lakehouse-fed-boundary.md b/docs/adr/ADR-0001-lakehouse-fed-boundary.md
+index d94818a05aeea97ad9a48c0fc2a22a26122806b3..23aaaf1879a837608f4ade5152fef8a03ed7372f 100644
+--- a/docs/adr/ADR-0001-lakehouse-fed-boundary.md
++++ b/docs/adr/ADR-0001-lakehouse-fed-boundary.md
+@@ -2,7 +2,7 @@
+ 
+ ## Status
+ 
+-`accepted-draft`
++`accepted_rationale`
+ 
+ ## Decision
+ 
+@@ -20,4 +20,4 @@ This separates source transport from Cadastre interpretation and preserves repla
+ 
+ ## Authority Boundary
+ 
+-Runtime behavior is owned by `010` and `020`; this ADR is rationale only.
++Runtime behavior remains owned by `010` and `020`; this ADR is rationale only and must not define field shapes, algorithms, defaults, errors, or acceptance criteria.
+diff --git a/docs/adr/ADR-0002-graph-as-derived-projection.md b/docs/adr/ADR-0002-graph-as-derived-projection.md
+index 571c2a2e3cb72dc63cf254abf7d141cc3cfb3052..3bcc8f70d42ab28aadf0f1844792ccfe7b01ac81 100644
+--- a/docs/adr/ADR-0002-graph-as-derived-projection.md
++++ b/docs/adr/ADR-0002-graph-as-derived-projection.md
+@@ -2,7 +2,7 @@
+ 
+ ## Status
+ 
+-`accepted-draft`
++`accepted_rationale`
+ 
+ ## Decision
+ 
+@@ -20,4 +20,4 @@ This prevents graph backend state, graph cleanup, and graph drift checks from be
+ 
+ ## Authority Boundary
+ 
+-Runtime behavior is owned by `090`; this ADR is rationale only.
++Runtime behavior remains owned by `090`; this ADR is rationale only and must not define field shapes, algorithms, defaults, errors, or acceptance criteria.
+diff --git a/docs/adr/ADR-0003-ocsf-as-silver-profile.md b/docs/adr/ADR-0003-ocsf-as-silver-profile.md
+index ad3c7cf84165dbbdb439086a864494338618823c..a93b90bebb37f972c2514ddcb7531095e94b1187 100644
+--- a/docs/adr/ADR-0003-ocsf-as-silver-profile.md
++++ b/docs/adr/ADR-0003-ocsf-as-silver-profile.md
+@@ -2,7 +2,7 @@
+ 
+ ## Status
+ 
+-`accepted-draft`
++`accepted_rationale`
+ 
+ ## Decision
+ 
+@@ -20,4 +20,4 @@ This gives silver observations an external semantic profile while keeping omissi
+ 
+ ## Authority Boundary
+ 
+-Runtime behavior is owned by `050`; this ADR is rationale only.
++Runtime behavior remains owned by `050`; this ADR is rationale only and must not define field shapes, algorithms, defaults, errors, or acceptance criteria.
+diff --git a/docs/adr/ADR-0004-package-set-activation.md b/docs/adr/ADR-0004-package-set-activation.md
+index 9f2b17ffa8ece69ba350c8169d725ba8037d84c6..e405f027ae4e5d267ae1654e283a54aa5d4dce8d 100644
+--- a/docs/adr/ADR-0004-package-set-activation.md
++++ b/docs/adr/ADR-0004-package-set-activation.md
+@@ -2,7 +2,7 @@
+ 
+ ## Status
+ 
+-`accepted-draft`
++`accepted_rationale`
+ 
+ ## Decision
+ 
+@@ -20,4 +20,4 @@ Cadastre packages are interdependent across adapters, parsers, mappings, resolve
+ 
+ ## Authority Boundary
+ 
+-Runtime behavior is owned by `100`; this ADR is rationale only.
++Runtime behavior remains owned by `100`; this ADR is rationale only and must not define field shapes, algorithms, defaults, errors, or acceptance criteria.
+diff --git a/docs/deferred/200-future-reachability-analysis-domain.md b/docs/deferred/200-future-reachability-analysis-domain.md
+index 1a4170076c89adf18b30c6638f54dfc8d8b99a9c..aab5088a3e1b7c7485c362f8a49e66b0cd5a069b 100644
+--- a/docs/deferred/200-future-reachability-analysis-domain.md
++++ b/docs/deferred/200-future-reachability-analysis-domain.md
+@@ -65,18 +65,38 @@ This document may become active only after a new accepted NLSpec promotion updat
+ - Unqualified `reachable` or `not reachable` wording.
+ - Any graph property that implies packet, session, service, or identity-conditioned access.
+ 
++
++Expected active-spec failure codes:
++
++| Code | Required use |
++| --- | --- |
++| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | Active graph, gold, or analysis code attempts theoretical reachability behavior in MVP. |
++| `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | Active spec attempts to emit a deferred reachability fact, edge, property, or API output. |
++| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | API/UI/export wording uses unqualified reachable/not-reachable language. |
++
+ ## Deferred Reachability Validation Contracts
+ 
+ ### ReachabilityDeferredValidationPointer
+ 
+ `120` must include negative validation rows proving that active MVP specs fail or no-op for the following prohibited outputs.
+ 
+-| Prohibited output | Required active-spec validation pointer | Expected result |
++| Prohibited output | Required active-spec validation row ID | Expected result |
+ | --- | --- | --- |
+-| `has_theoretical_reachability` edge | `090` and `120` negative graph projection row | fail or no-op |
+-| `modeled_reachability_fact` | `080`, `090`, and `120` negative derivation/projection row | fail or no-op |
+-| Boolean reachability property | `090`, `110`, and `120` API/projection row | fail or no-op |
+-| unqualified `reachable` or `not reachable` wording | `110` API wording row | reject wording or qualify as unsupported/deferred |
++| `has_theoretical_reachability` edge | `val-090-theoretical-reachability-prohibited`; `fixture-090-theoretical-reachability-edge` | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op |
++| `modeled_reachability_fact` | `val-080-modeled-reachability-fact-prohibited`; `fixture-200-active-reachability-output` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or no-op |
++| Boolean reachability property | `val-090-boolean-reachability-property-prohibited`; `val-110-reachability-wording-prohibited` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` |
++| unqualified `reachable` or `not reachable` wording | `val-110-reachability-wording-prohibited` | `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` |
++
++
++### DeferredStatusConsistency
++
++| Condition | Required behavior |
++| --- | --- |
++| `000` status is `inactive_deferred` | This document remains non-runtime and active specs must reject prohibited outputs. |
++| `000` status is not `inactive_deferred` | Activation rule in this document must be satisfied before any reachability runtime behavior can execute. |
++| Any active spec emits prohibited MVP output | `ValidateSpecSet` fails before promotion. |
++
++This document must not define production solver behavior, source authority, graph effect, or result semantics beyond preserved future candidates.
+ 
+ ### Future Activation Required Decisions
+ 
+@@ -99,6 +119,8 @@ This document may become active only after a new accepted NLSpec promotion updat
+ | `200-CLEANUP-AC-003` | Active graph and gold specs still cannot emit theoretical reachability facts, graph edges, graph properties, or unqualified reachability claims from this document. |
+ | `200-CLEANUP-AC-004` | Future activation still requires accepted NLSpec promotion, assigned owners, resolved future activation decisions, and passing validation fixtures. |
+ 
++| `200-DEFERRED-CONSISTENCY-AC-001` | `ValidateSpecSet` fails when `000` status and this document's activation rule disagree, or when any active spec emits prohibited reachability output. |
++
+ ## Definition of Done for Future Activation
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/000-cadastre-spec-index.md b/docs/nlspec/000-cadastre-spec-index.md
+index 619ad7a7b89101e0856de07923aaada32379c97d..d8b2ae5f90b25d0335da2f771b080cf1a817f15f 100644
+--- a/docs/nlspec/000-cadastre-spec-index.md
++++ b/docs/nlspec/000-cadastre-spec-index.md
+@@ -47,6 +47,7 @@ Define the self-contained Cadastre documentation set, source-of-truth ownership,
+ | `authoritative` | Accepted NLSpec text whose validation criteria pass and whose registry row marks it active. | Yes, for owned contracts only. |
+ | `superseded` | Replaced by a newer registered version. | No. |
+ | `archived` | Retained for historical reference only. | No. |
++| `accepted_rationale` | Accepted decision rationale with no runtime authority. | No. |
+ | `inactive_deferred` | Preserved future-domain candidate with no active MVP effect. | No. |
+ | `active_standard` | Reference standard for NLSpec quality only. | No product runtime authority. |
+ 
+@@ -121,34 +122,39 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
+ | `130` | docs/nlspec/130-analysis-enrichment-and-registry-governance.md | candidate_spec | `candidate` | 130 | No | Analysis and registry owner. |
+ | `200` | docs/deferred/200-future-reachability-analysis-domain.md | deferred_spec | `inactive_deferred` | 200 | No | Inactive future reachability. |
+ | `nlspec-standard` | docs/reference/standards/nlspec-spec.md | reference | `active_standard` | 000 | No | Quality standard only. |
+-| `ADR-0001` | docs/adr/ADR-0001-lakehouse-fed-boundary.md | rationale | `draft` | 010,020 | No | Rationale only. |
+-| `ADR-0002` | docs/adr/ADR-0002-graph-as-derived-projection.md | rationale | `draft` | 090 | No | Rationale only. |
+-| `ADR-0003` | docs/adr/ADR-0003-ocsf-as-silver-profile.md | rationale | `draft` | 050 | No | Rationale only. |
+-| `ADR-0004` | docs/adr/ADR-0004-package-set-activation.md | rationale | `draft` | 100 | No | Rationale only. |
++| `ADR-0001` | docs/adr/ADR-0001-lakehouse-fed-boundary.md | rationale | `accepted_rationale` | 010,020 | No | Accepted rationale only; runtime owned by `010` and `020`. |
++| `ADR-0002` | docs/adr/ADR-0002-graph-as-derived-projection.md | rationale | `accepted_rationale` | 090 | No | Accepted rationale only; runtime owned by `090`. |
++| `ADR-0003` | docs/adr/ADR-0003-ocsf-as-silver-profile.md | rationale | `accepted_rationale` | 050 | No | Accepted rationale only; runtime owned by `050`. |
++| `ADR-0004` | docs/adr/ADR-0004-package-set-activation.md | rationale | `accepted_rationale` | 100 | No | Accepted rationale only; runtime owned by `100`. |
+ | `research-reports` | docs/reference/research/*.md | reference | `draft` | 000 | No | Evidence only. |
+ | `doc-cleanup` | docs/doc_clean-up/*.md | reference | `draft` | 000 | No | Formatting reference only. |
+ | `product-archive` | docs/archive/PRD-Cadastre.revised-draft.md | archive | `archived` | 000 | No | Historical reference only. |
+ 
+ ## Owner Contract Registry
+ 
+-| Contract | Owner spec | Imported by | Runtime authority class | Validation owner | Open blocker status |
+-| --- | --- | --- | --- | --- | --- |
+-| Documentation governance | `000` | `MANIFEST.md` and registered documentation artifacts | governance | 120 | open |
+-| Root domain vocabulary | `domain` | all owner specs | vocabulary | 120 | open until domain TODOs close |
+-| Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | 120 | open |
+-| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | 120 | open |
+-| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | 120 | open |
+-| Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | 120 | open until all core schema TODO rows and 120 fixtures close |
+-| External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | 120 | open |
+-| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | 120 | open |
+-| Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | 120 | open |
+-| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | 120 | open |
+-| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | 120 | open |
+-| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | 120 | open |
+-| API, errors, security | `110` | all owner specs | runtime_api | 120 | open |
+-| Validation and acceptance | `120` | 000 and all owner specs | validation | 120 | open |
+-| Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | 120 | open |
+-| Deferred reachability | `200` | 090,110,120 | inactive_future_domain | 120 | deferred |
++| Contract | Owner spec | Imported by | Runtime authority class | Validation owner | Owner-local closure state | Open blocker status |
++| --- | --- | --- | --- | --- | --- | --- |
++| Documentation governance | `000` | `MANIFEST.md` and registered documentation artifacts | governance | 120 | blocked_validation | open until registry consistency rows pass |
++| Root domain vocabulary | `domain` | all owner specs | vocabulary | 120 | blocked_owner_todo | open until domain TODOs close |
++| Boundary and authority classes | `010` | 020,060,090,110,130 | runtime_boundary | 120 | closed_local | validation rows required |
++| Lakehouse feed and table-state contracts | `020` | 030,040,060,080,120 | runtime_data_input | 120 | blocked_validation | open until manifest fixtures and checksum rows close |
++| RawFeedManifest | `020` | 030,040,060,120 | runtime_data_input | 120 | closed_local | validation fixture checksums required |
++| Raw record identity import | `020` | 040,120,domain | runtime_data_input | 120 | closed_local | imports `040.ComputeRawRecordId`; no local ID order blocker |
++| DAG lifecycle and version manifest | `030` | 020,080,090,100,120 | runtime_orchestration | 120 | blocked_owner_todo | run-lock lease timing and lifecycle transition rows remain TODO |
++| Core record schema registry, scalar registry, canonical serialization, IDs, checksums, omission states, and evidence refs | `040` | 020,030,050,060,070,080,090,110,120 | runtime_data_shape | 120 | blocked_validation | owner enum and one-of validation rows required |
++| ComputeRawRecordId | `040` | 020,120,domain | runtime_data_shape | 120 | closed_local | validation fixture checksums required |
++| External schema and mapping | `050` | 040,100,120,130 | runtime_normalization | 120 | blocked_owner_todo | exact OCSF rows and artifact checksums remain TODO |
++| Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | 120 | blocked_owner_todo | source-specific coverage rows remain TODO |
++| Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
++| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
++| Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | 120 | blocked_owner_todo | graph apply numeric defaults and validation checksums remain TODO |
++| Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | 120 | blocked_owner_todo | package deprecation windows remain TODO |
++| API, errors, security | `110` | all owner specs | runtime_api | 120 | blocked_owner_todo | page-token expiration bounds remain TODO |
++| Validation and acceptance | `120` | 000 and all owner specs | validation | 120 | blocked_validation | fixture and expected-output checksums remain TODO |
++| Analysis, enrichment, registry | `130` | 050,060,090,110 | non_authoritative_analysis | 120 | blocked_validation | fixture checksums required |
++| Deferred reachability | `200` | 090,110,120 | inactive_future_domain | 120 | inactive_deferred | deferred |
++
++Owner-local closure states are closed values: `closed_local`, `blocked_owner_todo`, `blocked_validation`, `inactive_deferred`, and `candidate_not_promoted`. A `closed_local` owner contract may still be prevented from promotion by candidate document status or missing validation evidence.
+ 
+ ## Dependency Rule
+ 
+@@ -180,6 +186,30 @@ Every target file in the NLSpec set must have exactly one registry row. Duplicat
+ 
+ No non-040 file may define a field schema for a core record exported by `040`. A downstream spec may import an exact schema name and define behavior for its own stage, but it must not restate field paths, defaults, nullability, ID inputs, checksum inputs, or extension policy for the 040-owned record.
+ 
++### OwnerLocalStatusConsistencyRule
++
++`ValidateSpecSet` must evaluate owner-local closure state independently from document authority status. The following failure codes are closed for this rule.
++
++| Failure code | Emitted when |
++| --- | --- |
++| `DOMAIN_OWNER_STATUS_CONTRADICTION` | `domain.md` marks a named behavior unresolved while every named owner contract is `closed_local`, or marks it resolved while any named owner-local blocker remains. |
++| `DOMAIN_RUNTIME_RESTATEMENT` | `domain.md` copies a downstream schema, ID input order, default, nullability rule, checksum input set, or collision behavior owned by another spec instead of routing by exact owner contract name. |
++| `OWNER_SPEC_CONTRADICTION` | Two owner specs define incompatible runtime behavior for the same named contract. |
++| `ADR_STATUS_UNREGISTERED` | An ADR file or registry row uses a status outside `SpecStatus`. |
++| `REGISTRY_MANIFEST_PATH_MISMATCH` | A manifest path lacks exactly one registry row or explicit non-registry reason. |
++
++Required consistency checks:
++
++| Check | Required behavior |
++| --- | --- |
++| Domain unresolved and owners closed | Fail with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
++| Domain resolved and owner blocked | Fail with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
++| Domain runtime restatement | Fail with `DOMAIN_RUNTIME_RESTATEMENT`; `domain.md` must use owner-routing language only. |
++| Owner runtime contradiction | Fail with `OWNER_SPEC_CONTRADICTION`; `domain.md` must not pick a side. |
++| ADR status mismatch | Fail with `ADR_STATUS_UNREGISTERED` unless both file and registry row use `accepted_rationale`. |
++| Manifest path mismatch | Fail with `REGISTRY_MANIFEST_PATH_MISMATCH`; every manifest path must have one registry row or explicit non-registry reason. |
++
++
+ ## Registry and Acceptance Control
+ 
+ No document may be marked `authoritative` when it has unresolved owner `TODO:` rows, duplicate runtime ownership, missing validation evidence, or a missing registry entry.
+@@ -201,7 +231,7 @@ Archived documents are historical reference only and never implementation author
+ | `000-AC-003` | Archived and reference documents are not cited as implementation authority. |
+ | `000-AC-004` | Research reports, ADRs, navigation files, and manifest files are marked non-authoritative for runtime behavior. |
+ | `000-CLEANUP-AC-001` | The file contains no banned reference class. |
+-| `000-CLEANUP-AC-002` | `SpecStatus` is total for `draft`, `candidate`, `authoritative`, `superseded`, `archived`, `inactive_deferred`, and `active_standard`. |
++| `000-CLEANUP-AC-002` | `SpecStatus` is total for `draft`, `candidate`, `authoritative`, `superseded`, `archived`, `accepted_rationale`, `inactive_deferred`, and `active_standard`. |
+ | `000-CLEANUP-AC-003` | No export name contains a banned reference class. |
+ | `000-CLEANUP-AC-004` | The registry has one row for each target file and no row for decomposition-control artifacts. |
+ | `000-CLEANUP-AC-005` | Promotion to `authoritative` depends only on registry state, owner review, and passing validation evidence. |
+@@ -209,6 +239,12 @@ Archived documents are historical reference only and never implementation author
+ | `000-SCHEMA-PATCH-AC-002` | No downstream spec is registered as owner of a 040 core record field schema. |
+ | `000-SCHEMA-PATCH-AC-003` | Promotion to `authoritative` depends on passing 040 schema validation rows in `120`. |
+ 
++| `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
++| `000-STATUS-CONSISTENCY-AC-002` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |
++| `000-STATUS-CONSISTENCY-AC-003` | `ValidateSpecSet` fails owner-spec runtime contradictions with `OWNER_SPEC_CONTRADICTION`. |
++| `000-STATUS-CONSISTENCY-AC-004` | ADR status values in files and registry rows are members of `SpecStatus` and use `accepted_rationale` for accepted non-runtime rationale. |
++| `000-STATUS-CONSISTENCY-AC-005` | Every manifest path has exactly one registry row or explicit non-registry reason. |
++
+ ## Open Questions
+ 
+ Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+diff --git a/docs/nlspec/010-system-boundary-and-authority.md b/docs/nlspec/010-system-boundary-and-authority.md
+index 9ca41d1639721c161a94c155440611a26ccb9423..d7f581957ca3f38798bdbf4c99939de2520f9933 100644
+--- a/docs/nlspec/010-system-boundary-and-authority.md
++++ b/docs/nlspec/010-system-boundary-and-authority.md
+@@ -95,6 +95,16 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
+ | `PRIVATE_BINDING_LEAK` | A public artifact contains a concrete private vendor/source binding. |
+ | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
+ 
++Error precedence:
++
++| Condition | Required precedence |
++| --- | --- |
++| Caller is not authorized to know the object exists and the response could reveal a private binding | `AUTHORIZATION_ERROR` must precede `PRIVATE_BINDING_LEAK` in caller-visible API responses. |
++| Public docs, exports, validation reports, or persisted public artifacts contain private binding data | `PRIVATE_BINDING_LEAK` must precede generic validation errors. |
++| Projection attempts authoritative mutation | `PROJECTION_AUTHORITY_VIOLATION` must precede generic validation errors. |
++| Production code attempts direct enterprise source access | `DIRECT_SOURCE_CALL_FORBIDDEN` must precede package-local, transport, or source-client errors. |
++
++
+ ## Authority Validation Contracts
+ 
+ ### PrivateBindingLeakValidationRule
+@@ -122,6 +132,16 @@ Public artifacts must be scanned before publication, API response emission, expo
+ 
+ `source_exploration` and validation-only probe modes may emit only `SourceExplorationResult`, `ProbeDiagnosticRecord`, validation diagnostics, or redacted fixture candidates. They must not satisfy production raw, completeness, silver, identity, gold, graph, health, watermark, manifest, or acceptance-report contracts.
+ 
++
++### BoundaryValidationTraceability
++
++| Error code | Required `120` validation row | Expected result |
++| --- | --- | --- |
++| `DIRECT_SOURCE_CALL_FORBIDDEN` | `neg-010-direct-source-call` | Fail before output and before source transport side effects. |
++| `PRIVATE_BINDING_LEAK` | `neg-010-private-binding-leak-public-artifact` | Reject or redact according to artifact class and `110` response rules. |
++| `PROJECTION_AUTHORITY_VIOLATION` | `neg-010-projection-authority-violation` | No authoritative mutation and no projection commit. |
++| `UNDECLARED_AUTHORITY_CLASS` | `neg-010-undeclared-authority-class` | Reject record write before persistence. |
++
+ ### Error ownership export
+ 
+ | Error code | Owning spec | Shared registry owner |
+@@ -143,6 +163,8 @@ Public artifacts must be scanned before publication, API response emission, expo
+ | `010-SCHEMA-PATCH-AC-002` | `EvidenceRef` remains supporting evidence and cannot become raw payload storage or fact authority by itself. |
+ | `010-SCHEMA-PATCH-AC-003` | Graph delta primitive shapes remain derived projection records. |
+ 
++| `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/020-lakehouse-feeds-and-table-state.md b/docs/nlspec/020-lakehouse-feeds-and-table-state.md
+index 6ae565c73ec06e0dd434827d9b7ab0932feb9f11..ba14add8132e624975a42701d445a1d8df532d41 100644
+--- a/docs/nlspec/020-lakehouse-feeds-and-table-state.md
++++ b/docs/nlspec/020-lakehouse-feeds-and-table-state.md
+@@ -180,6 +180,79 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
+ | `hash_algorithm` | enum | Yes | `sha256` | Only `sha256` is active for MVP. |
+ | `manifest_checksum` | string | Yes | none | SHA-256 over canonical manifest bytes excluding this field. |
+ 
++
++#### RawFeedManifest nested object schemas
++
++`RawFeedManifest` nested objects must use the following closed shapes before manifest ID or checksum computation. Omitted optional arrays default to `[]`; omitted required nested objects fail with `RAW_FEED_MANIFEST_INVALID`.
++
++##### `object_refs[]`
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `object_ref_id` | Yes | Stable object reference scoped to the manifest; not an object-store credential or private route. |
++| `object_uri_hash` | Yes | SHA-256 lowercase hex over the redacted canonical URI reference. |
++| `byte_count` | Yes | Non-negative `uint64`. |
++| `checksum_algorithm` | Yes | Default and only active value `sha256`. |
++| `object_checksum` | Yes | SHA-256 lowercase hex over object bytes after declared compression boundary. |
++| `media_type` | Yes | Declared MIME-like media type token or `application/octet-stream`. |
++| `compression` | Yes | Closed token; default `none`. |
++| `encryption_ref` | No | Omitted when not encrypted; present value must be a redacted reference. |
++| `redaction_state` | Yes | Closed token imported from `110` redaction policy. |
++
++##### `partition_refs[]`
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `partition_key` | Yes | Canonical JSON object; keys sorted lexically. |
++| `partition_bounds` | Yes | Canonical JSON object describing inclusive/exclusive bounds. |
++| `schema_ref_id` | Yes | Must match one `schema_refs[].schema_ref_id`. |
++| `partition_checksum` | Yes | SHA-256 lowercase hex over canonical partition inventory or table-format-native partition ref. |
++| `row_count` | Yes | Non-negative `uint64`; `0` is valid only when the profile permits empty partitions. |
++| `byte_count` | Yes | Non-negative `uint64`. |
++
++##### `schema_refs[]`
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `schema_ref_id` | Yes | Stable manifest-local schema reference. |
++| `schema_family` | Yes | Vendor-neutral schema family or `unknown`. |
++| `schema_version` | Yes | Exact source schema version or `unknown`. |
++| `schema_checksum` | Yes | SHA-256 lowercase hex over schema bytes or canonical schema descriptor. |
++| `schema_uri_hash` | Yes | SHA-256 lowercase hex over the redacted schema URI reference. |
++
++##### `time_bounds`
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `source_time_from` | No | RFC3339 UTC or omitted when unavailable. |
++| `source_time_to` | No | RFC3339 UTC or omitted when unavailable. |
++| `supplier_collection_from` | No | RFC3339 UTC or omitted when unavailable. |
++| `supplier_collection_to` | No | RFC3339 UTC or omitted when unavailable. |
++| `lakehouse_commit_time` | Yes | RFC3339 UTC table/object commit or manifest materialization time; not fact time by itself. |
++| `quality` | Yes | Closed quality token; `unknown` is allowed only when profile permits. |
++
++##### `supplier_lineage`
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `supplier_batch_id` | Yes | Supplier-scoped batch ID or canonical null sentinel when unavailable. |
++| `supplier_run_id` | Yes | Supplier-scoped run ID or canonical null sentinel when unavailable. |
++| `supplier_profile_id` | Yes | Must match the manifest's `supplier_profile_id`. |
++| `redacted_access_ref_hash` | Yes | SHA-256 lowercase hex over the redacted access-reference descriptor. |
++
++### ComputeRawFeedManifestId
++
++```text
++ComputeRawFeedManifestId(manifest):
++1. Materialize manifest defaults.
++2. Exclude `manifest_id` and `manifest_checksum`.
++3. Serialize the remaining manifest object with `040.CanonicalJSON`.
++4. Return `rfm_` plus SHA-256 lowercase hex over the UTF-8 canonical bytes.
++5. If a prior different canonical manifest byte string has the same ID, emit `RAW_FEED_MANIFEST_ID_COLLISION` and commit no manifest or raw import output.
++```
++
++`manifest_checksum` must be SHA-256 lowercase hex over `040.CanonicalJSON` bytes for the materialized manifest excluding only `manifest_checksum`. `manifest_id` is included in `manifest_checksum`.
++
+ ### RawRecord identity import
+ 
+ `020` imports `040.RawRecordSchema`, `040.ComputeRawRecordId`, and `040.CoreRecordValidationAlgorithm`. The former `020` raw ID input-order table is consolidated into `040.CoreRecordIdPolicy`. Raw import fixtures in `120` must compute expected raw IDs through `040.ComputeRawRecordId`.
+@@ -213,16 +286,18 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
+ 
+ ### Feed-fixture coverage matrix
+ 
+-| Fixture class | Required owner validation row |
+-| --- | --- |
+-| valid table snapshot | `120` feed-read success row |
+-| malformed manifest | `120` manifest rejection row |
+-| duplicate payload | `120` raw identity duplicate row |
+-| stale availability | `120` availability stale row |
+-| partial known gap | `120` no-absence row |
+-| permission-limited supplier evidence | `120` no-absence row |
+-| CDC tombstone | `120` CDC non-authority row |
+-| no direct source call | `120` direct-source negative row |
++| Fixture class | Required fixture ID | Required owner validation row | Expected outcome |
++| --- | --- | --- | --- |
++| minimal valid object-batch manifest | `feed-020-valid-object-batch-manifest` | `val-020-manifest-valid-object-batch` | Manifest ID and checksum match expected TODO checksum. |
++| malformed manifest | `feed-020-malformed-manifest` | `val-020-manifest-malformed` | `manifest_invalid`; no raw import commit. |
++| manifest checksum mismatch | `feed-020-manifest-checksum-mismatch` | `val-020-manifest-checksum-mismatch` | `manifest_invalid`; no raw import commit. |
++| omitted object for table snapshot | `feed-020-table-omitted-object` | `val-020-table-omitted-object` | Fail read unless declared subset profile permits partial. |
++| omitted object for object batch | `feed-020-object-batch-known-gap` | `val-020-object-batch-known-gap` | `read_partial_known_gap`; no absence authority. |
++| raw ID replay | `feed-020-raw-id-replay` | `val-020-raw-id-replay` | Expected raw ID computed through `040.ComputeRawRecordId`. |
++| raw ID collision | `feed-020-raw-id-collision` | `val-020-raw-id-collision` | `RAW_RECORD_ID_COLLISION`; commit no colliding record. |
++| no absence from manifest | `feed-020-no-absence-from-manifest` | `val-020-no-absence-from-manifest` | Missing object or row yields no absence without `060` gates. |
++| CDC tombstone | `feed-020-cdc-tombstone-non-authority` | `val-020-cdc-tombstone-non-authority` | No retraction without `060` and `080` policy. |
++| no direct source call | `feed-010-direct-source-call` | `neg-010-direct-source-call` | `DIRECT_SOURCE_CALL_FORBIDDEN`. |
+ 
+ ### Acceptance Criteria
+ 
+@@ -237,6 +312,9 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
+ | `020-SCHEMA-PATCH-AC-003` | `LakehouseReadPolicy` declares max payload byte length and raw byte canonicalization mode. |
+ | `020-SCHEMA-PATCH-AC-004` | Raw payload refs cannot expose private routes, credentials, or raw payload bytes in public artifacts. |
+ 
++| `020-DOMAIN-CONSISTENCY-AC-001` | `domain.md` routes raw feed manifest and raw record ID behavior to `020` and `040` without marking them unresolved or restating `040` ID input order. |
++| `020-MANIFEST-AC-001` | `ComputeRawFeedManifestId` and `manifest_checksum` produce byte-identical values across replay from the same manifest bytes. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/030-processing-dag-lifecycle-and-versioning.md b/docs/nlspec/030-processing-dag-lifecycle-and-versioning.md
+index cee7fdffad2d0a11168abe1a35d16298e6154b7c..670b3c9ffc9f2a4703cc08c36aeeddd2cf9c22df 100644
+--- a/docs/nlspec/030-processing-dag-lifecycle-and-versioning.md
++++ b/docs/nlspec/030-processing-dag-lifecycle-and-versioning.md
+@@ -66,6 +66,25 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
+ 
+ Any stage emitting a record class outside its permitted set must fail with `FORBIDDEN_STAGE_OUTPUT` before the output is committed.
+ 
++Deterministic stage ordering rules:
++
++| Condition | Required behavior |
++| --- | --- |
++| Duplicate `stage_id` | Reject the DAG with `DAG_STAGE_ID_DUPLICATE`. |
++| Cycle detected | Reject the DAG with `DAG_CYCLE_DETECTED`. |
++| Multiple ready stages | Execute ready stages in ascending lexical `stage_id` order. |
++| Stage order replay | Same DAG bytes and requested subset must produce byte-identical ordered stage ID list. |
++
++Failure-isolation precedence:
++
++| Precedence | Condition | Required behavior |
++| ---: | --- | --- |
++| 1 | Core schema validation fails | Reject before owner algorithm execution. |
++| 2 | Stage emits forbidden output | Reject before persistence. |
++| 3 | Non-isolated stage failure | Stop all downstream stages and emit deterministic error. |
++| 4 | Isolated stage failure | Continue only for declared outputs; watermarks must not advance. |
++
++
+ Every production stage output whose record class is imported from `040.CoreRecordSchema` must pass `040.ValidateCoreRecord` before commit and before external visibility. Schema validation failure must occur before source authority, identity, gold derivation, graph projection, API, export, or analysis behavior can consume the record. A package, parser, resolver, or projector must not bypass `040` by emitting package-local DTOs as production records.
+ 
+ ## Lifecycle Contract
+@@ -104,11 +123,11 @@ A production stage subset may execute only with an active `DeclaredDAGSubsetProf
+ 
+ ```text
+ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
+-1. Validate dag acyclicity and active lifecycle state.
++1. Validate duplicate stage IDs, dag acyclicity, and active lifecycle state.
+ 2. Resolve active package set and stage bindings.
+ 3. Validate requested subset or full DAG mode.
+ 4. Acquire RunLockSet.
+-5. For each stage in canonical topological order:
++5. For each stage in canonical topological order, sorting simultaneously ready stages by lexical `stage_id`:
+    a. Validate imported profiles and state refs.
+    b. Validate permitted outputs.
+    c. Execute package role or pure product algorithm.
+@@ -166,6 +185,35 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
+ | API/export output | owner state labels, authorization/redaction policy, page-token policy, derived view state. |
+ | Package activation | package-set manifest, trust evidence, compatibility, validation, approval, rollback refs. |
+ 
++
++### VersionManifestSchema
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `version_manifest_id` | Yes | Deterministic ID computed from `manifest_kind` and canonical included refs. |
++| `manifest_kind` | Yes | Closed token for run, replay, validation, graph rebuild, or package activation. |
++| `included_refs` | Yes | Canonically sorted refs for every output-affecting artifact. |
++| `schema_registry_checksum` | Yes | Active `040` core schema registry checksum. |
++| `package_set_checksum` | Yes when packages affect output | Immutable `ProductionPackageSetManifest` checksum. |
++| `stage_state_refs` | Yes | Stage state refs and checksums sorted by state kind then ID. |
++| `snapshot_refs` | Yes when lakehouse reads affect output | `LakehouseSnapshotRef` and `DatasetVersionRef` refs. |
++| `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
++| `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
++| `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
++| `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
++
++`version_manifest_id` must be `vm_` plus SHA-256 lowercase hex over `040.CanonicalJSON` of `manifest_kind` and `included_refs`. `created_at` must not affect `version_manifest_id`.
++
++### RequiredLifecycleMachineBindings
++
++| Production lifecycle | Required owner | Transition table status | Validation row |
++| --- | --- | --- | --- |
++| package/profile activation | `100` plus package/profile owner | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-package-activation` |
++| production run execution | `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-production-run` |
++| feed stage execution | `020`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-feed-stage` |
++| graph apply | `090`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-graph-apply` |
++| validation acceptance | `120`, `030` | TODO: total transition table required before authoritative promotion | `val-030-lifecycle-validation-acceptance` |
++
+ ### RunLockKeyDerivation
+ 
+ ```text
+@@ -176,6 +224,17 @@ RunLockKeyDerivation(scope):
+ 4. If two non-identical tuples produce the same lock key, fail with `RUN_LOCK_COLLISION`.
+ ```
+ 
++
++### RunLockSet acquisition semantics
++
++| Condition | Required behavior |
++| --- | --- |
++| All lock keys available | Acquire the complete lock set before any production output write. |
++| One or more lock keys unavailable | Acquire no locks or release every acquired lock before returning `RUN_LOCK_ACQUISITION_FAILED`. |
++| Partial acquisition failure | Emit `RUN_LOCK_ACQUISITION_FAILED`; write no production output and advance no watermark. |
++| Lock lost during run | Stop before next output commit and emit `RUN_LOCK_LOST`; downstream stages must not run. |
++| Stale lock | TODO: product governance must define default lease TTL, heartbeat interval, and stale-lock recovery condition before authoritative promotion. |
++
+ ### DeclaredDAGSubsetProfile matrix
+ 
+ | Subset mode | Allowed outputs | Forbidden outputs | Absence behavior | Cleanup behavior | Projection behavior | Watermark behavior | Validation requirement |
+@@ -197,6 +256,10 @@ RunLockKeyDerivation(scope):
+ | `030-SCHEMA-PATCH-AC-002` | `VersionManifest` records the active core schema registry checksum for every output-affecting run. |
+ | `030-SCHEMA-PATCH-AC-003` | A forbidden or malformed core record fails before downstream domain algorithms execute. |
+ 
++| `030-DAG-ORDER-AC-001` | Duplicate stage IDs fail with `DAG_STAGE_ID_DUPLICATE`, cycles fail with `DAG_CYCLE_DETECTED`, and ready-stage ties sort lexically by `stage_id`. |
++| `030-RUNLOCK-AC-001` | Run lock acquisition is all-or-nothing and partial acquisition failure releases acquired locks before returning `RUN_LOCK_ACQUISITION_FAILED`. |
++| `030-VERSION-MANIFEST-AC-001` | Same included refs and manifest kind produce the same `version_manifest_id`; checksum includes `created_at` but ID does not. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/040-canonical-data-observation-and-fact-model.md b/docs/nlspec/040-canonical-data-observation-and-fact-model.md
+index aea776d52902143682418ae05aa7063b2bf57896..792c022b7aa02d861326e591d9780bfefca189f2 100644
+--- a/docs/nlspec/040-canonical-data-observation-and-fact-model.md
++++ b/docs/nlspec/040-canonical-data-observation-and-fact-model.md
+@@ -111,6 +111,45 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
+ | `map<string,T>` | JSON object keyed by canonical strings. | Maximum 4096 entries unless the field row overrides; keys sort lexically. |
+ | `one_of` | Tagged union with `kind` plus exactly one matching value member. | Unknown `kind` is rejected. |
+ 
++
++### DecimalPrecisionPolicy
++
++Decimal values that affect IDs, checksums, confidence, graph scoring, or validation output must use canonical base-10 strings. Binary floating point is forbidden.
++
++| Decimal class | Range | Canonical scale | Accepted input normalization | Rounding behavior | Invalid error |
++| --- | --- | ---: | --- | --- | --- |
++| `confidence_0_1` | `0.000000` through `1.000000` inclusive | 6 fractional digits | `0`, `0.0`, and `0.000000` normalize to `0.000000`; `1`, `1.0`, and `1.000000` normalize to `1.000000`. | No rounding is performed; inputs with more than 6 fractional digits fail. | `CORE_DECIMAL_PRECISION_INVALID` |
++
++Persisted records must contain the canonical six-fractional-digit string. A persisted value such as `1`, `1.0`, or `1.00000` fails checksum validation because it is not canonical.
++
++### CoreEnumRegistryOwnership
++
++Every `enum_token` field must be governed by exactly one closed enum owner before authoritative promotion. `040` owns only the enum-token scalar grammar unless the row below assigns the enum to `040`.
++
++| Enum family | Owner | Applies to | Closure state |
++| --- | --- | --- | --- |
++| core record tokens and schema record types | `040` | `CommonRecordHeader.record_type` and core schema selectors | closed by exported core record set |
++| omission states | `040` | `OmissionState` | closed by `040.Omission Semantics` |
++| assertion states | `040`, `080` | `GoldFact.assertion_state` and correction transitions | closed for default states; owner-specific transitions in `080` |
++| raw import and payload enums | `020`, `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | owner enum row required before promotion |
++| silver observation enums | `050`, `040` | observation type, source category, field quality, external profile state | owner enum row required before promotion |
++| identity enums | `070`, `040` | identity decision, evidence role, review state, selector mechanism | owner enum row required before promotion |
++| temporal and correction enums | `080`, `040` | temporal quality, correction class, replay result, bitemporal query mode | owner enum row required before promotion |
++| graph enums | `090`, `040` | graph node type, edge type, operation, traversal class, assertion visibility | owner enum row required before promotion |
++| API, package, validation, and analysis enums | `100`, `110`, `120`, `130` | status, health, error, validation, and analysis tokens | owner enum row required before promotion |
++
++### CoreOneOfRegistry
++
++Each `one_of` field must use a tagged object with `kind` plus exactly one member named by the registry row. Unknown `kind`, missing value member, multiple value members, or null value member where not permitted fails with `CORE_ONE_OF_INVALID`.
++
++| Union | Owning spec | Allowed `kind` values | Value member rule | Null/omission behavior | ID/checksum behavior | Invalid-kind error | Closure state |
++| --- | --- | --- | --- | --- | --- | --- | --- |
++| `GoldFact.subject_ref` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null and omission forbidden. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
++| `GoldFact.object_value` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null permitted only when the owning fact predicate declares null-object semantics. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
++| `GraphNodeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
++| `GraphEdgeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
++| `EvidenceRef.artifact_id` | `040`, behavior imported by `110` and `120` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`; raw payload bytes are forbidden. | Null and omission forbidden. | Included in evidence-ref ID and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
++
+ ### CommonRecordHeader
+ 
+ `CommonRecordHeader` applies to every persisted core record in this registry. Per-record field tables define additional fields. When a per-record table includes a record-specific ID field such as `raw_record_id`, that field must equal `CommonRecordHeader.record_id`; a mismatch fails with `CORE_RECORD_ID_MISMATCH`.
+@@ -367,6 +406,7 @@ ValidateCoreRecord(record, schema, environment):
+ 5. Reject omitted required fields.
+ 6. Reject explicit null where null_allowed = no.
+ 7. Validate scalar type, container type, bounds, enum membership, and one_of tag/value pairing.
++7a. Apply validation precedence from `CoreRecordValidationPrecedence` when more than one failure is present.
+ 8. Canonically sort arrays and maps that declare sort keys.
+ 9. Validate extension-map ownership and redaction ownership.
+ 10. Compute expected record_id from CoreRecordIdPolicy.
+@@ -379,6 +419,24 @@ ValidateCoreRecord(record, schema, environment):
+ 
+ `CoreRecordValidationAlgorithm` is exported as `ValidateCoreRecord` for import by downstream specs.
+ 
++
++### CoreRecordValidationPrecedence
++
++When a record has multiple validation defects, `ValidateCoreRecord` must emit the first applicable class in this total order. The validation result may include non-primary diagnostics only after the primary error is selected.
++
++| Order | Failure class | Primary error |
++| ---: | --- | --- |
++| 1 | unknown field outside declared extension map | `CORE_UNKNOWN_FIELD` |
++| 2 | required field omitted | `CORE_REQUIRED_FIELD_MISSING` |
++| 3 | explicit null where forbidden | `CORE_NULL_FORBIDDEN` |
++| 4 | scalar or container type invalid | `CORE_FIELD_TYPE_INVALID` |
++| 5 | scalar bound, byte bound, length, or decimal precision invalid | `CORE_FIELD_BOUNDS_INVALID` or `CORE_DECIMAL_PRECISION_INVALID` |
++| 6 | enum token not in closed owner enum | `CORE_ENUM_INVALID` |
++| 7 | `one_of` tag/value invalid | `CORE_ONE_OF_INVALID` |
++| 8 | computed ID mismatch | `CORE_RECORD_ID_MISMATCH` |
++| 9 | checksum mismatch | `CORE_RECORD_CHECKSUM_MISMATCH` |
++| 10 | required production version manifest missing | `VERSION_MANIFEST_INCOMPLETE` |
++
+ ### ComputeRawRecordId
+ 
+ ```text
+@@ -432,6 +490,9 @@ ComputeEvidenceRefId(evidence_ref):
+ | `CORE_NULL_FORBIDDEN` | Field is explicit null where null is forbidden. |
+ | `CORE_FIELD_TYPE_INVALID` | Field has wrong scalar or container type. |
+ | `CORE_FIELD_BOUNDS_INVALID` | Field exceeds declared bound. |
++| `CORE_DECIMAL_PRECISION_INVALID` | Decimal string is outside range, non-canonical, or has more fractional digits than the declared scale. |
++| `CORE_ENUM_INVALID` | `enum_token` value is not in the closed owner enum. |
++| `CORE_ONE_OF_INVALID` | `one_of` value has unknown kind, missing matching value member, multiple value members, or forbidden null. |
+ | `CORE_RECORD_ID_MISMATCH` | Supplied ID does not equal computed ID. |
+ | `CORE_RECORD_CHECKSUM_MISMATCH` | Supplied checksum does not equal computed checksum. |
+ | `CORE_SCHEMA_VERSION_UNSUPPORTED` | Record schema version is unknown or inactive. |
+@@ -444,6 +505,7 @@ ComputeEvidenceRefId(evidence_ref):
+ | `EVIDENCE_REF_ID_COLLISION` | Different evidence-ref ID inputs produce the same evidence-ref ID. |
+ | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `EvidenceRef` embeds raw payload bytes. |
+ | `GRAPH_BACKEND_ID_FORBIDDEN` | Backend-generated ID appears in graph delta shape, graph response, selector, evidence ref, replay key, drillback key, or pagination identity. |
++| `PRIVATE_BINDING_LEAK` | A core record or public core-shaped artifact exposes concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories. |
+ 
+ ### Core schema security and extensibility constraints
+ 
+@@ -456,15 +518,16 @@ ComputeEvidenceRefId(evidence_ref):
+ | Extensibility | Extension maps must be owner-declared. Undeclared extension fields fail before production output. |
+ | Minimal coupling | `040` defines record bytes and validation behavior only. It must not define parser mechanisms, resolver scoring, graph backend products, package runtimes, or source-specific mappings. |
+ 
+-### Core schema unresolved rows
++### Core schema closure rows
+ 
+-The following rows block authoritative promotion until closed by the owning spec or explicit product governance.
++`040` closes decimal precision and validation precedence. Owner-specific enum and one-of value sets remain explicit owner-local blockers and must be represented in `120` validation rows; downstream implementations must not invent missing enum tokens or union members.
+ 
+-| Blocker | Required closure |
+-| --- | --- |
+-| `TODO:decimal-precision` | `GoldFact.confidence` and graph edge `confidence` require an accepted decimal precision and rounding policy before production activation. |
+-| `TODO:one-of-members` | `GoldFact.subject_ref`, `GoldFact.object_value`, graph `source_object_ref`, and `EvidenceRef.artifact_id` require owner-specific closed union member tables before authoritative promotion. |
+-| `TODO:enum-registries` | Every `enum_token` field requires a closed owner enum before authoritative promotion. |
++| Closure row | Required behavior | Closure state |
++| --- | --- | --- |
++| decimal precision | Use `DecimalPrecisionPolicy.confidence_0_1`; no rounding; persisted value has six fractional digits. | closed_local |
++| one-of members | Use `CoreOneOfRegistry`; any row with TODO allowed kinds blocks authoritative promotion for affected outputs. | blocked_owner_todo |
++| enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_owner_todo |
++| private binding error | `PRIVATE_BINDING_LEAK` is available to core schema and imported from `010`/`110` for public artifact rejection. | closed_local |
+ 
+ ## Assertion States
+ 
+diff --git a/docs/nlspec/050-normalization-external-schema-and-mapping.md b/docs/nlspec/050-normalization-external-schema-and-mapping.md
+index 40b1e658f77d45da38bef7a33fc30d81bdb98355..83dba3cfe0ecbeba9d722debf56b42d66e0e2377 100644
+--- a/docs/nlspec/050-normalization-external-schema-and-mapping.md
++++ b/docs/nlspec/050-normalization-external-schema-and-mapping.md
+@@ -77,6 +77,9 @@ Cadastre-owned fields for omission, lineage, source identity, confidence, tempor
+ 
+ `ExternalSchemaProfile` must pin external schema name, version, source tag, source commit, compiler version, validator version, compiled artifact checksum, class allowlist, profile set, extension set, deprecated-field policy, and enum mapping behavior.
+ 
++
++MVP OCSF baseline is `OCSF 1.8.0` as a candidate production baseline. The profile must remain non-active until `ExternalSchemaArtifactRef` records the exact source tag, source commit, compiler ID/version/checksum, validator ID/version/checksum, compiled artifact checksum, profile set, extension set, and class allowlist checksum. Use of OCSF `main`, development versions, or main-only fields is forbidden for production output.
++
+ Production OCSF profile status must be `active` only after `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `OCSFBaseEventFieldPolicy`, `ExternalEnumMappingRule`, `OCSFProfileUpgradeReport` when applicable, and `ObservationTypeExternalMappingValidationMatrix` pass.
+ 
+ ## OCSF Mapping Requirements
+@@ -149,16 +152,16 @@ OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`,
+ 
+ The following rows define the active MVP mapping scope at MVP mapping scope. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
+ 
+-| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Status |
+-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+-| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
+-| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | allowed only by mapping row |
++| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Blocked outputs while TODO | Status |
++| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
++| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
++| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
++| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, vulnerability gold candidates | blocking |
++| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, identity/gold candidates | blocking |
++| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DNS gold candidates | blocking |
++| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DHCP/IPAM gold candidates | blocking |
++| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, observed-connection graph candidates | blocking |
++| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | none when mapping row explicitly allows null profile | allowed only by mapping row |
+ 
+ ### OCSFBaseEventFieldPolicy
+ 
+@@ -186,7 +189,8 @@ The following rows define the active MVP mapping scope at MVP mapping scope. Mis
+ 
+ | Namespace | Field path | Type | Bounds | Redaction | Collision policy | Secret-scan behavior | OCSF-reserved-name behavior | Owner | Validation fixture |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+-| TODO | TODO | TODO | TODO | TODO | reject collision by default | reject secret-like value by default | reject by default | `050` | TODO |
++| `source.<source_category>` | `source.<namespace>.<field_name>` where each segment is lowercase snake case and non-empty | scalar: string, boolean, uint64, int64, decimal string, timestamp, sha256; container: array or map of allowed scalar | string max 4096 scalar values; arrays max 1024 elements; maps max 4096 entries; canonical object max 65536 bytes | owner row must state caller-visible, audit-only, or redacted | reject path collision and type collision by default | reject secret-like value before output unless redaction policy permits audit-only storage | reject any path equal to or prefixed by an OCSF reserved base-event field unless policy permits non-authoritative metadata | `050` | `fixture-050-source-extension-declared` |
++| undeclared namespace or path | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `050` | `fixture-050-source-extension-undeclared` emits `SOURCE_EXTENSION_FIELD_UNDECLARED` |
+ 
+ ### MappingValidationRule severity defaults
+ 
+@@ -201,6 +205,31 @@ The following rows define the active MVP mapping scope at MVP mapping scope. Mis
+ 
+ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts cannot authorize production mappings.
+ 
++
++### Mapping diagnostics and errors
++
++| Error code | Emitted when |
++| --- | --- |
++| `OCSF_ARTIFACT_MISMATCH` | Active profile refs do not match the compiled artifact checksum, source tag, source commit, compiler, or validator evidence. |
++| `OCSF_CLASS_NOT_ALLOWED` | A mapping emits an OCSF class outside the active class allowlist. |
++| `EXTERNAL_ENUM_UNKNOWN` | Source enum value is not mapped and no unknown-value policy applies. |
++| `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | Mapping attempts OCSF `Other` without an active rule preserving the raw value. |
++| `EXTERNAL_ENUM_DEPRECATED` | Mapping emits a deprecated enum or field without a non-expired waiver. |
++| `EXTERNAL_ENUM_SIBLING_MISMATCH` | Enum ID/name sibling values do not match the compiled artifact. |
++| `SOURCE_EXTENSION_FIELD_UNDECLARED` | Mapping emits a source extension field without an active `SourceExtensionFieldRule`. |
++
++### OCSFProfileUpgradeReport evidence requirements
++
++| Evidence | Required behavior |
++| --- | --- |
++| schema diff | Compare current and candidate compiled artifacts and record checksum. |
++| golden corpus replay | Replay every active observation mapping fixture and compare expected output checksums. |
++| shadow run | Produce non-production output only and record drift summary. |
++| enum change review | Review new, removed, renamed, deprecated, and sibling enum changes. |
++| deprecated field review | List deprecated fields and waiver decisions. |
++| class allowlist change | Record added/removed classes and affected observation types. |
++| extension set change | Record added/removed extensions, namespace collisions, and reserved-name effects. |
++
+ ### Acceptance Criteria
+ 
+ | ID | Criterion |
+@@ -214,6 +243,9 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
+ | `050-SCHEMA-PATCH-AC-004` | OCSF fields cannot create identity, gold, graph, authority, or omission semantics outside the owning specs. |
+ | `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
+ 
++| `050-OCSF-BASELINE-AC-001` | MVP OCSF production activation is blocked until exact `OCSF 1.8.0` artifact identity, compiled artifact checksum, class allowlist, profile set, extension set, enum rules, and validation fixtures are recorded. |
++| `050-SOURCE-EXTENSION-AC-001` | Undeclared, namespace-invalid, unbounded, secret-scan-failing, or OCSF-reserved-colliding source extension fields fail before production output. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/060-source-authority-completeness-coverage-and-absence.md b/docs/nlspec/060-source-authority-completeness-coverage-and-absence.md
+index fe91b9c939ccd915fbcbfc1ba57d54f63233396a..64fbd3a77f514db0dfe43766844e889f7de412b5 100644
+--- a/docs/nlspec/060-source-authority-completeness-coverage-and-absence.md
++++ b/docs/nlspec/060-source-authority-completeness-coverage-and-absence.md
+@@ -111,6 +111,30 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
+ 8. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
+ ```
+ 
++
++### AbsenceDerivationResult schema
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `result_state` | Yes | Closed token: absence authorized, unknown, not applicable, stale, no-op, or deterministic error. |
++| `absence_authorized` | Yes | Boolean; true only when authority, completeness, staleness, and coverage gates pass. |
++| `blocking_reason` | Required when `absence_authorized = false` | Most specific blocking code. |
++| `authority_row_ref` | Required when evaluated | Exact `SourceAuthorityProfileRow` ref or null when missing. |
++| `completeness_decision_ref` | Required when evaluated | Lakehouse feed completeness decision ref. |
++| `coverage_assertion_refs` | Required for coverage-sensitive outputs | Non-empty when coverage-sensitive output is authorized. |
++| `staleness_decision_ref` | Required when staleness evaluated | Source staleness policy decision ref. |
++| `version_manifest_ref` | Required for production output | Version manifest ref containing all output-affecting inputs. |
++
++### Authority, coverage, and absence error codes
++
++| Error/no-op code | Emitted when |
++| --- | --- |
++| `SOURCE_AUTHORITY_ROW_MISSING` | No exact active authority row covers fact type, predicate, dataset, scopes, and requested absence authority. |
++| `COVERAGE_ASSERTION_REQUIRED` | Coverage-sensitive output lacks a current coverage assertion. |
++| `COVERAGE_DIMENSION_UNRESOLVED` | Required coverage dimension has no active source-specific row. |
++| `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | Progress/liveness/freshness/lineage signal is used without an active policy row granting the effect. |
++| `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | Completeness decision is partial, unavailable, permission-limited, not attempted, not authoritative, or otherwise unsafe. |
++
+ ## Watermarks
+ 
+ Every attempted production source, projection, graph-apply, or presence-only watermark change must be evaluated through `ProjectionWatermarkPolicy` and persisted as exactly one `WatermarkCommitRecord`. Failed, partial, aborted, schema-preflight-failed, or completeness-blocked runs must not advance watermarks.
+@@ -130,18 +154,35 @@ Missing rows, stale states, partial states, permission-limited states, weak prog
+ 
+ ### CoverageDimensionProfile catalog
+ 
+-| Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output |
+-| --- | --- | --- | --- | --- | --- | --- | --- |
+-| vulnerability | scanner target, credentialed status, plugin/check scope, scan window | coverage assertion plus scanner evidence | `SourceStalenessPolicy` | `permission_limited` blocks absence | `partial_known_gap` or `partial_unknown_gap` | stale blocks absence | unknown |
+-| control | benchmark/check scope, applicability, evaluation status | `ControlResultMappingRow` and coverage assertion | owner row | not checked/unknown | unknown | stale | unknown |
+-| endpoint | asset scope, enrollment visibility, collection window | feed completeness plus authority row | owner row | blocks absence | unknown | stale | unknown |
+-| directory | tenant/domain, group/member scope, hidden membership visibility | directory completeness evidence | owner row | blocks nonmembership | unknown | stale | unknown |
+-| DNS | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown |
+-| DHCP/IPAM | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown |
+-| flow | sensor scope, collection point, time window, role evidence | flow feed evidence | window policy | unknown | partial | stale | unknown |
+-| cloud inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown |
+-| source history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown |
+-| deferred reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op |
++| Row ID | Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output | CoverageClosureStatus |
++| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
++| `cov-vulnerability-default` | vulnerability | scanner target, credentialed status, plugin/check scope, scan window | coverage assertion plus scanner evidence | `SourceStalenessPolicy` | `permission_limited` blocks absence | `partial_known_gap` or `partial_unknown_gap` | stale blocks absence | unknown | `requires_source_specific_row` |
++| `cov-control-default` | control | benchmark/check scope, applicability, evaluation status | `ControlResultMappingRow` and coverage assertion | owner row | not checked/unknown | unknown | stale | unknown | `requires_source_specific_row` |
++| `cov-endpoint-default` | endpoint | asset scope, enrollment visibility, collection window | feed completeness plus authority row | owner row | blocks absence | unknown | stale | unknown | `requires_source_specific_row` |
++| `cov-directory-default` | directory | tenant/domain, group/member scope, hidden membership visibility | directory completeness evidence | owner row | blocks nonmembership | unknown | stale | unknown | `requires_source_specific_row` |
++| `cov-dns-default` | DNS | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
++| `cov-dhcp-ipam-default` | DHCP/IPAM | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
++| `cov-flow-default` | flow | sensor scope, collection point, time window, role evidence | flow feed evidence | window policy | unknown | partial | stale | unknown | `requires_source_specific_row` |
++| `cov-cloud-inventory-default` | cloud inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown | `requires_source_specific_row` |
++| `cov-source-history-default` | source history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown | `requires_source_specific_row` |
++| `cov-reachability-deferred` | deferred reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op | `inactive_deferred` |
++
++
++`CoverageClosureStatus` is a closed enum: `closed_default`, `requires_source_specific_row`, and `inactive_deferred`. Source-specific absence-sensitive outputs remain blocked until a `requires_source_specific_row` domain has a matching active source-specific coverage row.
++
++### Coverage-sensitive blocked outputs
++
++| Missing coverage domain | Blocked output |
++| --- | --- |
++| vulnerability | vulnerability absence and fixed-state absence. |
++| control | control pass, fail, unknown, not-checked, and not-applicable facts. |
++| endpoint | endpoint disappearance, non-observation, and cleanup. |
++| directory | group non-membership, user non-membership, hidden-membership absence. |
++| DNS | DNS absence, host deletion from TTL expiry, negative DNS fact. |
++| DHCP/IPAM | DHCP lease absence, IPAM absence, host deletion from lease expiry. |
++| flow | flow non-observation and observed-connection absence. |
++| cloud inventory | missing cloud resource and resource deletion inference. |
++| source history | no-change proof outside supported history window. |
+ 
+ ### LakehouseFeedCompletenessProfile table
+ 
+@@ -233,6 +274,9 @@ Weak progress signals must not combine into stronger authority.
+ | `060-SCHEMA-PATCH-AC-002` | `absence_outcome` can be materialized only by `DeriveAbsenceOrUnknown`. |
+ | `060-SCHEMA-PATCH-AC-003` | `060` does not restate `GoldFact` field definitions; it references `040.GoldFactSchema` by exact name. |
+ 
++| `060-COVERAGE-CLOSURE-AC-001` | Every coverage catalog row has a `CoverageDimensionProfileRowId` and `CoverageClosureStatus`. |
++| `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, and manifest refs or a specific blocking reason. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/070-identity-resolution-and-target-selectors.md b/docs/nlspec/070-identity-resolution-and-target-selectors.md
+index e08e7debd47fa093ad0a3f5a6ef7faeefea37797..5e8b4b27ea805f1203765607458892dbb7d2e005 100644
+--- a/docs/nlspec/070-identity-resolution-and-target-selectors.md
++++ b/docs/nlspec/070-identity-resolution-and-target-selectors.md
+@@ -134,7 +134,7 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
+ | `host` | `production` | provider/account/tenant/site/cluster as applicable | durable IDs plus weak evidence classes | reimage, clone, VDI, reinstall, delete/recreate, reuse | auto_merged, candidate, rejected, split, conflicted, no_decision | weak evidence rejection, hard blocker, split handoff |
+ | `user` | `production` | directory tenant/domain/source | directory IDs plus names and memberships | delete/recreate, reenrollment | candidate, rejected, conflicted, no_decision unless profile permits merge | permission-limited and hidden-membership cases |
+ | `service_account` | `production` | provider/account/tenant | durable provider IDs and directory IDs | delete/recreate, rekey | candidate, rejected, no_decision | scope mismatch cases |
+-| TODO | TODO | TODO | TODO | TODO | TODO | blocking until owner row exists |
++| `unsupported_entity_type` | any | any | any | any | no_decision only | emit `RESOLVER_ENTITY_TYPE_UNSUPPORTED`; no identity mutation |
+ 
+ ### IdentifierScope canonicalization
+ 
+@@ -185,6 +185,49 @@ OpenGraph-style property matching, name matching, source-kind matching, environm
+ 
+ Manual review must never mutate canonical identity outside terminal `IdentityDecision` records.
+ 
++
++`IdentityReviewCase` transition coverage is total. Any state/event pair not listed as an allowed transition must reject mutation, preserve the current state, and emit `IDENTITY_REVIEW_TRANSITION_INVALID`. Expiration routes the case to `expired` and must not mutate canonical identity.
++
++### Identity closed enum tables
++
++| Enum family | Closed values |
++| --- | --- |
++| identity decision states | `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, `no_decision` |
++| review case states | `opened`, `in_review`, `blocked`, `expired`, `terminal_decision_emitted` |
++| review events | `assign`, `approve_merge`, `reject_merge`, `request_more_evidence`, `evidence_supplied`, `expire`, `cancel` |
++| evidence roles | `positive_evidence`, `negative_evidence`, `candidate_hint`, `selector`, `lineage_only`, `correlation_hint` |
++| selector mechanisms | `mapped_target`, `opengraph_property_matching`, `graph_key`, `hostname`, `ip_address`, `dns_name`, `ptr_name` |
++
++### Resolver error codes
++
++| Error code | Emitted when |
++| --- | --- |
++| `RESOLVER_PROFILE_MISSING` | No active resolver profile covers run mode, entity type, source scopes, evidence classes, and lifecycle boundaries. |
++| `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | Entity type maps to the unsupported row. |
++| `IDENTITY_EVIDENCE_UNDER_SCOPED` | Required scope keys are absent or non-canonical. |
++| `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | Evidence class lacks a covering resolver profile row. |
++| `IDENTITY_HARD_BLOCKER_TRIGGERED` | Hard blocker or generation boundary prevents auto-merge. |
++| `IDENTITY_REVIEW_TRANSITION_INVALID` | Review event is illegal for the current state. |
++| `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
++| `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
++
++### CandidateGenerationProfile bounds
++
++| Field | Default | Maximum | Overflow behavior | Closure state |
++| --- | --- | --- | --- | --- |
++| `candidate_cap` | TODO: owner decision required | TODO: owner decision required | Sort candidate pairs by deterministic pair ordering, emit overflow output state, and do not auto-merge overflowed candidates. | blocked_owner_todo |
++
++### ResolverExplanation required fields
++
++| Field | Required behavior |
++| --- | --- |
++| decision row | Reference the selected resolver decision matrix row. |
++| blockers evaluated | Include fired and non-fired blocker row IDs. |
++| evidence refs | Reference `IdentityEvidenceItem` rows and source evidence refs. |
++| confidence band | Include deterministic band or governed score inputs. |
++| review routing | Include review case ref when manual review is required. |
++| checksum | SHA-256 over canonical explanation bytes. |
++
+ ### ResolverActivationReport requirements
+ 
+ | Requirement | Default |
+@@ -228,6 +271,9 @@ Manual review must never mutate canonical identity outside terminal `IdentityDec
+ | `070-SCHEMA-PATCH-AC-002` | `070` does not restate core record fields except by exact schema name reference. |
+ | `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity or identifier merge by bypassing the `040` and `070` validation sequence. |
+ 
++| `070-REVIEW-TOTALITY-AC-001` | Every `IdentityReviewCase` state/event pair has an allowed transition or emits `IDENTITY_REVIEW_TRANSITION_INVALID` without identity mutation. |
++| `070-EXPLANATION-AC-001` | Every `IdentityDecision` has exactly one `ResolverExplanation` with decision row, blockers, evidence refs, confidence band, review routing, and checksum. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/080-temporal-corrections-replay-and-gold-derivation.md b/docs/nlspec/080-temporal-corrections-replay-and-gold-derivation.md
+index f0231ea08829f3f15e5e927d956877d2a49062af..488af935eda7175de99500f936e79a721d616366 100644
+--- a/docs/nlspec/080-temporal-corrections-replay-and-gold-derivation.md
++++ b/docs/nlspec/080-temporal-corrections-replay-and-gold-derivation.md
+@@ -120,6 +120,9 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
+ | `reconstructed_source_known_time` | Allowed only when policy names source-known-time evidence and validation rows pass. |
+ | `rejected_reconstruction` | Default when source-known-time evidence is missing, stale, ambiguous, or untrusted. |
+ 
++
++Production default is `current_import`. Historical known-time reconstruction is rejected unless explicit persisted source-known-time evidence exists and an active policy permits `reconstructed_source_known_time`. Current platform time may not be used for known time or valid time unless the value is captured in persisted evidence before derivation.
++
+ ### BitemporalQueryMode catalog
+ 
+ | Query mode | Default valid time | Default known time | Assertion-state visibility | Page-token scope | Ordering | Audit behavior |
+@@ -161,6 +164,15 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
+ | graph delta/apply/rebuild | projection profile, delta set, idempotency, backend evidence, rebuild manifest | backend transient IDs | `sha256` | delta ID and path order | schema mismatch before output mismatch | compare only | active draft |
+ | projections/API/analysis | owner refs, labels, authorization/redaction policy, output checksum | request correlation ID | `sha256` | owner-defined | authorization mismatch before output mismatch | compare only | TODO rows required |
+ 
++
++Replay-equivalence ownership split:
++
++| Output subset | Checksum-rule owner | Required behavior |
++| --- | --- | --- |
++| graph/API replay | `090` and `110` for included/excluded fields; `080` for checksum algorithm and preflight ordering | Missing owner row blocks replay before output. |
++| analysis replay | `130` for included/excluded fields; `080` for checksum algorithm and preflight ordering | Missing owner row blocks replay before output. |
++| gold/correction replay | `080` | Missing temporal, authority, evidence, correction, or snapshot refs fails before checksum comparison. |
++
+ ### DeterministicSideEffectPolicy
+ 
+ | Side-effect kind | Default |
+@@ -205,6 +217,9 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
+ | `080-SCHEMA-PATCH-AC-003` | Corrections never mutate original `GoldFact` bytes. |
+ | `080-SCHEMA-PATCH-AC-004` | Replay rejects gold output when any 040 schema, temporal, authority, evidence, or correction checksum mismatches. |
+ 
++| `080-KNOWLEDGE-TIME-AC-001` | Production known time defaults to `current_import`, and historical known-time reconstruction is rejected unless policy and persisted source-known-time evidence permit it. |
++| `080-REPLAY-SPLIT-AC-001` | Projection, API, and analysis replay rows import owner-specific included/excluded fields and use `080` only for checksum algorithm and preflight ordering. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/090-graph-projection-serving-and-backends.md b/docs/nlspec/090-graph-projection-serving-and-backends.md
+index ffa0de488aabf0c519d52d1db5884f331e295439..c0df607d57692f164a044b528e3c1e0f54345743 100644
+--- a/docs/nlspec/090-graph-projection-serving-and-backends.md
++++ b/docs/nlspec/090-graph-projection-serving-and-backends.md
+@@ -145,8 +145,8 @@ Every graph-serving response using graph read-model state must include or refere
+ 
+ | Policy | Required inputs | Forbidden inputs | Missing behavior | Collision behavior |
+ | --- | --- | --- | --- | --- |
+-| `GraphNodeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_node_id`, `node_type`, `source_object_ref`, valid/known interval, assertion state | backend node ID, element ID, storage ID, cursor ID | reject before apply | TODO: owner-specific graph node delta collision code required before authoritative promotion |
+-| `GraphEdgeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_edge_id`, `edge_type`, endpoint graph node IDs, direction rule, valid/known interval, assertion state | backend relationship ID, edge storage ID, cursor ID | reject before apply | TODO: owner-specific graph edge delta collision code required before authoritative promotion |
++| `GraphNodeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_node_id`, `node_type`, `source_object_ref`, valid/known interval, assertion state | backend node ID, element ID, storage ID, cursor ID | reject before apply | `GRAPH_NODE_DELTA_ID_COLLISION`; emit no commit before graph apply |
++| `GraphEdgeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_edge_id`, `edge_type`, endpoint graph node IDs, direction rule, valid/known interval, assertion state | backend relationship ID, edge storage ID, cursor ID | reject before apply | `GRAPH_EDGE_DELTA_ID_COLLISION`; emit no commit before graph apply |
+ 
+ `properties` defaults to `{}`. Every property path must pass `GraphPropertyEvidencePolicy`, redaction checks, and raw payload leakage checks. Non-`no_op` deltas must have evidence refs unless an active graph profile explicitly permits structural synthetic output. `observed_connection` direction must derive from `FlowRoleEvidence`, not OCSF endpoint field order or backend edge convention. `has_theoretical_reachability` remains inactive and fail/no-op in MVP.
+ 
+@@ -154,9 +154,53 @@ Every graph-serving response using graph read-model state must include or refere
+ 
+ | Edge type | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op | Validation rows | Status |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+-| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | owner policy | explicit class only | does not imply theoretical reachability | no edge when flow role missing | TODO | blocking until exact row complete |
+-| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | reachability negative rows | inactive_deferred |
+-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | blocking |
++| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | `090` imports confidence from source fact and `040.DecimalPrecisionPolicy` | `observed_connection_path` | does not imply theoretical reachability | no edge when `FlowRoleEvidence` is missing or ambiguous | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role` | active_mvp |
++| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | `val-090-theoretical-reachability-prohibited` | inactive_deferred |
++
++
++The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a new `GraphEdgeSemanticsRegistry` row and validation fixtures before projection activation.
++
++### GraphTraversalClass table
++
++| Traversal class | Pathfinding eligibility | Neighbor expansion eligibility | Reverse traversal behavior | Default inclusion | No-op behavior |
++| --- | --- | --- | --- | --- | --- |
++| `observed_connection_path` | allowed when query names this class | allowed when edge type filter permits | reverse allowed only as a query traversal over the same observed edge; it must not reverse source direction semantics | excluded unless explicitly requested for path queries | empty allowed traversal classes return no paths |
++| `non_traversable` | forbidden | profile-defined display only | none | excluded | edge may be returned as property/detail but not traversed |
++| `analysis_only` | forbidden unless `130.RuleGraphCompatibilityMatrix` permits read-only analysis query | read-only | none unless analysis rule permits | excluded | no production graph mutation |
++
++### GraphApplyProfile defaults
++
++| Setting | Default | Maximum | Required behavior |
++| --- | --- | --- | --- |
++| batch size | TODO: owner decision required before authoritative promotion | TODO | Missing default blocks production graph apply activation. |
++| retry count | TODO: owner decision required before authoritative promotion | TODO | Retryable error classes must be explicit. |
++| transaction boundary | one declared batch | n/a | Partial apply must record committed batch IDs or prove no committed writes. |
++| partial apply behavior | fail closed unless resume evidence is complete | n/a | Unsafe resume emits `GRAPH_APPLY_RESUME_UNSAFE`. |
++| read-after-write proof | required | n/a | Graph apply result must include proof or block derived-view advancement. |
++| schema stale behavior | reject | n/a | Emit `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
++
++### GraphQueryTranslationProfile observable contract
++
++| Field | Required behavior |
++| --- | --- |
++| stable page token fields | Query checksum, authorization context checksum, ordering keys, page boundary, derived-view state, expiration, and profile refs. |
++| backend candidate limit | Must be explicit per query class; TODO owner decision blocks production query activation. |
++| timeout behavior | Return `GRAPH_QUERY_TIMEOUT` unless partial results are explicitly permitted for the query class. |
++| empty traversal behavior | Empty `allowed_traversal_classes` returns no paths. |
++| authorization and redaction | Applied after backend candidate materialization and before response emission. |
++
++### GraphRebuildManifest schema
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `input_snapshot_refs` | Yes | Authoritative lakehouse snapshot or dataset refs. |
++| `graph_delta_set_refs` | Yes | Persisted graph delta set refs and checksums. |
++| `projection_profile_ref` | Yes | Active graph projection profile. |
++| `backend_profile_ref` | Yes | Active backend profile. |
++| `schema_fingerprint` | Yes | Current backend schema fingerprint. |
++| `output_checksum` | Yes | SHA-256 over canonical rebuilt graph-serving output summary. |
++| `status` | Yes | success, failed, blocked, or not_run. |
++| `errors` | Yes | Default `[]`; owner-specific graph rebuild errors. |
+ 
+ ### GraphObjectOutputEligibilityRow
+ 
+@@ -231,6 +275,10 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
+ | `090-SCHEMA-PATCH-AC-003` | Graph properties with undeclared provenance or raw payload leakage fail before graph apply. |
+ | `090-SCHEMA-PATCH-AC-004` | MVP graph profiles still cannot emit theoretical reachability output. |
+ 
++| `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
++| `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |
++| `090-REBUILD-MANIFEST-AC-001` | Every graph rebuild promotion has a `GraphRebuildManifest` with input refs, profile refs, schema fingerprint, output checksum, status, and errors. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/100-packages-supply-chain-and-activation.md b/docs/nlspec/100-packages-supply-chain-and-activation.md
+index fe9dcafd6aafdf149b9054d172092bd25c737a29..b47ec700ff07a106bbc6941b12d87edc5628c5d7 100644
+--- a/docs/nlspec/100-packages-supply-chain-and-activation.md
++++ b/docs/nlspec/100-packages-supply-chain-and-activation.md
+@@ -122,7 +122,7 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
+ | `oci_digest` | resolve by immutable digest only | repository metadata and referrers required when policy says | OCI descriptor required | subject digest and artifact digest must match manifest | signatures, attestations, SBOM attach to subject | candidate |
+ | `tuf_compatible_metadata` | resolve through trusted metadata roles | timestamp, snapshot, targets, delegation evidence required | target metadata required | target hash and length verified | trust evidence persists | candidate |
+ | `local_bundle` | resolve by local immutable checksum | local repository metadata required | bundle descriptor required | bundle checksum verified | evidence bundled and checksummed | candidate |
+-| `git_tree_snapshot` | resolve by immutable commit/tree checksum only | anti-rollback state required | tree descriptor required | tree checksum verified | evidence refs required | TODO blocking until policy rows exist |
++| `git_tree_snapshot` | unsupported for MVP production activation | n/a | n/a | n/a | n/a | `inactive_for_mvp`; reject with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` |
+ 
+ ### PackageTrustRootGovernance
+ 
+@@ -172,12 +172,65 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
+ 
+ | Package type | Public API | Runtime protocol | Dependency lock | Validation checksum | Schema compatibility | Graph compatibility | Trust policy | Attestation | SBOM | Deprecation window |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+-| feed reader | package developer contract | feed stage protocol | required when dependencies affect output | required | feed schema refs | none | required | policy-defined | policy-defined | TODO |
+-| parser | parser contract | parse stage protocol | required | required | raw/schema refs | none | required | policy-defined | policy-defined | TODO |
+-| mapping | mapping compiler pipeline | normalize stage protocol | required | required | external schema artifact | none | required | policy-defined | policy-defined | TODO |
+-| resolver profile | resolver contract | identity stage protocol | n/a | required | evidence classes | graph handoff compatibility | required | policy-defined | policy-defined | TODO |
+-| projection package | graph projection/apply contract | graph stage protocol | required | required | graph schema profile | required | required | policy-defined | policy-defined | TODO |
+-| validation package | validation matrix contract | validation protocol | required | required | fixture schema | graph fixture when applicable | required | policy-defined | policy-defined | TODO |
++| feed reader | package developer contract | feed stage protocol | required when dependencies affect output | required | feed schema refs | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++| parser | parser contract | parse stage protocol | required | required | raw/schema refs | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++| mapping | mapping compiler pipeline | normalize stage protocol | required | required | external schema artifact | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++| resolver profile | resolver contract | identity stage protocol | n/a | required | evidence classes | graph handoff compatibility | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++| projection package | graph projection/apply contract | graph stage protocol | required | required | graph schema profile | required | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++| validation package | validation matrix contract | validation protocol | required | required | fixture schema | graph fixture when applicable | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
++
++
++### PackageDeprecationWindowPolicy
++
++| Package type | Default window | Minimum | Maximum | Emergency retirement behavior | Compatibility override behavior | Validation fixture | Closure state |
++| --- | --- | --- | --- | --- | --- | --- | --- |
++| feed reader | TODO | TODO | TODO | immediate quarantine or retirement allowed when trust or correctness gate fails | only with explicit owner approval and validation evidence | `fixture-100-deprecation-feed-reader` | blocked_owner_todo |
++| parser | TODO | TODO | TODO | same | same | `fixture-100-deprecation-parser` | blocked_owner_todo |
++| mapping | TODO | TODO | TODO | same | same | `fixture-100-deprecation-mapping` | blocked_owner_todo |
++| resolver profile | TODO | TODO | TODO | same | same | `fixture-100-deprecation-resolver` | blocked_owner_todo |
++| projection package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-projection` | blocked_owner_todo |
++| validation package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-validation` | blocked_owner_todo |
++
++### Package activation failure codes
++
++| Error code | Emitted when |
++| --- | --- |
++| `PACKAGE_SET_CHECKSUM_MISMATCH` | Candidate package set checksum or release manifest checksum mismatches. |
++| `PACKAGE_COHESION_INCOMPLETE` | A cohesion group is incomplete. |
++| `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | Repository form is inactive or unsupported for MVP. |
++| `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | Repository metadata regresses under anti-rollback state. |
++| `PACKAGE_SIGNER_UNAUTHORIZED` | Cryptographic signature is valid but signer is not authorized. |
++| `PACKAGE_ATTESTATION_SUBJECT_MISMATCH` | Attestation subject does not match release subject digest. |
++| `PACKAGE_SBOM_SUBJECT_MISMATCH` | SBOM subject does not match release subject digest. |
++| `PACKAGE_COMPATIBILITY_FAILED` | Compatibility matrix row fails. |
++| `PACKAGE_VALIDATION_FAILED` | Required validation row fails, is blocked, or is missing. |
++
++### ProductionPackageSetManifest schema
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `package_release_refs` | Yes | Canonically sorted release manifest refs and checksums. |
++| `cohesion_groups` | Yes | Every group complete before activation. |
++| `environment` | Yes | Target environment token. |
++| `activation_mode` | Yes | production, canary, shadow, rollback, or emergency bounded action. |
++| `trust_refs` | Yes | Trust policies and verification results. |
++| `validation_refs` | Yes | Required validation report refs. |
++| `compatibility_refs` | Yes | Compatibility matrix refs. |
++| `rollback_refs` | Yes | Immutable rollback target refs or explicit null when not applicable. |
++| `approval_refs` | Yes | Product approval refs; approval does not bypass trust. |
++| `package_set_checksum` | Yes | SHA-256 over canonical manifest bytes excluding this field. |
++
++### PackageActivationFailureEvent schema
++
++| Field | Required | Rule |
++| --- | ---: | --- |
++| `event_id` | Yes | Deterministic event ID from candidate set checksum, failed check, and timestamp evidence. |
++| `candidate_package_set_checksum` | Yes | Candidate checksum. |
++| `current_active_package_set_checksum` | Yes | Current active set preserved after failure. |
++| `failed_check` | Yes | Most specific failure code. |
++| `failure_detail_ref` | Yes | Redacted evidence ref. |
++| `candidate_output_visibility` | Yes | Must be `none` for production output. |
++| `watermark_effect` | Yes | Must be `no_advancement`. |
+ 
+ ### Package-set activation failure precedence
+ 
+@@ -201,6 +254,9 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
+ | `100-CLEANUP-AC-003` | Unauthorized signer with a cryptographically valid signature still fails closed. |
+ | `100-CLEANUP-AC-004` | Emergency override still cannot bypass signature or trust verification for a new production activation. |
+ 
++| `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
++| `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, approval refs, and checksum. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/110-api-ux-health-errors-and-security.md b/docs/nlspec/110-api-ux-health-errors-and-security.md
+index d68490eacb459326b22d82387c6dfcb97c2c3739..f8dbb961b7956ad490e13a51ac5c3b81f2d5afca 100644
+--- a/docs/nlspec/110-api-ux-health-errors-and-security.md
++++ b/docs/nlspec/110-api-ux-health-errors-and-security.md
+@@ -95,7 +95,9 @@ These labels must not be rendered as authorized negative facts or compliance pas
+ 
+ ## Error Model
+ 
+-`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, correlation ID, redaction state, and source artifact refs. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
++`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
++
++`message` must be at most 1024 Unicode scalar values after normalization. Caller-visible `ErrorRecord` fields are code, message, severity, retryability, owner spec, affected record type, field path, redaction state, and error correlation ID. Audit-visible fields may additionally include record ID, source artifact refs, owner error context, input checksum, and secure diagnostic refs.
+ 
+ Generic error codes must not be used when a more specific domain code exists.
+ 
+@@ -167,6 +169,21 @@ The generated error registry must include every code exported by `040.CoreRecord
+ | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
+ | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
+ 
++
++### Shared error codes
++
++| Error code | Owner | Emitted when |
++| --- | --- | --- |
++| `AUTHORIZATION_ERROR` | `110` | Caller lacks permission and the response must not reveal existence. |
++| `LINEAGE_ERROR` | `110` | Required lineage or evidence drillback refs are absent or invalid. |
++| `PAGE_TOKEN_INVALID` | `110` | Page token is malformed, uses backend cursor identity, or authorization context mismatches. |
++| `PAGE_TOKEN_EXPIRED` | `110` | Page token expiration has passed. |
++| `API_BOUNDS_INVALID` | `110` | API field exceeds bounds or violates required shape. |
++| `RAW_PAYLOAD_PERMISSION_REQUIRED` | `110` | Raw payload was requested and metadata-only redaction is not permitted for the endpoint. |
++| `DERIVED_VIEW_LAG_ERROR` | `090`, `110` | Query class requires current graph-derived state and derived view is stale. |
++
++All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
++
+ ### SourceStateLabelMapping
+ 
+ | Owner state | API label | Compliance label | Audit label | Graph label | Allowed negative interpretation | Default |
+@@ -199,10 +216,34 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
+ | `not_applicable` | not applicable |
+ | omitted/redacted | omitted/redacted with audit event |
+ 
++
++### HealthStatusMapping
++
++| Owner source | User-visible state | Retryability | Production impact | Alert class | Redaction behavior |
++| --- | --- | --- | --- | --- | --- |
++| feed availability | `source_unavailable` or `partial_unknown_gap` | retryable when lakehouse evidence can refresh | blocks absence and may block import | feed_health | private refs redacted |
++| schema validation | `error` | not retryable until schema or input changes | blocks affected output | schema_health | values redacted |
++| source staleness | `source_stale` | owner-defined | blocks absence unless policy permits | data_freshness | source refs redacted |
++| derived view lag | `derived_view_stale` | retryable after graph apply/rebuild | blocks compliance/audit graph queries | graph_health | backend details redacted |
++| package activation failure | `error` | owner-defined | preserves current active package set | package_health | supply-chain evidence redacted |
++| validation acceptance | `blocked`, `not_run`, or `fail` | owner-defined | prevents promotion | validation_health | fixture bytes redacted |
++
+ ### Page token canonicalization
+ 
+ API page tokens must be generated from `040.CanonicalJSON` over query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. Backend cursors or internal IDs are forbidden as page token identity.
+ 
++
++### PageTokenPolicy
++
++| Policy field | Required behavior |
++| --- | --- |
++| token input fields | Query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. |
++| default expiration | TODO: owner decision required before authoritative promotion. |
++| maximum expiration | TODO: owner decision required before authoritative promotion. |
++| stale derived-view behavior | If token references a stale derived-view state and query class requires current state, fail with `DERIVED_VIEW_LAG_ERROR`. |
++| authorization context mismatch | Fail with `PAGE_TOKEN_INVALID`; do not reveal whether the original result still exists. |
++| backend cursor supplied | Reject with `PAGE_TOKEN_INVALID`; backend cursors are not Cadastre token identity. |
++
+ ### AuditEventSchema
+ 
+ | Field | Required | Rule |
+@@ -222,9 +263,16 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum,
+ | Endpoint | Condition | Output | Error | Redaction | Authorization | Stale behavior | Partial behavior | Pagination | Owner spec |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+ | asset search | no matches | empty result | none | applied | omit unauthorized | label stale when present | label partial when present | canonical token | `110`, owner states |
++| asset search | malformed query | none | `API_BOUNDS_INVALID` or owner validation code | n/a | required | n/a | n/a | n/a | `110` |
++| asset search | page size out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `110` |
+ | asset detail | inaccessible entity | none | `AUTHORIZATION_ERROR` | no existence leak | fail closed | n/a | n/a | n/a | `110` |
++| evidence drillback | missing lineage | none | `LINEAGE_ERROR` | applied | required | owner label | owner label | n/a | `110` |
+ | evidence drillback | raw payload not permitted | metadata plus redaction marker | none | raw redacted | raw permission required | owner label | owner label | canonical token | `110` |
++| evidence drillback | raw payload requested without permission and endpoint requires hard failure | none | `RAW_PAYLOAD_PERMISSION_REQUIRED` | raw redacted | raw permission required | owner label | owner label | n/a | `110` |
++| graph query | graph max depth out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `090`, `110` |
++| graph query | graph timeout | none unless partial allowed | `GRAPH_QUERY_TIMEOUT` | applied | required | owner label | partial only when allowed | canonical token | `090`, `110` |
+ | graph query | derived view stale and compliance/audit class | reject | `DERIVED_VIEW_LAG_ERROR` | applied | required | reject by default | owner label | canonical token | `090`, `110` |
++| compliance query | stale source or derived view | reject unless owner permits non-authoritative state | `DERIVED_VIEW_LAG_ERROR` or owner stale code | applied | required | reject by default | n/a | canonical token | `060`, `090`, `110` |
+ | export | private binding detected | none | `PRIVATE_BINDING_LEAK` | fail closed | export permission required | owner label | owner label | n/a | `010`, `110` |
+ 
+ ### Acceptance Criteria
+@@ -239,6 +287,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum,
+ | `110-SCHEMA-PATCH-AC-002` | Raw payload leakage through `EvidenceRef` or graph properties fails closed and produces a redacted audit event. |
+ | `110-SCHEMA-PATCH-AC-003` | Backend-native IDs are never returned as Cadastre identity, evidence identity, pagination identity, or drillback identity. |
+ 
++| `110-ERROR-RECORD-AC-001` | `ErrorRecord` has no duplicate field definitions, has `error_correlation_id` and `owner_error_context`, and separates caller-visible from audit-visible fields. |
++| `110-PAGE-TOKEN-AC-001` | Page tokens reject backend cursors, authorization-context mismatches, expired tokens, and stale derived-view state when the query class requires current state. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/120-validation-fixtures-and-acceptance.md b/docs/nlspec/120-validation-fixtures-and-acceptance.md
+index 111a6cae0ed3798a0f4cc4b9233981c471a97c64..0c0c137562369adde1b7bde69862a43712fb2edb 100644
+--- a/docs/nlspec/120-validation-fixtures-and-acceptance.md
++++ b/docs/nlspec/120-validation-fixtures-and-acceptance.md
+@@ -86,6 +86,10 @@ Every active domain spec must include at least one negative validation case for
+ | `SPECSET-AC-006` | The deferred reachability document is inactive and no active MVP graph or gold spec can emit theoretical reachability output. |
+ | `SPECSET-AC-007` | The recreatability test passes using only active NLSpecs, deferred NLSpecs where explicitly referenced, and accepted standards. |
+ 
++| `SPECSET-AC-008` | Domain unresolved/resolved status and owner-local closure states are consistent. |
++| `SPECSET-AC-009` | ADR statuses are members of `000.SpecStatus` and accepted ADRs use `accepted_rationale`. |
++| `SPECSET-AC-010` | Every manifest path has exactly one registry row or explicit non-registry reason. |
++
+ ## Validation Contract Details
+ 
+ ### CoreRecordSchemaValidationMatrix
+@@ -140,6 +144,19 @@ Every active domain spec must include at least one negative validation case for
+ 
+ ### ValidationCoverageMatrix
+ 
++
++### OwnerLocalStatusConsistencyRule validation rows
++
++| Row ID | Scenario | Expected failure code | Mutation prohibition |
++| --- | --- | --- | --- |
++| `domain-owner-status-raw-feed-manifest-closed` | Domain marks `RawFeedManifest` unresolved while `020` is `closed_local`. | `DOMAIN_OWNER_STATUS_CONTRADICTION` | no production output |
++| `domain-owner-status-raw-record-id-closed` | Domain marks raw record ID unresolved while `040.ComputeRawRecordId` and `020` import contribution are `closed_local`. | `DOMAIN_OWNER_STATUS_CONTRADICTION` | no production output |
++| `domain-runtime-restatement-raw-id-order` | Domain copies raw ID input order instead of routing to `040.ComputeRawRecordId`. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
++| `owner-spec-contradiction-same-runtime-contract` | Two owner specs define incompatible runtime behavior for one named contract. | `OWNER_SPEC_CONTRADICTION` | no production output |
++| `adr-status-unregistered` | ADR status is not in `000.SpecStatus`. | `ADR_STATUS_UNREGISTERED` | no promotion |
++| `registry-manifest-path-mismatch` | Manifest path lacks exactly one registry row or explicit non-registry reason. | `REGISTRY_MANIFEST_PATH_MISMATCH` | no promotion |
++
++
+ | Owner spec | Required success | Required rejection | Required no-op | Required edge | Required replay | Required redaction | Required authorization | Required negative authority-boundary |
+ | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+ | `010` | authority class | direct source call | validation exploration no-op | private/public boundary | n/a | private leak | API/private boundary | direct source, projection authority |
+@@ -186,21 +203,61 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
+ 
+ ### Required negative tests by owner
+ 
+-| Owner spec | Forbidden boundary | Fixture ID | Expected error/no-op | Acceptance criterion | Blocking status |
+-| --- | --- | --- | --- | --- | --- |
+-| `010` | direct source call | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010-CLEANUP-AC-002` | blocking |
+-| `020` | CDC metadata as authority | TODO | no-op | `020-CLEANUP-AC-004` | blocking |
+-| `030` | forbidden stage output | TODO | `FORBIDDEN_STAGE_OUTPUT` | `030-CLEANUP-AC-003` | blocking |
+-| `040` | unknown field | TODO | owner error | `040-CLEANUP-AC-002` | blocking |
+-| `050` | undeclared extension | TODO | mapping error | `050-CLEANUP-AC-002` | blocking |
+-| `060` | weak progress absence | TODO | no-op/unknown | `060-CLEANUP-AC-003` | blocking |
+-| `070` | weak evidence auto-merge | TODO | no_decision | `070-CLEANUP-AC-002` | blocking |
+-| `080` | current-time fallback | TODO | temporal error | `080-CLEANUP-AC-003` | blocking |
+-| `090` | theoretical reachability edge | TODO | reachability scope error/no-op | `090-CLEANUP-AC-004` | blocking |
+-| `100` | unauthorized signer | TODO | activation failure | `100-CLEANUP-AC-003` | blocking |
+-| `110` | state-label collapse | TODO | reject/non-collapse | `110-CLEANUP-AC-002` | blocking |
+-| `130` | analysis mutation | TODO | analysis mutation error | `130-CLEANUP-AC-003` | blocking |
+-| `200` | active reachability output | TODO | no-op/rejected | `200-CLEANUP-AC-003` | blocking |
++| Owner spec | Forbidden boundary | Fixture ID | Fixture checksum | Expected error/no-op | Expected output checksum | Mutation prohibition | Acceptance criterion | Blocking status |
++| --- | --- | --- | --- | --- | --- | --- | --- | --- |
++| `010` | direct source call | `fixture-010-direct-source-call` | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | TODO | no production output | `010-CLEANUP-AC-002` | blocking |
++| `010` | private binding leak | `fixture-010-private-binding-leak` | TODO | `PRIVATE_BINDING_LEAK` | TODO | no public artifact write | `010-CLEANUP-AC-003` | blocking |
++| `010` | projection authority violation | `fixture-010-projection-authority-violation` | TODO | `PROJECTION_AUTHORITY_VIOLATION` | TODO | no authoritative mutation | `010-CLEANUP-AC-004` | blocking |
++| `020` | CDC metadata as authority | `fixture-020-cdc-metadata-non-authority` | TODO | no-op | TODO | no absence, no retraction, no watermark | `020-CLEANUP-AC-004` | blocking |
++| `020` | malformed feed manifest | `feed-020-malformed-manifest` | TODO | `manifest_invalid` | TODO | no raw import commit | `020-MANIFEST-AC-001` | blocking |
++| `030` | forbidden stage output | `fixture-030-forbidden-stage-output` | TODO | `FORBIDDEN_STAGE_OUTPUT` | TODO | no production output | `030-CLEANUP-AC-003` | blocking |
++| `030` | duplicate stage ID | `fixture-030-duplicate-stage-id` | TODO | `DAG_STAGE_ID_DUPLICATE` | TODO | no production output | `030-DAG-ORDER-AC-001` | blocking |
++| `040` | unknown field | `fixture-040-unknown-field` | TODO | `CORE_UNKNOWN_FIELD` | TODO | no record commit | `040-CLEANUP-AC-002` | blocking |
++| `040` | one-of invalid | `fixture-040-one-of-invalid` | TODO | `CORE_ONE_OF_INVALID` | TODO | no record commit | `120-SCHEMA-PATCH-AC-001` | blocking |
++| `050` | undeclared extension | `fixture-050-source-extension-undeclared` | TODO | `SOURCE_EXTENSION_FIELD_UNDECLARED` | TODO | no silver output | `050-CLEANUP-AC-002` | blocking |
++| `050` | OCSF artifact mismatch | `fixture-050-ocsf-artifact-mismatch` | TODO | `OCSF_ARTIFACT_MISMATCH` | TODO | no normalized output | `050-OCSF-BASELINE-AC-001` | blocking |
++| `060` | weak progress absence | `fixture-060-weak-progress-absence` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no absence, no cleanup, no watermark | `060-CLEANUP-AC-003` | blocking |
++| `060` | missing coverage | `fixture-060-coverage-required` | TODO | `COVERAGE_ASSERTION_REQUIRED` | TODO | no coverage-sensitive fact | `060-COVERAGE-CLOSURE-AC-001` | blocking |
++| `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
++| `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
++| `080` | current-time fallback | `fixture-080-current-time-fallback` | TODO | temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
++| `080` | replay mismatch | `fixture-080-replay-mismatch` | TODO | replay mismatch error | TODO | no replay output | `080-CLEANUP-AC-004` | blocking |
++| `090` | theoretical reachability edge | `fixture-090-theoretical-reachability-edge` | TODO | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op | TODO | no graph mutation | `090-CLEANUP-AC-004` | blocking |
++| `090` | backend internal ID | `fixture-090-backend-id` | TODO | `GRAPH_BACKEND_ID_FORBIDDEN` | TODO | no graph response identity leak | `090-CLEANUP-AC-003` | blocking |
++| `100` | unauthorized signer | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
++| `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
++| `110` | state-label collapse | `fixture-110-state-label-collapse` | TODO | reject/non-collapse | TODO | no incorrect API state | `110-CLEANUP-AC-002` | blocking |
++| `110` | page token authorization mismatch | `fixture-110-page-token-auth-mismatch` | TODO | `PAGE_TOKEN_INVALID` | TODO | no data disclosure | `110-PAGE-TOKEN-AC-001` | blocking |
++| `130` | analysis mutation | `fixture-130-analysis-mutation` | TODO | `ANALYSIS_MUTATION_FORBIDDEN` | TODO | no mutation | `130-CLEANUP-AC-003` | blocking |
++| `130` | lineage facet checksum mismatch | `fixture-130-lineage-facet-checksum-mismatch` | TODO | `LINEAGE_FACET_CHECKSUM_MISMATCH` | TODO | no lineage activation | `130-AC-003` | blocking |
++| `200` | active reachability output | `fixture-200-active-reachability-output` | TODO | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | TODO | no gold, graph, API output | `200-CLEANUP-AC-003` | blocking |
++
++
++### ExpectedMutationProhibition rows
++
++| Prohibition token | Required proof |
++| --- | --- |
++| no production output | Output manifest contains no production-visible record refs. |
++| no graph mutation | Graph apply result absent or no-op; derived-view state unchanged. |
++| no watermark advancement | No `WatermarkCommitRecord` with advanced value. |
++| no package activation | Current active package set checksum unchanged. |
++| no identity mutation | No new terminal `IdentityDecision` that mutates canonical identity. |
++| no raw payload exposure | API/export/audit caller-visible fields contain no raw payload bytes. |
++
++### Owner-specific fixture families
++
++| Owner | Required fixture families |
++| --- | --- |
++| `020` | feed read, manifest validation, read completeness, raw ID replay, omitted object, partial known gap. |
++| `030` | DAG ordering, lifecycle transition, version manifest ID/checksum, run lock failure, forbidden output. |
++| `050` | OCSF mapping, enum handling, source extension, disabled base-event fields, cadastre-only null profile. |
++| `060` | absence, coverage, progress signal, source staleness, control result mapping. |
++| `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
++| `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
++| `090` | edge semantics, graph apply, query ordering, reachability prohibition, backend ID rejection. |
++| `100` | package activation, trust, rollback, emergency behavior, repository unsupported form. |
++| `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
++| `130` | analysis mutation, lineage facet, registry non-authority, threat-intel no-identity, risk scoring boundary. |
+ 
+ ### Acceptance Criteria
+ 
+@@ -218,6 +275,10 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
+ | `120-SCHEMA-PATCH-AC-007` | The aggregate `AcceptanceReport` cannot pass while any 040 schema row, fixture checksum, expected output checksum, or owner error code remains `TODO:`. |
+ | `120-CLEANUP-AC-004` | Required negative tests by owner remain present and do not depend on external product drafts, decomposition-control artifacts, private binding indexes, or promotion-readiness gates. |
+ 
++| `120-STATUS-CONSISTENCY-AC-001` | Owner/domain status contradiction, domain runtime restatement, owner-spec contradiction, ADR status, and manifest path mismatch validation rows exist and fail with exact codes. |
++| `120-MUTATION-PROHIBITION-AC-001` | Every negative validation row has a mutation-prohibition proof for each affected mutation class. |
++| `120-ACCEPTANCE-PRECEDENCE-AC-001` | Aggregate `AcceptanceReport` cannot pass while any non-deferred required row is `fail`, `blocked`, or `not_run`, or while any required fixture checksum or expected output checksum is `TODO`. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/130-analysis-enrichment-and-registry-governance.md b/docs/nlspec/130-analysis-enrichment-and-registry-governance.md
+index af4fef9075e8d8a29f84b8b7783e834c6ea9fa8d..a958bc7c00e6a5c1fc38bbd34098462b50533393 100644
+--- a/docs/nlspec/130-analysis-enrichment-and-registry-governance.md
++++ b/docs/nlspec/130-analysis-enrichment-and-registry-governance.md
+@@ -109,7 +109,14 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores
+ 
+ | Facet namespace | Schema URL immutability | Schema bytes | Checksum | Collision behavior | Raw-facet storage | Mapped fields | Rejection behavior |
+ | --- | --- | --- | --- | --- | --- | --- | --- |
+-| TODO | required immutable | required | SHA-256 required | reject by default | raw facet may be stored as non-authoritative metadata | TODO | reject with lineage error |
++| OpenLineage run facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject namespace collision by default | may be stored as non-authoritative metadata | run ID, job ref, dataset IO refs when policy maps them | `LINEAGE_FACET_SCHEMA_MUTABLE` or `LINEAGE_FACET_CHECKSUM_MISMATCH` |
++| OpenLineage job facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | job namespace/name metadata only | same |
++| OpenLineage dataset facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | dataset version refs only when owner policy maps them | same |
++| custom facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision unless active policy grants namespace | raw facet may be stored as non-authoritative metadata | TODO owner-specific mapped fields required before production effect | `LINEAGE_FACET_SCHEMA_MUTABLE` or `LINEAGE_FACET_CHECKSUM_MISMATCH` |
++| schema facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | diagnostic only by default | schema diagnostic fields only | same |
++| freshness facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | diagnostic only | freshness diagnostic only; no completeness proof | same |
++| source-code facet | required when used | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | source ref diagnostics only | same |
++| parent-run facet | required when used | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | parent lineage metadata only | same |
+ 
+ ### ArtifactClassPolicy substitution matrix
+ 
+@@ -133,11 +140,11 @@ Registry governance artifacts may become active only when owner, domain, classif
+ 
+ | Output class | Default authority | Permitted downstream use | Prohibited mutations | Owner of exception | Validation fixture |
+ | --- | --- | --- | --- | --- | --- |
+-| `AnalysisFinding` | non-authoritative | UI, audit, workflow context | raw, silver, identity, gold, graph, completeness, watermark | future accepted spec | TODO |
+-| `AnalysisMetric` | non-authoritative | dashboards and reports | facts, risk authority, package state | future scoring contract | TODO |
+-| `RiskAcceptanceRecord` | workflow metadata | audit and workflow | remediation, retraction, risk reduction proof | future workflow spec | TODO |
+-| `ThreatIntelEnrichmentRecord` | enrichment context | context, filtering, analysis | identity, source authority, graph edge | future owner spec | TODO |
+-| `RegistryArtifactGovernance` | governance metadata | ownership, approval, labels | fact, graph, source authority | owner spec | TODO |
++| `AnalysisFinding` | non-authoritative | UI, audit, workflow context | raw, silver, identity, gold, graph, completeness, watermark | future accepted spec | `analysis-finding-non-authority` |
++| `AnalysisMetric` | non-authoritative | dashboards and reports | facts, risk authority, package state | future scoring contract | `analysis-metric-non-authority` |
++| `RiskAcceptanceRecord` | workflow metadata | audit and workflow | remediation, retraction, risk reduction proof | future workflow spec | `risk-acceptance-no-remediation` |
++| `ThreatIntelEnrichmentRecord` | enrichment context | context, filtering, analysis | identity, source authority, graph edge | future owner spec | `threat-intel-no-identity` |
++| `RegistryArtifactGovernance` | governance metadata | ownership, approval, labels | fact, graph, source authority | owner spec | `registry-label-no-fact-authority` |
+ 
+ ### External lineage facet table
+ 
+@@ -148,6 +155,31 @@ Registry governance artifacts may become active only when owner, domain, classif
+ | schema facet | schema diagnostic only unless owner maps | non-authoritative metadata | schema bytes | mismatch, stale, missing owner |
+ | freshness facet | freshness diagnostic only | non-authoritative | facet bytes | use as completeness proof |
+ 
++
++### Analysis and lineage error codes
++
++| Error code | Emitted when |
++| --- | --- |
++| `ANALYSIS_MUTATION_FORBIDDEN` | Analysis, enrichment, lineage, or registry output attempts forbidden mutation. |
++| `LINEAGE_FACET_SCHEMA_MUTABLE` | Facet schema URL is mutable or not immutable under policy. |
++| `LINEAGE_FACET_CHECKSUM_MISMATCH` | Schema bytes or facet bytes do not match recorded checksum. |
++| `REGISTRY_AUTHORITY_FORBIDDEN` | Registry metadata attempts fact, graph, source authority, evidence, or production approval authority. |
++| `THREAT_INTEL_IDENTITY_FORBIDDEN` | Threat-intel indicator/enrichment attempts identity authority. |
++
++### RuleGraphCompatibilityMatrix fixture expectations
++
++| Field | Required behavior |
++| --- | --- |
++| required graph profile | Exact graph projection profile checksum. |
++| required node/edge types | Closed set; missing type blocks rule activation. |
++| expected query checksum | Canonical checksum over translated read-only graph query. |
++| stale graph behavior | Reject or label according to `090` and `110`; compliance/audit queries reject by default. |
++| read-only guarantee | Fixture must prove no raw, silver, identity, gold, graph-serving, completeness, watermark, or package mutation. |
++
++### RiskScoringBoundary validation
++
++Numeric scoring is disabled by default. Attempts to emit authoritative numeric risk or exposure scores must fail with `ANALYSIS_MUTATION_FORBIDDEN` or remain `AnalysisMetric` only when `RiskScoringBoundary.numeric_scoring_authority = disabled`.
++
+ ### Acceptance Criteria
+ 
+ | ID | Criterion |
+@@ -157,6 +189,9 @@ Registry governance artifacts may become active only when owner, domain, classif
+ | `130-CLEANUP-AC-003` | Analysis rules remain read-only unless routed through an owning derivation interface. |
+ | `130-CLEANUP-AC-004` | Threat-intel enrichment remains context by default and cannot become identity, source completeness, source authority, gold fact, graph edge, absence, cleanup, retraction, coverage, or watermark authority by itself. |
+ 
++| `130-LINEAGE-FACET-AC-001` | Lineage facet rows define schema URL immutability, schema bytes, checksum, collision behavior, raw-facet storage, mapped fields, and rejection behavior. |
++| `130-RISK-SCORING-AC-001` | Numeric scoring is disabled by default and cannot emit authoritative risk scores without a future accepted scoring policy. |
++
+ ## Definition of Done
+ 
+ | ID | Criterion |
+diff --git a/docs/nlspec/domain.md b/docs/nlspec/domain.md
+index e9183502fc79ab8e98b2adbf92f847fbca31fb1b..b16d7ebad6dd1a0c5b2fcdc05f31044572001714 100644
+--- a/docs/nlspec/domain.md
++++ b/docs/nlspec/domain.md
+@@ -444,7 +444,7 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
+ | Canonical domain identity | Product-owned canonical entity or fact identity. | Stable reference inside Cadastre outputs and evidence chains. | Source-native ID, graph backend ID, display label. | `040`, `070`, `080` | Resolved. |
+ | Source-native identity | Identifier emitted by external source or supplier feed. | Evidence input scoped by source/feed and resolver/authority policy. | Cadastre canonical identity by default. | `040`, `070`, `020` | Resolved. |
+ | Source/feed scope key | Scope boundary for feed, supplier, source dataset, resolver, authority, completeness, coverage. | Defines where source evidence is valid and comparable. | Global identity by itself. | `020`, `060`, `070` | Resolved. |
+-| Raw record ID | `RawRecord`. | Deterministic raw evidence reference. | Source completeness or canonical identity. | `040`, `020` | `TODO:` exact input ordering unresolved in `020`. |
++| Raw record ID | `RawRecord`. | Deterministic raw evidence reference computed by `040.ComputeRawRecordId`; `020` supplies feed, target, manifest, source dataset, scope, supplier identity, payload hash, and import-profile inputs. | Source completeness, canonical identity, or a `domain.md` restatement of raw ID input order. | `040`, `020` | Resolved; field schema and ID policy are owned by `040`, and feed/import input contribution is owned by `020`. |
+ | Silver observation ID | `CadastreSilverObservation`. | Deterministic normalized observation reference. | Gold fact ID or identity decision ID. | `040`, `050` | Resolved. |
+ | Canonical entity ID | `CanonicalEntity`. | Product-owned identity selected by resolver policy. | Source asset ID, hostname, IP, DNS name, graph node ID. | `040`, `070` | Resolved. |
+ | Source asset ID | `SourceAsset`. | Source/feed-scoped asset reference. | Product canonical entity ID. | `040`, `070` | Resolved. |
+@@ -585,7 +585,7 @@ This section defines cross-representation mappings not already defined in Sectio
+ | Asset ownership/containment/use | Owner-defined edge type. | Must derive from gold facts or declared synthetic structural rules. | `080`, `090` | Requires graph edge semantics row. |
+ | Threat-intel enrichment relationship | Analysis/enrichment edge only if declared. | Must not become gold/graph authority without separate contract. | `130`, `090` | No default authority. |
+ | Future reachability relationship | `has_theoretical_reachability` or equivalent. | Forbidden in MVP. Future activation requires `ReachabilityClaimPolicy`. | `200`, `090` | Inactive deferred. |
+-| TODO: Complete active edge-type list | TODO: exact graph edge family rows. | Required source: active `GraphEdgeSemantics` registry for MVP graph profile. | `090` | Blocking for exhaustive edge-family map. |
++| TODO: Complete active edge-type list | TODO: exact graph edge family rows. | Required source: active `090.GraphEdgeSemanticsRegistry` for MVP graph profile. | `090` | Domain-level blocker tied to `090`; no graph behavior is defined here. |
+ 
+ ### 19.3 Source evidence concept to Cadastre observation or fact concept
+ 
+@@ -744,7 +744,6 @@ Drift-control rules:
+ 
+ | ID | Question | Blocking scope | Required source or owner decision | Default until resolved |
+ | --- | --- | --- | --- | --- |
+-| `DOM-TODO-004` | TODO: Finalize exact raw feed manifest schema and raw record identity input ordering. | Raw record identity and replay. | `020` owner decision. | Raw identity basis remains conceptually defined but exact ordering is blocking. |
+ | `DOM-TODO-005` | TODO: Complete source-category-specific coverage dimension catalog. | Coverage-sensitive absence and negative claims. | `060` owner decision. | Coverage-dependent negative claims remain blocked where dimensions are unresolved. |
+ | `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | Affected correction classes remain blocked. |
+ | `DOM-TODO-007` | TODO: Finalize replay equivalence policy catalog. | Production replay and deterministic rebuild. | `080` owner decision. | Production replay remains blocked for unresolved output classes. |
+@@ -755,6 +754,9 @@ Drift-control rules:
+ 
+ A downstream implementation must not resolve a `TODO:` by inference.
+ 
++Unresolved rows in this section are valid only when the named owner spec contains a corresponding owner-local blocker, validation row, or deferred-status row. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this section marks a behavior unresolved and every named owner contract is `closed_local`, or marks a behavior resolved while an owner-local blocker still exists.
++
++
+ ## 26. Definition of Done
+ 
+ | ID | Criterion |
+@@ -773,7 +775,7 @@ A downstream implementation must not resolve a `TODO:` by inference.
+ | `DOM-AC-012` | Rationale is separated from normative requirements; normative requirements are listed in Section 21. |
+ | `DOM-AC-013` | No Cartulary-specific content remains except the short exclusion note in Section 1. |
+ | `DOM-AC-014` | No Cadastre requirement is invented from the uploaded template. |
+-| `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25. |
++| `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25 and has a matching owner-local blocker, validation row, or deferred-status row in the named owner spec. |
+ | `DOM-AC-016` | The document passes the two-independent-implementers test for domain vocabulary, owner lookup, entity interpretation, relationship interpretation, and boundary decisions. |
+ | `DOM-AC-017` | The document passes the recreatability test for the root Cadastre domain model and owner map without relying on the uploaded template. |
+ | `DOM-AC-018` | The document is small enough for prompt context but complete enough to prevent semantic drift at root-domain level. |

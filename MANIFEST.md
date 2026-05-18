@@ -1,6 +1,6 @@
 # Artifact Manifest
 
-The manifest defines the current documents for the Cadasre project.
+The manifest defines the current documents for the Cadastre project.
 
 If a file is not currently uploaded, it can be added to the context on request.
 

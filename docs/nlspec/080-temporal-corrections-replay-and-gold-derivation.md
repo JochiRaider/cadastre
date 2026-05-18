@@ -35,6 +35,7 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ComputeGoldFactKeyId`
 - `ComputeGoldFactId`
 - `CoreRecordValidationAlgorithm`
+
 ## Exports
 
 - `TemporalSemanticsPolicy`
@@ -120,6 +121,8 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `reconstructed_source_known_time` | Allowed only when policy names source-known-time evidence and validation rows pass. |
 | `rejected_reconstruction` | Default when source-known-time evidence is missing, stale, ambiguous, or untrusted. |
 
+Production default is `current_import`. Historical known-time reconstruction is rejected unless explicit persisted source-known-time evidence exists and an active policy permits `reconstructed_source_known_time`. Current platform time may not be used for known time or valid time unless the value is captured in persisted evidence before derivation.
+
 ### BitemporalQueryMode catalog
 
 | Query mode | Default valid time | Default known time | Assertion-state visibility | Page-token scope | Ordering | Audit behavior |
@@ -160,6 +163,14 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | gold | temporal resolution, authority, evidence, fact bytes, correction policy | processing timestamp | `sha256` | fact ID and known interval | authority mismatch before output mismatch | compare only | active draft |
 | graph delta/apply/rebuild | projection profile, delta set, idempotency, backend evidence, rebuild manifest | backend transient IDs | `sha256` | delta ID and path order | schema mismatch before output mismatch | compare only | active draft |
 | projections/API/analysis | owner refs, labels, authorization/redaction policy, output checksum | request correlation ID | `sha256` | owner-defined | authorization mismatch before output mismatch | compare only | TODO rows required |
+
+Replay-equivalence ownership split:
+
+| Output subset | Checksum-rule owner | Required behavior |
+| --- | --- | --- |
+| graph/API replay | `090` and `110` for included/excluded fields; `080` for checksum algorithm and preflight ordering | Missing owner row blocks replay before output. |
+| analysis replay | `130` for included/excluded fields; `080` for checksum algorithm and preflight ordering | Missing owner row blocks replay before output. |
+| gold/correction replay | `080` | Missing temporal, authority, evidence, correction, or snapshot refs fails before checksum comparison. |
 
 ### DeterministicSideEffectPolicy
 
@@ -205,6 +216,9 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `080-SCHEMA-PATCH-AC-003` | Corrections never mutate original `GoldFact` bytes. |
 | `080-SCHEMA-PATCH-AC-004` | Replay rejects gold output when any 040 schema, temporal, authority, evidence, or correction checksum mismatches. |
 
+| `080-KNOWLEDGE-TIME-AC-001` | Production known time defaults to `current_import`, and historical known-time reconstruction is rejected unless policy and persisted source-known-time evidence permit it. |
+| `080-REPLAY-SPLIT-AC-001` | Projection, API, and analysis replay rows import owner-specific included/excluded fields and use `080` only for checksum algorithm and preflight ordering. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -214,7 +228,6 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `080-AC-003` | Corrections never mutate existing `GoldFact` rows in place. |
 | `080-AC-004` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, or checksum-mismatched inputs before writing output. |
 | `080-AC-005` | Event-sequence validation covers temporal resolution, late arrival, correction, replay, side effects, and graph rebuild equivalence. |
-
 
 ## Open Questions
 

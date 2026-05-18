@@ -2,7 +2,7 @@
 
 ## Status
 
-`accepted-draft`
+`accepted_rationale`
 
 ## Decision
 
@@ -20,4 +20,4 @@ Cadastre packages are interdependent across adapters, parsers, mappings, resolve
 
 ## Authority Boundary
 
-Runtime behavior is owned by `100`; this ADR is rationale only.
+Runtime behavior remains owned by `100`; this ADR is rationale only and must not define field shapes, algorithms, defaults, errors, or acceptance criteria.

@@ -33,6 +33,7 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `GraphEdgeDeltaShape`
 - `EvidenceRef`
 - `CoreRecordValidationAlgorithm`
+
 ## Exports
 
 - `GraphProjectionProfile`
@@ -145,8 +146,8 @@ Every graph-serving response using graph read-model state must include or refere
 
 | Policy | Required inputs | Forbidden inputs | Missing behavior | Collision behavior |
 | --- | --- | --- | --- | --- |
-| `GraphNodeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_node_id`, `node_type`, `source_object_ref`, valid/known interval, assertion state | backend node ID, element ID, storage ID, cursor ID | reject before apply | TODO: owner-specific graph node delta collision code required before authoritative promotion |
-| `GraphEdgeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_edge_id`, `edge_type`, endpoint graph node IDs, direction rule, valid/known interval, assertion state | backend relationship ID, edge storage ID, cursor ID | reject before apply | TODO: owner-specific graph edge delta collision code required before authoritative promotion |
+| `GraphNodeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_node_id`, `node_type`, `source_object_ref`, valid/known interval, assertion state | backend node ID, element ID, storage ID, cursor ID | reject before apply | `GRAPH_NODE_DELTA_ID_COLLISION`; emit no commit before graph apply |
+| `GraphEdgeDeltaIdPolicy` | `projection_profile_id`, `graph_delta_set_id`, `delta_operation`, `graph_edge_id`, `edge_type`, endpoint graph node IDs, direction rule, valid/known interval, assertion state | backend relationship ID, edge storage ID, cursor ID | reject before apply | `GRAPH_EDGE_DELTA_ID_COLLISION`; emit no commit before graph apply |
 
 `properties` defaults to `{}`. Every property path must pass `GraphPropertyEvidencePolicy`, redaction checks, and raw payload leakage checks. Non-`no_op` deltas must have evidence refs unless an active graph profile explicitly permits structural synthetic output. `observed_connection` direction must derive from `FlowRoleEvidence`, not OCSF endpoint field order or backend edge convention. `has_theoretical_reachability` remains inactive and fail/no-op in MVP.
 
@@ -154,9 +155,52 @@ Every graph-serving response using graph read-model state must include or refere
 
 | Edge type | Source fact type | Predicate | Direction rule | Evidence | Assertion states | Temporal policy | Confidence policy | Traversal class | Non-implication | No-op | Validation rows | Status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | owner policy | explicit class only | does not imply theoretical reachability | no edge when flow role missing | TODO | blocking until exact row complete |
-| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | reachability negative rows | inactive_deferred |
-| TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | TODO | blocking |
+| `observed_connection` | `observed_network_flow_fact` | observed flow relation | `FlowRoleEvidence` only | gold, silver, raw refs | active, stale when allowed | `080` | `090` imports confidence from source fact and `040.DecimalPrecisionPolicy` | `observed_connection_path` | does not imply theoretical reachability | no edge when `FlowRoleEvidence` is missing or ambiguous | `val-090-observed-connection-positive`, `val-090-observed-connection-missing-flow-role` | active_mvp |
+| `has_theoretical_reachability` | none in MVP | none | none | none | none | none | none | none | prohibited | fail/no-op | `val-090-theoretical-reachability-prohibited` | inactive_deferred |
+
+The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a new `GraphEdgeSemanticsRegistry` row and validation fixtures before projection activation.
+
+### GraphTraversalClass table
+
+| Traversal class | Pathfinding eligibility | Neighbor expansion eligibility | Reverse traversal behavior | Default inclusion | No-op behavior |
+| --- | --- | --- | --- | --- | --- |
+| `observed_connection_path` | allowed when query names this class | allowed when edge type filter permits | reverse allowed only as a query traversal over the same observed edge; it must not reverse source direction semantics | excluded unless explicitly requested for path queries | empty allowed traversal classes return no paths |
+| `non_traversable` | forbidden | profile-defined display only | none | excluded | edge may be returned as property/detail but not traversed |
+| `analysis_only` | forbidden unless `130.RuleGraphCompatibilityMatrix` permits read-only analysis query | read-only | none unless analysis rule permits | excluded | no production graph mutation |
+
+### GraphApplyProfile defaults
+
+| Setting | Default | Maximum | Required behavior |
+| --- | --- | --- | --- |
+| batch size | TODO: owner decision required before authoritative promotion | TODO | Missing default blocks production graph apply activation. |
+| retry count | TODO: owner decision required before authoritative promotion | TODO | Retryable error classes must be explicit. |
+| transaction boundary | one declared batch | n/a | Partial apply must record committed batch IDs or prove no committed writes. |
+| partial apply behavior | fail closed unless resume evidence is complete | n/a | Unsafe resume emits `GRAPH_APPLY_RESUME_UNSAFE`. |
+| read-after-write proof | required | n/a | Graph apply result must include proof or block derived-view advancement. |
+| schema stale behavior | reject | n/a | Emit `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
+
+### GraphQueryTranslationProfile observable contract
+
+| Field | Required behavior |
+| --- | --- |
+| stable page token fields | Query checksum, authorization context checksum, ordering keys, page boundary, derived-view state, expiration, and profile refs. |
+| backend candidate limit | Must be explicit per query class; TODO owner decision blocks production query activation. |
+| timeout behavior | Return `GRAPH_QUERY_TIMEOUT` unless partial results are explicitly permitted for the query class. |
+| empty traversal behavior | Empty `allowed_traversal_classes` returns no paths. |
+| authorization and redaction | Applied after backend candidate materialization and before response emission. |
+
+### GraphRebuildManifest schema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `input_snapshot_refs` | Yes | Authoritative lakehouse snapshot or dataset refs. |
+| `graph_delta_set_refs` | Yes | Persisted graph delta set refs and checksums. |
+| `projection_profile_ref` | Yes | Active graph projection profile. |
+| `backend_profile_ref` | Yes | Active backend profile. |
+| `schema_fingerprint` | Yes | Current backend schema fingerprint. |
+| `output_checksum` | Yes | SHA-256 over canonical rebuilt graph-serving output summary. |
+| `status` | Yes | success, failed, blocked, or not_run. |
+| `errors` | Yes | Default `[]`; owner-specific graph rebuild errors. |
 
 ### GraphObjectOutputEligibilityRow
 
@@ -231,6 +275,10 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-SCHEMA-PATCH-AC-003` | Graph properties with undeclared provenance or raw payload leakage fail before graph apply. |
 | `090-SCHEMA-PATCH-AC-004` | MVP graph profiles still cannot emit theoretical reachability output. |
 
+| `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
+| `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |
+| `090-REBUILD-MANIFEST-AC-001` | Every graph rebuild promotion has a `GraphRebuildManifest` with input refs, profile refs, schema fingerprint, output checksum, status, and errors. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -240,7 +288,6 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `090-AC-003` | Graph apply rejects stale schema fingerprints and missing constraints before mutation. |
 | `090-AC-004` | Graph drift checks cannot repair or mutate state. |
 | `090-AC-005` | MVP graph profiles cannot emit `has_theoretical_reachability`, modeled reachability facts, or equivalent graph properties. |
-
 
 ## Open Questions
 

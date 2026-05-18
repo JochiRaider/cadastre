@@ -29,6 +29,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `RawRecord`
 - `ComputeRawRecordId`
 - `CoreRecordValidationAlgorithm`
+
 ## Exports
 
 - `RawSupplierProfile`
@@ -180,6 +181,78 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
 | `hash_algorithm` | enum | Yes | `sha256` | Only `sha256` is active for MVP. |
 | `manifest_checksum` | string | Yes | none | SHA-256 over canonical manifest bytes excluding this field. |
 
+#### RawFeedManifest nested object schemas
+
+`RawFeedManifest` nested objects must use the following closed shapes before manifest ID or checksum computation. Omitted optional arrays default to `[]`; omitted required nested objects fail with `RAW_FEED_MANIFEST_INVALID`.
+
+##### `object_refs[]`
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `object_ref_id` | Yes | Stable object reference scoped to the manifest; not an object-store credential or private route. |
+| `object_uri_hash` | Yes | SHA-256 lowercase hex over the redacted canonical URI reference. |
+| `byte_count` | Yes | Non-negative `uint64`. |
+| `checksum_algorithm` | Yes | Default and only active value `sha256`. |
+| `object_checksum` | Yes | SHA-256 lowercase hex over object bytes after declared compression boundary. |
+| `media_type` | Yes | Declared MIME-like media type token or `application/octet-stream`. |
+| `compression` | Yes | Closed token; default `none`. |
+| `encryption_ref` | No | Omitted when not encrypted; present value must be a redacted reference. |
+| `redaction_state` | Yes | Closed token imported from `110` redaction policy. |
+
+##### `partition_refs[]`
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `partition_key` | Yes | Canonical JSON object; keys sorted lexically. |
+| `partition_bounds` | Yes | Canonical JSON object describing inclusive/exclusive bounds. |
+| `schema_ref_id` | Yes | Must match one `schema_refs[].schema_ref_id`. |
+| `partition_checksum` | Yes | SHA-256 lowercase hex over canonical partition inventory or table-format-native partition ref. |
+| `row_count` | Yes | Non-negative `uint64`; `0` is valid only when the profile permits empty partitions. |
+| `byte_count` | Yes | Non-negative `uint64`. |
+
+##### `schema_refs[]`
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `schema_ref_id` | Yes | Stable manifest-local schema reference. |
+| `schema_family` | Yes | Vendor-neutral schema family or `unknown`. |
+| `schema_version` | Yes | Exact source schema version or `unknown`. |
+| `schema_checksum` | Yes | SHA-256 lowercase hex over schema bytes or canonical schema descriptor. |
+| `schema_uri_hash` | Yes | SHA-256 lowercase hex over the redacted schema URI reference. |
+
+##### `time_bounds`
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `source_time_from` | No | RFC3339 UTC or omitted when unavailable. |
+| `source_time_to` | No | RFC3339 UTC or omitted when unavailable. |
+| `supplier_collection_from` | No | RFC3339 UTC or omitted when unavailable. |
+| `supplier_collection_to` | No | RFC3339 UTC or omitted when unavailable. |
+| `lakehouse_commit_time` | Yes | RFC3339 UTC table/object commit or manifest materialization time; not fact time by itself. |
+| `quality` | Yes | Closed quality token; `unknown` is allowed only when profile permits. |
+
+##### `supplier_lineage`
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `supplier_batch_id` | Yes | Supplier-scoped batch ID or canonical null sentinel when unavailable. |
+| `supplier_run_id` | Yes | Supplier-scoped run ID or canonical null sentinel when unavailable. |
+| `supplier_profile_id` | Yes | Must match the manifest's `supplier_profile_id`. |
+| `redacted_access_ref_hash` | Yes | SHA-256 lowercase hex over the redacted access-reference descriptor. |
+
+### ComputeRawFeedManifestId
+
+```text
+ComputeRawFeedManifestId(manifest):
+1. Materialize manifest defaults.
+2. Exclude `manifest_id` and `manifest_checksum`.
+3. Serialize the remaining manifest object with `040.CanonicalJSON`.
+4. Return `rfm_` plus SHA-256 lowercase hex over the UTF-8 canonical bytes.
+5. If a prior different canonical manifest byte string has the same ID, emit `RAW_FEED_MANIFEST_ID_COLLISION` and commit no manifest or raw import output.
+```
+
+`manifest_checksum` must be SHA-256 lowercase hex over `040.CanonicalJSON` bytes for the materialized manifest excluding only `manifest_checksum`. `manifest_id` is included in `manifest_checksum`.
+
 ### RawRecord identity import
 
 `020` imports `040.RawRecordSchema`, `040.ComputeRawRecordId`, and `040.CoreRecordValidationAlgorithm`. The former `020` raw ID input-order table is consolidated into `040.CoreRecordIdPolicy`. Raw import fixtures in `120` must compute expected raw IDs through `040.ComputeRawRecordId`.
@@ -213,16 +286,18 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
 
 ### Feed-fixture coverage matrix
 
-| Fixture class | Required owner validation row |
-| --- | --- |
-| valid table snapshot | `120` feed-read success row |
-| malformed manifest | `120` manifest rejection row |
-| duplicate payload | `120` raw identity duplicate row |
-| stale availability | `120` availability stale row |
-| partial known gap | `120` no-absence row |
-| permission-limited supplier evidence | `120` no-absence row |
-| CDC tombstone | `120` CDC non-authority row |
-| no direct source call | `120` direct-source negative row |
+| Fixture class | Required fixture ID | Required owner validation row | Expected outcome |
+| --- | --- | --- | --- |
+| minimal valid object-batch manifest | `feed-020-valid-object-batch-manifest` | `val-020-manifest-valid-object-batch` | Manifest ID and checksum match expected TODO checksum. |
+| malformed manifest | `feed-020-malformed-manifest` | `val-020-manifest-malformed` | `manifest_invalid`; no raw import commit. |
+| manifest checksum mismatch | `feed-020-manifest-checksum-mismatch` | `val-020-manifest-checksum-mismatch` | `manifest_invalid`; no raw import commit. |
+| omitted object for table snapshot | `feed-020-table-omitted-object` | `val-020-table-omitted-object` | Fail read unless declared subset profile permits partial. |
+| omitted object for object batch | `feed-020-object-batch-known-gap` | `val-020-object-batch-known-gap` | `read_partial_known_gap`; no absence authority. |
+| raw ID replay | `feed-020-raw-id-replay` | `val-020-raw-id-replay` | Expected raw ID computed through `040.ComputeRawRecordId`. |
+| raw ID collision | `feed-020-raw-id-collision` | `val-020-raw-id-collision` | `RAW_RECORD_ID_COLLISION`; commit no colliding record. |
+| no absence from manifest | `feed-020-no-absence-from-manifest` | `val-020-no-absence-from-manifest` | Missing object or row yields no absence without `060` gates. |
+| CDC tombstone | `feed-020-cdc-tombstone-non-authority` | `val-020-cdc-tombstone-non-authority` | No retraction without `060` and `080` policy. |
+| no direct source call | `feed-010-direct-source-call` | `neg-010-direct-source-call` | `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 
 ### Acceptance Criteria
 
@@ -237,6 +312,9 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
 | `020-SCHEMA-PATCH-AC-003` | `LakehouseReadPolicy` declares max payload byte length and raw byte canonicalization mode. |
 | `020-SCHEMA-PATCH-AC-004` | Raw payload refs cannot expose private routes, credentials, or raw payload bytes in public artifacts. |
 
+| `020-DOMAIN-CONSISTENCY-AC-001` | `domain.md` routes raw feed manifest and raw record ID behavior to `020` and `040` without marking them unresolved or restating `040` ID input order. |
+| `020-MANIFEST-AC-001` | `ComputeRawFeedManifestId` and `manifest_checksum` produce byte-identical values across replay from the same manifest bytes. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -246,7 +324,6 @@ Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists b
 | `020-AC-003` | Every production read and write has table-format-native refs when it can affect output or replay. |
 | `020-AC-004` | Destructive maintenance is refused when any protected manifest, snapshot, replay window, or legal hold would be invalidated. |
 | `020-AC-005` | Feed profile activation fails while feed feasibility, raw supplier profiles, read policy catalog, raw manifest schema, or feed fixture coverage is `TODO:` for the target feed. |
-
 
 ## Open Questions
 

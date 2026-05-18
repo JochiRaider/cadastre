@@ -25,6 +25,7 @@ Define fixtures, validation matrices, golden corpus, shadow execution, replay va
 
 - `All exported 040 core record schemas`
 - `CoreRecordValidationAlgorithm`
+
 ## Exports
 
 - `ValidationMatrix`
@@ -86,6 +87,10 @@ Every active domain spec must include at least one negative validation case for 
 | `SPECSET-AC-006` | The deferred reachability document is inactive and no active MVP graph or gold spec can emit theoretical reachability output. |
 | `SPECSET-AC-007` | The recreatability test passes using only active NLSpecs, deferred NLSpecs where explicitly referenced, and accepted standards. |
 
+| `SPECSET-AC-008` | Domain unresolved/resolved status and owner-local closure states are consistent. |
+| `SPECSET-AC-009` | ADR statuses are members of `000.SpecStatus` and accepted ADRs use `accepted_rationale`. |
+| `SPECSET-AC-010` | Every manifest path has exactly one registry row or explicit non-registry reason. |
+
 ## Validation Contract Details
 
 ### CoreRecordSchemaValidationMatrix
@@ -138,6 +143,17 @@ Every active domain spec must include at least one negative validation case for 
 | `checksums` | Yes | Input, fixture, expected, and actual checksums. |
 | `pass_fail_evidence` | Yes after run | `pass`, `fail`, `blocked`, or `not_run`. |
 
+### OwnerLocalStatusConsistencyRule validation rows
+
+| Row ID | Scenario | Expected failure code | Mutation prohibition |
+| --- | --- | --- | --- |
+| `domain-owner-status-raw-feed-manifest-closed` | Domain marks `RawFeedManifest` unresolved while `020` is `closed_local`. | `DOMAIN_OWNER_STATUS_CONTRADICTION` | no production output |
+| `domain-owner-status-raw-record-id-closed` | Domain marks raw record ID unresolved while `040.ComputeRawRecordId` and `020` import contribution are `closed_local`. | `DOMAIN_OWNER_STATUS_CONTRADICTION` | no production output |
+| `domain-runtime-restatement-raw-id-order` | Domain copies raw ID input order instead of routing to `040.ComputeRawRecordId`. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `owner-spec-contradiction-same-runtime-contract` | Two owner specs define incompatible runtime behavior for one named contract. | `OWNER_SPEC_CONTRADICTION` | no production output |
+| `adr-status-unregistered` | ADR status is not in `000.SpecStatus`. | `ADR_STATUS_UNREGISTERED` | no promotion |
+| `registry-manifest-path-mismatch` | Manifest path lacks exactly one registry row or explicit non-registry reason. | `REGISTRY_MANIFEST_PATH_MISMATCH` | no promotion |
+
 ### ValidationCoverageMatrix
 
 | Owner spec | Required success | Required rejection | Required no-op | Required edge | Required replay | Required redaction | Required authorization | Required negative authority-boundary |
@@ -156,7 +172,6 @@ Every active domain spec must include at least one negative validation case for 
 | `130` | analysis read-only | mutation rejection | risk scoring disabled | lineage facet | registry replay | lineage redaction | registry auth | analysis non-authority |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability |
 
-
 ### TwoIndependentImplementersCheck
 
 | Field | Required content |
@@ -174,7 +189,6 @@ The recreatability check passes only when the intended behavior can be derived f
 
 Any required lookup outside those inputs is a failure unless the lookup is trace-only and does not determine behavior.
 
-
 ### AcceptanceReport statuses
 
 | Status | Meaning | Failure precedence |
@@ -186,21 +200,60 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 
 ### Required negative tests by owner
 
-| Owner spec | Forbidden boundary | Fixture ID | Expected error/no-op | Acceptance criterion | Blocking status |
-| --- | --- | --- | --- | --- | --- |
-| `010` | direct source call | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010-CLEANUP-AC-002` | blocking |
-| `020` | CDC metadata as authority | TODO | no-op | `020-CLEANUP-AC-004` | blocking |
-| `030` | forbidden stage output | TODO | `FORBIDDEN_STAGE_OUTPUT` | `030-CLEANUP-AC-003` | blocking |
-| `040` | unknown field | TODO | owner error | `040-CLEANUP-AC-002` | blocking |
-| `050` | undeclared extension | TODO | mapping error | `050-CLEANUP-AC-002` | blocking |
-| `060` | weak progress absence | TODO | no-op/unknown | `060-CLEANUP-AC-003` | blocking |
-| `070` | weak evidence auto-merge | TODO | no_decision | `070-CLEANUP-AC-002` | blocking |
-| `080` | current-time fallback | TODO | temporal error | `080-CLEANUP-AC-003` | blocking |
-| `090` | theoretical reachability edge | TODO | reachability scope error/no-op | `090-CLEANUP-AC-004` | blocking |
-| `100` | unauthorized signer | TODO | activation failure | `100-CLEANUP-AC-003` | blocking |
-| `110` | state-label collapse | TODO | reject/non-collapse | `110-CLEANUP-AC-002` | blocking |
-| `130` | analysis mutation | TODO | analysis mutation error | `130-CLEANUP-AC-003` | blocking |
-| `200` | active reachability output | TODO | no-op/rejected | `200-CLEANUP-AC-003` | blocking |
+| Owner spec | Forbidden boundary | Fixture ID | Fixture checksum | Expected error/no-op | Expected output checksum | Mutation prohibition | Acceptance criterion | Blocking status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `010` | direct source call | `fixture-010-direct-source-call` | TODO | `DIRECT_SOURCE_CALL_FORBIDDEN` | TODO | no production output | `010-CLEANUP-AC-002` | blocking |
+| `010` | private binding leak | `fixture-010-private-binding-leak` | TODO | `PRIVATE_BINDING_LEAK` | TODO | no public artifact write | `010-CLEANUP-AC-003` | blocking |
+| `010` | projection authority violation | `fixture-010-projection-authority-violation` | TODO | `PROJECTION_AUTHORITY_VIOLATION` | TODO | no authoritative mutation | `010-CLEANUP-AC-004` | blocking |
+| `020` | CDC metadata as authority | `fixture-020-cdc-metadata-non-authority` | TODO | no-op | TODO | no absence, no retraction, no watermark | `020-CLEANUP-AC-004` | blocking |
+| `020` | malformed feed manifest | `feed-020-malformed-manifest` | TODO | `manifest_invalid` | TODO | no raw import commit | `020-MANIFEST-AC-001` | blocking |
+| `030` | forbidden stage output | `fixture-030-forbidden-stage-output` | TODO | `FORBIDDEN_STAGE_OUTPUT` | TODO | no production output | `030-CLEANUP-AC-003` | blocking |
+| `030` | duplicate stage ID | `fixture-030-duplicate-stage-id` | TODO | `DAG_STAGE_ID_DUPLICATE` | TODO | no production output | `030-DAG-ORDER-AC-001` | blocking |
+| `040` | unknown field | `fixture-040-unknown-field` | TODO | `CORE_UNKNOWN_FIELD` | TODO | no record commit | `040-CLEANUP-AC-002` | blocking |
+| `040` | one-of invalid | `fixture-040-one-of-invalid` | TODO | `CORE_ONE_OF_INVALID` | TODO | no record commit | `120-SCHEMA-PATCH-AC-001` | blocking |
+| `050` | undeclared extension | `fixture-050-source-extension-undeclared` | TODO | `SOURCE_EXTENSION_FIELD_UNDECLARED` | TODO | no silver output | `050-CLEANUP-AC-002` | blocking |
+| `050` | OCSF artifact mismatch | `fixture-050-ocsf-artifact-mismatch` | TODO | `OCSF_ARTIFACT_MISMATCH` | TODO | no normalized output | `050-OCSF-BASELINE-AC-001` | blocking |
+| `060` | weak progress absence | `fixture-060-weak-progress-absence` | TODO | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` or unknown no-op | TODO | no absence, no cleanup, no watermark | `060-CLEANUP-AC-003` | blocking |
+| `060` | missing coverage | `fixture-060-coverage-required` | TODO | `COVERAGE_ASSERTION_REQUIRED` | TODO | no coverage-sensitive fact | `060-COVERAGE-CLOSURE-AC-001` | blocking |
+| `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
+| `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
+| `080` | current-time fallback | `fixture-080-current-time-fallback` | TODO | temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
+| `080` | replay mismatch | `fixture-080-replay-mismatch` | TODO | replay mismatch error | TODO | no replay output | `080-CLEANUP-AC-004` | blocking |
+| `090` | theoretical reachability edge | `fixture-090-theoretical-reachability-edge` | TODO | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op | TODO | no graph mutation | `090-CLEANUP-AC-004` | blocking |
+| `090` | backend internal ID | `fixture-090-backend-id` | TODO | `GRAPH_BACKEND_ID_FORBIDDEN` | TODO | no graph response identity leak | `090-CLEANUP-AC-003` | blocking |
+| `100` | unauthorized signer | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
+| `100` | mutable rollback target | `fixture-100-mutable-rollback-target` | TODO | activation failure | TODO | no package activation | `100-AC-003` | blocking |
+| `110` | state-label collapse | `fixture-110-state-label-collapse` | TODO | reject/non-collapse | TODO | no incorrect API state | `110-CLEANUP-AC-002` | blocking |
+| `110` | page token authorization mismatch | `fixture-110-page-token-auth-mismatch` | TODO | `PAGE_TOKEN_INVALID` | TODO | no data disclosure | `110-PAGE-TOKEN-AC-001` | blocking |
+| `130` | analysis mutation | `fixture-130-analysis-mutation` | TODO | `ANALYSIS_MUTATION_FORBIDDEN` | TODO | no mutation | `130-CLEANUP-AC-003` | blocking |
+| `130` | lineage facet checksum mismatch | `fixture-130-lineage-facet-checksum-mismatch` | TODO | `LINEAGE_FACET_CHECKSUM_MISMATCH` | TODO | no lineage activation | `130-AC-003` | blocking |
+| `200` | active reachability output | `fixture-200-active-reachability-output` | TODO | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | TODO | no gold, graph, API output | `200-CLEANUP-AC-003` | blocking |
+
+### ExpectedMutationProhibition rows
+
+| Prohibition token | Required proof |
+| --- | --- |
+| no production output | Output manifest contains no production-visible record refs. |
+| no graph mutation | Graph apply result absent or no-op; derived-view state unchanged. |
+| no watermark advancement | No `WatermarkCommitRecord` with advanced value. |
+| no package activation | Current active package set checksum unchanged. |
+| no identity mutation | No new terminal `IdentityDecision` that mutates canonical identity. |
+| no raw payload exposure | API/export/audit caller-visible fields contain no raw payload bytes. |
+
+### Owner-specific fixture families
+
+| Owner | Required fixture families |
+| --- | --- |
+| `020` | feed read, manifest validation, read completeness, raw ID replay, omitted object, partial known gap. |
+| `030` | DAG ordering, lifecycle transition, version manifest ID/checksum, run lock failure, forbidden output. |
+| `050` | OCSF mapping, enum handling, source extension, disabled base-event fields, cadastre-only null profile. |
+| `060` | absence, coverage, progress signal, source staleness, control result mapping. |
+| `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
+| `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
+| `090` | edge semantics, graph apply, query ordering, reachability prohibition, backend ID rejection. |
+| `100` | package activation, trust, rollback, emergency behavior, repository unsupported form. |
+| `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
+| `130` | analysis mutation, lineage facet, registry non-authority, threat-intel no-identity, risk scoring boundary. |
 
 ### Acceptance Criteria
 
@@ -218,6 +271,10 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-SCHEMA-PATCH-AC-007` | The aggregate `AcceptanceReport` cannot pass while any 040 schema row, fixture checksum, expected output checksum, or owner error code remains `TODO:`. |
 | `120-CLEANUP-AC-004` | Required negative tests by owner remain present and do not depend on external product drafts, decomposition-control artifacts, private binding indexes, or promotion-readiness gates. |
 
+| `120-STATUS-CONSISTENCY-AC-001` | Owner/domain status contradiction, domain runtime restatement, owner-spec contradiction, ADR status, and manifest path mismatch validation rows exist and fail with exact codes. |
+| `120-MUTATION-PROHIBITION-AC-001` | Every negative validation row has a mutation-prohibition proof for each affected mutation class. |
+| `120-ACCEPTANCE-PRECEDENCE-AC-001` | Aggregate `AcceptanceReport` cannot pass while any non-deferred required row is `fail`, `blocked`, or `not_run`, or while any required fixture checksum or expected output checksum is `TODO`. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -227,7 +284,6 @@ Any required lookup outside those inputs is a failure unless the lookup is trace
 | `120-AC-003` | Golden corpus replay produces byte-identical expected outputs or deterministic failure records. |
 | `120-AC-004` | Validation artifacts are redacted, checksummed, and replayable. |
 | `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can be promoted to `authoritative`. |
-
 
 ## Open Questions
 

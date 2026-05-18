@@ -33,6 +33,7 @@ Define observable API behavior, user-facing states, health, shared error records
 - `CoreRecordErrorCodeSet`
 - `EvidenceRef`
 - `CommonRecordHeader`
+
 ## Exports
 
 - `GraphQueryRequest`
@@ -95,7 +96,9 @@ These labels must not be rendered as authorized negative facts or compliance pas
 
 ## Error Model
 
-`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, correlation ID, redaction state, and source artifact refs. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
+`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
+
+`message` must be at most 1024 Unicode scalar values after normalization. Caller-visible `ErrorRecord` fields are code, message, severity, retryability, owner spec, affected record type, field path, redaction state, and error correlation ID. Audit-visible fields may additionally include record ID, source artifact refs, owner error context, input checksum, and secure diagnostic refs.
 
 Generic error codes must not be used when a more specific domain code exists.
 
@@ -167,6 +170,20 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
 
+### Shared error codes
+
+| Error code | Owner | Emitted when |
+| --- | --- | --- |
+| `AUTHORIZATION_ERROR` | `110` | Caller lacks permission and the response must not reveal existence. |
+| `LINEAGE_ERROR` | `110` | Required lineage or evidence drillback refs are absent or invalid. |
+| `PAGE_TOKEN_INVALID` | `110` | Page token is malformed, uses backend cursor identity, or authorization context mismatches. |
+| `PAGE_TOKEN_EXPIRED` | `110` | Page token expiration has passed. |
+| `API_BOUNDS_INVALID` | `110` | API field exceeds bounds or violates required shape. |
+| `RAW_PAYLOAD_PERMISSION_REQUIRED` | `110` | Raw payload was requested and metadata-only redaction is not permitted for the endpoint. |
+| `DERIVED_VIEW_LAG_ERROR` | `090`, `110` | Query class requires current graph-derived state and derived view is stale. |
+
+All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
+
 ### SourceStateLabelMapping
 
 | Owner state | API label | Compliance label | Audit label | Graph label | Allowed negative interpretation | Default |
@@ -199,9 +216,31 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | `not_applicable` | not applicable |
 | omitted/redacted | omitted/redacted with audit event |
 
+### HealthStatusMapping
+
+| Owner source | User-visible state | Retryability | Production impact | Alert class | Redaction behavior |
+| --- | --- | --- | --- | --- | --- |
+| feed availability | `source_unavailable` or `partial_unknown_gap` | retryable when lakehouse evidence can refresh | blocks absence and may block import | feed_health | private refs redacted |
+| schema validation | `error` | not retryable until schema or input changes | blocks affected output | schema_health | values redacted |
+| source staleness | `source_stale` | owner-defined | blocks absence unless policy permits | data_freshness | source refs redacted |
+| derived view lag | `derived_view_stale` | retryable after graph apply/rebuild | blocks compliance/audit graph queries | graph_health | backend details redacted |
+| package activation failure | `error` | owner-defined | preserves current active package set | package_health | supply-chain evidence redacted |
+| validation acceptance | `blocked`, `not_run`, or `fail` | owner-defined | prevents promotion | validation_health | fixture bytes redacted |
+
 ### Page token canonicalization
 
 API page tokens must be generated from `040.CanonicalJSON` over query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. Backend cursors or internal IDs are forbidden as page token identity.
+
+### PageTokenPolicy
+
+| Policy field | Required behavior |
+| --- | --- |
+| token input fields | Query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. |
+| default expiration | TODO: owner decision required before authoritative promotion. |
+| maximum expiration | TODO: owner decision required before authoritative promotion. |
+| stale derived-view behavior | If token references a stale derived-view state and query class requires current state, fail with `DERIVED_VIEW_LAG_ERROR`. |
+| authorization context mismatch | Fail with `PAGE_TOKEN_INVALID`; do not reveal whether the original result still exists. |
+| backend cursor supplied | Reject with `PAGE_TOKEN_INVALID`; backend cursors are not Cadastre token identity. |
 
 ### AuditEventSchema
 
@@ -222,9 +261,16 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | Endpoint | Condition | Output | Error | Redaction | Authorization | Stale behavior | Partial behavior | Pagination | Owner spec |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | asset search | no matches | empty result | none | applied | omit unauthorized | label stale when present | label partial when present | canonical token | `110`, owner states |
+| asset search | malformed query | none | `API_BOUNDS_INVALID` or owner validation code | n/a | required | n/a | n/a | n/a | `110` |
+| asset search | page size out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `110` |
 | asset detail | inaccessible entity | none | `AUTHORIZATION_ERROR` | no existence leak | fail closed | n/a | n/a | n/a | `110` |
+| evidence drillback | missing lineage | none | `LINEAGE_ERROR` | applied | required | owner label | owner label | n/a | `110` |
 | evidence drillback | raw payload not permitted | metadata plus redaction marker | none | raw redacted | raw permission required | owner label | owner label | canonical token | `110` |
+| evidence drillback | raw payload requested without permission and endpoint requires hard failure | none | `RAW_PAYLOAD_PERMISSION_REQUIRED` | raw redacted | raw permission required | owner label | owner label | n/a | `110` |
+| graph query | graph max depth out of range | none | `API_BOUNDS_INVALID` | n/a | required | n/a | n/a | n/a | `090`, `110` |
+| graph query | graph timeout | none unless partial allowed | `GRAPH_QUERY_TIMEOUT` | applied | required | owner label | partial only when allowed | canonical token | `090`, `110` |
 | graph query | derived view stale and compliance/audit class | reject | `DERIVED_VIEW_LAG_ERROR` | applied | required | reject by default | owner label | canonical token | `090`, `110` |
+| compliance query | stale source or derived view | reject unless owner permits non-authoritative state | `DERIVED_VIEW_LAG_ERROR` or owner stale code | applied | required | reject by default | n/a | canonical token | `060`, `090`, `110` |
 | export | private binding detected | none | `PRIVATE_BINDING_LEAK` | fail closed | export permission required | owner label | owner label | n/a | `010`, `110` |
 
 ### Acceptance Criteria
@@ -239,6 +285,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-SCHEMA-PATCH-AC-002` | Raw payload leakage through `EvidenceRef` or graph properties fails closed and produces a redacted audit event. |
 | `110-SCHEMA-PATCH-AC-003` | Backend-native IDs are never returned as Cadastre identity, evidence identity, pagination identity, or drillback identity. |
 
+| `110-ERROR-RECORD-AC-001` | `ErrorRecord` has no duplicate field definitions, has `error_correlation_id` and `owner_error_context`, and separates caller-visible from audit-visible fields. |
+| `110-PAGE-TOKEN-AC-001` | Page tokens reject backend cursors, authorization-context mismatches, expired tokens, and stale derived-view state when the query class requires current state. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -248,7 +297,6 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-AC-003` | Source stale and derived-view stale states are never collapsed. |
 | `110-AC-004` | Error records include owner spec and use the most specific available error code. |
 | `110-AC-005` | Compliance and audit query classes reject stale graph-derived state by default. |
-
 
 ## Open Questions
 

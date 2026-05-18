@@ -122,7 +122,7 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | `oci_digest` | resolve by immutable digest only | repository metadata and referrers required when policy says | OCI descriptor required | subject digest and artifact digest must match manifest | signatures, attestations, SBOM attach to subject | candidate |
 | `tuf_compatible_metadata` | resolve through trusted metadata roles | timestamp, snapshot, targets, delegation evidence required | target metadata required | target hash and length verified | trust evidence persists | candidate |
 | `local_bundle` | resolve by local immutable checksum | local repository metadata required | bundle descriptor required | bundle checksum verified | evidence bundled and checksummed | candidate |
-| `git_tree_snapshot` | resolve by immutable commit/tree checksum only | anti-rollback state required | tree descriptor required | tree checksum verified | evidence refs required | TODO blocking until policy rows exist |
+| `git_tree_snapshot` | unsupported for MVP production activation | n/a | n/a | n/a | n/a | `inactive_for_mvp`; reject with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` |
 
 ### PackageTrustRootGovernance
 
@@ -172,12 +172,64 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 
 | Package type | Public API | Runtime protocol | Dependency lock | Validation checksum | Schema compatibility | Graph compatibility | Trust policy | Attestation | SBOM | Deprecation window |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| feed reader | package developer contract | feed stage protocol | required when dependencies affect output | required | feed schema refs | none | required | policy-defined | policy-defined | TODO |
-| parser | parser contract | parse stage protocol | required | required | raw/schema refs | none | required | policy-defined | policy-defined | TODO |
-| mapping | mapping compiler pipeline | normalize stage protocol | required | required | external schema artifact | none | required | policy-defined | policy-defined | TODO |
-| resolver profile | resolver contract | identity stage protocol | n/a | required | evidence classes | graph handoff compatibility | required | policy-defined | policy-defined | TODO |
-| projection package | graph projection/apply contract | graph stage protocol | required | required | graph schema profile | required | required | policy-defined | policy-defined | TODO |
-| validation package | validation matrix contract | validation protocol | required | required | fixture schema | graph fixture when applicable | required | policy-defined | policy-defined | TODO |
+| feed reader | package developer contract | feed stage protocol | required when dependencies affect output | required | feed schema refs | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+| parser | parser contract | parse stage protocol | required | required | raw/schema refs | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+| mapping | mapping compiler pipeline | normalize stage protocol | required | required | external schema artifact | none | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+| resolver profile | resolver contract | identity stage protocol | n/a | required | evidence classes | graph handoff compatibility | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+| projection package | graph projection/apply contract | graph stage protocol | required | required | graph schema profile | required | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+| validation package | validation matrix contract | validation protocol | required | required | fixture schema | graph fixture when applicable | required | policy-defined | policy-defined | governed by `PackageDeprecationWindowPolicy` |
+
+### PackageDeprecationWindowPolicy
+
+| Package type | Default window | Minimum | Maximum | Emergency retirement behavior | Compatibility override behavior | Validation fixture | Closure state |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| feed reader | TODO | TODO | TODO | immediate quarantine or retirement allowed when trust or correctness gate fails | only with explicit owner approval and validation evidence | `fixture-100-deprecation-feed-reader` | blocked_owner_todo |
+| parser | TODO | TODO | TODO | same | same | `fixture-100-deprecation-parser` | blocked_owner_todo |
+| mapping | TODO | TODO | TODO | same | same | `fixture-100-deprecation-mapping` | blocked_owner_todo |
+| resolver profile | TODO | TODO | TODO | same | same | `fixture-100-deprecation-resolver` | blocked_owner_todo |
+| projection package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-projection` | blocked_owner_todo |
+| validation package | TODO | TODO | TODO | same | same | `fixture-100-deprecation-validation` | blocked_owner_todo |
+
+### Package activation failure codes
+
+| Error code | Emitted when |
+| --- | --- |
+| `PACKAGE_SET_CHECKSUM_MISMATCH` | Candidate package set checksum or release manifest checksum mismatches. |
+| `PACKAGE_COHESION_INCOMPLETE` | A cohesion group is incomplete. |
+| `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | Repository form is inactive or unsupported for MVP. |
+| `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | Repository metadata regresses under anti-rollback state. |
+| `PACKAGE_SIGNER_UNAUTHORIZED` | Cryptographic signature is valid but signer is not authorized. |
+| `PACKAGE_ATTESTATION_SUBJECT_MISMATCH` | Attestation subject does not match release subject digest. |
+| `PACKAGE_SBOM_SUBJECT_MISMATCH` | SBOM subject does not match release subject digest. |
+| `PACKAGE_COMPATIBILITY_FAILED` | Compatibility matrix row fails. |
+| `PACKAGE_VALIDATION_FAILED` | Required validation row fails, is blocked, or is missing. |
+
+### ProductionPackageSetManifest schema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `package_release_refs` | Yes | Canonically sorted release manifest refs and checksums. |
+| `cohesion_groups` | Yes | Every group complete before activation. |
+| `environment` | Yes | Target environment token. |
+| `activation_mode` | Yes | production, canary, shadow, rollback, or emergency bounded action. |
+| `trust_refs` | Yes | Trust policies and verification results. |
+| `validation_refs` | Yes | Required validation report refs. |
+| `compatibility_refs` | Yes | Compatibility matrix refs. |
+| `rollback_refs` | Yes | Immutable rollback target refs or explicit null when not applicable. |
+| `approval_refs` | Yes | Product approval refs; approval does not bypass trust. |
+| `package_set_checksum` | Yes | SHA-256 over canonical manifest bytes excluding this field. |
+
+### PackageActivationFailureEvent schema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `event_id` | Yes | Deterministic event ID from candidate set checksum, failed check, and timestamp evidence. |
+| `candidate_package_set_checksum` | Yes | Candidate checksum. |
+| `current_active_package_set_checksum` | Yes | Current active set preserved after failure. |
+| `failed_check` | Yes | Most specific failure code. |
+| `failure_detail_ref` | Yes | Redacted evidence ref. |
+| `candidate_output_visibility` | Yes | Must be `none` for production output. |
+| `watermark_effect` | Yes | Must be `no_advancement`. |
 
 ### Package-set activation failure precedence
 
@@ -201,6 +253,9 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | `100-CLEANUP-AC-003` | Unauthorized signer with a cryptographically valid signature still fails closed. |
 | `100-CLEANUP-AC-004` | Emergency override still cannot bypass signature or trust verification for a new production activation. |
 
+| `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
+| `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, approval refs, and checksum. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -210,7 +265,6 @@ Emergency override may quarantine, retire, abort candidate activation, roll back
 | `100-AC-003` | Rollback targets immutable verified package-set manifests only. |
 | `100-AC-004` | Emergency override cannot bypass trust verification for new production activation. |
 | `100-AC-005` | Package repository model, trust root governance, SBOM/provenance policy, compatibility matrix, and cohesion group catalogs have exact catalog rows or explicit blocking rows before authoritative status. |
-
 
 ## Open Questions
 

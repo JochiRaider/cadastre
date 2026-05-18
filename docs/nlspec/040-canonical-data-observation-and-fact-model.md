@@ -111,6 +111,44 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 | `map<string,T>` | JSON object keyed by canonical strings. | Maximum 4096 entries unless the field row overrides; keys sort lexically. |
 | `one_of` | Tagged union with `kind` plus exactly one matching value member. | Unknown `kind` is rejected. |
 
+### DecimalPrecisionPolicy
+
+Decimal values that affect IDs, checksums, confidence, graph scoring, or validation output must use canonical base-10 strings. Binary floating point is forbidden.
+
+| Decimal class | Range | Canonical scale | Accepted input normalization | Rounding behavior | Invalid error |
+| --- | --- | ---: | --- | --- | --- |
+| `confidence_0_1` | `0.000000` through `1.000000` inclusive | 6 fractional digits | `0`, `0.0`, and `0.000000` normalize to `0.000000`; `1`, `1.0`, and `1.000000` normalize to `1.000000`. | No rounding is performed; inputs with more than 6 fractional digits fail. | `CORE_DECIMAL_PRECISION_INVALID` |
+
+Persisted records must contain the canonical six-fractional-digit string. A persisted value such as `1`, `1.0`, or `1.00000` fails checksum validation because it is not canonical.
+
+### CoreEnumRegistryOwnership
+
+Every `enum_token` field must be governed by exactly one closed enum owner before authoritative promotion. `040` owns only the enum-token scalar grammar unless the row below assigns the enum to `040`.
+
+| Enum family | Owner | Applies to | Closure state |
+| --- | --- | --- | --- |
+| core record tokens and schema record types | `040` | `CommonRecordHeader.record_type` and core schema selectors | closed by exported core record set |
+| omission states | `040` | `OmissionState` | closed by `040.Omission Semantics` |
+| assertion states | `040`, `080` | `GoldFact.assertion_state` and correction transitions | closed for default states; owner-specific transitions in `080` |
+| raw import and payload enums | `020`, `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | owner enum row required before promotion |
+| silver observation enums | `050`, `040` | observation type, source category, field quality, external profile state | owner enum row required before promotion |
+| identity enums | `070`, `040` | identity decision, evidence role, review state, selector mechanism | owner enum row required before promotion |
+| temporal and correction enums | `080`, `040` | temporal quality, correction class, replay result, bitemporal query mode | owner enum row required before promotion |
+| graph enums | `090`, `040` | graph node type, edge type, operation, traversal class, assertion visibility | owner enum row required before promotion |
+| API, package, validation, and analysis enums | `100`, `110`, `120`, `130` | status, health, error, validation, and analysis tokens | owner enum row required before promotion |
+
+### CoreOneOfRegistry
+
+Each `one_of` field must use a tagged object with `kind` plus exactly one member named by the registry row. Unknown `kind`, missing value member, multiple value members, or null value member where not permitted fails with `CORE_ONE_OF_INVALID`.
+
+| Union | Owning spec | Allowed `kind` values | Value member rule | Null/omission behavior | ID/checksum behavior | Invalid-kind error | Closure state |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `GoldFact.subject_ref` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null and omission forbidden. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `GoldFact.object_value` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null permitted only when the owning fact predicate declares null-object semantics. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `GraphNodeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `GraphEdgeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null forbidden unless `090` declares structural synthetic output. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `EvidenceRef.artifact_id` | `040`, behavior imported by `110` and `120` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`; raw payload bytes are forbidden. | Null and omission forbidden. | Included in evidence-ref ID and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+
 ### CommonRecordHeader
 
 `CommonRecordHeader` applies to every persisted core record in this registry. Per-record field tables define additional fields. When a per-record table includes a record-specific ID field such as `raw_record_id`, that field must equal `CommonRecordHeader.record_id`; a mismatch fails with `CORE_RECORD_ID_MISMATCH`.
@@ -367,6 +405,7 @@ ValidateCoreRecord(record, schema, environment):
 5. Reject omitted required fields.
 6. Reject explicit null where null_allowed = no.
 7. Validate scalar type, container type, bounds, enum membership, and one_of tag/value pairing.
+7a. Apply validation precedence from `CoreRecordValidationPrecedence` when more than one failure is present.
 8. Canonically sort arrays and maps that declare sort keys.
 9. Validate extension-map ownership and redaction ownership.
 10. Compute expected record_id from CoreRecordIdPolicy.
@@ -378,6 +417,23 @@ ValidateCoreRecord(record, schema, environment):
 ```
 
 `CoreRecordValidationAlgorithm` is exported as `ValidateCoreRecord` for import by downstream specs.
+
+### CoreRecordValidationPrecedence
+
+When a record has multiple validation defects, `ValidateCoreRecord` must emit the first applicable class in this total order. The validation result may include non-primary diagnostics only after the primary error is selected.
+
+| Order | Failure class | Primary error |
+| ---: | --- | --- |
+| 1 | unknown field outside declared extension map | `CORE_UNKNOWN_FIELD` |
+| 2 | required field omitted | `CORE_REQUIRED_FIELD_MISSING` |
+| 3 | explicit null where forbidden | `CORE_NULL_FORBIDDEN` |
+| 4 | scalar or container type invalid | `CORE_FIELD_TYPE_INVALID` |
+| 5 | scalar bound, byte bound, length, or decimal precision invalid | `CORE_FIELD_BOUNDS_INVALID` or `CORE_DECIMAL_PRECISION_INVALID` |
+| 6 | enum token not in closed owner enum | `CORE_ENUM_INVALID` |
+| 7 | `one_of` tag/value invalid | `CORE_ONE_OF_INVALID` |
+| 8 | computed ID mismatch | `CORE_RECORD_ID_MISMATCH` |
+| 9 | checksum mismatch | `CORE_RECORD_CHECKSUM_MISMATCH` |
+| 10 | required production version manifest missing | `VERSION_MANIFEST_INCOMPLETE` |
 
 ### ComputeRawRecordId
 
@@ -432,6 +488,9 @@ ComputeEvidenceRefId(evidence_ref):
 | `CORE_NULL_FORBIDDEN` | Field is explicit null where null is forbidden. |
 | `CORE_FIELD_TYPE_INVALID` | Field has wrong scalar or container type. |
 | `CORE_FIELD_BOUNDS_INVALID` | Field exceeds declared bound. |
+| `CORE_DECIMAL_PRECISION_INVALID` | Decimal string is outside range, non-canonical, or has more fractional digits than the declared scale. |
+| `CORE_ENUM_INVALID` | `enum_token` value is not in the closed owner enum. |
+| `CORE_ONE_OF_INVALID` | `one_of` value has unknown kind, missing matching value member, multiple value members, or forbidden null. |
 | `CORE_RECORD_ID_MISMATCH` | Supplied ID does not equal computed ID. |
 | `CORE_RECORD_CHECKSUM_MISMATCH` | Supplied checksum does not equal computed checksum. |
 | `CORE_SCHEMA_VERSION_UNSUPPORTED` | Record schema version is unknown or inactive. |
@@ -444,6 +503,7 @@ ComputeEvidenceRefId(evidence_ref):
 | `EVIDENCE_REF_ID_COLLISION` | Different evidence-ref ID inputs produce the same evidence-ref ID. |
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `EvidenceRef` embeds raw payload bytes. |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | Backend-generated ID appears in graph delta shape, graph response, selector, evidence ref, replay key, drillback key, or pagination identity. |
+| `PRIVATE_BINDING_LEAK` | A core record or public core-shaped artifact exposes concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories. |
 
 ### Core schema security and extensibility constraints
 
@@ -456,15 +516,16 @@ ComputeEvidenceRefId(evidence_ref):
 | Extensibility | Extension maps must be owner-declared. Undeclared extension fields fail before production output. |
 | Minimal coupling | `040` defines record bytes and validation behavior only. It must not define parser mechanisms, resolver scoring, graph backend products, package runtimes, or source-specific mappings. |
 
-### Core schema unresolved rows
+### Core schema closure rows
 
-The following rows block authoritative promotion until closed by the owning spec or explicit product governance.
+`040` closes decimal precision and validation precedence. Owner-specific enum and one-of value sets remain explicit owner-local blockers and must be represented in `120` validation rows; downstream implementations must not invent missing enum tokens or union members.
 
-| Blocker | Required closure |
-| --- | --- |
-| `TODO:decimal-precision` | `GoldFact.confidence` and graph edge `confidence` require an accepted decimal precision and rounding policy before production activation. |
-| `TODO:one-of-members` | `GoldFact.subject_ref`, `GoldFact.object_value`, graph `source_object_ref`, and `EvidenceRef.artifact_id` require owner-specific closed union member tables before authoritative promotion. |
-| `TODO:enum-registries` | Every `enum_token` field requires a closed owner enum before authoritative promotion. |
+| Closure row | Required behavior | Closure state |
+| --- | --- | --- |
+| decimal precision | Use `DecimalPrecisionPolicy.confidence_0_1`; no rounding; persisted value has six fractional digits. | closed_local |
+| one-of members | Use `CoreOneOfRegistry`; any row with TODO allowed kinds blocks authoritative promotion for affected outputs. | blocked_owner_todo |
+| enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_owner_todo |
+| private binding error | `PRIVATE_BINDING_LEAK` is available to core schema and imported from `010`/`110` for public artifact rejection. | closed_local |
 
 ## Assertion States
 
@@ -572,7 +633,6 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-AC-004` | Every `GoldFact` carries valid-time, known-time, assertion-state, evidence, confidence, and authority references. |
 | `040-AC-005` | Unknown fields are rejected unless declared through a namespaced extension field rule owned by `050`. |
 | `040-AC-006` | The spec cannot become authoritative while any `TODO:` row remains in the core schema registry, ID policy, enum registry, one-of registry, decimal precision policy, or validation fixture set. |
-
 
 ## Open Questions
 

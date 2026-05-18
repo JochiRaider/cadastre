@@ -32,6 +32,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `GoldFactSchema`
 - `FactAbsenceOutcome`
 - `EvidenceRef`
+
 ## Exports
 
 - `SourceAuthorityProfile`
@@ -111,6 +112,29 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 8. Emit exactly one AbsenceDerivationResult: absence authorized, unknown, not applicable, stale, no-op, or deterministic error.
 ```
 
+### AbsenceDerivationResult schema
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `result_state` | Yes | Closed token: absence authorized, unknown, not applicable, stale, no-op, or deterministic error. |
+| `absence_authorized` | Yes | Boolean; true only when authority, completeness, staleness, and coverage gates pass. |
+| `blocking_reason` | Required when `absence_authorized = false` | Most specific blocking code. |
+| `authority_row_ref` | Required when evaluated | Exact `SourceAuthorityProfileRow` ref or null when missing. |
+| `completeness_decision_ref` | Required when evaluated | Lakehouse feed completeness decision ref. |
+| `coverage_assertion_refs` | Required for coverage-sensitive outputs | Non-empty when coverage-sensitive output is authorized. |
+| `staleness_decision_ref` | Required when staleness evaluated | Source staleness policy decision ref. |
+| `version_manifest_ref` | Required for production output | Version manifest ref containing all output-affecting inputs. |
+
+### Authority, coverage, and absence error codes
+
+| Error/no-op code | Emitted when |
+| --- | --- |
+| `SOURCE_AUTHORITY_ROW_MISSING` | No exact active authority row covers fact type, predicate, dataset, scopes, and requested absence authority. |
+| `COVERAGE_ASSERTION_REQUIRED` | Coverage-sensitive output lacks a current coverage assertion. |
+| `COVERAGE_DIMENSION_UNRESOLVED` | Required coverage dimension has no active source-specific row. |
+| `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | Progress/liveness/freshness/lineage signal is used without an active policy row granting the effect. |
+| `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | Completeness decision is partial, unavailable, permission-limited, not attempted, not authoritative, or otherwise unsafe. |
+
 ## Watermarks
 
 Every attempted production source, projection, graph-apply, or presence-only watermark change must be evaluated through `ProjectionWatermarkPolicy` and persisted as exactly one `WatermarkCommitRecord`. Failed, partial, aborted, schema-preflight-failed, or completeness-blocked runs must not advance watermarks.
@@ -130,18 +154,34 @@ Missing rows, stale states, partial states, permission-limited states, weak prog
 
 ### CoverageDimensionProfile catalog
 
-| Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| vulnerability | scanner target, credentialed status, plugin/check scope, scan window | coverage assertion plus scanner evidence | `SourceStalenessPolicy` | `permission_limited` blocks absence | `partial_known_gap` or `partial_unknown_gap` | stale blocks absence | unknown |
-| control | benchmark/check scope, applicability, evaluation status | `ControlResultMappingRow` and coverage assertion | owner row | not checked/unknown | unknown | stale | unknown |
-| endpoint | asset scope, enrollment visibility, collection window | feed completeness plus authority row | owner row | blocks absence | unknown | stale | unknown |
-| directory | tenant/domain, group/member scope, hidden membership visibility | directory completeness evidence | owner row | blocks nonmembership | unknown | stale | unknown |
-| DNS | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown |
-| DHCP/IPAM | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown |
-| flow | sensor scope, collection point, time window, role evidence | flow feed evidence | window policy | unknown | partial | stale | unknown |
-| cloud inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown |
-| source history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown |
-| deferred reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op |
+| Row ID | Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output | CoverageClosureStatus |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `cov-vulnerability-default` | vulnerability | scanner target, credentialed status, plugin/check scope, scan window | coverage assertion plus scanner evidence | `SourceStalenessPolicy` | `permission_limited` blocks absence | `partial_known_gap` or `partial_unknown_gap` | stale blocks absence | unknown | `requires_source_specific_row` |
+| `cov-control-default` | control | benchmark/check scope, applicability, evaluation status | `ControlResultMappingRow` and coverage assertion | owner row | not checked/unknown | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-endpoint-default` | endpoint | asset scope, enrollment visibility, collection window | feed completeness plus authority row | owner row | blocks absence | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-directory-default` | directory | tenant/domain, group/member scope, hidden membership visibility | directory completeness evidence | owner row | blocks nonmembership | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-dns-default` | DNS | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-dhcp-ipam-default` | DHCP/IPAM | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-flow-default` | flow | sensor scope, collection point, time window, role evidence | flow feed evidence | window policy | unknown | partial | stale | unknown | `requires_source_specific_row` |
+| `cov-cloud-inventory-default` | cloud inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown | `requires_source_specific_row` |
+| `cov-source-history-default` | source history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown | `requires_source_specific_row` |
+| `cov-reachability-deferred` | deferred reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op | `inactive_deferred` |
+
+`CoverageClosureStatus` is a closed enum: `closed_default`, `requires_source_specific_row`, and `inactive_deferred`. Source-specific absence-sensitive outputs remain blocked until a `requires_source_specific_row` domain has a matching active source-specific coverage row.
+
+### Coverage-sensitive blocked outputs
+
+| Missing coverage domain | Blocked output |
+| --- | --- |
+| vulnerability | vulnerability absence and fixed-state absence. |
+| control | control pass, fail, unknown, not-checked, and not-applicable facts. |
+| endpoint | endpoint disappearance, non-observation, and cleanup. |
+| directory | group non-membership, user non-membership, hidden-membership absence. |
+| DNS | DNS absence, host deletion from TTL expiry, negative DNS fact. |
+| DHCP/IPAM | DHCP lease absence, IPAM absence, host deletion from lease expiry. |
+| flow | flow non-observation and observed-connection absence. |
+| cloud inventory | missing cloud resource and resource deletion inference. |
+| source history | no-change proof outside supported history window. |
 
 ### LakehouseFeedCompletenessProfile table
 
@@ -233,6 +273,9 @@ Weak progress signals must not combine into stronger authority.
 | `060-SCHEMA-PATCH-AC-002` | `absence_outcome` can be materialized only by `DeriveAbsenceOrUnknown`. |
 | `060-SCHEMA-PATCH-AC-003` | `060` does not restate `GoldFact` field definitions; it references `040.GoldFactSchema` by exact name. |
 
+| `060-COVERAGE-CLOSURE-AC-001` | Every coverage catalog row has a `CoverageDimensionProfileRowId` and `CoverageClosureStatus`. |
+| `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, and manifest refs or a specific blocking reason. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -242,7 +285,6 @@ Weak progress signals must not combine into stronger authority.
 | `060-AC-003` | Every coverage-dependent fact has a current coverage assertion or emits a deterministic unknown/error outcome. |
 | `060-AC-004` | Source staleness and derived-view lag are exposed as distinct states. |
 | `060-AC-005` | Every watermark attempt emits exactly one `WatermarkCommitRecord`. |
-
 
 ## Open Questions
 

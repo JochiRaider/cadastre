@@ -30,6 +30,7 @@ Define how parsed raw records become silver observations and how external schema
 
 - `CoreRecordValidationAlgorithm`
 - `CadastreSilverObservationSchema`
+
 ## Exports
 
 - `ParseRawBatch`
@@ -76,6 +77,8 @@ Cadastre-owned fields for omission, lineage, source identity, confidence, tempor
 ## External Schema Profile Contract
 
 `ExternalSchemaProfile` must pin external schema name, version, source tag, source commit, compiler version, validator version, compiled artifact checksum, class allowlist, profile set, extension set, deprecated-field policy, and enum mapping behavior.
+
+MVP OCSF baseline is `OCSF 1.8.0` as a candidate production baseline. The profile must remain non-active until `ExternalSchemaArtifactRef` records the exact source tag, source commit, compiler ID/version/checksum, validator ID/version/checksum, compiled artifact checksum, profile set, extension set, and class allowlist checksum. Use of OCSF `main`, development versions, or main-only fields is forbidden for production output.
 
 Production OCSF profile status must be `active` only after `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `OCSFBaseEventFieldPolicy`, `ExternalEnumMappingRule`, `OCSFProfileUpgradeReport` when applicable, and `ObservationTypeExternalMappingValidationMatrix` pass.
 
@@ -149,16 +152,16 @@ OCSF `raw_data`, `unmapped`, `observables`, `enrichments`, `status`, `severity`,
 
 The following rows define the active MVP mapping scope at MVP mapping scope. Missing exact class, activity, type, object path, or fixture IDs are blocking rows, not implementation discretion.
 
-| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | blocking |
-| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | allowed only by mapping row |
+| Cadastre observation type | OCSF category | OCSF class | Activity ID/name | Type UID/name | Required object paths | Enum rules | Disabled base-event fields | Validation fixture IDs | Blocked outputs while TODO | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
+| `software_inventory_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, downstream gold candidates | blocking |
+| `vulnerability_finding_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, vulnerability gold candidates | blocking |
+| `authentication_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, identity/gold candidates | blocking |
+| `dns_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DNS gold candidates | blocking |
+| `dhcp_ipam_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, DHCP/IPAM gold candidates | blocking |
+| `network_activity_observation` | TODO | TODO | TODO | TODO | TODO | `ExternalEnumMappingRule` | `raw_data`, `unmapped` by default | TODO | active normalized output, OCSF export, observed-connection graph candidates | blocking |
+| `cadastre_only` | none | none | none | none | Cadastre envelope only | n/a | n/a | TODO | none when mapping row explicitly allows null profile | allowed only by mapping row |
 
 ### OCSFBaseEventFieldPolicy
 
@@ -186,7 +189,8 @@ The following rows define the active MVP mapping scope at MVP mapping scope. Mis
 
 | Namespace | Field path | Type | Bounds | Redaction | Collision policy | Secret-scan behavior | OCSF-reserved-name behavior | Owner | Validation fixture |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TODO | TODO | TODO | TODO | TODO | reject collision by default | reject secret-like value by default | reject by default | `050` | TODO |
+| `source.<source_category>` | `source.<namespace>.<field_name>` where each segment is lowercase snake case and non-empty | scalar: string, boolean, uint64, int64, decimal string, timestamp, sha256; container: array or map of allowed scalar | string max 4096 scalar values; arrays max 1024 elements; maps max 4096 entries; canonical object max 65536 bytes | owner row must state caller-visible, audit-only, or redacted | reject path collision and type collision by default | reject secret-like value before output unless redaction policy permits audit-only storage | reject any path equal to or prefixed by an OCSF reserved base-event field unless policy permits non-authoritative metadata | `050` | `fixture-050-source-extension-declared` |
+| undeclared namespace or path | n/a | n/a | n/a | n/a | n/a | n/a | n/a | `050` | `fixture-050-source-extension-undeclared` emits `SOURCE_EXTENSION_FIELD_UNDECLARED` |
 
 ### MappingValidationRule severity defaults
 
@@ -201,6 +205,30 @@ The following rows define the active MVP mapping scope at MVP mapping scope. Mis
 
 External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts cannot authorize production mappings.
 
+### Mapping diagnostics and errors
+
+| Error code | Emitted when |
+| --- | --- |
+| `OCSF_ARTIFACT_MISMATCH` | Active profile refs do not match the compiled artifact checksum, source tag, source commit, compiler, or validator evidence. |
+| `OCSF_CLASS_NOT_ALLOWED` | A mapping emits an OCSF class outside the active class allowlist. |
+| `EXTERNAL_ENUM_UNKNOWN` | Source enum value is not mapped and no unknown-value policy applies. |
+| `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | Mapping attempts OCSF `Other` without an active rule preserving the raw value. |
+| `EXTERNAL_ENUM_DEPRECATED` | Mapping emits a deprecated enum or field without a non-expired waiver. |
+| `EXTERNAL_ENUM_SIBLING_MISMATCH` | Enum ID/name sibling values do not match the compiled artifact. |
+| `SOURCE_EXTENSION_FIELD_UNDECLARED` | Mapping emits a source extension field without an active `SourceExtensionFieldRule`. |
+
+### OCSFProfileUpgradeReport evidence requirements
+
+| Evidence | Required behavior |
+| --- | --- |
+| schema diff | Compare current and candidate compiled artifacts and record checksum. |
+| golden corpus replay | Replay every active observation mapping fixture and compare expected output checksums. |
+| shadow run | Produce non-production output only and record drift summary. |
+| enum change review | Review new, removed, renamed, deprecated, and sibling enum changes. |
+| deprecated field review | List deprecated fields and waiver decisions. |
+| class allowlist change | Record added/removed classes and affected observation types. |
+| extension set change | Record added/removed extensions, namespace collisions, and reserved-name effects. |
+
 ### Acceptance Criteria
 
 | ID | Criterion |
@@ -214,6 +242,9 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-SCHEMA-PATCH-AC-004` | OCSF fields cannot create identity, gold, graph, authority, or omission semantics outside the owning specs. |
 | `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
 
+| `050-OCSF-BASELINE-AC-001` | MVP OCSF production activation is blocked until exact `OCSF 1.8.0` artifact identity, compiled artifact checksum, class allowlist, profile set, extension set, enum rules, and validation fixtures are recorded. |
+| `050-SOURCE-EXTENSION-AC-001` | Undeclared, namespace-invalid, unbounded, secret-scan-failing, or OCSF-reserved-colliding source extension fields fail before production output. |
+
 ## Definition of Done
 
 | ID | Criterion |
@@ -223,7 +254,6 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-AC-003` | Undeclared source extension fields fail before production output. |
 | `050-AC-004` | CIM projection records every lossy or unsupported mapping and never becomes authoritative input. |
 | `050-AC-005` | Every external mapping table is exhaustive for its declared MVP observation scope or carries a blocking `TODO:` row. |
-
 
 ## Open Questions
 

@@ -444,7 +444,7 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | Canonical domain identity | Product-owned canonical entity or fact identity. | Stable reference inside Cadastre outputs and evidence chains. | Source-native ID, graph backend ID, display label. | `040`, `070`, `080` | Resolved. |
 | Source-native identity | Identifier emitted by external source or supplier feed. | Evidence input scoped by source/feed and resolver/authority policy. | Cadastre canonical identity by default. | `040`, `070`, `020` | Resolved. |
 | Source/feed scope key | Scope boundary for feed, supplier, source dataset, resolver, authority, completeness, coverage. | Defines where source evidence is valid and comparable. | Global identity by itself. | `020`, `060`, `070` | Resolved. |
-| Raw record ID | `RawRecord`. | Deterministic raw evidence reference. | Source completeness or canonical identity. | `040`, `020` | `TODO:` exact input ordering unresolved in `020`. |
+| Raw record ID | `RawRecord`. | Deterministic raw evidence reference computed by `040.ComputeRawRecordId`; `020` supplies feed, target, manifest, source dataset, scope, supplier identity, payload hash, and import-profile inputs. | Source completeness, canonical identity, or a `domain.md` restatement of raw ID input order. | `040`, `020` | Resolved; field schema and ID policy are owned by `040`, and feed/import input contribution is owned by `020`. |
 | Silver observation ID | `CadastreSilverObservation`. | Deterministic normalized observation reference. | Gold fact ID or identity decision ID. | `040`, `050` | Resolved. |
 | Canonical entity ID | `CanonicalEntity`. | Product-owned identity selected by resolver policy. | Source asset ID, hostname, IP, DNS name, graph node ID. | `040`, `070` | Resolved. |
 | Source asset ID | `SourceAsset`. | Source/feed-scoped asset reference. | Product canonical entity ID. | `040`, `070` | Resolved. |
@@ -585,7 +585,7 @@ This section defines cross-representation mappings not already defined in Sectio
 | Asset ownership/containment/use | Owner-defined edge type. | Must derive from gold facts or declared synthetic structural rules. | `080`, `090` | Requires graph edge semantics row. |
 | Threat-intel enrichment relationship | Analysis/enrichment edge only if declared. | Must not become gold/graph authority without separate contract. | `130`, `090` | No default authority. |
 | Future reachability relationship | `has_theoretical_reachability` or equivalent. | Forbidden in MVP. Future activation requires `ReachabilityClaimPolicy`. | `200`, `090` | Inactive deferred. |
-| TODO: Complete active edge-type list | TODO: exact graph edge family rows. | Required source: active `GraphEdgeSemantics` registry for MVP graph profile. | `090` | Blocking for exhaustive edge-family map. |
+| TODO: Complete active edge-type list | TODO: exact graph edge family rows. | Required source: active `090.GraphEdgeSemanticsRegistry` for MVP graph profile. | `090` | Domain-level blocker tied to `090`; no graph behavior is defined here. |
 
 ### 19.3 Source evidence concept to Cadastre observation or fact concept
 
@@ -744,7 +744,6 @@ Drift-control rules:
 
 | ID | Question | Blocking scope | Required source or owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `DOM-TODO-004` | TODO: Finalize exact raw feed manifest schema and raw record identity input ordering. | Raw record identity and replay. | `020` owner decision. | Raw identity basis remains conceptually defined but exact ordering is blocking. |
 | `DOM-TODO-005` | TODO: Complete source-category-specific coverage dimension catalog. | Coverage-sensitive absence and negative claims. | `060` owner decision. | Coverage-dependent negative claims remain blocked where dimensions are unresolved. |
 | `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | Affected correction classes remain blocked. |
 | `DOM-TODO-007` | TODO: Finalize replay equivalence policy catalog. | Production replay and deterministic rebuild. | `080` owner decision. | Production replay remains blocked for unresolved output classes. |
@@ -754,6 +753,8 @@ Drift-control rules:
 | `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | Treat `domain.md` as no-runtime-export vocabulary reference. |
 
 A downstream implementation must not resolve a `TODO:` by inference.
+
+Unresolved rows in this section are valid only when the named owner spec contains a corresponding owner-local blocker, validation row, or deferred-status row. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this section marks a behavior unresolved and every named owner contract is `closed_local`, or marks a behavior resolved while an owner-local blocker still exists.
 
 ## 26. Definition of Done
 
@@ -773,7 +774,7 @@ A downstream implementation must not resolve a `TODO:` by inference.
 | `DOM-AC-012` | Rationale is separated from normative requirements; normative requirements are listed in Section 21. |
 | `DOM-AC-013` | No Cartulary-specific content remains except the short exclusion note in Section 1. |
 | `DOM-AC-014` | No Cadastre requirement is invented from the uploaded template. |
-| `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25. |
+| `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25 and has a matching owner-local blocker, validation row, or deferred-status row in the named owner spec. |
 | `DOM-AC-016` | The document passes the two-independent-implementers test for domain vocabulary, owner lookup, entity interpretation, relationship interpretation, and boundary decisions. |
 | `DOM-AC-017` | The document passes the recreatability test for the root Cadastre domain model and owner map without relying on the uploaded template. |
 | `DOM-AC-018` | The document is small enough for prompt context but complete enough to prevent semantic drift at root-domain level. |
@@ -787,4 +788,3 @@ A downstream implementation must not resolve a `TODO:` by inference.
 | `DOMAIN-CLEANUP-AC-003` | Conflict handling uses local `TODO:` rows or validation failure. |
 | `DOMAIN-CLEANUP-AC-004` | No external-draft evidence table remains. |
 | `DOMAIN-CLEANUP-AC-005` | Private implementation artifacts are described without deprecated artifact-index wording. |
-

@@ -1,5 +1,6 @@
 // .markdownlint.jsonc
 {
+  "line-length": false,
   "MD060": {
     "style": "compact",
     "aligned_delimiter": false
