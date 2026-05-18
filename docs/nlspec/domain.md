@@ -83,6 +83,8 @@ This document is not an API reference, schema reference, persistence spec, graph
 
 Cadastre is a lakehouse-fed interpretation, normalization, identity, fact, and projection system for temporal asset intelligence. It consumes externally supplied lakehouse-resident raw feeds, preserves raw evidence, normalizes observations into Cadastre-owned silver envelopes, resolves canonical identity through governed resolver profiles, derives bitemporal gold facts through source authority and temporal policies, and projects those facts into graph serving and optional external outputs.
 
+Temporal, correction, late-arrival, replay, correction-snapshot, no-op/error, and graph-handoff behavior is closed by `080` and instantiated by activation-controlled rows. `domain.md` routes terms to owner specs and must not duplicate `080` algorithms, correction matrices, replay failure precedence, replay output-class rows, or graph handoff behavior.
+
 The controlling domain interpretation rule is:
 
 > Cadastre domain truth is the product-owned interpretation of lakehouse-resident evidence through active Cadastre contracts, not the implementation representation that happens to store, display, transport, project, or query that interpretation.
@@ -422,7 +424,7 @@ Lifecycle concepts in root `domain.md` identify the domain meaning and owner of 
 | --- | --- | --- | --- | --- |
 | Spec status | Cadastre documentation artifacts. | `000` | Whether a document may drive implementation or is draft/candidate/deferred/archive material. | Runtime behavior unless status is `authoritative` and owner spec grants behavior. |
 | Lifecycle status | Packages, profiles, policies, lifecycle machines, validation artifacts, activation-controlled records. | `030`, `100`, specific owner specs. | Production eligibility state shared across activation-controlled artifacts. | Transition behavior without lifecycle machine. |
-| Gold fact assertion state | `GoldFact` rows. | `040`, corrections in `080`. | Current assertion meaning of a bitemporal fact. | UI state, graph state, source completeness, identity decision. |
+| Gold fact assertion state | `GoldFact` rows. | `040`, corrections in `080`. | Current assertion meaning of a bitemporal fact; transition behavior is owned by `080`. | UI state, graph state, source completeness, identity decision. |
 | Lakehouse read receipt state | `LakehouseReadCompletenessReceipt`. | `020`. | Whether Cadastre read a declared lakehouse feed target completely or failed/partially read it. | Source absence or source completeness by itself. |
 | Completeness decision | Source/feed completeness evaluation. | `060`. | Whether source-level completeness may be considered under active profiles. | Source authority, identity, graph truth, or absence without additional gates. |
 | API/source/export state labels | API, UI, evidence drillback, compliance export, audit export, analysis output. | `110`, source domain owners. | User-facing state separation. | Authorized negative facts or compliance pass/fail unless owner output exists. |
@@ -800,8 +802,8 @@ Drift-control rules:
 | ID | Question | Blocking scope | Required source or owner decision | Blocking owner refs | Default until resolved |
 | --- | --- | --- | --- | --- | --- |
 | `DOM-TODO-005` | TODO: Provide concrete active source-specific row instances for any vendor-neutral `source_dataset` that product governance activates. | Source-category-specific absence, cleanup, retraction, graph expiry, watermark, control pass/fail, and no-change effects. | `060.SourceAuthorityClosureMatrix` validation plus `120` fixture rows. | `060` closure rows and `120-SOURCE-CLOSURE-*` fixtures. | Runtime behavior is closed as fail-closed: missing active source-specific rows produce deterministic block, unknown, not-applicable, source-stale, or no-op states, never negative effects. |
-| `DOM-TODO-006` | TODO: Finalize old/new table snapshot roles, table-set checksums, and retention-protection rows by correction class. | Gold correction and replay. | `080` owner decision. | `080` correction rows. | Affected correction classes remain blocked. |
-| `DOM-TODO-007` | TODO: Finalize replay equivalence policy catalog. | Production replay and deterministic rebuild. | `080` owner decision. | `080` replay rows. | Production replay remains blocked for unresolved output classes. |
+| `DOM-RESOLVED-006` | Correction snapshot roles, table-set checksum requirement, retention protection, and mutable-ref rejection are closed by owner spec. | Gold correction and replay owner routing. | `080.CorrectionSnapshotRefPolicy`; validation in `120`. | `080`, `120`, `030.VersionManifest`. | Runtime behavior is owner-spec closed; concrete activation-controlled row instances remain blockers only when selected for production scope. |
+| `DOM-RESOLVED-007` | Replay equivalence output-class catalog is closed by owner spec. | Production replay and deterministic rebuild owner routing. | `080.ReplayEquivalencePolicy`; owner-specific field handoffs in `050`, `090`, `110`, and `130`; validation in `120`. | `080`, `050`, `090`, `110`, `120`, `130`. | Runtime behavior is owner-spec closed; replay still blocks when required output-class rows, refs, or validation evidence are missing for a selected production scope. |
 | `DOM-TODO-008` | TODO: Complete active MVP observation type to OCSF category/class/activity/type mapping rows. | External schema mapping and silver validation. | `050` owner decision. | `050` mapping rows. | Any missing row is a blocking `TODO:` for that observation type. |
 | `DOM-TODO-009` | TODO: Provide exhaustive active graph edge family registry and edge semantics rows for the MVP graph profile. | Relationship-family and graph mapping completeness. | `090` owner decision. | `090` graph edge rows. | Graph edge mapping remains only concept-level; missing edge rows block activation. |
 | `DOM-TODO-010` | TODO: Confirm lifecycle transition tables and validation evidence for every production-affecting lifecycle machine. | Lifecycle behavior. | `030`, `020`, `070`, `090`, `100`, `120` owner decisions and `120` validation evidence. | `070.IdentityReviewCaseStateMachine.v1` TODO and `120` lifecycle fixture checksums. | Runtime behavior is routed by exact machine ID, but authoritative lifecycle closure remains blocked until owner-local TODOs and lifecycle validation rows close. |
@@ -809,7 +811,7 @@ Drift-control rules:
 
 A downstream implementation must not resolve a `TODO:` by inference.
 
-Unresolved rows in this section are valid only when the named owner spec contains a corresponding owner-local blocker, validation row, or deferred-status row. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this section marks a behavior unresolved and every named owner contract is `closed_local`, or marks a behavior resolved while an owner-local blocker still exists.
+Unresolved rows in this section are valid only when the named owner spec contains a corresponding owner-local blocker, validation row, or deferred-status row. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this section marks a behavior unresolved and every named owner contract is `closed_local`, or marks a behavior resolved while an owner-local blocker still exists. `domain.md` must fail owner-status consistency validation if it restates runtime temporal, correction, replay, transition, or graph handoff behavior instead of routing to `080`, `090`, and `120`.
 
 ## 26. Definition of Done
 

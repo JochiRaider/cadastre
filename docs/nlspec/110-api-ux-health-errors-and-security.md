@@ -99,6 +99,8 @@ These labels must not be rendered as authorized negative facts or compliance pas
 
 Mapping-blocked observations must surface as `error`, not `unknown`. Source-extension redaction failures must surface as security errors. OCSF non-authority blocks must not render as `authorized_not_observed`, compliance pass, compliance fail, remediation, risk reduction, or graph mutation.
 
+Temporal resolution failures must render as `error` with owner context, not as `unknown`. Unauthorized negative evidence must render as `unknown` or owner diagnostic, never as an authorized negative fact. Replay failures must render as replay or audit errors and must not be converted into source-state labels. Duplicate no-op correction output must render as no output change with audit evidence. Stale known-state output must render as `source_stale`, not `derived_view_stale`.
+
 ### SourceAuthorityClosureStateMapping
 
 Each `060` closure outcome or error class must map to exactly one caller-visible label for the response context. A mapping row must not render a blocked, unknown, stale, permission-limited, not-checked, not-applicable, error, or ambiguous state as an authorized negative fact.
@@ -280,6 +282,30 @@ The generated `ErrorCodeRegistry` must include every `060` source-authority clos
 | `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `060` | blocked | no, until closure rows and validation refs exist | closure refs redacted | `manifest-closure-omitted-authority-row-set-ref` |
 | `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `060` | error | no, until closure rows change | matching rows redacted | `source-authority-row-resolution-ambiguous` |
 
+### TemporalCorrectionReplayErrorRegistryRows
+
+The generated registry must include every `080` temporal, correction, late-arrival, snapshot, no-op, and replay error below. Each row must produce a stable `ErrorRecord` and must not collapse into a generic error when the owner-specific code applies.
+
+| Error code | Owner | Severity | Retryability | Redaction | Caller-visible behavior | Audit-visible fields | Validation fixture |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `TEMPORAL_POLICY_UNRESOLVED` | `080` | error | no, until policy row activates | source selector redacted | temporal error | temporal tuple, policy row-set refs | `temporal-resolution-missing-policy` |
+| `TEMPORAL_INTERVAL_MODEL_MISSING` | `080` | error | no, until policy row changes | policy payload redacted | temporal error | policy row ref, missing field | `temporal-resolution-interval-model-missing` |
+| `SOURCE_TIME_NOT_AUTHORIZED` | `080` | error | no, until policy or input changes | source value redacted | temporal error | selected path, policy ref | `temporal-resolution-source-time-not-authorized` |
+| `TEMPORAL_RESOLUTION_REQUIRED` | `080` | error | no, until resolution exists | source refs redacted | temporal error | observation ref, required output class | `temporal-resolution-required` |
+| `TEMPORAL_ARTIFACT_MISSING` | `080` | blocked | no, until artifact ref exists | artifact payload redacted | blocked | artifact class, manifest ref | `temporal-artifact-missing` |
+| `LATE_ARRIVAL_POLICY_MISSING` | `080` | blocked | no, until policy row exists | policy payload redacted | blocked | dataset, fact type, predicate | `late-arrival-policy-missing` |
+| `LATE_ARRIVAL_DISCARD_FORBIDDEN` | `080` | error | no, until route policy changes | evidence refs redacted | error with evidence preserved | route row, temporal ref | `late-arrival-discard-forbidden` |
+| `CORRECTION_POLICY_MISSING` | `080` | blocked | no, until policy row exists | policy payload redacted | blocked | fact type, predicate | `gold-correction-policy-missing` |
+| `GOLD_CORRECTION_TRANSITION_UNDEFINED` | `080` | error | no, until transition row exists | evidence refs redacted | error | prior state, event, policy ref | `assertion-transition-missing` |
+| `CORRECTION_SNAPSHOT_REF_MISSING` | `080` | blocked | no, until snapshot refs exist | snapshot refs redacted by policy | blocked | correction class, old/new role | `correction-snapshot-ref-missing` |
+| `MUTABLE_BRANCH_REF_FOR_REPLAY` | `080` | error | no, until immutable ref supplied | mutable ref redacted | replay/correction error | ref type, artifact class | `replay-mutable-ref` |
+| `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `080` | diagnostic | no, until authority changes | tombstone payload redacted | unknown or owner diagnostic, not authorized negative | tombstone ref, `060` blocking reason | `gold-correction-unauthorized-cdc-tombstone` |
+| `REPLAY_POLICY_ARTIFACT_MISSING` | `080` | blocked | no, until row exists | artifact payload redacted | replay blocked | output class, manifest ref | `replay-output-class-row-missing` |
+| `REPLAY_INPUT_INSUFFICIENT` | `080` | blocked | owner-defined after inputs restore | refs redacted by class | replay blocked | missing refs, sufficiency check | `replay-input-insufficient` |
+| `REPLAY_CHECKSUM_MISMATCH` | `080` | error | no, until input or expected output changes | checksums visible only by policy | replay error | expected and actual checksum refs | `replay-checksum-mismatch` |
+
+Temporal, correction, and replay errors must be audit-visible even when caller-visible fields are redacted. Replay errors must not mutate source labels, facts, graph state, watermarks, or exports.
+
 ### Activation artifact error handling
 
 Artifact activation failures must use the most specific owner code when available. `030.ACTIVATION_ARTIFACT_INCOMPLETE` is the generic fallback only when no domain-specific code exists.
@@ -381,6 +407,11 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | lifecycle machine inactive or missing | `blocked` | no until artifact activation | output blocked | activation_health | artifact refs redacted |
 | package lifecycle failure | `error` or `blocked` | owner-defined | current active package set preserved | package_health | package evidence redacted |
 | graph apply lifecycle partial failure | `blocked` | retry only when resume-safe | derived view not advanced | graph_health | backend evidence redacted |
+| temporal policy missing | `error` or `blocked` | no, until policy row activates | blocks gold, correction, replay, and dependent graph output | temporal_health | policy refs redacted |
+| correction policy missing | `blocked` | no, until policy row activates | blocks correction output | temporal_health | policy refs redacted |
+| replay policy missing | `blocked` | no, until output-class row activates | blocks replay output only | replay_health | artifact refs redacted |
+| late discard forbidden | `error` | no, until route policy changes | preserves evidence; blocks discard | temporal_health | evidence refs redacted |
+| snapshot-ref failure | `blocked` | no, until immutable old/new refs exist | blocks correction and replay output | replay_health | snapshot refs redacted |
 
 ### Page token canonicalization
 
@@ -443,6 +474,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 | `110-ERROR-RECORD-AC-001` | `ErrorRecord` has no duplicate field definitions, has `error_correlation_id` and `owner_error_context`, and separates caller-visible from audit-visible fields. |
 | `110-PAGE-TOKEN-AC-001` | Page tokens reject backend cursors, authorization-context mismatches, expired tokens, and stale derived-view state when the query class requires current state. |
+| `110-TEMPORAL-ERROR-REGISTRY-AC-001` | Every `080` temporal, correction, late-arrival, snapshot, no-op, and replay error code appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible fields, and validation fixture. |
+| `110-TEMPORAL-LABEL-AC-001` | Temporal errors render as `error`, unauthorized negatives do not render as authorized absence, replay errors do not mutate output, duplicate no-ops render as no output change with audit evidence, and stale known states render as `source_stale`. |
 | `110-ACTIVATION-ERROR-AC-001` | Activation artifact errors expose owner, artifact class, retryability, and redaction state. |
 | `110-ACTIVATION-ERROR-AC-002` | Activation artifact errors never collapse into `unknown`, `not_checked`, pass, or fail. |
 | `110-PAGE-TOKEN-DEFAULTS-AC-001` | Page-token default and maximum expiration are explicit or promotion is blocked. |

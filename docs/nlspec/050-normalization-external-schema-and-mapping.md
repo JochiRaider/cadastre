@@ -199,7 +199,19 @@ ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
 
 ## CIM Projection Contract
 
-CIM output is a lossy, deterministic projection. `CIMProjectionProfile` must define input record classes, field mapping rows, lossy fields, unsupported fields, redaction, default values, and `ProjectionLossManifest` output. CIM success must not imply no source information was lost.
+`CIMProjectionProfile` is a lossy deterministic projection profile. CIM success must not imply that no source information was lost. Every CIM projection run must emit `ProjectionLossManifest` when fields are dropped, transformed, redacted, coalesced, or unsupported.
+
+### ProjectionReplayEquivalenceHandoff
+
+`050` owns projection-specific included and excluded fields for replay output class `080.ReplayEquivalencePolicy.output_class = export_projection`. `080` owns checksum algorithm and replay preflight ordering.
+
+| Output subset | Included replay fields | Excluded volatile fields | Required validation |
+| --- | --- | --- | --- |
+| `cim_projection` | projection profile ref, input record refs, mapping row refs, redaction policy refs, output checksum, `ProjectionLossManifest` checksum, `VersionManifest` ref | export job ID, request correlation ID, execution duration, display timestamp | exact replay, profile mismatch, redaction mismatch, checksum mismatch |
+| `ocsf_export_projection` | external schema profile ref, profile resolution manifest ref, mapping row refs, input record refs, redaction policy refs, output checksum, loss manifest checksum, `VersionManifest` ref | export job ID, request correlation ID, execution duration, display timestamp | exact replay, schema profile mismatch, loss-manifest mismatch |
+| `projection_loss_manifest` | projection profile ref, dropped/transformed/redacted/coalesced/unsupported field summaries, input checksum, manifest checksum, `VersionManifest` ref | display timestamp, UI sort order | exact replay and loss-manifest mismatch |
+
+A missing projection replay row blocks replay output with `REPLAY_POLICY_ARTIFACT_MISSING` unless a more specific owner projection replay code is registered in `110`. Projection exporters must persist output checksums and loss-manifest checksums before replay output is accepted.
 
 ## Mapping Activation Contract Details
 
@@ -440,6 +452,9 @@ External schema docs, OCSF `main` branch, dev fields, and uncompiled artifacts c
 | `050-BASE-FIELD-AC-001` | `raw_data`, `raw_data_hash`, and `unmapped` remain absent unless an explicit bounded policy permits them. |
 | `050-NONAUTH-AC-001` | OCSF observables, enrichments, status, severity, confidence, and endpoint ordering cannot create identity, source authority, omission, gold, temporal, graph, or reachability effects. |
 | `050-LIFECYCLE-AC-001` | Every `050` activation-controlled artifact entering `active` status has a `030.LifecycleTransitionEvidence` ref for the generic artifact lifecycle and mapping-specific guard rows. |
+| `050-PROJECTION-REPLAY-AC-001` | Exact projection replay matches projection profile, mapping refs, redaction refs, output checksum, loss-manifest checksum, and `VersionManifest` ref. |
+| `050-PROJECTION-REPLAY-AC-002` | Projection profile mismatch, loss-manifest mismatch, redaction-policy mismatch, or output checksum mismatch blocks replay before output. |
+| `050-PROJECTION-REPLAY-AC-003` | Differences only in export job ID, request correlation ID, execution duration, or display timestamp are excluded volatile-field differences. |
 
 ## Definition of Done
 

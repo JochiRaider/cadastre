@@ -102,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
 | `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
-| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. |
+| `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
@@ -171,6 +171,13 @@ The following source-authority closure artifacts must have exactly one volatilit
 | `SourceHistoryRetentionProfile` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for source-history interpretation |
 | `SupplierCollectionVisibilityProfile` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for permission-sensitive absence |
 | `AbsenceDerivationPolicy` row set | `activation_controlled_artifact` | `060` | `060` | yes | required for absence-sensitive output |
+| `CorrectionSnapshotRefPolicy` | `activation_controlled_artifact` | `080` | `080` | yes | required for correction output |
+| `ReplayEquivalencePolicy` | `activation_controlled_artifact` | `080` | `080` | yes | required for replay output |
+| `GraphRebuildEquivalencePolicy` | `activation_controlled_artifact` | `080` and `090` | `080` and `090` | yes | required for graph rebuild replay/promotion |
+| `EventSequenceValidationCorpus` | `activation_controlled_artifact` | `120` | `120` | yes for promotion | required for temporal/correction/replay validation |
+| `TemporalObservationTimeResolution` | `runtime_state_record` | `080` | `080` | yes | required for gold, correction, graph handoff, audit, and replay when source observation time affects output |
+| `GoldFactChangeSet` | `runtime_state_record` | `080` | `080` | yes | required for correction output and graph handoff |
+| `ReplayInputSufficiencyCheck` | `runtime_state_record` | `080` | `080` | yes | required before replay output |
 
 ## Document Registry
 
@@ -232,7 +239,7 @@ The following source-authority closure artifacts must have exactly one volatilit
 | `SourceAuthorityClosureMatrix` | `060` | `020`, `030`, `080`, `090`, `110`, `120`, `domain` | `runtime_authority_validation` | `stable_core_contract` | 120 | blocked_validation | open until every active absence-sensitive feed category has exact active authority, completeness, coverage, staleness, progress, control-result, source-history, absence, and watermark row coverage or an explicit deterministic block row |
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
 | Identity resolution | `070` | 040,060,080,090,110 | runtime_identity | `stable_core_contract` | 120 | blocked_owner_todo | unsupported entity and candidate cap owner decisions remain TODO |
-| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | blocked_owner_todo | temporal, correction, late-arrival, and replay rows remain TODO |
+| Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | closed_local | validation rows required; concrete activation-controlled row instances remain blockers only when selected for production scope |
 | Graph projection and serving | `090` | 070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | graph apply validation checksums remain TODO |
 | GraphApplyLifecycleMachine | `090` | `030`, `080`, `110`, `120` | derived_projection | `stable_core_contract` | 120 | closed_local | graph apply fixtures required |
 | Package-set activation | `100` | 030,050,090,110,120 | runtime_activation | `stable_core_contract` | 120 | blocked_validation | package lifecycle fixture checksums remain TODO |
@@ -320,6 +327,10 @@ A document that is not marked `authoritative` must not be used as product runtim
 
 `SpecSetVersion.validation_matrix_refs` must include lifecycle validation rows for every lifecycle machine that can affect production output, activation, graph apply, replay, watermark eligibility, or CI gating. Authoritative handoff must fail when lifecycle ownership or closure state is inconsistent with `domain.md` unresolved or resolved lifecycle status.
 
+`SpecSetVersion.validation_matrix_refs` must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when temporal, gold, correction, late-arrival, replay, export replay, analysis replay, or graph handoff behavior is in implementation scope.
+
+`ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` or a more specific registry error when `000` marks temporal/gold/replay closed while `080` contains blocking placeholder rows in `TemporalSemanticsPolicy`, `GoldFactCorrectionPolicy`, `LateArrivalPolicy`, `ReplayEquivalencePolicy`, `CorrectionSnapshotRefPolicy`, or assertion-state transitions. It must also fail when `080` is closed but required `120` temporal/correction/replay validation rows are missing, or when a replay/correction artifact lacks a volatility class or `030.VersionManifest` representation.
+
 ## Archival Policy
 
 Archived documents are historical reference only and never implementation authority.
@@ -346,6 +357,9 @@ Archived documents are historical reference only and never implementation author
 | `000-VOLATILITY-AC-004` | Research, ADR, reference, and archive documents remain non-runtime even when cited as evidence. |
 | `000-FEED-CLOSURE-AC-001` | `ValidateSpecSet` fails with registry or volatility errors if `LakehouseFeedProfileSchema`, `LakehouseFeedFeasibilityAssessment`, `LakehouseFeedCategoryClosureRowSet`, `LakehouseFeedCompletenessProfileRow`, or `DeclaredDAGSubsetProfile` lacks exactly one owner and volatility classification. |
 | `000-FEED-CLOSURE-AC-002` | `SpecSetVersion.validation_matrix_refs` includes the feed-closure acceptance rows before authoritative handoff for any active feed category. |
+| `000-TEMPORAL-REGISTRY-AC-001` | `ValidateSpecSet` fails when `000` says temporal/gold/replay is `closed_local` but `080` contains blocking temporal, correction, late-arrival, replay, snapshot-ref, or assertion transition placeholder rows. |
+| `000-TEMPORAL-REGISTRY-AC-002` | `ValidateSpecSet` fails when `080` is closed but required `120` temporal/correction/replay validation rows are missing. |
+| `000-TEMPORAL-REGISTRY-AC-003` | Every replay/correction artifact has exactly one volatility class and every output-affecting activation-controlled artifact appears in `030.VersionManifest`. |
 | `000-OCSF-MAP-AC-001` | `ValidateSpecSet` fails when a new mapping row set lacks a volatility classification, an artifact class exists in `030` but not in `000`, a validation row exists in `120` but is missing from required promotion refs, or a research report is referenced as runtime authority. |
 | `000-OCSF-MAP-AC-002` | Every new OCSF mapping row set and policy set is classified as activation-controlled and tied to required `120` validation refs before authoritative handoff. |
 | `000-SOURCE-CLOSURE-AC-001` | Promotion fails when an active absence-sensitive feed category lacks `120` validation refs for `SourceAuthorityClosureMatrix`. |

@@ -66,6 +66,19 @@ Analysis, enrichment, lineage, and registry records must not mutate facts, graph
 
 `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are workflow outputs. They must not represent remediation, risk reduction, fact retraction, graph edge removal, or source completeness change.
 
+### AnalysisReplayEquivalenceHandoff
+
+`130` owns analysis-specific included and excluded fields for replay output class `080.ReplayEquivalencePolicy.output_class = analysis_output`. `080` owns checksum algorithm and replay preflight ordering.
+
+| Analysis output subset | Included replay fields | Excluded volatile fields | Required validation |
+| --- | --- | --- | --- |
+| `analysis_finding` | `AnalysisRuleBundle` ref, `AnalysisRule` row refs, `RuleGraphCompatibilityMatrix` refs, query target refs, graph derived-view state refs, authorization/redaction refs, finding canonical output checksum, `VersionManifest` ref | request correlation ID, UI display label, runtime duration, non-output diagnostic ordering artifacts | exact replay, rule bundle mismatch, graph compatibility mismatch, authorization mismatch |
+| `analysis_metric` | rule bundle ref, metric rule refs, query target refs, graph derived-view state refs, authorization/redaction refs, metric canonical output checksum, `VersionManifest` ref | request correlation ID, UI display label, runtime duration | exact replay and derived-view mismatch |
+| `risk_acceptance_record` | acceptance workflow record checksum, authorization refs, related finding refs, redaction refs, `VersionManifest` ref | UI display label, request correlation ID, runtime duration | exact replay and authorization mismatch |
+| `analysis_rule_execution_summary` | rule bundle ref, executed rule refs, graph profile refs, query target refs, canonical summary checksum, `VersionManifest` ref | non-output diagnostic ordering artifacts, runtime duration | exact replay and shadow-only comparison |
+
+Changed output-affecting inputs reject production replay before output. Shadow-only comparison is allowed only when an active owner row permits shadow output and the result is not production-visible. Analysis replay must not mutate raw, silver, identity, gold, graph-delta, graph-serving, completeness, watermark, package, or source-authority state.
+
 ## Derivation Rule Boundary
 
 `DerivationRuleBundle` may emit `GoldFact` records only through the gold derivation interface owned by `080`. A derived graph edge rule may emit graph deltas only when the supporting facts, rule version, authority profile, completeness profile, deterministic ID inputs, and projection profile are persisted.
@@ -229,6 +242,9 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 
 | `130-LINEAGE-FACET-AC-001` | Lineage facet rows define schema URL immutability, schema bytes, checksum, collision behavior, raw-facet storage, mapped fields, and rejection behavior. |
 | `130-RISK-SCORING-AC-001` | Numeric scoring is disabled by default and cannot emit authoritative risk scores without a future accepted scoring policy. |
+| `130-ANALYSIS-REPLAY-AC-001` | Analysis replay exact match includes rule bundle refs, rule row refs, graph compatibility refs, query target refs, derived-view refs, authorization/redaction refs, output checksum, and `VersionManifest` ref. |
+| `130-ANALYSIS-REPLAY-AC-002` | Rule bundle mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, or mutation attempt rejects production replay before output. |
+| `130-ANALYSIS-REPLAY-AC-003` | Shadow-only comparison is non-production and may not mutate facts, graph state, completeness, watermarks, identity, package state, or source authority. |
 | `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
 | `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
 | `130-LIFECYCLE-AC-001` | Every analysis, enrichment, lineage, and registry activation-controlled artifact entering `active` status has generic artifact lifecycle transition evidence and owner-specific guard results. |

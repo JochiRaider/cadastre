@@ -420,6 +420,11 @@ temporal_semantics_policy
 knowledge_time_policy
 late_arrival_policy
 gold_correction_policy
+correction_snapshot_ref_policy
+replay_equivalence_policy
+graph_rebuild_equivalence_policy
+event_sequence_validation_corpus
+bitemporal_query_mode_visibility_policy
 graph_projection_profile
 graph_backend_profile
 graph_read_model_schema_profile
@@ -506,6 +511,13 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 | `cdc_offset` | source event metadata, offset value, schema-history ref | `020`, `080` | Included and non-authoritative for fact time. |
 | `schema_history_ref` | schema-history artifact ref and checksum | `020`, `080` | Required for CDC replay sufficiency. |
 | `deterministic_side_effect` | side-effect record ref and checksum | `080` | Replay from recorded value only. |
+| `temporal_resolution_ref` | temporal resolution ref, policy refs, resolution checksum | `080` | Required before gold output and replay. |
+| `late_arrival_route_state` | route state ref, late-arrival policy ref, authority and watermark refs | `080`, `060` | Required when late evidence affects output or quarantine. |
+| `gold_correction_changeset_ref` | change-set ref, operation list checksum, correction policy ref | `080` | Required for correction output and replay. |
+| `correction_snapshot_ref_set` | old snapshot ref, new snapshot ref, table-set checksum, retention proof | `020`, `080` | Required before correction output. |
+| `replay_input_sufficiency_check` | output class, required refs, failure precedence result | `080`, output owner | Required before replay output. |
+| `replay_equivalence_checksum` | output class, included refs, excluded volatile fields, checksum | `080`, output owner | Required for replay acceptance. |
+| `graph_handoff_effect_ref` | `GoldFactChangeSet` ref, handoff effect, authority refs when applicable | `080`, `090` | Required when graph projection depends on correction effects. |
 | `graph_apply_checkpoint` | delta-set checksum, applied batch IDs, backend evidence refs | `090` | Required for resume. |
 | `watermark_checkpoint` | watermark kind, attempted value, commit record | `060`, `080`, `090` | Required before advancement. |
 | `package_activation_ref` | package-set manifest and deployment revision | `100` | Required for production output. |
@@ -542,7 +554,13 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
 | Identity output | resolver profile, evidence scope, identity decision refs, review case refs when applicable. |
-| Gold output | temporal policy, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, correction policy, source refs, snapshot refs, and validation refs. |
+| Temporal resolution output | `TemporalSemanticsPolicy` row ref, `KnowledgeTimeImportPolicy` row ref, source evidence refs, selected input path/value checksum, `TemporalObservationTimeResolution` ref, and resolution checksum. |
+| Gold fact output | temporal resolution ref and checksum, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, source refs, derivation refs, and validation refs. |
+| Gold correction output | `GoldFactChangeSet` ref, correction policy ref, assertion transition row ref, old `LakehouseSnapshotRef`, new `LakehouseSnapshotRef`, table-set checksum ref, retention-protection ref, temporal resolution refs, authority refs, absence refs when applicable, and graph handoff effect refs. |
+| Late-arrival output | late-arrival policy row ref, late-arrival route state, temporal resolution ref, authority/completeness/coverage/staleness refs, absence refs when applicable, quarantine refs when selected, and watermark refs when consulted. |
+| Replay output | `ReplayEquivalencePolicy` output-class row ref, `ReplayInputSufficiencyCheck` ref, replay equivalence checksum, required owner-specific included-field refs, excluded volatile-field list, and failure-precedence result. |
+| CDC-shaped feed replay output | CDC raw subtype refs, schema-history refs, offset refs, tombstone refs, heartbeat refs, replay sufficiency check, and non-authority diagnostics proving CDC metadata was not used as fact time or absence authority. |
+| Graph handoff output | `GoldFactChangeSet` ref, graph handoff effect ref, projection profile ref when known, `060.AbsenceDerivationResult` refs for expiry or cleanup, and validation refs. |
 | Absence, cleanup, retraction, or graph expiry output | requested effect token, `060.AbsenceDerivationResult`, `SourceAuthorityClosureMatrix` validation result ref or validation row ref, and all row-set refs consulted by `DeriveAbsenceOrUnknown`. |
 | Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, completeness decision refs, source-authority closure refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
 | Graph delta/apply | projection profile, graph delta set, idempotency key, backend profile, graph apply lifecycle transition evidence, apply result. |
@@ -564,6 +582,11 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | `commit_refs` | Yes when writes occur | `LakehouseCommitRef` refs for attempted and successful writes. |
 | `acceptance_report_refs` | Required for promotion | Acceptance report refs and checksums. |
 | `activation_artifact_refs` | Required when activation-controlled artifacts affect output | Canonically sorted `ActivationControlledArtifactRef` rows and checksums. |
+| `temporal_resolution_refs` | Required when source observation time affects gold, correction, graph projection, audit, or replay | Canonically sorted `080.TemporalObservationTimeResolution` refs and checksums. |
+| `correction_snapshot_ref_sets` | Required for correction output | Old snapshot refs, new snapshot refs, table-set checksums, retention-protection refs, and mutable-ref rejection evidence. |
+| `replay_sufficiency_check_refs` | Required for replay output | One `080.ReplayInputSufficiencyCheck` ref per replay output class. |
+| `replay_equivalence_policy_refs` | Required for replay output | Output-class row refs and checksums for every replayed output class. |
+| `graph_handoff_effect_refs` | Required when graph projection depends on correction effects | Canonically sorted `080` graph handoff effect refs and related authority refs. |
 | `lifecycle_machine_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Machine ID, version, owner, and machine checksum refs. |
 | `lifecycle_transition_evidence_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Canonically sorted transition evidence refs and checksums. |
 | `lifecycle_state_artifact_refs` | Required when persisted lifecycle state artifacts affect output, replay, activation, graph apply, watermark eligibility, or CI gating | Subject refs, state artifact refs, and checksums. |
@@ -673,6 +696,11 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-LIFECYCLE-AC-004` | Idempotent replay is byte-identical or fails with a deterministic idempotency conflict. |
 | `030-LIFECYCLE-AC-005` | Canary and shadow outputs never advance current production, last-known-good, or watermark state. |
 | `030-LIFECYCLE-AC-006` | Lifecycle transition evidence appears in `VersionManifest` whenever lifecycle behavior is output-affecting. |
+
+| `030-TEMPORAL-MANIFEST-AC-001` | Missing temporal resolution ref, temporal policy ref, or temporal resolution checksum fails before gold output. |
+| `030-CORRECTION-MANIFEST-AC-001` | Missing old snapshot ref, new snapshot ref, table-set checksum, or retention-protection ref fails before correction output. |
+| `030-REPLAY-MANIFEST-AC-001` | Missing replay equivalence row ref or replay sufficiency check ref fails before replay output. |
+| `030-GRAPH-HANDOFF-MANIFEST-AC-001` | Graph handoff refs appear in `VersionManifest` whenever graph projection depends on correction effects. |
 
 ## Definition of Done
 

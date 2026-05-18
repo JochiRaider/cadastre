@@ -301,6 +301,35 @@ Each fixture family in this matrix applies to every active feed category in `020
 | `source_history` | Positive and negative closure fixtures required, including outside-window no-proof. |
 | `future_reachability` | MVP block/no-op fixture required; positive reachability output forbidden. |
 
+### TemporalCorrectionReplayValidationMatrix
+
+Rows in this matrix are required when `080` behavior is in implementation scope. Each row must name fixture checksum, input checksum, expected output checksum or no-op, expected error when applicable, mutation-prohibition proof, and `VersionManifest` ref.
+
+| Fixture family | Required coverage |
+| --- | --- |
+| `temporal-resolution-*` | exact policy row, missing policy, absent time, malformed time, ambiguous time, unauthorized source time, authorized fallback, forbidden current-time fallback, manifest omission. |
+| `knowledge-time-import-*` | `current_import`, historical valid-time-only import, reconstruction success with persisted source-known-time evidence, reconstruction rejected without evidence. |
+| `late-arrival-*` | on-time authoritative, late authoritative correction, late non-authoritative quarantine, discard forbidden, watermark no-effect default. |
+| `gold-correction-*` | replacement, retraction, interval split, stale state, conflict mark, conflict resolution, duplicate no-op, confidence-only same value, confidence-only changed value. |
+| `assertion-transition-*` | Every default assertion-state and correction-event pair defined by `080`. |
+| `correction-snapshot-ref-*` | old snapshot missing, new snapshot missing, table-set checksum missing, retention ineligible, mutable ref rejected. |
+| `gold-correction-no-op-error-*` | missing temporal resolution, missing authority, ambiguous authority, missing correction policy, missing transition row, unauthorized negative, unauthorized CDC tombstone, replay output-class missing. |
+| `replay-equivalence-*` | output-class rows for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance; checksum match and mismatch. |
+| `graph-handoff-*` | `none`, `reproject_fact_key`, authorized expiry, authorized cleanup, denied expiry, conflict visibility default, identity split handoff. |
+| `temporal-version-manifest-*` | missing temporal resolution ref, missing correction snapshot refs, missing replay sufficiency check, missing graph handoff refs, checksum mismatch. |
+
+| Validation row | Owner | Required assertion |
+| --- | --- | --- |
+| `120-TEMPORAL-CORRECTION-MISSING-POLICY` | `080` | Missing temporal policy emits `TEMPORAL_POLICY_UNRESOLVED` and no gold output. |
+| `120-TEMPORAL-CORRECTION-CURRENT-TIME` | `080` | Current platform time fallback is rejected. |
+| `120-ASSERTION-TRANSITION-TOTALITY` | `080` | Every assertion-state/correction-event pair has one expected result. |
+| `120-REPLAY-OUTPUT-CLASS-COVERAGE` | `080` | Replay rows exist for every required output class. |
+| `120-GRAPH-HANDOFF-COVERAGE` | `080`, `090` | Every graph handoff effect has success, error, or no-op validation. |
+| `120-NOOP-ERROR-COVERAGE` | `080`, `060`, `090` | No-op and deterministic error cases prove no forbidden mutation. |
+| `120-PROJECTION-REPLAY-COVERAGE` | `050`, `080` | Projection replay exact match, profile mismatch, loss-manifest mismatch, redaction mismatch, and volatile-field-only difference are validated. |
+| `120-ANALYSIS-REPLAY-COVERAGE` | `130`, `080` | Analysis replay exact match, rule mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, shadow-only result, and mutation attempt are validated. |
+| `120-API-TEMPORAL-ERROR-COVERAGE` | `110`, `080` | Every new `080` error is registered and label behavior is non-collapsing. |
+
 ### SourceAuthorityClosureValidationMatrix
 
 Every fixture family in this matrix is required before `SourceAuthorityClosureMatrix` may satisfy promotion for an active absence-sensitive feed category. `120` validates owner behavior; it must not define source-authority behavior beyond validation artifact shapes, fixture IDs, expected outputs, and acceptance aggregation.
@@ -388,8 +417,31 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `060` | OCSF field absence as absence | `ocsf-field-absence-non-authority-*` | TODO | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | TODO | no absence, cleanup, retraction, graph expiry, or watermark | `060-OCSF-NONAUTH-AC-003` | blocking |
 | `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
 | `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
-| `080` | current-time fallback | `fixture-080-current-time-fallback` | TODO | temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
-| `080` | replay mismatch | `fixture-080-replay-mismatch` | TODO | replay mismatch error | TODO | no replay output | `080-CLEANUP-AC-004` | blocking |
+| `080` | missing temporal policy | `temporal-resolution-missing-policy` | TODO | `TEMPORAL_POLICY_UNRESOLVED` | TODO | no gold fact | `080-TEMPORAL-POLICY-AC-001` | blocking |
+| `080` | absent source time | `temporal-resolution-absent-time` | TODO | temporal error or unknown per active row | TODO | no unauthorized fallback | `080-TEMPORAL-RESOLUTION-AC-001` | blocking |
+| `080` | malformed source time | `temporal-resolution-malformed-time` | TODO | temporal error | TODO | no gold fact | `080-TEMPORAL-RESOLUTION-AC-001` | blocking |
+| `080` | ambiguous source time | `temporal-resolution-ambiguous-time` | TODO | temporal error | TODO | no gold fact | `080-TEMPORAL-RESOLUTION-AC-001` | blocking |
+| `080` | forbidden current-time fallback | `fixture-080-current-time-fallback` | TODO | `SOURCE_TIME_NOT_AUTHORIZED` or temporal error | TODO | no gold fact | `080-CLEANUP-AC-003` | blocking |
+| `080` | historical known-time reconstruction rejected | `knowledge-time-import-reconstruction-rejected` | TODO | rejected reconstruction | TODO | no historical known-time claim | `080-KNOWLEDGE-TIME-AC-001` | blocking |
+| `080` | missing late-arrival row | `late-arrival-policy-missing` | TODO | `LATE_ARRIVAL_POLICY_MISSING` | TODO | no correction route | `080-LATE-ARRIVAL-AC-001` | blocking |
+| `080` | late discard forbidden | `late-arrival-discard-forbidden` | TODO | `LATE_ARRIVAL_DISCARD_FORBIDDEN` | TODO | evidence preserved | `080-LATE-ARRIVAL-AC-001` | blocking |
+| `080` | missing correction policy | `gold-correction-policy-missing` | TODO | `CORRECTION_POLICY_MISSING` | TODO | no correction | `080-CORRECTION-MATRIX-AC-001` | blocking |
+| `080` | missing correction transition | `assertion-transition-missing` | TODO | `GOLD_CORRECTION_TRANSITION_UNDEFINED` | TODO | no correction or graph handoff | `080-CORRECTION-MATRIX-AC-001` | blocking |
+| `080` | missing old snapshot | `correction-snapshot-old-missing` | TODO | `CORRECTION_SNAPSHOT_REF_MISSING` | TODO | no correction | `080-CORRECTION-SNAPSHOT-AC-001` | blocking |
+| `080` | missing new snapshot | `correction-snapshot-new-missing` | TODO | `CORRECTION_SNAPSHOT_REF_MISSING` | TODO | no correction | `080-CORRECTION-SNAPSHOT-AC-001` | blocking |
+| `080` | mutable snapshot ref | `correction-snapshot-mutable-ref` | TODO | `MUTABLE_BRANCH_REF_FOR_REPLAY` | TODO | no correction | `080-CORRECTION-SNAPSHOT-AC-001` | blocking |
+| `080` | duplicate candidate no-op | `gold-correction-duplicate-no-op` | TODO | `no_op_duplicate` | TODO | no graph mutation | `080-CORRECTION-NOOP-AC-001` | blocking |
+| `080` | unauthorized retraction | `gold-correction-unauthorized-retraction` | TODO | owner `060` blocking reason | TODO | no retraction, no graph expiry, no watermark | `080-UNSAFE-NEGATIVE-AC-001` | blocking |
+| `080` | unauthorized CDC tombstone | `gold-correction-unauthorized-cdc-tombstone` | TODO | `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | TODO | no retraction, cleanup, expiry, or watermark | `080-UNSAFE-NEGATIVE-AC-001` | blocking |
+| `080` | confidence-only same value no-op | `gold-correction-confidence-same-no-op` | TODO | `no_op_duplicate` | TODO | no new active fact and no graph delta | `080-CORRECTION-NOOP-AC-001` | blocking |
+| `080` | confidence-only changed value | `gold-correction-confidence-changed` | TODO | `insert_fact` or policy-defined update | TODO | append-only change set only | `040-CONFIDENCE-CANONICAL-AC-001` | blocking |
+| `080` | missing replay output-class row | `replay-output-class-row-missing` | TODO | `REPLAY_POLICY_ARTIFACT_MISSING` | TODO | no replay output | `080-REPLAY-OUTPUT-CLASS-AC-001` | blocking |
+| `080` | replay mutable ref | `replay-mutable-ref` | TODO | `MUTABLE_BRANCH_REF_FOR_REPLAY` | TODO | no replay output | `080-REPLAY-PRECEDENCE-AC-001` | blocking |
+| `080` | replay retention failure | `replay-retention-ineligible` | TODO | `REPLAY_INPUT_INSUFFICIENT` | TODO | no replay output | `080-REPLAY-PRECEDENCE-AC-001` | blocking |
+| `080` | replay authority mismatch | `replay-authority-mismatch` | TODO | `REPLAY_INPUT_INSUFFICIENT` or `REPLAY_CHECKSUM_MISMATCH` | TODO | no replay output | `080-REPLAY-PRECEDENCE-AC-001` | blocking |
+| `080` | replay temporal mismatch | `replay-temporal-mismatch` | TODO | `REPLAY_INPUT_INSUFFICIENT` or `REPLAY_CHECKSUM_MISMATCH` | TODO | no replay output | `080-REPLAY-PRECEDENCE-AC-001` | blocking |
+| `080` | replay side-effect mismatch | `replay-side-effect-mismatch` | TODO | `REPLAY_CHECKSUM_MISMATCH` | TODO | no replay output | `080-REPLAY-PRECEDENCE-AC-001` | blocking |
+| `080` | replay checksum mismatch | `fixture-080-replay-mismatch` | TODO | `REPLAY_CHECKSUM_MISMATCH` | TODO | no replay output | `080-CLEANUP-AC-004` | blocking |
 | `090` | theoretical reachability edge | `fixture-090-theoretical-reachability-edge` | TODO | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op | TODO | no graph mutation | `090-CLEANUP-AC-004` | blocking |
 | `090` | backend internal ID | `fixture-090-backend-id` | TODO | `GRAPH_BACKEND_ID_FORBIDDEN` | TODO | no graph response identity leak | `090-CLEANUP-AC-003` | blocking |
 | `090` | graph apply unsafe resume | `fixture-090-lifecycle-graph-apply-resume-unsafe` | TODO | `GRAPH_APPLY_RESUME_UNSAFE` | TODO | no graph mutation and no derived-view advancement | `090-LIFECYCLE-AC-003` | blocking |
@@ -491,7 +543,7 @@ replay_same_event
 | `050` | OCSF mapping row success, missing row, ambiguous row, activity discriminator missing, required object path missing, forbidden field, unknown enum, OCSF Other not permitted, deprecated field, source extension rule success, undeclared source extension, wildcard rejection, secret scan, cadastre-only null profile, DHCP/IPAM split required. |
 | `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating, OCSF status non-authority, OCSF severity non-authority, OCSF confidence non-authority, OCSF observable non-authority, OCSF field absence non-authority. |
 | `070` | weak evidence, hard blocker, split handoff, review state machine, selector safety. |
-| `080` | event sequence, fact time, late arrival, correction, replay mismatch, graph rebuild equivalence. |
+| `080` | temporal-resolution, knowledge-time-import, late-arrival, gold-correction, assertion-transition, correction-snapshot-ref, gold-correction-no-op-error, replay-equivalence, graph-handoff, temporal-version-manifest. |
 | `090` | edge semantics, graph apply lifecycle, graph apply resume, identical reapply, query ordering, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, flow-role evidence required. |
 | `100` | package activation lifecycle, trust, canary and shadow isolation, rollback, quarantine, emergency behavior, deprecation window expiry, repository unsupported form. |
 | `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
@@ -512,6 +564,11 @@ replay_same_event
 | `120-SCHEMA-PATCH-AC-006` | The two-independent-implementer check covers raw, silver, canonical entity, source asset, identifier, gold, evidence, and graph delta fixtures. |
 | `120-SCHEMA-PATCH-AC-007` | The aggregate `AcceptanceReport` cannot pass while any 040 schema row, fixture checksum, expected output checksum, or owner error code remains `TODO:`. |
 | `120-CLEANUP-AC-004` | Required negative tests by owner remain present and do not depend on external product drafts, decomposition-control artifacts, private binding indexes, or promotion-readiness gates. |
+| `120-TEMPORAL-CORRECTION-AC-001` | Aggregate acceptance fails while any `080` temporal, correction, late-arrival, replay, no-op/error, graph handoff, or manifest fixture is blocked, missing checksum, missing expected output, or not run. |
+| `120-ASSERTION-TRANSITION-AC-001` | Every assertion-state/correction-event pair has one expected result. |
+| `120-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance. |
+| `120-GRAPH-HANDOFF-AC-001` | Every graph handoff effect has success, error, or no-op validation. |
+| `120-NOOP-ERROR-AC-001` | No-op and deterministic error cases prove no forbidden fact, graph, export, replay, or watermark mutation. |
 
 | `120-STATUS-CONSISTENCY-AC-001` | Owner/domain status contradiction, domain runtime restatement, owner-spec contradiction, ADR status, and manifest path mismatch validation rows exist and fail with exact codes. |
 | `120-MUTATION-PROHIBITION-AC-001` | Every negative validation row has a mutation-prohibition proof for each affected mutation class. |

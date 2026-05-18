@@ -352,7 +352,7 @@ Shape validation materializes required defaults before checksum computation. Unk
 | `known_from` | `timestamp_utc` | yes | none | no | no | scalar default | n/a | ordered:2 for immutable ID | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `known_to` | `timestamp_utc` | yes | null means open knowledge interval; effective closure materializes through `080.GoldFactChangeSet` | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `assertion_state` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:3 for immutable ID | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `confidence` | `decimal_string` | yes | none | no | no | 0 through 1 inclusive; TODO: precision scale must be closed before authoritative promotion | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+| `confidence` | `decimal_string` | yes | none | no | no | `040.DecimalPrecisionPolicy.confidence_0_1`: canonical six fractional digits, no rounding, range `0.000000` through `1.000000` inclusive | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_DECIMAL_PRECISION_INVALID` |
 | `authority_profile_row_id` | `cadastre_id` | yes | none | no | no | scalar default | n/a | ordered:4 for immutable ID | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `temporal_resolution_id` | `cadastre_id` | yes | none | no | no | scalar default | n/a | ordered:5 for immutable ID | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `coverage_assertion_refs` | `array<cadastre_id>` | yes | `[]`; non-empty when coverage-sensitive | no | no | scalar default | lexical by ref ID | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
@@ -605,6 +605,10 @@ If a record carries an activation-artifact value outside a declared extension ma
 | `unknown` | Evidence exists but does not authorize presence or absence. |
 | `no_op` | Candidate derivation intentionally emitted no fact. |
 
+`040` owns the assertion-state token vocabulary only. `080` owns all correction transitions and no-op emission behavior. `no_op` must not be treated as active presence, authorized absence, graph eligibility, compliance pass/fail, or source completeness. Default no-op behavior is represented by `080.GoldFactChangeSet.operation = no_op_duplicate`; a persisted `GoldFact` with `assertion_state = no_op` is forbidden unless a future active owner row defines output eligibility and validation rows for that exact use.
+
+Graph, API, export, and analysis paths must treat no-op correction evidence as no output change unless their owner specs import an active `080` no-op behavior row that permits a narrower diagnostic rendering. `090` must not project no-op facts or no-op changesets into graph output by default.
+
 ## Graph Delta Primitive Shapes
 
 This spec owns only the primitive record shape of `GraphNodeDeltaShape` and `GraphEdgeDeltaShape`. Projection rules, graph apply, backend mapping, traversal, runtime delta ID inputs, and query behavior are owned by `090`. A graph delta primitive shape that contains a backend-generated ID must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response materialization, evidence ref generation, replay, drillback, or pagination identity is emitted.
@@ -692,6 +696,8 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-FACT-ABSENCE-AC-001` | Every `GoldFact.absence_outcome` token is either null or one closed `FactAbsenceOutcome` value. |
 | `040-FACT-ABSENCE-AC-002` | Parser-generated or mapping-generated absence outcomes fail before persistence. |
 | `040-FACT-ABSENCE-AC-003` | Null absence outcome is not rendered as `unknown` without `110` owner mapping. |
+| `040-CONFIDENCE-CANONICAL-AC-001` | Confidence-only correction fixtures compare canonical six-fractional-digit confidence bytes and reject non-canonical persisted spellings. |
+| `040-NOOP-ASSERTION-AC-001` | A `no_op` assertion state or `080.no_op_duplicate` changeset is not rendered as active presence, authorized absence, graph eligibility, compliance pass/fail, or source completeness. |
 | `040-SOURCE-EXT-SHAPE-AC-001` | A minimal valid `SourceExtensionFieldRuleShape` fixture validates with byte-stable canonical ordering and checksum. |
 | `040-SOURCE-EXT-SHAPE-AC-002` | Missing required, unknown-field, non-canonical ordering, invalid bounds, and checksum-replay fixtures fail or pass exactly as declared by `SourceExtensionFieldRuleShape`. |
 | `040-SOURCE-EXT-SHAPE-AC-003` | Invalid source-extension rule shape is rejected before `050` activation behavior evaluates the rule. |

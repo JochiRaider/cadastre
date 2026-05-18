@@ -64,6 +64,12 @@ A broad source-category ranking must not act as fallback authority when the exac
 
 `DeriveAbsenceOrUnknown` may populate `040.GoldFact.absence_outcome` only through `040.GoldFactSchema` and only after exact authority, completeness, staleness, and coverage gates pass. Coverage-sensitive fact types or predicates must emit a `GoldFact` with non-empty `coverage_assertion_refs`; `coverage_assertion_refs = []` fails with `GOLD_FACT_COVERAGE_REQUIRED` for coverage-sensitive output.
 
+### Correction authority handoff to 080
+
+`080` must call `DeriveAbsenceOrUnknown` for any correction candidate based on missing evidence, stale evidence, source delete evidence, cleanup evidence, source-history no-change, control result absence, vulnerability fixed state, DNS absence, DHCP/IPAM expiry, flow non-observation, cloud disappearance, or CDC tombstone.
+
+`060` decides whether negative, stale, cleanup, tombstone, or no-change evidence is authorized for a requested effect. `080` decides the correction operation. `090` decides projection and apply output. A correction or graph projection that consumes negative evidence directly, without an `AbsenceDerivationResult` ref for the requested effect, must fail before mutation.
+
 ### SourceAuthorityProfileRow schema
 
 `SourceAuthorityProfileRow` is the stable row interface for fact authority and absence-sensitive effect authority. Concrete row instances are activation-controlled artifacts. Wildcards for `fact_type`, `predicate`, `source_dataset`, and requested effect are forbidden. Dataset-default rows may match only when `instance_default_allowed = true`.
@@ -277,20 +283,23 @@ Only `complete` and `empty_complete` may enter absence evaluation, and only when
 ## DeriveAbsenceOrUnknown Algorithm
 
 ```text
-DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_set, completeness_profile, authority_profile, coverage_assertions, staleness_policy):
+DeriveAbsenceOrUnknown(candidate, requested_effect, evidence_set, receipt_set, upstream_evidence_set, completeness_profile, authority_profile, coverage_assertions, staleness_policy):
 1. Validate every required activation artifact ref through `030.ActivationControlledArtifactRef`.
-2. Fail before absence, cleanup, retraction, graph expiry, or watermark advancement when an authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact is missing, inactive, checksum-mismatched, out of scope, or unvalidated.
-3. Resolve exactly one active `SourceAuthorityProfileRow` through `ResolveSourceAuthorityProfileRow`; missing or ambiguous rows block the requested effect.
-4. Reject when required LakehouseReadCompletenessReceipt is missing or not tied to the active feed profile and manifest refs.
-5. Evaluate UpstreamCompletenessEvidence and the read receipt through `EvaluateLakehouseFeedCompleteness` for the requested effect.
-6. If the completeness decision is not `complete` or `empty_complete`, return unknown, not applicable, stale, no-op, or deterministic error with the selected blocking reason.
-7. Reject when the selected completeness row's `allowed_effects` omits the requested effect.
-8. Evaluate SourceStalenessPolicy using declared time-input precedence.
-9. Require CoverageAssertion when the fact type or predicate is coverage-sensitive.
-10. Reject weak progress signals unless one active ProgressSignalInterpretationPolicy row grants the exact effect.
-11. Reject external-schema classification, status, severity, confidence, observables, enrichments, field presence, field absence, or endpoint order as authority unless an active `060` row maps the exact signal to the exact requested effect.
-12. Emit exactly one `AbsenceDerivationResult` whose `result_state` maps one-to-one to `040.FactAbsenceOutcome` when a fact-level outcome is produced.
-13. Include authority profile row refs, completeness row refs, policy refs, artifact checksums, feed manifest refs, requested effect, and validation refs in the result and `VersionManifest`.
+2. Fail before absence, cleanup, retraction, graph expiry, or watermark advancement when an authority, staleness, coverage, completeness, progress, control-result, source-history, visibility, or absence policy artifact is missing, inactive, checksum-mismatched, out of scope, or unvalidated.
+3. Validate `requested_effect` against the requested-effect gate table. Missing, unknown, or omitted effects block with `COMPLETENESS_EFFECT_NOT_ALLOWED`.
+4. Resolve exactly one active `SourceAuthorityProfileRow` through `ResolveSourceAuthorityProfileRow`; missing or ambiguous rows block the requested effect.
+5. Reject when required `LakehouseReadCompletenessReceipt` is missing or not tied to the active feed profile and manifest refs.
+6. Evaluate `UpstreamCompletenessEvidence` and the read receipt through `EvaluateLakehouseFeedCompleteness` for the requested effect.
+7. If the completeness decision is not `complete` or `empty_complete`, return unknown, not applicable, stale, no-op, or deterministic error with the selected blocking reason.
+8. Reject when the selected completeness row's `allowed_effects` omits the requested effect.
+9. Evaluate `SourceStalenessPolicy` using declared time-input precedence.
+10. Require `CoverageAssertion` when the fact type or predicate is coverage-sensitive.
+11. Reject weak progress signals unless one active `ProgressSignalInterpretationPolicy` row grants the exact effect.
+12. Reject source-history no-change unless an active `SourceHistoryRetentionProfile` row covers the exact dataset, scope, and history window.
+13. Reject supplier visibility or permission-sensitive absence unless required `SupplierCollectionVisibilityProfile` refs validate.
+14. Reject external-schema classification, status, severity, confidence, observables, enrichments, field presence, field absence, endpoint order, CDC tombstone, source delete marker, or cleanup evidence as authority unless an active `060` row maps the exact signal to the exact requested effect.
+15. Emit exactly one `AbsenceDerivationResult` whose `result_state` maps one-to-one to `040.FactAbsenceOutcome` when a fact-level outcome is produced.
+16. Include requested effect, allowed effects, authority profile row refs, completeness row refs, policy refs, artifact checksums, feed manifest refs, input evidence refs, result checksum, and validation refs in the result and `VersionManifest`.
 ```
 
 ### AbsenceDerivationResult schema
@@ -305,6 +314,29 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 | `coverage_assertion_refs` | Required for coverage-sensitive outputs | Non-empty when coverage-sensitive output is authorized. |
 | `staleness_decision_ref` | Required when staleness evaluated | Source staleness policy decision ref. |
 | `version_manifest_ref` | Required for production output | Version manifest ref containing all output-affecting inputs. |
+| `requested_effect` | Yes | One requested-effect token from the gate table. |
+| `allowed_effects` | Yes | Closed set selected from the active authority and completeness rows. Empty means no absence-sensitive effect is authorized. |
+| `absence_policy_ref` | Required when absence policy evaluated | Active `AbsenceDerivationPolicy` row ref or null when blocked before policy selection. |
+| `progress_signal_policy_refs` | Yes | Canonically sorted consulted progress-signal policy refs; empty when no progress signals were consulted. |
+| `control_result_mapping_refs` | Yes | Canonically sorted consulted control-result mapping refs. |
+| `source_history_retention_refs` | Yes | Canonically sorted consulted source-history retention refs. |
+| `supplier_visibility_refs` | Yes | Canonically sorted consulted visibility refs. |
+| `input_evidence_refs` | Yes | Canonically sorted raw, silver, source-state, delete, tombstone, cleanup, or source-history evidence refs. |
+| `result_checksum` | Yes | SHA-256 over canonical result bytes excluding only `result_checksum`. |
+
+### Requested-effect gate table
+
+| Requested effect | Required authorization | Default when gate fails | Downstream owner |
+| --- | --- | --- | --- |
+| `absence` | Exact authority row with `allowed_effects` containing `absence`, complete or empty-complete decision, required coverage, and non-stale state unless policy permits. | `unknown` or deterministic owner error; no negative fact. | `060`, consumed by `080`. |
+| `cleanup` | Exact authority row and completeness row with `allowed_effects` containing `cleanup`; cleanup evidence must be authorized, not merely destination cleanup. | no-op with no cleanup. | `060`, consumed by `080` and `090`. |
+| `retraction` | Exact authority row and completeness row with `allowed_effects` containing `retraction`; delete or tombstone evidence must pass all gates. | no-op with no retraction. | `060`, consumed by `080`. |
+| `graph_expiry` | Exact authority row and completeness row with `allowed_effects` containing `graph_expiry`; graph expiry is never authorized by graph state alone. | no-op with no graph delta. | `060`, consumed by `090`. |
+| `watermark` | Exact authority row, completeness row, and `ProjectionWatermarkPolicy` permitting the exact watermark target and effect. | no watermark advancement. | `060`. |
+
+Stale-source output may create a stale known-state only when the active `SourceStalenessPolicy` row permits stale state materialization. Stale source state does not authorize retraction, cleanup, graph expiry, or watermark by default.
+
+CDC delete markers and tombstones are raw delete evidence only. They authorize retraction only when exact authority, completeness, coverage, staleness, source-history when applicable, and requested-effect gates pass. Unauthorized CDC tombstones must produce no retraction, cleanup, graph expiry, absence, or watermark advancement.
 
 ### Authority, coverage, and absence error codes
 
@@ -341,6 +373,7 @@ DeriveAbsenceOrUnknown(candidate, evidence_set, receipt_set, upstream_evidence_s
 | `COMPLETENESS_BLOCKING_PRECEDENCE_APPLIED` | A higher-precedence blocking condition selected the completeness decision and blocked a lower-precedence effect. |
 | `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | An empty scope is complete for the feed read but not authorized for absence by exact completeness, authority, coverage, and staleness rows. |
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | Watermark advancement is requested while completeness, upstream evidence, authority, coverage, or staleness gates block the effect. |
+| `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | CDC tombstone or delete marker attempts retraction without exact authority, completeness, coverage, staleness, and requested-effect authorization. |
 | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | A gold derivation, absence derivation, control-state output, cleanup, retraction, graph expiry, or watermark decision attempts to use external schema classification, status, severity, confidence, field presence, field absence, observable, enrichment, or endpoint order as authority without an active `060` row. |
 
 ## Watermarks
@@ -572,7 +605,11 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-SCHEMA-PATCH-AC-003` | `060` does not restate `GoldFact` field definitions; it references `040.GoldFactSchema` by exact name. |
 
 | `060-COVERAGE-CLOSURE-AC-001` | Every coverage catalog row has a `CoverageDimensionProfileRowId` and `CoverageClosureStatus`. |
-| `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, and manifest refs or a specific blocking reason. |
+| `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, requested effect, allowed effects, result checksum, and manifest refs or a specific blocking reason. |
+| `060-CORRECTION-HANDOFF-AC-001` | `080` correction candidates based on missing, stale, delete, cleanup, no-change, fixed-state, DNS, DHCP/IPAM, flow non-observation, cloud disappearance, or CDC tombstone evidence carry an `AbsenceDerivationResult` ref before correction output. |
+| `060-REQUESTED-EFFECT-AC-001` | Missing or omitted requested effect blocks absence, cleanup, retraction, graph expiry, and watermark. |
+| `060-STALE-NO-EFFECT-AC-001` | Stale source state without a staleness row permitting materialization emits no retraction, cleanup, graph expiry, or watermark. |
+| `060-CDC-TOMBSTONE-AC-001` | Unauthorized CDC tombstone evidence emits no absence, retraction, cleanup, graph expiry, or watermark. |
 | `060-VOLATILITY-AC-001` | Missing exact source-authority row, inactive row set, staleness checksum mismatch, coverage row absence, and weak-signal combination cases fail or no-op with no absence, cleanup, retraction, graph expiry, or watermark advancement. |
 | `060-VOLATILITY-AC-002` | Every output-affecting source-authority artifact ref appears in `VersionManifest` with checksum and validation refs. |
 | `060-FEED-CLOSURE-AC-001` | Missing `LakehouseFeedCompletenessProfileRow` maps to `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` and no absence-sensitive effect. |
