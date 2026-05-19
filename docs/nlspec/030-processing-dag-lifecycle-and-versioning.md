@@ -656,6 +656,8 @@ Package activation refs required by `VersionManifestCompletenessMatrix` must app
 
 `version_manifest_id` must be `vm_` plus SHA-256 lowercase hex over `040.CanonicalJSON` of `manifest_kind` and `included_refs`. `created_at` must not affect `version_manifest_id`.
 
+When identity review output, identity mutation, review expiration, or review terminal decision output can affect production behavior, `VersionManifest` must include `070.IdentityReviewCaseStateMachine.v1` machine refs, machine checksums, transition evidence refs, review-case refs, terminal decision refs, and resolver explanation refs.
+
 ### RequiredLifecycleMachineBindings
 
 | Production lifecycle | Required owner | Machine ID | Transition-table location | Validation rows |
@@ -667,8 +669,11 @@ Package activation refs required by `VersionManifestCompletenessMatrix` must app
 | feed stage execution | `020`, `030` | `030.StageExecutionLifecycleMachine.v1` with `020.FeedStageLifecycleEventDerivation` | `020`, `030` | `val-030-lifecycle-feed-stage` |
 | graph apply | `090` | `090.GraphApplyLifecycleMachine.v1` | `090` | `val-090-lifecycle-graph-apply-totality` |
 | validation acceptance | `120` | `120.ValidationAcceptanceLifecycleMachine.v1` | `120` | `val-120-lifecycle-validation-acceptance` |
+| identity review case | `070` | `070.IdentityReviewCaseStateMachine.v1` | `070`; generic evidence fields in `030` | `val-070-identity-review-totality`, `val-070-identity-review-idempotency`, `val-070-identity-review-illegal-no-mutation`, `val-070-identity-review-terminal-output`, `val-domain-lifecycle-todo-resolved` |
 
 `ValidateSpecSet` must fail when any row in this table omits a concrete machine ID, transition-table owner, validation row, or owner guard/event-derivation location. Owner-specific errors must be used when available; generic lifecycle errors are fallback only.
+
+If an owner spec defines a production-affecting lifecycle machine and transition matrix, domain-level lifecycle status must be `blocked_validation` until the matching `120.LifecycleValidationMatrix` rows pass. It must not remain `blocked_owner_todo` unless the owner spec lacks the machine, states, events, transition matrix, or illegal-transition rule.
 
 ### RunLockKeyDerivation
 

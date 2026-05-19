@@ -168,7 +168,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `expected_error` | Required when error expected | Owner-specific code. |
 | `mutation_prohibition` | Yes | Production mutation classes forbidden by the row. |
 | `checksums` | Yes | Input, fixture, expected, and actual checksums. |
-| `pass_fail_evidence` | Yes after run | `pass`, `fail`, `blocked`, or `not_run`. |
+| `pass_fail_evidence` | Yes after run | `pass`, `fail`, `blocked`, or `not_run`. `pass` is forbidden when any required fixture checksum, expected output checksum, expected no-op assertion, expected error, mutation prohibition, activation artifact ref, or version manifest ref is `TODO`, omitted, stale, or checksum-mismatched. |
 | `volatility_class` | No | Required when the row validates a volatility boundary. |
 | `activation_artifact_refs` | No | Required refs and checksums for output-affecting activation-controlled artifacts. |
 | `stable_core_owner` | No | Owner stable contract when validating activation artifacts. |
@@ -186,6 +186,20 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `owner-spec-contradiction-same-runtime-contract` | Two owner specs define incompatible runtime behavior for one named contract. | `OWNER_SPEC_CONTRADICTION` | no production output |
 | `adr-status-unregistered` | ADR status is not in `000.SpecStatus`. | `ADR_STATUS_UNREGISTERED` | no promotion |
 | `registry-manifest-path-mismatch` | Manifest path lacks exactly one registry row or explicit non-registry reason. | `REGISTRY_MANIFEST_PATH_MISMATCH` | no promotion |
+
+### DomainSection25StatusValidationMatrix
+
+| Row ID | Scenario | Expected result |
+| --- | --- | --- |
+| `domain-section25-source-closure-blocked-validation` | Domain row for source-specific closure is `blocked_validation`; `060` closure row instances or `120-SOURCE-CLOSURE-*` rows are missing. | Acceptance blocked, no production output. |
+| `domain-section25-correction-snapshot-resolved` | Domain row is resolved; `080.CorrectionSnapshotRefPolicy` has no owner TODO and required validation rows exist. | Pass only when `080` rows are not blocked. |
+| `domain-section25-replay-equivalence-resolved` | Domain row is resolved; `080.ReplayEquivalencePolicy` routes output class field selection to owners. | Pass. |
+| `domain-section25-ocsf-blocked-validation` | Domain row for MVP OCSF mapping is `blocked_validation` while row instances/checksums are missing. | Acceptance blocked. |
+| `domain-section25-graph-profile-blocked-validation` | MVP edge semantics are closed but graph fixture checksums are missing. | Acceptance blocked. |
+| `domain-section25-lifecycle-blocked-validation` | Lifecycle owners have machine definitions but validation rows are missing or blocked. | Acceptance blocked. |
+| `domain-section25-domain-exports-none` | `domain.md` declares no runtime exports and no runtime row, schema, or algorithm is found. | Pass. |
+| `domain-section25-package-type-enum-resolved` | `100.PackageType` confirmed enum has no duplicates and no generic `deployment_profile`. | Pass after `100` patch. |
+| `domain-section25-janusgraph-default-blocked-activation` | `090` backend default selection is resolved, but production activation fails closed until backend/package validation rows pass. | Pass when activation fail-closed rows pass. |
 
 ### ValidationCoverageMatrix
 
@@ -610,6 +624,11 @@ Lifecycle validation rows must be executable ordered event sequences. Each row m
 | `val-030-lifecycle-production-run` | `030` | Non-isolated stage failure stops downstream stages and emits no downstream production output. |
 | `val-030-lifecycle-stage-execution` | `030` | Stage execution machine has total state/event coverage and expected terminal states. |
 | `val-030-lifecycle-feed-stage` | `020`, `030` | Partial feed read emits valid lifecycle result with blocked effects and no absence or watermark. |
+| `val-070-identity-review-totality` | `070` | Every identity review state/event pair resolves to allowed transition, terminal no-op, idempotent no-op, or illegal-transition evidence. |
+| `val-070-identity-review-idempotency` | `070` | Same review event key and same input checksums produce byte-identical evidence. |
+| `val-070-identity-review-illegal-no-mutation` | `070` | Illegal review transitions emit no identity, graph, completeness, package, or watermark mutation. |
+| `val-070-identity-review-terminal-output` | `070` | Terminal review output emits only terminal `IdentityDecision` records and required explanation refs. |
+| `val-070-identity-review-evidence-snapshot` | `070` | Evidence snapshot mismatch emits `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` and no mutation. |
 | `val-090-lifecycle-graph-apply-totality` | `090` | Graph apply machine has total state/event coverage. |
 | `val-090-lifecycle-graph-apply-resume-safe` | `090` | Partial apply with committed-batch proof resumes after last compatible batch. |
 | `val-090-lifecycle-graph-apply-resume-unsafe` | `090` | Partial apply without proof fails with `GRAPH_APPLY_RESUME_UNSAFE`. |
@@ -999,6 +1018,18 @@ graph-janusgraph-package-gate-failed
 graph-provider-portability-equivalence
 ```
 
+### Required closure validation families
+
+| Validation family | Required patch content |
+| --- | --- |
+| `120-OCSF-MAP-*` | One positive, missing-row, ambiguous-row, enum, forbidden-field, source-extension, `cadastre_only`, and endpoint-order fixture per active MVP row family. |
+| `120-SOURCE-CLOSURE-*` | One closure-positive, closure-missing, closure-ambiguous, deterministic-block, weak-signal, stale-source, coverage-missing, and watermark-block fixture per active absence-sensitive feed category. |
+| `120-GRAPH-PROFILE-CLOSURE-*` | Edge set exactly `observed_connection`, theoretical reachability prohibited, all other edge types inactive or rejected, missing flow role no edge, and ambiguous flow role no edge. |
+| `120-GRAPH-JANUSGRAPH-*` | Backend selection, unresolved default, storage/index declaration, Gremlin translation, schema/index apply, stale mixed index, raw-write bypass, backend ID leak, package gate, partial apply, and rebuild equivalence. |
+| `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, unknown token rejection, missing policy, ambiguous policy, and exact policy success. |
+| `120-LIFECYCLE-*` | `030`, `070`, `090`, `100`, and validation acceptance lifecycle totality, idempotency, illegal transition, no mutation, and manifest inclusion. |
+| `120-ERROR-REGISTRY-*` | No owner error fragment contains `TODO`; generic code rejected when owner-specific code exists. |
+
 ### Owner-specific fixture families
 
 | Owner | Required fixture families |
@@ -1095,6 +1126,8 @@ graph-provider-portability-equivalence
 | `120-GRAPH-PAGE-TOKEN-AC-001` | Page-token fixtures prove TTL, expiry, mismatch, authorization context, derived-view state, and profile-ref identity behavior. |
 | `120-PACKAGE-ACTIVATION-AC-001` | Aggregate acceptance fails while any required package activation fixture is blocked, not run, failed, missing fixture checksum, missing expected-output checksum, missing expected error, or missing mutation-prohibition proof. |
 | `120-PACKAGE-MATRIX-AC-001` | Every `PackageActivationValidationMatrix` row has fixture checksum, expected output checksum, expected error or no-op, mutation prohibition, owner spec, and version manifest requirement. |
+| `120-DEFINE-ONCE-CLOSURE-AC-001` | The spec set cannot pass while any domain Section 25 row, owner closure row, required validation fixture, expected output checksum, expected no-op/error assertion, or owner error fragment contains `TODO` in required promotion scope. |
+| `120-DEFINE-ONCE-CLOSURE-AC-002` | No active spec restates another active spec's runtime behavior except by exact imported contract name and one-sentence routing reference; violations fail with `DOMAIN_RUNTIME_RESTATEMENT` or `OWNER_SPEC_CONTRADICTION` as applicable. |
 
 ## Definition of Done
 

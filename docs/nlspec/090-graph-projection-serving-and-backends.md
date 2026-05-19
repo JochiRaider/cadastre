@@ -192,6 +192,23 @@ A `GraphBackendProfile` is provider-neutral. Provider-specific fields may appear
 | `activation_scope` | Yes | none | Graph serving scope. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
+### GraphBackendActivationChecklist
+
+Production use of a graph backend requires every checklist row below to resolve before mutation, query, rebuild promotion, drift check, or graph-serving output.
+
+| Requirement | Required behavior |
+| --- | --- |
+| provider package refs | Must resolve through `100.PackageReleaseManifest` and active `ProductionPackageSetManifest`. |
+| provider adapter refs | Must resolve through `100` and `090.GraphProviderAdapterContract`. |
+| driver refs | Must resolve through package trust and compatibility gates. |
+| storage backend | Must be explicitly declared; provider defaults are forbidden. |
+| index backend | Must be explicitly declared or unsupported-query behavior must be declared. |
+| capability matrix | Must declare supported, unsupported, partial, and fail-closed query/apply behavior. |
+| schema profile | Must validate before mutation or query. |
+| raw-write bypass policy | Must be explicit and fail-closed. |
+| validation refs | Must include `120-GRAPH-JANUSGRAPH-*` and backend package gates. |
+| lifecycle status | Production use requires `active`. |
+
 ### MVP JanusGraph default backend profile
 
 The default profile row is a selection default, not a domain decision. It must not become production-active while any `TODO:` value in this table is unresolved.
@@ -552,6 +569,17 @@ The registry is total for the declared MVP edge scope. `all_other_edge_types` is
 
 The MVP active graph edge set is exactly `observed_connection`. Any additional active edge type requires a later authoritative profile row, semantics row, output eligibility row, query translation row, and validation fixture set before projection activation.
 
+### GraphMVPClosureStatus
+
+| Closure area | Required state |
+| --- | --- |
+| Active MVP edge set | Exactly `observed_connection`. |
+| `has_theoretical_reachability` | Inactive and prohibited. |
+| All other edge types | Rejected or inactive unless a future profile, semantics row, output eligibility row, query translation row, and fixture set activate them. |
+| Direction evidence | Qualifying `FlowRoleEvidence` only. |
+| OCSF endpoint order | Never direction authority. |
+| Generic external graph payload | Not pathfinding-ready, finding-producing, metrics-producing, or identity-influencing by default. |
+
 ### GraphTraversalClass table
 
 | Traversal class | Pathfinding eligibility | Neighbor expansion eligibility | Reverse traversal behavior | Default inclusion | No-op behavior |
@@ -870,6 +898,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-GRAPH-APPLY-ORDER-AC-001` | Same graph delta set and apply profile produce byte-identical canonical delta ordering and batch membership. |
 | `090-GRAPH-REBUILD-CLOSURE-AC-001` | Rebuild equivalence includes profile, edge semantics, output eligibility, taxonomy, query translation, property policy, schema, index consistency, and canonical output checksums. |
 | `090-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; unresolved default fields block production serving with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
+| `090-GRAPH-BACKEND-DEFAULT-AC-002` | When graph serving is enabled and backend profile input is omitted, the implementation materializes `mvp-janusgraph.v1`; if any required production profile field, package ref, capability row, schema ref, storage/index declaration, or validation ref is unresolved, graph mutation, query, rebuild promotion, and drift check fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, implicit schema creation, and missing package gates before mutation or query. |
 | `090-GRAPH-PROVIDER-CAPABILITY-AC-001` | Every active graph provider profile satisfies `GraphProviderCapabilityMatrix` or declares deterministic unsupported behavior for each query, apply, rebuild, and serving class. |
 | `090-GRAPH-JANUSGRAPH-SCHEMA-AC-001` | JanusGraph implicit schema creation, destructive schema drop, stale fingerprint, missing schema constraints without exception, and missing index readiness fail closed. |
@@ -895,13 +924,24 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
 
+### Production activation blockers
+
+| ID | Blocker | Blocking scope | Required owner decision | Default until resolved |
+| --- | --- | --- | --- | --- |
 | `090-TODO-JANUSGRAPH-RELEASE-PIN` | TODO: Pin JanusGraph provider release/package, provider adapter package, driver package, and TinkerPop version refs before active production profile. | P0 before active production profile. | Product governance plus `100` package-set evidence. | Validation-only profile may remain selected but blocked for production. |
 | `090-TODO-JANUSGRAPH-STORAGE-BACKEND` | TODO: Select durable storage backend or require explicit deployment-supplied storage backend configuration and validation refs. | P0 unless deployment config explicitly supplies and validates it. | Product governance plus `100` package gates and `120` fixtures. | `mvp-janusgraph.v1` fails with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-TODO-JANUSGRAPH-INDEX-BACKEND` | TODO: Select index backend or declare query classes unsupported. | P0 for query classes requiring mixed or text/range index support. | Product governance plus `120-GRAPH-JANUSGRAPH-INDEX-*`. | Affected query classes are blocked. |
-| `090-TODO-JANUSGRAPH-BIGTABLE` | TODO: Resolve Bigtable adapter behavior if Bigtable is selected. | P2 unless selected, then P0. | JanusGraph source inspection and provider fixtures. | Bigtable unsupported for MVP. |
-| `090-TODO-JANUSGRAPH-GRPC` | TODO: Resolve gRPC management surface before enabling it. | P2 unless enabled, then P0. | `090`, `100`, `110`, and `120`. | gRPC disabled by default. |
-| `090-TODO-JANUSGRAPH-CONFIG-PRECEDENCE` | TODO: Confirm complete selected-field configuration precedence. | P1 for selected profile fields. | Provider source inspection and config fixtures. | Omitted or ambiguous selected config fields fail closed. |
-| `090-TODO-JANUSGRAPH-DOCKER-ENTRYPOINT` | TODO: Inspect Docker/container entrypoint before containerized mode becomes MVP default. | P1 if containerized mode is MVP default. | Package and deployment validation. | Container entrypoint is not a production default. |
-| `090-TODO-JANUSGRAPH-ID-BINARY-ENCODING` | TODO: Resolve full ID binary encoding only if migration/export depends on it. | P2 unless migration/export depends on binary encoding. | Provider source inspection. | Backend IDs remain forbidden. |
-| `090-TODO-JANUSGRAPH-QUERY-OPTIMIZER` | TODO: Trace query optimizer strategies for performance-sensitive portability. | P1 for performance-sensitive query portability. | Provider source inspection and query fixtures. | Full-scan and natural-order behavior remain forbidden. |
-| `090-TODO-JANUSGRAPH-EXAMPLES` | TODO: Treat examples as non-blocking rationale only unless adopted by owner validation rows. | Non-blocking. | Owner spec review. | Examples do not define behavior. |
+| `090-TODO-JANUSGRAPH-CONFIG-PRECEDENCE` | TODO: Confirm configuration precedence for selected profile fields. | P1 for selected profile fields. | Provider source inspection and config fixtures. | Omitted or ambiguous selected config fields fail closed. |
+| `090-TODO-JANUSGRAPH-SCHEMA-INDEX-APPLY-FIXTURES` | TODO: Provide schema, index, apply, stale mixed-index, raw-write bypass, partial-apply, and rebuild fixtures with expected checksums. | P0 for active production profile. | `090`, `100`, and `120`. | Backend profile remains selection-only and activation-blocked. |
+| `090-TODO-ERROR-FRAGMENT-COMPLETION` | TODO: Complete all graph backend owner error fragments using `110.ErrorCodeRegistryRow` fields. | Error registry generation and API/export visibility. | `090` plus `110.GenerateErrorCodeRegistry` validation. | `110.GenerateErrorCodeRegistry` fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
+
+### Non-blocking investigation unless selected
+
+| ID | Investigation | Blocking behavior |
+| --- | --- | --- |
+| `090-TODO-JANUSGRAPH-BIGTABLE` | Resolve Bigtable adapter behavior if Bigtable is selected. | Non-blocking unless selected, then production activation blocker. |
+| `090-TODO-JANUSGRAPH-GRPC` | Resolve gRPC management surface before enabling it. | gRPC disabled by default; non-blocking unless enabled. |
+| `090-TODO-JANUSGRAPH-DOCKER-ENTRYPOINT` | Inspect Docker/container entrypoint before containerized mode becomes MVP default. | Non-blocking unless containerized mode is selected. |
+| `090-TODO-JANUSGRAPH-ID-BINARY-ENCODING` | Resolve full ID binary encoding only if migration/export depends on it. | Backend IDs remain forbidden; non-blocking unless migration/export depends on binary encoding. |
+| `090-TODO-JANUSGRAPH-QUERY-OPTIMIZER` | Trace query optimizer strategies for performance-sensitive portability. | Full-scan and natural-order behavior remain forbidden; non-blocking unless selected query classes require optimizer-specific evidence. |
+| `090-TODO-JANUSGRAPH-EXAMPLES` | Treat examples as non-blocking rationale only unless adopted by owner validation rows. | Examples do not define behavior. |

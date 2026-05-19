@@ -385,6 +385,24 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
 
+### OwnerErrorFragmentCompletionRequirement
+
+Owner fragments are incomplete unless every exported owner error code can generate one `ErrorCodeRegistryRow` through the schema above.
+
+| owner_spec | fragment_required | required_fields | TODO_behavior | failure_code |
+| --- | --- | --- | --- | --- |
+| `020` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `030` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `040` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `050` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `060` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `070` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `080` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `090` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `100` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `120` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `130` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+
 Generated-registry validation for `130` must include fixture families for `error-registry-130-lineage-facet-policy-missing`, `error-registry-130-lineage-facet-namespace-collision`, `error-registry-130-threat-intel-profile-missing`, `error-registry-130-threat-intel-distribution-unmapped`, `error-registry-130-threat-intel-artifact-checksum-mismatch`, `error-registry-130-registry-custom-property-schema-invalid`, `error-registry-130-registry-classification-authority-forbidden`, `error-registry-130-derived-graph-edge-supporting-facts-required`, `error-registry-130-derived-graph-edge-projection-forbidden`, and `error-registry-130-derived-graph-edge-replay-mismatch`. Missing, duplicate, unredacted, unfixtured, unknown-severity, unknown-retry, or owner-context-incomplete `130` rows must fail registry generation before API, export, health, compliance, audit, or validation output.
 
 ## Evidence Drillback
@@ -715,6 +733,10 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | no, until adapter/profile changes | backend profile activation blocked | adapter ref, provider ref |
 | `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `200`, observable handling by `110` | error | no until wording or policy changes | output wording rejected | output checksum and owner policy refs |
 
+### ReachabilityWordingGuard
+
+Public API, graph query, health, audit, compliance, and analysis responses must not emit unqualified `reachable`, `not reachable`, `reachability`, `service access`, or `lateral movement path` wording for MVP graph output. Any such wording must fail with `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` unless a future active reachability owner spec permits the exact claim kind.
+
 ### Shared error codes
 
 | Error code | Owner | Emitted when |
@@ -726,8 +748,11 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `API_BOUNDS_INVALID` | `110` | API field exceeds bounds or violates required shape. |
 | `RAW_PAYLOAD_PERMISSION_REQUIRED` | `110` | Raw payload was requested and metadata-only redaction is not permitted for the endpoint. |
 | `DERIVED_VIEW_LAG_ERROR` | `090`, `110` | Query class requires current graph-derived state and derived view is stale. |
+| `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` | `110` | An owner error fragment has a `TODO`, blank required field, duplicate code, or generic substitute. |
 
 All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
+
+`source_stale`, `derived_view_stale`, `unknown`, `not_applicable`, `permission_limited`, `source_unavailable`, `scope_unavailable`, `partial_known_gap`, `partial_unknown_gap`, `conflicted`, and `ambiguous` must remain distinct in `state_summary`, evidence drillback, compliance export, and audit export.
 
 ### GraphBackendOperationalHealthComponents
 
@@ -905,12 +930,14 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-STATE-LABEL-CONFLICT-AC-001` | `conflicted` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or ambiguity by default. |
 | `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
 | `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, or unfixtured owner error rows. |
+| `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
 | `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
 | `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |
 | `110-REDACTION-MATRIX-AC-001` | Every data class in `RedactionDataClassMatrix` has caller-visible, audit-visible, and forbidden-output fixture coverage. |
 | `110-ENDPOINT-OUTCOME-TOTAL-AC-001` | Every endpoint row in `EndpointOutcomeMatrix` has deterministic success, empty, unauthorized, stale, partial, conflicted, ambiguous, pagination, redaction, and error-precedence behavior. |
 | `110-COMPLIANCE-NONNEGATIVE-AC-001` | Compliance export rows for `unknown`, `error`, `not_checked`, `not_applicable`, `conflicted`, and `ambiguous` are nonnegative counts and never pass/fail by default. |
 | `110-GRAPH-STATE-SEPARATION-AC-001` | `source_stale` and `derived_view_stale` remain separate in graph query, asset detail graph context, compliance export, audit export, and health output. |
+| `110-STATE-LABEL-PRESERVATION-AC-001` | `source_stale`, `derived_view_stale`, `unknown`, `not_applicable`, `permission_limited`, `source_unavailable`, `scope_unavailable`, `partial_known_gap`, `partial_unknown_gap`, `conflicted`, and `ambiguous` remain distinct in state summary, evidence drillback, compliance export, and audit export. |
 | `110-GRAPH-BACKEND-HEALTH-AC-001` | Operational health exposes provider profile, package gate, schema fingerprint, index freshness, and raw-write bypass states without leaking backend-native IDs, credentials, private config, or raw package evidence. |
 | `110-GRAPH-BACKEND-ERROR-AC-001` | New `090` graph backend errors appear in `GenerateErrorCodeRegistry` with no `TODO:` values, owner-specific precedence over generic errors, redacted caller fields, audit refs, and fixture families. |
 | `110-CLEANUP-AC-001` | No banned reference class remains. |

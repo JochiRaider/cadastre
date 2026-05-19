@@ -91,9 +91,7 @@ Before a package release can participate in validation, compatibility, stage bin
 
 `PackageType` is a lower snake-case enum token used only for package activation policy resolution. Package names, module names, artifact filenames, repository paths, version strings, and developer labels must not be used as package type substitutes.
 
-TODO: Product governance must confirm the canonical `PackageType` enum before authoritative package activation handoff because the broader package vocabulary exists only in an archived PRD. Until this TODO is resolved, promotion must fail, but validation fixtures may use the candidate token list below to prove fail-closed row resolution behavior.
-
-Candidate `PackageType` tokens:
+`PackageType` is the confirmed closed enum below. Unknown tokens fail with `PACKAGE_TYPE_UNKNOWN`.
 
 ```text
 lakehouse_feed_package
@@ -141,12 +139,12 @@ graph_storage_backend_adapter_package
 graph_index_backend_adapter_package
 graph_backend_runtime_distribution
 graph_backend_deployment_profile
-rule_graph_compatibility_matrix
 structural_global_node_alias_policy
 cim_projection_profile
 projection_loss_policy
-deployment_profile
 ```
+
+Broad package labels such as `deployment_profile`, module names, artifact filenames, repository paths, and developer labels are not package types. They must fail with `PACKAGE_TYPE_UNKNOWN` unless mapped by a future owner-approved enum patch.
 
 Package type resolution error codes are:
 
@@ -202,7 +200,7 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 
 ### Graph backend package type policy rows
 
-These rows are candidate package type policies until the canonical `PackageType` enum TODO closes. They must not define graph semantics; they gate runtime artifacts required by `090.GraphBackendProfile`.
+These rows are package type policies for confirmed `PackageType` tokens. They must not define graph semantics; they gate runtime artifacts required by `090.GraphBackendProfile`.
 
 | Package type | Public API boundary | Runtime protocol | Required compatibility inputs |
 | --- | --- | --- | --- |
@@ -216,7 +214,7 @@ These rows are candidate package type policies until the canonical `PackageType`
 
 ### Analysis, enrichment, lineage, and registry package type policy rows
 
-These rows are candidate package type policies until the canonical `PackageType` enum blocker closes. They make package-supplied `130` artifacts eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, and `030.VersionManifest` inclusion.
+These rows are package type policies for confirmed `PackageType` tokens. They make package-supplied `130` artifacts eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, and `030.VersionManifest` inclusion.
 
 | Package type | Public API boundary | Allowed stage classes | Allowed output record classes | Required activation artifact refs |
 | --- | --- | --- | --- | --- |
@@ -893,6 +891,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `100-PACKAGE-TYPE-POLICY-AC-002` | Unknown package type fails with `PACKAGE_TYPE_UNKNOWN`. |
 | `100-PACKAGE-TYPE-POLICY-AC-003` | Known package type with no active policy row fails with `PACKAGE_TYPE_POLICY_MISSING`. |
 | `100-PACKAGE-TYPE-POLICY-AC-004` | Ambiguous package type policy resolution fails with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. |
+| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has no duplicate tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, selected package type policy refs, repository refs, supply-chain policy/evidence refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, approval refs, and checksum. |
@@ -943,5 +942,6 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `100-TODO-PACKAGE-TYPE-ENUM` | TODO: Confirm canonical `PackageType` enum tokens before authoritative package activation handoff. | Package type policy, deprecation rows, compatibility rows, validation fixtures, and manifest inclusion. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Candidate token list may be used for validation-only fixture design; production promotion remains blocked. |
+| `100-RESOLVED-PACKAGE-TYPE-ENUM` | Canonical `PackageType` enum tokens are confirmed by this spec. | Package type token parsing and unknown-token rejection. | `100.PackageType`; validation by `120-PACKAGE-TYPE-*`. | Unknown or legacy broad labels fail with `PACKAGE_TYPE_UNKNOWN`. |
+| `100-TODO-PACKAGE-TYPE-POLICY-ROWS` | TODO: Every confirmed package type must have exactly one active `PackageTypePolicyRow` per target environment before package-set activation can affect production output. | Package type policy, deprecation rows, compatibility rows, validation fixtures, and manifest inclusion. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Package activation remains blocked with `PACKAGE_TYPE_POLICY_MISSING` or `PACKAGE_TYPE_POLICY_AMBIGUOUS` until policy rows validate. |
 | `100-TODO-DEPRECATION-ROWS` | TODO: Provide active `PackageDeprecationWindowPolicyRow` instances for every confirmed package type. | Deprecation expiry, emergency extension, rollback eligibility, and migration windows. | `100` package governance and `120` package deprecation fixtures. | Missing row fails with `PACKAGE_DEPRECATION_WINDOW_EXPIRED` or policy-missing package validation, and promotion remains blocked. |

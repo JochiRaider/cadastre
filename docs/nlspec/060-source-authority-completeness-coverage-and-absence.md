@@ -245,6 +245,51 @@ If the row chain is absent, ambiguous, inactive, checksum-mismatched, out of sco
 
 The matrix output must include the requested effect token, feed category, source dataset, selected row refs, row checksums, validation refs, blocking reason when blocked, and a `VersionManifest` ref. A closure validation result may be referenced by `030.VersionManifest`, but the underlying activation-controlled artifact refs and checksums remain required.
 
+#### SourceAuthorityClosureMatrixRow schema
+
+`SourceAuthorityClosureMatrixRow` is the executable row interface for proving that one active absence-sensitive effect has a complete authority chain or a deterministic block. Wildcards are forbidden for `fact_type` and `predicate`.
+
+| Field | Required behavior |
+| --- | --- |
+| `row_id` | Stable row ID. |
+| `feed_category` | Must match `020.LakehouseFeedCategoryClosureRow.feed_category`. |
+| `source_dataset` | Vendor-neutral dataset token. |
+| `requested_effect` | One of `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark`. |
+| `fact_type` | Exact fact type. Wildcards are forbidden. |
+| `predicate` | Exact predicate. Wildcards are forbidden. |
+| `source_instance_policy` | One of `exact_instance_required`, `dataset_default_allowed`, or `blocked`. |
+| `subject_scope_selector` | Canonical subject scope selector. |
+| `object_scope_selector` | Canonical object scope selector. |
+| `required_source_authority_row_refs` | Exact refs or deterministic block. |
+| `required_completeness_profile_row_refs` | Exact refs or deterministic block. |
+| `required_coverage_dimension_profile_refs` | Required when coverage-sensitive. |
+| `required_staleness_policy_refs` | Required when staleness can affect output. |
+| `required_progress_signal_policy_refs` | Required when progress signals are consulted. |
+| `required_control_result_mapping_refs` | Required for control-result output. |
+| `required_source_history_retention_refs` | Required for source-history no-change claims. |
+| `required_absence_derivation_policy_refs` | Required for absence-sensitive outputs. |
+| `required_watermark_policy_refs` | Required for watermark effects. |
+| `closure_outcome` | One of `closed`, `deterministically_blocked`, or `blocked_validation`. |
+| `deterministic_block_code` | Required when blocked. |
+| `validation_refs` | Non-empty `120-SOURCE-CLOSURE-*` refs. |
+| `lifecycle_status` | Production use requires `active`. |
+
+#### ResolveSourceAuthorityClosureMatrixRow
+
+```text
+ResolveSourceAuthorityClosureMatrixRow(request, active_closure_row_set):
+1. Validate activation ref and row-set checksum through `030.ActivationControlledArtifactRef`.
+2. Select active rows in scope.
+3. Match exact feed category, source dataset, fact type, predicate, requested effect, subject scope, and object scope.
+4. Reject zero rows with `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE`.
+5. Reject multiple equally specific rows with `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS`.
+6. Reject any selected row with missing required artifact refs, inactive refs, checksum mismatch, stale validation refs, or non-active lifecycle state.
+7. Return the deterministic block or the selected closure row.
+8. Include the closure row ref in `VersionManifest` before the requested effect can execute.
+```
+
+Public closure rows may use only vendor-neutral categories, datasets, redacted refs, and canonical scope selectors. Concrete product names, tenant IDs, routes, credentials, scanner site names, host lists, and account inventories remain private binding artifacts and must not change row-resolution behavior.
+
 ### SourceAuthorityArtifactLifecycleGuardRows
 
 `060` policy row sets use `030.ActivationControlledArtifactLifecycleMachine.v1` for activation. Runtime completeness, absence, and watermark decisions remain algorithmic unless a future owner patch defines a lifecycle subject, closed states, closed events, a total transition matrix, and validation rows.
@@ -724,6 +769,7 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-GRAPH-EFFECT-AUTH-AC-002` | Graph cleanup requires `AbsenceDerivationResult.requested_effect = cleanup` and destination or backend cleanup summaries do not authorize it. |
 | `060-GRAPH-EFFECT-AUTH-AC-003` | Missing or ambiguous flow-role evidence maps to unknown, ambiguous, or deterministic no-op and emits no graph mutation. |
 | `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
+| `060-SOURCE-CLOSURE-AC-014` | Every active absence-sensitive effect resolves one `SourceAuthorityClosureMatrixRow` with complete refs and passing validation, or resolves one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, or `TODO` rows fail before any absence-sensitive effect. |
 
 ## Definition of Done
 
@@ -740,5 +786,9 @@ Missing time input must never fall back to current platform time. A stale result
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+| ID | Question | Blocking scope | Required owner decision | Default until resolved |
+| --- | --- | --- | --- | --- |
+| `060-TODO-ERROR-FRAGMENT-COMPLETION` | TODO: Complete all `060` owner error fragments using `110.ErrorCodeRegistryRow` fields with non-`TODO` severity, retry class, caller-visible fields, audit fields, redaction rule, and validation fixture refs. | Error registry generation and API/export visibility. | `060` plus `110.GenerateErrorCodeRegistry` validation. | `110.GenerateErrorCodeRegistry` fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
 
 TODO: Concrete active source-specific row instances for vendor-neutral `source_dataset` values remain outside this stable contract. Missing row instances are deterministic activation or validation blockers and must not be inferred from source category, vendor product, research report, or private inventory.

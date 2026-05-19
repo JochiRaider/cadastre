@@ -348,6 +348,19 @@ Reviewer authority guards must execute before transition selection in this order
 
 Illegal transitions must emit `IDENTITY_REVIEW_TRANSITION_INVALID`, preserve current state, write no `IdentityDecision`, write no `CanonicalEntity`, write no `SourceAsset`, write no `Identifier`, and write no `GraphCorrectionHandoff`. Terminal no-op transitions must emit deterministic transition evidence and no mutation. `approve_merge` must be illegal when only weak, learned, selector-only, source-native-merge-history-only, mapped-target-only, or graph-key-only evidence exists.
 
+### IdentityReviewCaseLifecycleClosure
+
+`070` owns identity review states, events, transition rows, and terminal identity outputs. `030` owns generic lifecycle evidence fields and `ApplyLifecycleEvent`. `120` owns validation rows.
+
+| Field | Required value |
+| --- | --- |
+| `machine_id` | `070.IdentityReviewCaseStateMachine.v1` |
+| `generic_lifecycle_owner` | `030.LifecycleStateMachineDefinition` |
+| `domain_closure_state` | `closed_local_pending_validation` |
+| `required_validation_rows` | `val-070-identity-review-totality`, `val-070-identity-review-idempotency`, `val-070-identity-review-illegal-no-mutation`, `val-070-identity-review-terminal-decision`, `val-070-identity-review-evidence-snapshot` |
+| `mutation_prohibition` | Review transitions must not mutate identity except through terminal `IdentityDecision` records. |
+| `version_manifest_requirement` | Include machine ID, machine checksum, transition evidence refs, review-case refs, terminal decision refs, and resolver explanation refs whenever review affects output. |
+
 ### Review routing defaults
 
 | Candidate condition | Default routing | Reviewer authority limit |
@@ -553,6 +566,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `070-PACKAGE-WEAKENING-AC-001` | Package-supplied resolver artifacts that weaken stable weak-evidence defaults or redefine identity semantics fail activation before production output. |
 | `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, resolver artifact checksum mismatch, and package artifact core conflict fail before identity mutation. |
 | `070-LIFECYCLE-AC-001` | Resolver profile activation emits generic artifact lifecycle transition evidence and resolver-specific guard results before identity mutation. |
+| `070-LIFECYCLE-CLOSURE-AC-001` | `IdentityReviewCaseLifecycleClosure` names `070.IdentityReviewCaseStateMachine.v1`, routes generic lifecycle evidence to `030`, and lists the required `120` identity-review validation rows. |
 
 | `070-GRAPH-ENDPOINT-HANDOFF-AC-001` | Graph endpoint projection requires a qualifying identity decision and canonical entity ref. |
 | `070-GRAPH-ENDPOINT-HANDOFF-AC-002` | Selector-only, graph-key-only, mapped-target-only, and OpenGraph property-match-only inputs cannot create graph endpoint identity. |

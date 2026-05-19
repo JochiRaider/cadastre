@@ -25,6 +25,12 @@ Research reports, examples, the uploaded template, implementation modules, candi
 
 Content excluded from the uploaded template: Cartulary-specific product terms, workbook-native incident workspace framing, workbook surfaces, built-in tabs, saved views, parties, artifacts, notes, timeline rows, task requests, decisions, object blobs, import sessions, snapshots, releases, `view_schema_id`, `record_id`, `party_id`, and `cartulary.*` identifiers are not Cadastre requirements and are not imported into this document.
 
+### Runtime exports
+
+`domain.md` exports no runtime records, schemas, algorithms, interfaces, lifecycle machines, error codes, validation harness behavior, graph backend behavior, package activation behavior, or API behavior.
+
+`domain.md` exports vocabulary terms, owner-routing tables, boundary distinctions, and review rules only.
+
 ## 2. Purpose
 
 `domain.md` must provide the root domain context that lets implementers, reviewers, specification authors, and coding agents use Cadastre terminology consistently without turning implementation representations into domain truth.
@@ -343,7 +349,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | `replay_equivalence` | Deterministic equality rule for replay outputs and required refs. | Ad hoc checksum or current-state comparison. | `080` | `080` | `120` | canonical |
 | `graph_backend_profile` | Activation profile for a graph serving backend and its preflight requirements. | Backend selection, backend docs, benchmark result. | `090` | `090` | `120` | canonical |
 | `package_set` | Immutable coherent activation target for production packages. | Single package artifact, version string, signature scalar, dependency lock. | `100` | `100` | `120` | canonical |
-| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | `100` | `100` | `120` | TODO: enum confirmation required |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | `100` | `100.PackageType` | `120-PACKAGE-TYPE-*` | Resolved owner-routed; package activation remains validation-gated. |
 | `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `100` | `100` | `120` | canonical |
 | `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `100` | `100` | `120` | canonical |
 | `package_quarantine` | Immutable block record over package activation targets. | Artifact mutation, signature rewrite, or hidden denylist. | `100` | `100` | `120` | canonical |
@@ -403,7 +409,7 @@ A glossary term may become canonical only when `docs/nlspec/domain.md` adds or u
 | Graph edge delta | Primitive graph edge projection delta. | Cadastre-owned deterministic graph edge ID; not backend ID. | Delta set and graph apply lifecycle. | Governed by graph edge semantics and projected from facts/rules. | `040`, `090` | Resolved. |
 | Graph read-model object | Derived graph serving object after graph apply. | Cadastre graph ID translated through backend profile. | Derived view state and graph apply result. | Served by graph query; drillback to gold/silver/raw. | `090`, `110` | Resolved. |
 | Package release | Immutable package release record. | Artifact digest, subject digest, package type, release version, release checksum. | Package lifecycle and package-set activation. | Included in production package set manifest. | `100` | Resolved. |
-| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | Confirmed `PackageType` token. | Selects package type policy before activation. | `100` | TODO: token list requires product-governance confirmation. |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | Confirmed `100.PackageType` token. | Selects package type policy before activation. | `100` | Resolved owner-routed; active policy rows still gate activation. |
 | `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `PackageTypePolicyRow`, `PackageTypePolicyRowSet`. | Selects package evidence, compatibility, stage, rollback, health, quarantine, and emergency requirements. | `100` | Resolved as owner-routed behavior; active rows still gate use. |
 | Production package set | Coherent activation unit for package runtime behavior. | Immutable package-set checksum. | Promotion, activation, rollback, quarantine, last-known-good. | Provides package roles for DAG stages and validation. | `100`, `030` | Resolved. |
 | `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `LastKnownGoodPackageSet`, `LastKnownGoodHealthGate`. | Permits rollback eligibility only after health gates pass. | `100` | Resolved as owner-routed behavior. |
@@ -871,23 +877,45 @@ Drift-control rules:
 - `TODO:` rows must not be deleted without an owner decision or source update that resolves them.
 - Any change that reclassifies a contract, profile, row set, package, fixture, registry object, or runtime state by volatility class must update `000`, `010`, `030`, `100` when package activation is involved, and `120` validation rows. `domain.md` must route the change and must not define the runtime behavior.
 
-## 25. Unresolved questions
+## 25. Open questions, blockers, and required owner confirmation
 
-| ID | Question | Blocking scope | Required source or owner decision | Blocking owner refs | Default until resolved |
+Section 25 is a closure ledger for root-domain status only. It must not define runtime behavior and must not duplicate owner schemas, algorithms, defaults, failure precedence, or activation rows. Each row must resolve to exactly one owner contract or validation row family.
+
+Closed `domain_closure_state` values are `resolved_owner_routed`, `blocked_validation`, `blocked_owner_todo`, and `inactive_deferred`.
+
+Closed `domain_behavior_until_closed` values are `owner governs`, `validation fails`, `deferred no-op`, and `not runtime`.
+
+| domain_row_id | owner_contract | domain_closure_state | remaining_blocker | domain_behavior_until_closed | validation_target |
 | --- | --- | --- | --- | --- | --- |
-| `DOM-TODO-005` | TODO: Provide concrete active source-specific row instances for any vendor-neutral `source_dataset` that product governance activates. | Source-category-specific absence, cleanup, retraction, graph expiry, watermark, control pass/fail, and no-change effects. | `060.SourceAuthorityClosureMatrix` validation plus `120` fixture rows. | `060` closure rows and `120-SOURCE-CLOSURE-*` fixtures. | Runtime behavior is closed as fail-closed: missing active source-specific rows produce deterministic block, unknown, not-applicable, source-stale, or no-op states, never negative effects. |
-| `DOM-RESOLVED-006` | Correction snapshot roles, table-set checksum requirement, retention protection, and mutable-ref rejection are closed by owner spec. | Gold correction and replay owner routing. | `080.CorrectionSnapshotRefPolicy`; validation in `120`. | `080`, `120`, `030.VersionManifest`. | Runtime behavior is owner-spec closed; concrete activation-controlled row instances remain blockers only when selected for production scope. |
-| `DOM-RESOLVED-007` | Replay equivalence output-class catalog is closed by owner spec. | Production replay and deterministic rebuild owner routing. | `080.ReplayEquivalencePolicy`; owner-specific field handoffs in `050`, `090`, `110`, and `130`; validation in `120`. | `080`, `050`, `090`, `110`, `120`, `130`. | Runtime behavior is owner-spec closed; replay still blocks when required output-class rows, refs, or validation evidence are missing for a selected production scope. |
-| `DOM-TODO-008` | TODO: Complete active MVP observation type to OCSF category/class/activity/type mapping rows. | External schema mapping and silver validation. | `050` owner decision. | `050` mapping rows. | Any missing row is a blocking `TODO:` for that observation type. |
-| `DOM-TODO-009` | TODO: Complete graph edge-family validation evidence for the MVP graph profile. | Relationship-family and graph mapping promotion. | `090` and `120` owner evidence. | `090` graph edge rows plus `120-GRAPH-PROFILE-CLOSURE-*` fixture and expected-output checksums. | Domain routing is resolved to `observed_connection`; authoritative graph edge-family closure remains blocked while any required `120` graph validation checksum is `TODO`, blocked, failed, or not run. |
-| `DOM-TODO-010` | TODO: Confirm lifecycle transition tables and validation evidence for every production-affecting lifecycle machine. | Lifecycle behavior. | `030`, `020`, `070`, `090`, `100`, `120` owner decisions and `120` validation evidence. | `070.IdentityReviewCaseStateMachine.v1` TODO and `120` lifecycle fixture checksums. | Runtime behavior is routed by exact machine ID, but authoritative lifecycle closure remains blocked until owner-local TODOs and lifecycle validation rows close. |
-| `DOM-TODO-011` | TODO: Confirm whether `domain.md` must export any named records or only vocabulary/owner maps. | Spec index and imports/exports. | `000` owner decision. | `000` export/status rows. | Treat `domain.md` as no-runtime-export vocabulary reference. |
-| `DOM-TODO-012` | TODO: Confirm canonical `PackageType` enum tokens before authoritative package activation handoff. | Package vocabulary, package type policy, deprecation policy, compatibility policy, validation matrix rows, and version-manifest refs. | Product governance plus `100`, `000`, `030`, and `120` owner decisions. | `100.PackageType`, `100.PackageTypePolicyRow`, `000` package volatility rows, and `120-PACKAGE-*` fixtures. | Package vocabulary is routed to `100`; production promotion remains blocked while enum confirmation is unresolved. |
-| `DOM-TODO-013` | TODO: Confirm active `mvp-janusgraph.v1` storage backend, index backend, package refs, and validation refs. | Graph serving activation. | Product governance plus `090`, `100`, and `120`. | `090.GraphBackendProfile`, `100.PackageReleaseManifest`, `120-GRAPH-JANUSGRAPH-*`. | Graph backend default is routed to `090`; production serving remains blocked until owner refs validate. |
+| `DOM-TODO-005` | `060.SourceAuthorityClosureMatrix` | `blocked_validation` | `120-SOURCE-CLOSURE-*` rows for every active absence-sensitive feed category, or deterministic block rows with exact refs | validation fails | `120-DOMAIN-SECTION25-*`; `120-SOURCE-CLOSURE-*` |
+| `DOM-RESOLVED-006` | `080.CorrectionSnapshotRefPolicy` | `resolved_owner_routed` | none | owner governs | `120-DOMAIN-SECTION25-*`; `120-TEMPORAL-CORRECTION-*` |
+| `DOM-RESOLVED-007` | `080.ReplayEquivalencePolicy` | `resolved_owner_routed` | none | owner governs | `120-DOMAIN-SECTION25-*`; `120-REPLAY-OUTPUT-CLASS-*` |
+| `DOM-TODO-008` | `050.ObservationToOCSFMappingRowSet` | `blocked_validation` | active MVP row-set refs, compiled artifact refs, fixture refs, expected-output checksums, and `120-OCSF-MAP-*` rows | validation fails | `120-DOMAIN-SECTION25-*`; `120-OCSF-MAP-*` |
+| `DOM-TODO-009` | `090.GraphEdgeSemanticsRegistry` | `blocked_validation` | `120-GRAPH-PROFILE-CLOSURE-*` fixture and expected-output checksums for the active MVP graph profile | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-PROFILE-CLOSURE-*` |
+| `DOM-TODO-010` | `030.RequiredLifecycleMachineBindings` plus owner-specific machine bindings | `blocked_validation` | lifecycle validation rows for `030`, `070`, `090`, `100`, and `120` machines | validation fails | `120-DOMAIN-SECTION25-*`; `120-LIFECYCLE-*` |
+| `DOM-TODO-011` | `domain.md.Runtime exports` | `resolved_owner_routed` | none | not runtime | `120-DOMAIN-SECTION25-*` |
+| `DOM-TODO-012` | `100.PackageType` | `resolved_owner_routed` | none for enum closure; `100-TODO-PACKAGE-TYPE-POLICY-ROWS` remains owner-local activation scope | owner governs | `120-DOMAIN-SECTION25-*`; `120-PACKAGE-TYPE-*` |
+| `DOM-TODO-013` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | `090`, `100`, and `120` backend/profile/package validation rows for production activation | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-JANUSGRAPH-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
 
-A downstream implementation must not resolve a `TODO:` by inference.
+Stable source-authority behavior is owned by `060.SourceAuthorityClosureMatrix`. Production promotion remains blocked until every active absence-sensitive feed category has exact closure rows or deterministic block rows validated by `120-SOURCE-CLOSURE-*`.
 
-Unresolved rows in this section are valid only when the named owner spec contains a corresponding owner-local blocker, validation row, or deferred-status row. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this section marks a behavior unresolved and every named owner contract is `closed_local`, or marks a behavior resolved while an owner-local blocker still exists. `domain.md` must fail owner-status consistency validation if it restates runtime temporal, correction, replay, transition, or graph handoff behavior instead of routing to `080`, `090`, and `120`.
+Correction snapshot behavior is owned by `080.CorrectionSnapshotRefPolicy`. No domain action remains.
+
+Replay equivalence behavior is owned by `080.ReplayEquivalencePolicy`, with output-class field selection imported from owner specs. No domain action remains.
+
+OCSF mapping behavior is owned by `050.ObservationToOCSFMappingRowSet`. Production activation remains blocked until active MVP row sets and `120-OCSF-MAP-*` fixtures and checksums exist.
+
+MVP edge semantics are owner-routed to `090.GraphEdgeSemanticsRegistry`. The active edge set is `observed_connection` only, but validation evidence remains blocked until `120-GRAPH-PROFILE-CLOSURE-*` rows pass.
+
+Lifecycle behavior is owner-routed to `030` lifecycle machines and owner-specific machine bindings. Validation remains blocked until lifecycle matrix rows pass.
+
+`domain.md` exports no runtime records.
+
+`100.PackageType` owns the canonical package type enum.
+
+`090.GraphBackendSelectionPolicy` owns backend default selection. `mvp-janusgraph.v1` is a selection default only, and production activation remains blocked until `090`, `100`, and `120` backend and package validation rows pass.
+
+A downstream implementation must not resolve a blocker by inference. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this ledger marks a row resolved while a named owner-local blocker remains, or marks a row blocked-owner when the owner contract is closed and required validation rows pass. `ValidateSpecSet` must fail with `DOMAIN_RUNTIME_RESTATEMENT` when this ledger copies runtime schema, algorithm, default, failure precedence, activation behavior, or validation harness behavior from an owner spec instead of routing by exact owner contract name.
 
 ## 26. Definition of Done
 
@@ -909,7 +937,7 @@ Unresolved rows in this section are valid only when the named owner spec contain
 | `domain-source-closure-status-consistency` | `domain.md` must not mark source-category coverage unresolved when `060` marks the stable contract closed, and must not mark it resolved if `060` still contains owner-local blockers for the stable contract. |
 | `domain-identity-closure-status-consistency` | `domain.md` must not mark `070.IdentityReviewCaseStateMachine.v1` blocked when `070` closes it, and must not mark it closed if `070` reintroduces owner-local blockers. |
 | `DOM-AC-014` | No Cadastre requirement is invented from the uploaded template. |
-| `DOM-AC-015` | Every unresolved ambiguity that affects interoperability is surfaced as `TODO:` in Section 25 and has a matching owner-local blocker, validation row, or deferred-status row in the named owner spec. |
+| `DOM-AC-015` | Every row in the Section 25 closure ledger matches exactly one owner-local closure state in `000.Owner Contract Registry` and one validation row family in `120.DomainSection25StatusValidationMatrix`. |
 | `DOM-AC-016` | The document passes the two-independent-implementers test for domain vocabulary, owner lookup, entity interpretation, relationship interpretation, and boundary decisions. |
 | `DOM-AC-017` | The document passes the recreatability test for the root Cadastre domain model and owner map without relying on the uploaded template. |
 | `DOM-AC-018` | The document is small enough for prompt context but complete enough to prevent semantic drift at root-domain level. |

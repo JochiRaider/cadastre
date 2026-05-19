@@ -187,6 +187,25 @@ The active MVP OCSF class allowlist must contain exactly the class UIDs used by 
 
 A `cadastre_only` row has no OCSF category, class, activity, or type and must not contribute to the class allowlist.
 
+### MVPObservationMappingClosureChecklist
+
+Concrete row instances are activation-controlled artifacts. This checklist defines the required closure content for each MVP observation family before an active row set can affect production silver output.
+
+| Observation family | Required closure content |
+| --- | --- |
+| `inventory_observation` | Active row set ref, exact OCSF class `Device Inventory Info`, activity discriminator, compiled artifact ref, enum rule ref, base-event policy ref, object-path validation refs, and fixture refs. |
+| `software_inventory_observation` | Active row set ref, exact class `Software Inventory Info`, `device` and `sbom` path coverage, and explicit forbidden deprecated `package` path fixture. |
+| `vulnerability_finding_observation` | Active rows for create, update, and close source states; source scanner labels must not collapse to Cadastre absence without `060` authority. |
+| `authentication_observation` | One active row per supported activity; missing discriminator must not default to an activity. |
+| `dns_observation` | DNS Activity row coverage and explicit no graph direction handoff by default. |
+| `dhcp_ipam_observation` | `assignment_source = dhcp` maps to DHCP Activity; `assignment_source = ipam` must be explicit `cadastre_only` or fail. |
+| `network_activity_observation` | Network Activity rows; aggregate default is allowed only when the row explicitly declares aggregate-flow behavior; direction must route through `FlowRoleEvidence`. |
+| `cadastre_only` | Exact active row required; null external profile is allowed only for that row. |
+
+An observation type outside the active MVP row-family set must fail with `MAP_OCSF_ROW_MISSING` unless exactly one active `cadastre_only` row covers it. A missing mapping row must not default to `cadastre_only`.
+
+`ObservationToOCSFMappingRowSet` activation requires non-empty `validation_refs`, fixture checksums, expected output checksums, lifecycle status `active`, and `030.VersionManifest` inclusion. Any `TODO` fixture checksum or expected checksum keeps the row set out of production scope.
+
 ## Source Extension Fields
 
 Every `source_extension_fields` path must have an active `SourceExtensionFieldRule` before a production mapping bundle may emit it. The rule must define namespace, field path, type, bounds, redaction, collision policy, secret scan behavior, and OCSF-reserved-name collision behavior.
@@ -518,6 +537,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-FLOW-ROLE-HANDOFF-AC-002` | OCSF endpoint fields without explicit flow-role evidence emit no `FlowRoleEvidence` item and cannot determine graph direction. |
 | `050-FLOW-ROLE-HANDOFF-AC-003` | Ambiguous endpoint roles, NAT/proxy uncertainty, aggregation uncertainty, DNS, and DHCP defaults emit no observed-connection direction. |
 | `050-FLOW-ROLE-HANDOFF-AC-004` | `cadastre_only` network-context rows remain metadata unless `090` consumes qualifying flow-role evidence. |
+| `050-MVP-OCSF-CLOSURE-AC-001` | Every active MVP observation type resolves to exactly one active mapping row or exact `cadastre_only` row, and every row has compiled artifact refs, policy refs, validation refs, and non-`TODO` expected output checksums. |
 
 ## Definition of Done
 
@@ -533,3 +553,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+| ID | Question | Blocking scope | Required owner decision | Default until resolved |
+| --- | --- | --- | --- | --- |
+| `050-TODO-ERROR-FRAGMENT-COMPLETION` | TODO: Complete all `050` owner error fragments using `110.ErrorCodeRegistryRow` fields with non-`TODO` severity, retry class, caller-visible fields, audit fields, redaction rule, and validation fixture refs. | Error registry generation and API/export visibility. | `050` plus `110.GenerateErrorCodeRegistry` validation. | `110.GenerateErrorCodeRegistry` fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
