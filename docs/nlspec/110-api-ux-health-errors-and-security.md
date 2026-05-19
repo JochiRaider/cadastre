@@ -29,6 +29,11 @@ Define observable API behavior, user-facing states, health, shared error records
 - `CadastreSilverObservation`
 - `GoldFact`
 - `PackageActivationFailureEvent`
+- `ObservabilityInstrumentationProfile`
+- `TelemetryCorrelationPolicy`
+- `TelemetryHealthMappingPolicy`
+- `TelemetryRuntimeState`
+- `TelemetryRedactionPolicy`
 
 - `CoreRecordErrorCodeSet`
 - `EvidenceRef`
@@ -101,6 +106,7 @@ Every public API, health, compliance export, and audit export response must wrap
 | `errors` | Yes | `[]`. | Array of `ErrorRecord`; maximum 128 records per response. | Generic code rejected when owner-specific code covers the failure. |
 | `audit_event_ref` | Yes | None. | Ref to `AuditEventSchema`; caller may receive redacted ref only. | Missing audit event fails response materialization. |
 | `page_token` | No | null. | Cadastre token only; generated after authorization and redaction context are fixed. | Backend cursor or mismatched context fails before owner execution. |
+| `diagnostic_correlation_ref` | No | null. | Opaque Cadastre correlation ref. Raw trace IDs and span IDs are forbidden unless both `140.TelemetryCorrelationPolicy` and `110.RedactionPolicy` permit the exact data class. | Excluded from domain output checksums and replay equivalence by default; included in audit when emitted. |
 | `partial_result` | Yes | `false`. | Boolean. | `true` is permitted only when `EndpointOutcomeMatrix.partial_behavior` allows partial output for the endpoint and state class. |
 | `redaction_summary` | Yes | Counts default to zero. | Contains data-class counts and redaction reasons only; no raw bytes or private binding values. | Missing summary fails response materialization when any field was redacted. |
 
@@ -182,7 +188,7 @@ The tables below close the public API surface. Unknown fields in any request fai
 
 | Field | Required | Default, bounds, and omission behavior | Error and redaction behavior |
 | --- | ---: | --- | --- |
-| `health_scope` | No | `system`. Closed tokens: `system`, `feed`, `mapping`, `identity`, `source_authority`, `temporal`, `graph`, `package`, `analysis`, `api`. | Unknown token fails with `API_BOUNDS_INVALID`. |
+| `health_scope` | No | `system`. Closed tokens: `system`, `feed`, `mapping`, `identity`, `source_authority`, `temporal`, `graph`, `package`, `analysis`, `api`, `observability`. | Unknown token fails with `API_BOUNDS_INVALID`. |
 | `include_diagnostics` | No | `false`. | Diagnostic details are redacted by permission. |
 | `include_private_refs` | No | `false`. | Caller-visible responses must still redact private source bindings. |
 
@@ -194,6 +200,20 @@ The tables below close the public API surface. Unknown fields in any request fai
 | `status` | Yes | Closed token: `healthy`, `degraded`, `blocked`, `error`. | Must not collapse owner state labels. |
 | `components` | Yes | `[]`; one row per evaluated component. | Private refs redacted. |
 | `blocking_errors` | Yes | `[]`. | Must use generated `ErrorCodeRegistry`. |
+
+### TelemetryHealthMappingHandoff
+
+Telemetry runtime state may affect `OperationalHealthStatus` only through `140.TelemetryHealthMappingPolicy`.
+
+Default mapping:
+
+| Telemetry condition | Required health effect | Forbidden domain effect |
+| --- | --- | --- |
+| exporter unavailable | `status = degraded` for `health_scope = observability`; system may aggregate to degraded according to `EndpointOutcomeMatrix` | No source, identity, fact, graph, package, audit, replay, or watermark mutation. |
+| exporter queue overflow | `status = degraded` unless active policy maps to `blocked` for observability diagnostics | No domain mutation. |
+| telemetry profile missing when telemetry required | `status = blocked` for observability health and health output using telemetry state | No domain mutation. |
+| Collector unreachable | `status = degraded` unless active policy maps to `blocked` | No domain mutation. |
+| telemetry disabled by active profile | Healthy only for telemetry-disabled profile; not an exporter failure | No domain mutation. |
 
 #### ComplianceExportRequest schema
 
@@ -334,6 +354,8 @@ Generic error codes must not be used when a more specific domain code exists.
 ### ErrorCodeRegistryRow schema
 
 `ErrorCodeRegistry` is generated from owner fragments and shared `110` rows. Owner specs own error causes and owner context. `110` owns the caller-visible registry shape, final severity, final retry class, redaction behavior, and generic-code precedence.
+
+`140` owns telemetry error causes and owner context. `110` owns caller-visible severity, retry class, redaction behavior, generated registry shape, and generic-code precedence for telemetry error rows.
 
 Closed `severity` enum:
 
@@ -480,6 +502,9 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `private_activation_scope` | Hidden. | No public display permission. | Redacted ref/checksum only unless private implementation audit permits. | Public artifacts and API responses must not expose concrete activation scopes or private bindings. |
 | `artifact_payload_bytes` | Hidden. | Secure artifact-admin permission and owner policy. | Hash, byte count, artifact class, and package-set ref. | Never inline registry payload bytes, package payload bytes, schema payload bytes, or threat-intel artifact bytes in caller-visible output. |
 | `backend_query_text` | Hidden. | Owner-admin validation context only. | Query checksum, translation profile ref, and redacted text ref. | Hide provider-native query text unless the caller has owner-admin permission and the query is validation-only or translated. |
+| `telemetry_trace_context` | Hidden; expose only opaque `diagnostic_correlation_ref`. | `140.TelemetryCorrelationPolicy` plus caller permission. | Trace/span refs may be audit-visible only in redacted/hashed form when policy permits. | Never expose raw trace/span IDs by default. |
+| `telemetry_attribute` | Hidden unless allowlisted. | `140.TelemetryAttributePolicy` and endpoint permission. | Attribute key, redaction class, checksum. | Reject or redact raw payloads, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, usernames, and provider-native query text by default. |
+| `telemetry_runtime_state` | Summary only. | `health.read` plus operator/admin diagnostics for detail. | Runtime state refs, checksums, counts, and policy refs. | Do not expose private endpoints, exporter credentials, Collector routes, or raw queue payloads. |
 | `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
 
 `RedactionPolicy` must apply this matrix after owner result materialization and before checksum-visible response output. Redaction must not change owner state labels, error codes, or version-manifest refs; it may only remove or replace fields whose data class requires hiding.
@@ -904,6 +929,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `output_object_classes` | Yes | Classes emitted or redacted. |
 | `redaction_summary` | Yes | Counts and classes only, no private bytes. |
 | `error_correlation_id` | Required when error emitted | Links to `ErrorRecord`. |
+| `diagnostic_correlation_ref` | Required when emitted in response envelope | Opaque Cadastre correlation ref; raw trace/span IDs are forbidden unless permitted by `140` and redacted by `110`. |
 | `version_manifest_ref` | Required when production output relies on manifest | Manifest ref. |
 
 ### Observable API outcome matrix
@@ -916,7 +942,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `AssetDetail` | `AssetDetailResponse.asset` plus envelope. | Visible but absent owner detail returns null detail with owner state label; inaccessible returns authorization denial. | `AUTHORIZATION_ERROR` with no existence leak. | Metadata only unless `raw.read` and endpoint policy permit. | Preserve `source_stale`. | Graph context labels `derived_view_stale`; compliance/audit detail rejects if current graph required. | Preserve. | Preserve. | Preserve assertion conflict. | Preserve selector/result ambiguity. | Detail pagination uses token when evidence or relationships are paged. | `AUTHORIZATION_ERROR` before private-binding leak in caller-visible denial. | Read-only. |
 | `EvidenceDrillback` | Ordered evidence chain. | Empty chain only when owner confirms no drillback refs; missing required lineage emits `LINEAGE_ERROR`. | Hide inaccessible chain members or deny whole chain when leak risk exists. | Raw bytes require `raw.read`; otherwise emit redacted payload ref. | Preserve owner source stale. | Preserve graph context lag separately. | Preserve. | Preserve. | Preserve. | Preserve. | Validate token before expanding next chain page. | `RAW_PAYLOAD_PERMISSION_REQUIRED` when policy requires hard failure; otherwise redaction marker. | Read-only. |
 | `GraphQuery` | Nodes, edges, paths, or graph detail by query class. | Empty traversal classes return no paths; no matches return empty arrays. | Apply authorization/redaction after backend candidate materialization and before response. | Raw evidence expansion requires raw permission. | Display eligible source-stale graph objects only when `090` handoff permits. | Reject or label by `DerivedViewLagPolicy` and query class. | Partial output only when `090` handoff permits. | Partial output only when `090` handoff permits. | Visibility only when `090` permits conflicted graph objects. | Reject or non-mutating empty/diagnostic by `090` handoff. | Graph token identity also includes graph profile, backend taxonomy, output eligibility, derived-view state, and redaction context. | `GRAPH_TRAVERSAL_CLASS_REQUIRED`, token errors, and candidate-limit errors precede generic API errors. | Must not mutate graph, facts, identity, or watermarks. |
-| `OperationalHealthStatus` | Component health rows. | Return evaluated components with no blocking errors. | Deny unauthorized scope with no private diagnostics. | Raw bytes forbidden. | Render as health diagnostic, not pass/fail. | Render graph health lag separately. | Render as degraded/blocking by owner. | Render as degraded/blocking by owner. | Render as error/degraded by owner. | Render as error/degraded by owner. | Pagination optional for large component sets; token policy applies. | Owner health code before generic health error. | Must not repair or mutate. |
+| `OperationalHealthStatus` | Component health rows, including observability components when requested. | Return evaluated components with no blocking errors. | Deny unauthorized scope with no private diagnostics. | Raw bytes forbidden. | Render as health diagnostic, not pass/fail. | Render graph health lag separately. | Render as degraded/blocking by owner. | Render as degraded/blocking by owner. | Render as error/degraded by owner. | Render as error/degraded by owner. | Pagination optional for large component sets; token policy applies. | Owner health code before generic health error; telemetry degradation renders as health diagnostic through `140`. | Must not repair, mutate, or use telemetry to repair or mutate domain records. |
 | `ComplianceExport` | Canonical export rows plus checksum. | `rows = []` only for authorized empty scope; no inaccessible counts. | Deny before row enumeration. | Raw bytes forbidden unless separate raw export policy exists. | Export as stale/non-pass-fail by default. | Reject stale graph-derived rows by default. | Export non-pass/fail state. | Export non-pass/fail state. | Export `conflicted`, not pass/fail. | Export `ambiguous`, not pass/fail. | Required for paged export; token not portable across manifest or policy refs. | Owner compliance errors before generic export errors. | Must not mutate facts, graph, remediation, or watermarks. |
 | `AuditExport` | Audit event rows plus checksum. | `audit_events = []` only for authorized empty audit scope. | Deny before event enumeration. | Raw bytes hidden unless secure audit policy explicitly permits. | Audit state as observed; no pass/fail. | Audit derived-view state refs separately. | Audit owner context. | Audit owner context. | Audit conflict context when authorized. | Audit ambiguity context when authorized. | Required for paged audit export. | Authorization and redaction errors before generic export errors. | Must not mutate audited records. |
 | `AnalysisReadOnly` | Analysis result, finding preview, metric, or execution summary. | Empty analysis result is success with envelope. | Deny if caller lacks analysis and underlying graph permissions. | Raw expansion requires raw permission. | Preserve as input state. | Reject or display stale state only when `130` handoff permits. | Preserve non-authoritative partial state. | Preserve non-authoritative partial state. | Preserve conflict without mutation. | Preserve ambiguity without mutation. | Uses API token policy when paged. | `ANALYSIS_MUTATION_FORBIDDEN` and graph compatibility errors precede generic API errors. | Must not mutate raw, silver, identity, gold, graph, package, completeness, watermarks, or manifests. |
@@ -928,6 +954,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-API-SCHEMA-TOTAL-AC-001` | Every exported request and response object has a field table with required status, default, bounds or omitted-case behavior, redaction behavior, and error behavior. |
 | `110-STATE-LABEL-TOTAL-AC-001` | Every declared `SourceStateLabel` appears exactly once in `SourceStateLabelMapping`. |
 | `110-STATE-LABEL-CONFLICT-AC-001` | `conflicted` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or ambiguity by default. |
+| `110-OBSERVABILITY-HEALTH-AC-001` | Telemetry exporter, Collector, queue, profile, and dropped-signal states render through `OperationalHealthStatus` using `140.TelemetryHealthMappingPolicy` and cannot mutate domain records. |
+| `110-OBSERVABILITY-REDACTION-AC-001` | Raw trace/span IDs, telemetry attributes, exporter endpoints, Collector routes, private bindings, backend IDs, provider-native query text, and raw payload values are redacted or rejected according to `140` and `110`. |
+| `110-DIAGNOSTIC-CORRELATION-AC-001` | `diagnostic_correlation_ref` is opaque, optional, audit-linked when emitted, excluded from domain replay by default, and not accepted as evidence, identity, graph, completeness, package, or audit authority. |
 | `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
 | `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, or unfixtured owner error rows. |
 | `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |

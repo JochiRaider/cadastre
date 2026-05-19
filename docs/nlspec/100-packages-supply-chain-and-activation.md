@@ -126,6 +126,9 @@ registry_governance_artifact
 registry_custom_property_schema
 registry_classification_policy
 policy_bundle
+observability_policy_bundle
+telemetry_runtime_distribution
+telemetry_collector_deployment_profile
 target_selector_safety_policy
 graph_edge_semantics
 graph_taxonomy_translation_policy
@@ -211,6 +214,20 @@ These rows are package type policies for confirmed `PackageType` tokens. They mu
 | `graph_index_backend_adapter_package` | provider index adapter | index provider API | index freshness, mapping, query feature compatibility |
 | `graph_backend_runtime_distribution` | runtime distribution | server/container/distribution | package checks, startup config, health, rollback |
 | `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | server mode, storage config, index config, schema-init config, health |
+
+### Observability package type policy rows
+
+These rows are package type policies for confirmed `PackageType` tokens. Individual telemetry policies are activation-controlled artifact classes in `030`; package types represent package or release units.
+
+| Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required compatibility inputs |
+| --- | --- | --- | --- | --- | --- |
+| `observability_policy_bundle` | `140.ObservabilityInstrumentationProfile`, `140.MetricInstrumentCatalog`, telemetry attribute/redaction/exporter/health/replay policies | none | none or validation-only | no domain production records; may provide activation artifacts only | `140` policy refs, metric catalog checksum, redaction compatibility, health mapping, replay exclusion, validation refs |
+| `telemetry_runtime_distribution` | `140.TelemetryExporterProfile` and runtime telemetry exporter/Collector compatibility | OTLP-compatible telemetry export path | none | `140.TelemetryRuntimeState` only when runtime state is owner-visible | runtime version, exporter protocol, queue bounds, health behavior, security review, package trust, SBOM, compatibility |
+| `telemetry_collector_deployment_profile` | `140.TelemetryExporterProfile` deployment refs | Collector/runtime deployment config | none | `140.TelemetryRuntimeState` only when health-visible | endpoint refs, timeout/retry/queue config, redaction, network policy, trust evidence, rollback compatibility |
+
+Observability package types must not write raw, silver, identity, gold, graph, source-completeness, source-authority, package activation, watermark, or audit records. They may affect health only through `140.TelemetryRuntimeState` and `110.OperationalHealthStatus`.
+
+An observability package fails activation when any policy bundle permits raw payloads, private binding leakage, unbounded metric labels, backend internal ID export, domain authority effects, audit substitution, graph repair, source absence, identity evidence, package activation authority, watermark advancement, or replay checksum inclusion of forbidden telemetry fields.
 
 ### Analysis, enrichment, lineage, and registry package type policy rows
 
@@ -371,6 +388,8 @@ ActivatePackageSet(candidate_set, current_active_set):
 19. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
 20. Do not mark LastKnownGoodPackageSet until every required LastKnownGoodHealthGate passes.
 ```
+
+Telemetry packages are activation-controlled release units. `ActivatePackageSet` must verify that observability policy bundles, telemetry runtime distributions, and telemetry Collector deployment profiles cannot emit domain production records, cannot bypass `140.TelemetryNonAuthorityRule`, cannot weaken telemetry redaction, cannot permit unbounded metric attributes, cannot alter replay exclusion, and cannot affect health outside `140.TelemetryRuntimeState` and `110.OperationalHealthStatus`.
 
 Version strings never authorize activation by themselves. Dependency locks never authorize activation by themselves. Emergency override records never satisfy package signature, trust, repository metadata, repository freshness, transparency, or anti-rollback verification for a new production activation.
 
@@ -898,6 +917,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing JanusGraph provider, adapter, driver, storage adapter, index adapter, runtime distribution, SBOM, provenance, compatibility, or package-set refs fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | Storage adapter version mismatch, index adapter version mismatch, or TinkerPop/driver compatibility mismatch fails candidate activation and preserves the current active package set. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes. |
+| `100-OBSERVABILITY-PACKAGE-TYPE-AC-001` | Observability policy bundle, telemetry runtime distribution, and telemetry collector deployment package types resolve exactly one active `PackageTypePolicyRow`; unknown, missing, ambiguous, unsafe, untrusted, or incompatible telemetry packages fail before activation. |
+| `100-OBSERVABILITY-PACKAGE-NONAUTH-AC-001` | Telemetry packages cannot emit domain production records or bypass `140` non-authority, redaction, metric cardinality, health mapping, replay exclusion, or exporter bounds. |
 | `100-COMPATIBILITY-AC-001` | Missing or failed compatibility on any required output-affecting axis fails activation or rollback with `PACKAGE_COMPATIBILITY_FAILED`. |
 | `100-SBOM-AC-001` | Missing, subject-mismatched, expired, or policy-failed SBOM evidence fails activation with `PACKAGE_SBOM_MISSING`, `PACKAGE_SBOM_SUBJECT_MISMATCH`, or `PACKAGE_SBOM_POLICY_FAILED`. |
 | `100-ATTESTATION-AC-001` | Missing or subject-mismatched attestation fails activation with `PACKAGE_ATTESTATION_MISSING` or `PACKAGE_ATTESTATION_SUBJECT_MISMATCH`. |

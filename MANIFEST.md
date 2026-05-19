@@ -23,6 +23,7 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/nlspec/110-api-ux-health-errors-and-security.md` |
 | `docs/nlspec/120-validation-fixtures-and-acceptance.md` |
 | `docs/nlspec/130-analysis-enrichment-and-registry-governance.md` |
+| `docs/nlspec/140-observability-instrumentation.md` |
 | `docs/deferred/200-future-reachability-analysis-domain.md` |
 | `docs/doc_clean-up/MarkdownLint-Rules.md` |
 | `docs/doc_clean-up/markdownlint-cleanup-reference.md` |
@@ -46,4 +47,5 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/reference/research/RES-013-extension-package-supply-chain.md` |
 | `docs/reference/research/RES-014-source-authority-staleness-coverage-absence.md` |
 | `docs/reference/research/RES-015-janusgraph.md` |
+| `docs/reference/research/RES-016-batfish.md` |
 | `docs/archive/PRD-Cadastre.revised-draft.md` |

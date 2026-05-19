@@ -30,6 +30,8 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `DatasetVersionRef`
 - `VersionManifest`
 - `IdentityDecision`
+- `TelemetryReplayExclusionPolicy`
+- `TelemetryRuntimeState`
 
 - `GoldFactSchema`
 - `ComputeGoldFactKeyId`
@@ -154,6 +156,14 @@ Late authoritative evidence after the cutoff must be accepted as a correction ca
 Production replay must validate required replay policy artifact refs, then run `ReplayInputSufficiencyCheck`, resolve the active `ReplayEquivalencePolicy` output-class row, apply global replay failure precedence, decide replay mode, and run `ComputeReplayEquivalenceChecksum` before any replay output is written.
 
 `ReplayEquivalencePolicy` defines included fields, excluded volatile fields, hash algorithm, canonical ordering, owner-specific included/excluded field handoff, failure precedence, and shadow-output behavior by output class. Output-specific field selection for `graph_delta`, `graph_apply`, and `graph_rebuild` is imported from `090`; field selection for `api_response` is imported from `110`; field selection for `export_projection` is imported from `050`; field selection for `analysis_output` is imported from `130`. `080` owns checksum algorithm, preflight ordering, and failure precedence.
+
+### TelemetryReplayExclusionHandoff
+
+Telemetry runtime identifiers and exporter state are excluded volatile fields by default. `ComputeReplayEquivalenceChecksum` must exclude trace IDs, span IDs, sampled flags, runtime duration, runtime start time, exporter queue state, exporter delivery result, Collector state, dropped telemetry counts, diagnostic display order, and telemetry backend-generated IDs unless an active `140.TelemetryReplayExclusionPolicy` and owner output-class row explicitly include a bounded telemetry diagnostic field for health, API, audit, or validation output.
+
+Telemetry exclusion must not hide output-affecting telemetry policy changes. When telemetry policy affects health, API diagnostics, audit diagnostics, validation diagnostics, or operator-visible telemetry runtime state, `ReplayInputSufficiencyCheck` must require the relevant `140` policy refs and runtime state refs through `030.VersionManifest`.
+
+A replay that includes trace IDs, span IDs, backend telemetry IDs, exporter queue state, or sampling decisions in an authoritative domain output checksum must fail with `TELEMETRY_REPLAY_FIELD_FORBIDDEN`.
 
 ### Lifecycle evidence in replay equivalence
 
@@ -372,6 +382,7 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `export_projection` | imported `050` projection included fields, projection profile, input refs, mapping refs, redaction refs, loss manifest checksum, output checksum | export job ID, request correlation ID, execution duration, display timestamp | `sha256` | export projection ID | compare only | active default |
 | `analysis_output` | imported `130` analysis included fields, analysis rule bundle, graph derived-view refs, authorization/redaction refs, output checksum | request correlation ID, UI display label, runtime duration | `sha256` | analysis output ID | compare only | active default |
 | `validation_acceptance` | validation matrix refs, fixture checksums, expected/actual checksums, validation lifecycle evidence, acceptance report bytes | validation execution duration, display timestamp | `sha256` | validation row ID then fixture ID | compare only | active default |
+| `telemetry_health_diagnostic` | `140.TelemetryRuntimeState` refs when health/API/audit/validation output depends on telemetry state, telemetry policy refs, health mapping policy ref, redaction refs, output checksum | trace ID, span ID, sampled flag, exporter queue state unless health-visible, runtime duration, backend telemetry IDs, display timestamp | `sha256` | telemetry runtime state ref then policy ref | compare only | active default after `140` patch |
 
 Global replay failure precedence:
 
@@ -395,6 +406,10 @@ Global replay failure precedence:
 | generated ID | rejected unless derived by `040.CoreRecordIdPolicy` |
 | unordered iteration | rejected |
 | external call | rejected in production unless explicitly validation-only |
+| telemetry trace/span ID | excluded from domain replay; rejected if used as output-affecting deterministic ID |
+| telemetry sampling decision | excluded from domain replay; may affect only telemetry emission |
+| telemetry exporter result | operational health input only when represented by `TelemetryRuntimeState` and manifest refs |
+| telemetry Collector state | operational health input only when represented by `TelemetryRuntimeState` and manifest refs |
 | backend-discovered value | replay from recorded value only when owner permits |
 
 ### Assertion-state transition matrix
@@ -591,6 +606,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-UNSAFE-NEGATIVE-AC-001` | Unauthorized negative evidence emits no absence, retraction, cleanup, graph expiry, or watermark advancement. |
 | `080-CORRECTION-SNAPSHOT-AC-001` | Every correction class requires old snapshot ref, new snapshot ref, table-set checksum, retention protection, and mutable-ref rejection. |
 | `080-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance. |
+| `080-TELEMETRY-REPLAY-AC-001` | Trace IDs, span IDs, sampling decisions, exporter state, Collector state, backend telemetry IDs, runtime duration, and dropped telemetry counts are excluded from authoritative domain replay checksums unless explicitly included for telemetry health diagnostics by `140` and manifest refs. |
 | `080-REPLAY-PRECEDENCE-AC-001` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, temporal-mismatched, side-effect-mismatched, or checksum-mismatched inputs according to global precedence before output. |
 | `080-GRAPH-HANDOFF-AC-001` | Every correction graph handoff effect is emitted as metadata only, and `080` performs no graph mutation. |
 | `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |

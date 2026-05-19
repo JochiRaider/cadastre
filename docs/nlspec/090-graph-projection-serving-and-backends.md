@@ -29,6 +29,10 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `SourceAuthorityProfile`
 - `GoldFactChangeSet`
 - `PackageStageBinding`
+- `ObservabilityInstrumentationProfile`
+- `TelemetryAttributePolicy`
+- `TelemetryRedactionPolicy`
+- `TelemetryRuntimeState`
 
 - `GraphNodeDeltaShape`
 - `GraphEdgeDeltaShape`
@@ -79,6 +83,16 @@ Graph state is a derived read model. It must be rebuildable from authoritative l
 `GraphNodeDelta` and `GraphEdgeDelta` are concrete 090 records that must conform to `040.GraphNodeDeltaShape` and `040.GraphEdgeDeltaShape` before apply. `090` owns projection/apply semantics and runtime graph delta ID input policies.
 
 A graph backend must not create authoritative facts, infer identity, decide source completeness, decide fact retraction, define bitemporal semantics, repair drift by itself, or expose backend internal IDs as Cadastre IDs.
+
+### GraphTelemetryHandoff
+
+Graph projection, graph apply, graph query, graph rebuild, graph backend preflight, graph drift check, and derived-view lag operations may emit telemetry only through `140.EmitTelemetry`.
+
+Graph telemetry must not expose backend-generated node IDs, edge IDs, relationship IDs, vertex IDs, document IDs, element IDs, provider-native query text, raw graph property values, raw payload bytes, private source bindings, or graph backend credentials.
+
+Graph telemetry, graph backend metrics, graph backend health, graph apply span success, graph query span success, graph rebuild span success, and graph drift-check telemetry must not create facts, infer identity, decide source completeness, authorize graph expiry or cleanup, repair drift, advance derived-view state, or satisfy graph rebuild equivalence.
+
+Provider-native telemetry attributes must be translated through `140.TelemetryAttributePolicy` and redacted through `140.TelemetryRedactionPolicy` before export.
 
 ### GraphExpirySourceAuthorityGate
 
@@ -862,6 +876,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-SCHEMA-PATCH-AC-002` | Backend-generated IDs fail with `GRAPH_BACKEND_ID_FORBIDDEN`. |
 | `090-SCHEMA-PATCH-AC-003` | Graph properties with undeclared provenance or raw payload leakage fail before graph apply. |
 | `090-SCHEMA-PATCH-AC-004` | MVP graph profiles still cannot emit theoretical reachability output. |
+| `090-GRAPH-TELEMETRY-HANDOFF-AC-001` | Graph telemetry may report graph operation diagnostics but cannot expose backend IDs or provider query text, cannot repair drift, cannot authorize graph mutation, and cannot substitute for graph apply, rebuild, schema, index, or derived-view state records. |
 
 | `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
 | `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |

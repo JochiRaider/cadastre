@@ -29,6 +29,7 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 - `AuthorityClass`
 - `PublicPrivateBoundaryRule`
 - `ProjectionAuthorityRule`
+- `RuntimeTelemetryAuthorityRule`
 - `DirectSourceProhibition`
 - `SourceOfRecordRule`
 - `VolatilityBoundaryRule`
@@ -60,6 +61,18 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 ## Projection Authority Rule
 
 Graph state, Splunk CIM output, OCSF export output, metadata graphs, lineage graphs, analysis outputs, and registry labels must not create or modify authoritative facts. A projection may be served only when its derivation profile, input refs, output checksum, and lag state are persisted.
+
+### RuntimeTelemetryAuthorityRule
+
+Runtime telemetry, including traces, spans, metrics, structured logs, baggage, exporter state, Collector state, sampling decisions, dashboards, and telemetry-derived alerts, is operational diagnostic material only.
+
+Runtime telemetry must not create, modify, retract, expire, merge, split, authorize, validate, project, replay, or persist authoritative Cadastre domain records.
+
+Runtime telemetry must not create or modify `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `IdentityDecision`, `GoldFact`, `GraphDeltaSet`, `GraphApplyResult`, `SourceAuthorityProfileRow`, `LakehouseFeedCompletenessProfileRow`, `CoverageAssertion`, `PackageActivationFailureEvent`, `ProductionPackageSetManifest`, `WatermarkCommitRecord`, `VersionManifest`, or `AuditEvent`.
+
+Telemetry may inform `110.OperationalHealthStatus` only through `140.TelemetryHealthMappingPolicy` and `110.EndpointOutcomeMatrix`.
+
+Telemetry loss, exporter failure, or Collector failure must not invalidate already persisted authoritative Cadastre records.
 
 ## Volatility Boundary Rule
 
@@ -115,6 +128,7 @@ Private source binding artifacts may map concrete upstream systems to public res
 - Package signature verification must not imply package activation eligibility.
 - Analysis findings must not mutate facts, graph state, watermarks, or completeness.
 - A missing source-authority closure row must not imply source absence, cleanup permission, graph expiry, retraction, pass/fail state, source-history no-change, or watermark advancement.
+- Runtime telemetry must not imply source authority, source completeness, identity, fact correctness, graph correctness, audit persistence, replay equivalence, package activation, or watermark eligibility.
 
 ## Required Errors
 
@@ -123,6 +137,8 @@ Private source binding artifacts may map concrete upstream systems to public res
 | `DIRECT_SOURCE_CALL_FORBIDDEN` | Production execution attempts to call or authenticate to an enterprise source system. |
 | `PROJECTION_AUTHORITY_VIOLATION` | A derived projection attempts to create authoritative records. |
 | `PRIVATE_BINDING_LEAK` | A public artifact, including identity resolver rows and package-supplied resolver artifacts, contains a concrete private vendor/source binding. |
+| `TELEMETRY_AUTHORITY_VIOLATION` | Runtime telemetry attempts to create, modify, authorize, validate, replay, or persist a non-telemetry authoritative Cadastre record. |
+| `TELEMETRY_PRIVATE_BINDING_LEAK` | Telemetry contains a private source binding, private route, credential, tenant inventory, or environment-specific private value before redaction/export. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | An activation-controlled artifact attempts to define product authority or stable core semantics. |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | An activation-controlled artifact conflicts with the owner stable core contract. |
@@ -172,6 +188,7 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `DIRECT_SOURCE_CALL_FORBIDDEN` | `neg-010-direct-source-call` | Fail before output and before source transport side effects. |
 | `PRIVATE_BINDING_LEAK` | `neg-010-private-binding-leak-public-artifact` | Reject or redact according to artifact class and `110` response rules. |
 | `PROJECTION_AUTHORITY_VIOLATION` | `neg-010-projection-authority-violation` | No authoritative mutation and no projection commit. |
+| `TELEMETRY_AUTHORITY_VIOLATION` | `120-OBSERVABILITY-NONAUTH-*` | Telemetry authority attempt fails before forbidden mutation. |
 | `UNDECLARED_AUTHORITY_CLASS` | `neg-010-undeclared-authority-class` | Reject record write before persistence. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `neg-010-activation-artifact-core-override` | Reject artifact activation before production output. |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `neg-010-activation-artifact-core-conflict` | Reject artifact activation before production output. |
@@ -184,6 +201,8 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | `110` |
 | `PROJECTION_AUTHORITY_VIOLATION` | `010` | `110` |
 | `PRIVATE_BINDING_LEAK` | `010` | `110` |
+| `TELEMETRY_AUTHORITY_VIOLATION` | `010` | `110` |
+| `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | `110` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `110` |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `110` |
@@ -198,6 +217,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-direct-source-call-forbidden` |
 | `PROJECTION_AUTHORITY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-projection-authority-violation` |
 | `PRIVATE_BINDING_LEAK` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-private-binding-leak` |
+| `TELEMETRY_AUTHORITY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-telemetry-authority-violation` |
+| `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-telemetry-private-binding-leak` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-undeclared-authority-class` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-volatility-boundary-violation` |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-activation-artifact-core-conflict` |
@@ -219,6 +240,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-VOLATILITY-AC-003` | Product authority, identity semantics, temporal semantics, and projection boundaries remain stable-core owned. |
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-001` | A public source-authority row containing a private route or concrete tenant inventory fails before persistence, publication, export, or validation-report materialization. |
 | `010-IDENTITY-PRIVATE-BINDING-AC-001` | Public resolver profile rows, identifier scope rows, and package-supplied resolver artifacts containing concrete tenant inventories, private routes, credentials, scanner site names, or account lists fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response, package report, or validation-report materialization. |
+| `010-TELEMETRY-AUTHORITY-AC-001` | Runtime telemetry cannot mutate authoritative records, replace audit events, satisfy replay equivalence, activate packages, advance watermarks, or prove source, identity, fact, or graph correctness. |
+| `010-TELEMETRY-PRIVATE-BINDING-AC-001` | Telemetry private-binding leaks fail before export or publication. |
 
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
 

@@ -26,6 +26,12 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `LakehouseSnapshotRef`
 - `DatasetVersionRef`
 - `LakehouseCommitRef`
+- `ObservabilityInstrumentationProfile`
+- `TelemetrySignalPolicy`
+- `TraceContextPolicy`
+- `TelemetryCorrelationPolicy`
+- `TelemetryRuntimeState`
+- `TelemetryReplayExclusionPolicy`
 
 - `CoreRecordSchema`
 - `CoreRecordValidationAlgorithm`
@@ -34,6 +40,7 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 ## Exports
 
 - `ProcessingStageDAG`
+- `StageInstrumentationHandoff`
 - `LakehouseStageStep`
 - `FeedStepPattern`
 - `StageStateRecord`
@@ -94,6 +101,18 @@ Failure-isolation precedence:
 | 4 | Isolated stage failure | Continue only for declared outputs; watermarks must not advance. |
 
 Every production stage output whose record class is imported from `040.CoreRecordSchema` must pass `040.ValidateCoreRecord` before commit and before external visibility. Schema validation failure must occur before source authority, identity, gold derivation, graph projection, API, export, or analysis behavior can consume the record. A package, parser, resolver, or projector must not bypass `040` by emitting package-local DTOs as production records.
+
+### StageInstrumentationHandoff
+
+Every production `ProcessingStageDAG` stage execution must create a telemetry correlation context when an active `140.ObservabilityInstrumentationProfile` enables traces or structured logs for the stage class.
+
+Telemetry context must not affect stage ordering, output permission, failure-isolation precedence, lifecycle transition selection, run lock acquisition, output record IDs, output checksums, replay equivalence, watermarks, graph apply, or package activation.
+
+A stage span or structured log may reference only fields allowed by `140.TelemetryAttributePolicy`. The default allowed stage correlation attributes are `stage_id`, `stage_class`, `run_id`, `version_manifest_ref`, `package_set_ref`, selected activation artifact refs, owner error code, lifecycle transition evidence ref, and validation row ref.
+
+A stage span, metric, or structured log must not contain raw payload bytes, private source bindings, credentials, backend-generated IDs, source-native identifiers, canonical entity IDs, graph backend IDs, package payload bytes, provider-native query text, or unredacted user/source identifiers unless `140.TelemetryRedactionPolicy` and `110.RedactionPolicy` both permit the exact data class.
+
+Telemetry emission failure must emit or update `140.TelemetryRuntimeState` according to `140.TelemetryExporterProfile`; it must not change the stage's domain result except through `110.OperationalHealthStatus` when health is requested.
 
 ## Lifecycle Contract
 
@@ -416,6 +435,16 @@ source_history_retention_profile
 absence_derivation_policy
 projection_watermark_policy
 progress_signal_policy
+observability_instrumentation_profile
+telemetry_signal_policy
+trace_context_policy
+telemetry_correlation_policy
+metric_instrument_catalog
+telemetry_attribute_policy
+telemetry_redaction_policy
+telemetry_exporter_profile
+telemetry_health_mapping_policy
+telemetry_replay_exclusion_policy
 resolver_profile
 identifier_evidence_class_row_set
 identifier_scope_row_set
@@ -617,6 +646,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Graph backend selection/defaulting | selected profile ref, selection policy ref, provider id, defaulting decision ref, explicit-or-omitted input checksum, provider capability matrix ref, backend package gate refs, and validation refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | `110.CommonApiResponseEnvelope` ref, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, and API/export validation refs. |
+| Observability-visible health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state output | observability instrumentation profile ref, signal policy ref, trace context policy ref when tracing is enabled, telemetry correlation policy ref when correlation refs are emitted, metric instrument catalog ref when metrics are enabled, telemetry attribute policy ref, telemetry redaction policy ref, telemetry exporter profile ref when export is enabled, telemetry health mapping policy ref when health may be affected, telemetry replay exclusion policy ref, telemetry runtime state refs when health/API/audit/validation output depends on telemetry state, package-set refs when telemetry artifacts are package-supplied, and validation refs. |
 | Analysis output | `AnalysisRuleBundle`, `AnalysisRule` row refs, `RuleGraphCompatibilityMatrix`, query target refs, graph derived-view refs when graph-backed, authorization/redaction refs, output checksum, replay policy output-class row, and validation refs. |
 | Threat-intel enrichment output | `ThreatIntelEnrichmentProfile`, `ThreatIntelArtifactRef`, distribution mapping policy, object-template/taxonomy/galaxy refs when used, redaction refs, artifact checksum, output checksum, and validation refs. |
 | Lineage output | `RunDatasetIOContract`, `LineageFacetMappingPolicy` row refs, schema URL, schema bytes checksum, facet bytes checksum, collision decision, redaction refs, and validation refs. |
@@ -651,6 +681,8 @@ Package activation refs required by `VersionManifestCompletenessMatrix` must app
 | `lifecycle_machine_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Machine ID, version, owner, and machine checksum refs. |
 | `lifecycle_transition_evidence_refs` | Required when lifecycle behavior affects output, replay, activation, graph apply, watermark eligibility, or CI gating | Canonically sorted transition evidence refs and checksums. |
 | `lifecycle_state_artifact_refs` | Required when persisted lifecycle state artifacts affect output, replay, activation, graph apply, watermark eligibility, or CI gating | Subject refs, state artifact refs, and checksums. |
+| `telemetry_policy_refs` | Required when telemetry affects health, API diagnostics, audit diagnostics, validation diagnostics, or operator-visible telemetry state | Canonically sorted `140` activation artifact refs and checksums. These refs must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
+| `telemetry_runtime_state_refs` | Required when telemetry runtime state affects health, API, audit, validation, or operator-visible diagnostics | Canonically sorted `140.TelemetryRuntimeState` refs and checksums. These refs must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
 | `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
 | `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
 
@@ -741,6 +773,9 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-DERIVED-GRAPH-EDGE-MANIFEST-AC-001` | Derived graph edge output fails with `VERSION_MANIFEST_INCOMPLETE` when rule, supporting fact, authority, completeness, temporal, projection, semantics, eligibility, deterministic ID input, output checksum, or validation refs are missing. |
 | `030-ENRICHMENT-LINEAGE-STAGE-OUTPUT-AC-001` | `ExecuteProcessingStageDAG` permits `enrichment` and `lineage` outputs listed in the stage table and fails with `FORBIDDEN_STAGE_OUTPUT` for any other production output class. |
 | `030-API-EXPORT-MANIFEST-AC-001` | API/export output fails with `VERSION_MANIFEST_INCOMPLETE` when request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated error-registry checksum, authorization decision ref, redaction context checksum, page-token policy ref, audit event ref, owner error ref, or required derived-view state ref is missing. |
+| `030-OBSERVABILITY-HANDOFF-AC-001` | Stage telemetry context creation does not alter deterministic stage order, output permissions, lifecycle behavior, run locks, output IDs, output checksums, replay equivalence, watermarks, graph apply, or package activation. |
+| `030-OBSERVABILITY-ARTIFACT-CLASS-AC-001` | Every telemetry artifact class used by `140` appears in the closed `ActivationControlledArtifactRef.artifact_class` registry and invalid telemetry artifact classes fail before stage execution. |
+| `030-OBSERVABILITY-MANIFEST-AC-001` | Health/API/audit/validation output that depends on telemetry policy or runtime state includes required telemetry refs in `VersionManifest`; missing refs fail with `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE`. |
 | `030-CLEANUP-AC-001` | No banned reference class remains. |
 | `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |
 | `030-CLEANUP-AC-003` | Any stage emitting a forbidden record class still fails before commit. |

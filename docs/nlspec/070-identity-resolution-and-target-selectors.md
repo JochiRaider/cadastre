@@ -28,6 +28,8 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `CadastreSilverObservation`
 - `SourceAuthorityProfile`
 - `VersionManifest`
+- `TelemetryAttributePolicy`
+- `TelemetryNonAuthorityRule`
 
 - `CanonicalEntitySchema`
 - `SourceAssetSchema`
@@ -70,6 +72,14 @@ Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before
 
 A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier` records only by emitting records that pass the corresponding `040` schema and `040.ValidateCoreRecord`. `creation_identity_decision_id`, `resolver_profile_id`, and `identity_policy_version` must be present when a `CanonicalEntity` is created. `SourceAsset.source_scope`, `SourceAsset.source_native_identity`, and `SourceAsset.source_asset_type` must be sufficient for `040.SourceAssetSchema`; under-scoped source identity fails before candidate generation. `Identifier` outputs must include typed scope, quality, validity, known time, and evidence refs. `ResolverExplanation` must reference core record IDs and checksums rather than duplicate core fields.
 
+### TelemetryIdentityNonAuthorityHandoff
+
+Runtime telemetry resource attributes, trace attributes, span attributes, metric attributes, structured-log attributes, service names, process names, host names, container IDs, pod names, runtime instance IDs, exporter IDs, Collector IDs, backend internal IDs, trace IDs, and span IDs must not create, attach, merge, split, reject, or score canonical identity by themselves.
+
+Telemetry attributes may appear only as diagnostic context unless a future active `ResolverProfileRow` explicitly consumes a non-telemetry `IdentityEvidenceItem` derived from authoritative Cadastre evidence. The telemetry attribute itself must not be the evidence ref.
+
+A resolver run that attempts to use telemetry-only attributes as durable identity evidence must fail before candidate generation with `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN`.
+
 ### Resolver Determinism Closure
 
 Each production resolver run must resolve exactly one active `ResolverProfileRow` before candidate generation. Resolution must fail before mutation when any row, artifact ref, checksum, source scope, identifier scope, lifecycle status, activation scope, or validation ref is missing, inactive, ambiguous, mismatched, under-scoped, or outside the run scope. The selected row must name every output-affecting resolver artifact, and every selected artifact and runtime state ref must appear in `030.VersionManifest`.
@@ -110,6 +120,8 @@ A production resolver must not use implementation-local defaults for evidence cl
 ## Resolver artifact activation boundary
 
 Stable identity semantics, weak-evidence defaults, hard-blocker precedence, review terminality, and selector safety are owned by this spec. Resolver profiles, decision rows, candidate bounds, and selector policy material are activation-controlled artifacts.
+
+Resolver artifacts must not weaken stable weak-evidence defaults by treating telemetry resource attributes as durable identity evidence. Any package-supplied resolver artifact that maps telemetry-only values to auto-merge authority fails activation with `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` or the most specific resolver artifact conflict code.
 
 | Artifact or contract | Volatility class | Required handling |
 | --- | --- | --- |
@@ -440,6 +452,7 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | `IDENTITY_REVIEW_AUTHORITY_MISSING` | Reviewer lacks authority for the requested review event. |
 | `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
 | `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
+| `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` | Telemetry-only attributes or identifiers are used as durable identity evidence, candidate scoring authority, create/attach/merge authority, split authority, rejection authority, or hard-blocker authority. |
 | `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | Graph projection requests endpoint identity from unresolved target hints, selector-only evidence, graph keys, or non-qualifying identity material. |
 
 ### CandidateGenerationProfile bounds
@@ -564,6 +577,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `070-SPLIT-HANDOFF-AC-001` | Every identity split affecting gold or graph output emits `GraphCorrectionHandoff` with split policy, partition, affected fact, resolver explanation, and version manifest refs. |
 | `070-MANIFEST-AC-001` | `VersionManifest` contains all consulted resolver artifacts, runtime decision refs, review refs, explanation checksums, and graph correction handoff refs. |
 | `070-PACKAGE-WEAKENING-AC-001` | Package-supplied resolver artifacts that weaken stable weak-evidence defaults or redefine identity semantics fail activation before production output. |
+| `070-TELEMETRY-IDENTITY-NONAUTH-AC-001` | Telemetry-only service, host, container, process, runtime, trace, span, exporter, Collector, or backend identifiers cannot create, attach, merge, split, score, or reject canonical identity. |
 | `070-VOLATILITY-AC-001` | Inactive resolver profile, target selector artifact omission, resolver artifact checksum mismatch, and package artifact core conflict fail before identity mutation. |
 | `070-LIFECYCLE-AC-001` | Resolver profile activation emits generic artifact lifecycle transition evidence and resolver-specific guard results before identity mutation. |
 | `070-LIFECYCLE-CLOSURE-AC-001` | `IdentityReviewCaseLifecycleClosure` names `070.IdentityReviewCaseStateMachine.v1`, routes generic lifecycle evidence to `030`, and lists the required `120` identity-review validation rows. |

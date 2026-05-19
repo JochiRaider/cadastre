@@ -28,6 +28,8 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `RawRecord`
 - `CadastreSilverObservation`
 - `StageStateRecord`
+- `TelemetryRuntimeState`
+- `TelemetryNonAuthorityRule`
 
 - `GoldFactSchema`
 - `FactAbsenceOutcome`
@@ -196,6 +198,10 @@ For every active absence-sensitive feed profile, source dataset, scope selector,
 
 Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, and live-probe signals are non-authoritative by default. They may affect output only through an active `ProgressSignalInterpretationPolicy` row.
 
+Runtime telemetry signals are progress or diagnostic signals only. Trace presence, trace absence, metric value, structured-log presence, structured-log absence, exporter success, exporter failure, Collector state, dashboard state, alert state, sampling decision, and dropped telemetry counts must not authorize source absence, source completeness, coverage, cleanup, retraction, graph expiry, watermark advancement, control pass/fail, or source-history no-change.
+
+Telemetry may be consulted only through `140.TelemetryHealthMappingPolicy` for operational health or through an active `ProgressSignalInterpretationPolicy` row whose allowed effect is `diagnostic_only`. An active row must not grant `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark` effects from telemetry signals.
+
 | Signal class | Default effect |
 | --- | --- |
 | Cursor exhaustion | Candidate evidence only; no absence by itself. |
@@ -206,6 +212,10 @@ Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derive
 | Graph apply success | Derived-view state only. |
 | Destination stale delete | Non-authoritative; no source absence. |
 | Live source probe result | Validation/exploration only. |
+| Telemetry trace presence or absence | Runtime diagnostic only. |
+| Telemetry metric value | Runtime diagnostic only. |
+| Telemetry structured-log presence or absence | Runtime diagnostic only. |
+| Telemetry exporter or Collector state | Operational health input only through `140` and `110`. |
 
 Two or more progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, or live-probe signals that individually lack authority must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
 
@@ -218,6 +228,8 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 ## Source authority artifact activation boundary
 
 `060` algorithms are stable core contracts. Source-specific authority, staleness, coverage, completeness, progress, control-result, history, watermark, and absence rows are activation-controlled artifacts.
+
+`ProgressSignalInterpretationPolicy` may include telemetry-derived signals only as `diagnostic_only`; any row that grants absence-sensitive or watermark effects from telemetry fails activation with `TELEMETRY_AUTHORITY_VIOLATION`.
 
 | Artifact or contract | Volatility class | Required handling |
 | --- | --- | --- |
@@ -633,6 +645,16 @@ This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without 
 | live source probe | validation/exploration only | No |
 | table commit success | lakehouse write evidence only | No |
 | graph rebuild success | derived-view rebuild evidence only | No |
+| telemetry trace presence | runtime diagnostic only | No |
+| telemetry trace absence | runtime diagnostic only | No |
+| telemetry metric value | runtime diagnostic only | No |
+| telemetry structured-log presence | runtime diagnostic only | No |
+| telemetry structured-log absence | runtime diagnostic only | No |
+| telemetry exporter success | delivery diagnostic only | No |
+| telemetry exporter failure | operational health input only through `140`/`110` | No |
+| telemetry Collector state | operational health input only through `140`/`110` | No |
+| telemetry sampling decision | runtime diagnostic only | No |
+| telemetry dropped-signal count | operational health input only through `140`/`110` | No |
 
 Two or more weak progress signals must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
 
@@ -751,6 +773,7 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-OCSF-NONAUTH-AC-001` | OCSF status, severity, confidence, observables, enrichments, class, activity, field presence, and field absence cannot satisfy authority, completeness, coverage, staleness, control-result, or absence gates by themselves. |
 | `060-OCSF-NONAUTH-AC-002` | Vulnerability Finding status does not become Cadastre `assertion_state` without a `060` or `080` owned derivation path. |
 | `060-OCSF-NONAUTH-AC-003` | DNS or DHCP field absence does not become absence without exact completeness, coverage, staleness, and authority rows. |
+| `060-TELEMETRY-PROGRESS-NONAUTH-AC-001` | Telemetry traces, metrics, structured logs, exporter state, Collector state, sampling decisions, and dropped-signal counts cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement. |
 | `060-LIFECYCLE-AC-001` | Source authority, completeness, coverage, progress, absence, and watermark artifacts can become active only through `030.LifecycleTransitionEvidence`, while `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` remain pure deterministic algorithms. |
 | `060-SOURCE-CLOSURE-AC-001` | Missing exact source-authority row blocks the requested effect and emits no absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement. |
 | `060-SOURCE-CLOSURE-AC-002` | Ambiguous equally specific source-authority row blocks the requested effect with `SOURCE_AUTHORITY_ROW_AMBIGUOUS`. |

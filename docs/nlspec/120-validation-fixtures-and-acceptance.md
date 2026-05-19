@@ -73,6 +73,7 @@ Every active domain spec must include at least one negative validation case for 
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis finding, metric, risk acceptance, threat-intel enrichment, lineage facet, registry governance, registry custom property, registry classification, or derived-edge rule attempts forbidden authority or mutation and fails before the forbidden effect. |
+| Observability | Telemetry span, metric, structured log, baggage, exporter success, exporter failure, Collector state, sampling decision, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 
 ## Required Volatility Boundary Test Classes
@@ -91,6 +92,9 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | stable core conflict | Activation artifact attempts to redefine identity, temporal, omission, or graph authority. | Fails with volatility-boundary error before production output. |
 | runtime state substitution | `GraphRebuildManifest`, `LakehouseCommitRef`, lineage facet, or validation report is used as source truth. | Fails before authority effect. |
 | graph provider default boundary | Research report, backend package metadata, or provider runtime default attempts to define Cadastre graph behavior without active `090` profile and `100` package-set refs. | Fails before graph apply, query serving, rebuild promotion, or production output. |
+| telemetry runtime-state substitution | `TelemetryRuntimeState`, exporter success, Collector state, or dashboard state is used as source truth, identity evidence, graph truth, audit persistence, package activation, or replay input. | Fails before authority effect. |
+| telemetry artifact activation | Missing, inactive, checksum-mismatched, out-of-scope, or package-set-mismatched telemetry profile is referenced by health/API/audit/validation output. | Fails before telemetry-visible output or emits owner health error. |
+| telemetry metric cardinality | Metric catalog uses unbounded labels such as source-native IDs, canonical IDs, hostnames, IPs, usernames, backend IDs, or private route names. | Fails before telemetry profile activation or export. |
 
 ## Acceptance Aggregation
 
@@ -116,6 +120,7 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `SPECSET-AC-013` | Every output-affecting activation-controlled artifact is represented by `030.ActivationControlledArtifactRef` and appears in `VersionManifest`. |
 | `SPECSET-AC-014` | Stable core specs contain no production-active volatile rows except non-normative examples or blocking `TODO:` rows. |
 | `SPECSET-AC-015` | Every active absence-sensitive feed category has `SourceAuthorityClosureMatrix` validation rows or deterministic block rows. |
+| `SPECSET-AC-016` | When observability is in implementation scope, every telemetry contract, artifact, metric catalog, runtime state record, redaction rule, exporter profile, health mapping, replay exclusion, and non-authority rule has exactly one owner, one volatility class, and passing `120-OBSERVABILITY-*` validation rows. |
 
 ## Validation Contract Details
 
@@ -217,7 +222,43 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `100` | package type policy, supported repository forms, trust, transparency, attestation, provenance, SBOM, dependency lock, compatibility, deprecation, health, rollback, quarantine, emergency, and package manifest success | unknown type, missing policy, ambiguous policy, unsupported Git tree snapshot, unauthorized signer, threshold failure, missing transparency, missing attestation, missing SBOM, live dependency resolution, compatibility failure, expired deprecation, failed health gate, mutable rollback target, rollback incompatibility, quarantine block, emergency bypass, and package manifest omission | failed candidate keep-current, health-fail not-LKG, quarantine no mutation, and shadow/canary no current output | rollback preflight and emergency bounded actions | package-set replay and manifest completeness | package evidence redaction through `110` | promotion auth and emergency quorum | signature/trust bypass forbidden, dependency lock non-authority, and mutable Git ref non-authority | required when owner declares activation-controlled artifacts. |
 | `110` | API success | stale compliance rejection | empty result | state label | page token replay | raw payload redaction | inaccessible asset | state-label non-collapse | required when owner declares activation-controlled artifacts. |
 | `130` | analysis finding, metric, risk acceptance, threat-intel enrichment, lineage output, registry activation, and derived-edge routed output | mutation rejection, missing threat-intel profile, distribution unmapped, lineage policy missing, mutable schema, namespace collision, registry custom-property invalid, classification authority forbidden, derived-edge missing support, and projection forbidden | risk scoring disabled, explicit derived-edge no-op, sighting no-completeness, freshness no-completeness, facet-only no-evidence | lineage facet row, threat-intel distribution, registry package-set, and derived-edge route | analysis replay, threat-intel replay, lineage replay, registry replay, and derived-edge replay | lineage facet redaction, threat-intel raw-value redaction, registry custom-property redaction, private activation-scope redaction | registry auth, analysis read, graph-backed analysis auth, and raw expansion auth | analysis/enrichment/lineage/registry non-authority, identity forbidden, graph mutation forbidden, direct gold output forbidden | required when owner declares activation-controlled artifacts. |
+| `140` | profile validation, trace context propagation, metric catalog row, exporter runtime state, health mapping | forbidden signal, missing profile, invalid exporter, forbidden attribute, high-cardinality metric, raw payload, private binding, backend ID, replay field | exporter unavailable with domain no-op; telemetry disabled no-op | trace-stage handoff, async context handoff, health mapping branch | telemetry enabled/disabled domain replay parity and telemetry-health replay | telemetry attribute, trace context, exporter endpoint, Collector route, private binding, backend ID | health diagnostic permission, secure diagnostics permission | telemetry cannot mutate source, identity, facts, graph, package, audit, watermark, replay | inactive/missing/checksum-mismatched telemetry artifacts, runtime-state substitution, package-set mismatch |
 | `200` | n/a while deferred | reachability prohibited | no-op | no graph effect | n/a | n/a | n/a | deferred reachability | required when owner declares activation-controlled artifacts. |
+
+### ObservabilityValidationMatrix
+
+| Row ID | Scenario | Expected result |
+| --- | --- | --- |
+| `120-OBSERVABILITY-NONAUTH-001` | Span success attempts to prove stage success or fact correctness. | `TELEMETRY_AUTHORITY_VIOLATION`; no domain mutation. |
+| `120-OBSERVABILITY-NONAUTH-002` | Metric value `0` attempts to prove source absence. | No-op or `TELEMETRY_AUTHORITY_VIOLATION`; no absence, cleanup, graph expiry, or watermark. |
+| `120-OBSERVABILITY-NONAUTH-003` | Exporter delivery success attempts to replace `AuditEvent`. | Reject; audit persistence remains independent. |
+| `120-OBSERVABILITY-REDACTION-001` | Telemetry contains raw payload bytes. | `TELEMETRY_RAW_PAYLOAD_FORBIDDEN`; no export. |
+| `120-OBSERVABILITY-REDACTION-002` | Telemetry contains private source binding or credential. | `TELEMETRY_PRIVATE_BINDING_FORBIDDEN`; no export. |
+| `120-OBSERVABILITY-REDACTION-003` | Graph telemetry contains backend-generated ID or provider query text. | `TELEMETRY_BACKEND_ID_FORBIDDEN` or graph-specific owner error; no export. |
+| `120-OBSERVABILITY-CARDINALITY-001` | Metric catalog uses source-native object ID, canonical entity ID, hostname, IP, user name, backend ID, or private route as metric label. | `TELEMETRY_CARDINALITY_VIOLATION`; profile activation fails. |
+| `120-OBSERVABILITY-EXPORTER-001` | Exporter unavailable during production run. | Domain output unchanged; `TelemetryRuntimeState` records failure; health degraded. |
+| `120-OBSERVABILITY-HEALTH-001` | `health_scope = observability` with exporter failure. | `OperationalHealthStatus.status = degraded` unless active mapping says blocked. |
+| `120-OBSERVABILITY-REPLAY-001` | Same input with different trace/span IDs. | Authoritative output checksums identical. |
+| `120-OBSERVABILITY-REPLAY-002` | Replay checksum includes trace ID or span ID. | `TELEMETRY_REPLAY_FIELD_FORBIDDEN`. |
+| `120-OBSERVABILITY-AUDIT-001` | Audit event exists but telemetry export fails. | Audit remains persisted or deterministically refused independent of telemetry. |
+| `120-OBSERVABILITY-VERSION-MANIFEST-001` | Health/API output depends on telemetry policy but `VersionManifest` lacks required telemetry refs. | `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE`. |
+| `120-OBSERVABILITY-PACKAGE-001` | Package-supplied telemetry policy missing trust or compatibility evidence. | Package-set activation fails; current active set remains. |
+
+### Observability fixture families
+
+```text
+observability-profile-valid-*
+observability-profile-missing-*
+observability-signal-forbidden-*
+observability-attribute-forbidden-*
+observability-cardinality-unbounded-*
+observability-exporter-outage-*
+observability-health-degraded-*
+observability-replay-different-trace-id-*
+observability-audit-export-failure-*
+observability-version-manifest-missing-*
+observability-package-policy-invalid-*
+```
 
 ### ObservationTypeExternalMappingValidationMatrix
 
@@ -1043,6 +1084,7 @@ graph-provider-portability-equivalence
 | `090` | active profile exact edge set, observed-connection positive projection, missing/ambiguous flow-role no-edge, unresolved endpoint no-edge, traversal behavior, graph apply lifecycle, graph apply ordering, page-token behavior, query candidate limit, rebuild equivalence, backend taxonomy rejection, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, generic external payload non-pathfinding, source-kind cleanup safety, backend selection omitted/defaulted, JanusGraph profile preflight, provider capability matrix, Gremlin translation parity, implicit schema rejection, schema fingerprint mismatch, storage mode unsafe, stale mixed index, full-scan forbidden, transaction partial-apply evidence, raw-write bypass, provider package-gate failure, and future-provider parity. |
 | `100` | package type policy, repository form, trust, transparency, attestation, SBOM, dependency lock, compatibility, deprecation, health/LKG, rollback, quarantine, emergency, package manifest completeness, canary and shadow isolation. |
 | `110` | API outcome, redaction, paging, state labels, authorization non-leakage. |
+| `140` | observability-profile-valid, observability-profile-missing, observability-signal-forbidden, observability-attribute-forbidden, observability-cardinality-unbounded, observability-exporter-outage, observability-health-degraded, observability-replay-different-trace-id, observability-audit-export-failure, observability-version-manifest-missing, observability-package-policy-invalid. |
 | `130` | analysis finding non-authority, analysis mutation, metric non-authority, metric risk-score forbidden, risk acceptance no-remediation, analysis replay exact/mismatch, threat-intel known indicator, threat-intel identity forbidden, threat-intel distribution restricted/unmapped, threat-intel unknown taxonomy, threat-intel missing profile, threat-intel artifact checksum mismatch, threat-intel sighting no-completeness, lineage run/job/dataset, lineage custom policy missing, lineage mutable schema, lineage checksum mismatch, lineage namespace collision, lineage freshness no-completeness, lineage facet-only not-evidence, registry activation positive, inactive artifact, owner mismatch, label no-fact-authority, custom-property bounds, custom-property redaction, classification authority forbidden, package-set-ref required, private binding redaction, derived-edge supporting facts required, `090` routing, outside-`090` forbidden, `080` routing, exact replay, replay mismatch, explicit no-op, and risk scoring boundary. |
 
 ### Acceptance Criteria
@@ -1058,6 +1100,7 @@ graph-provider-portability-equivalence
 | `120-LINEAGE-FACET-COVERAGE-AC-001` | Validation rows prove lineage facet policy, schema immutability, checksum, namespace collision, freshness no-completeness, facet-only non-evidence, and redaction behavior. |
 | `120-REGISTRY-GOVERNANCE-COVERAGE-AC-001` | Validation rows prove registry activation, inactive artifact, owner mismatch, custom-property bounds, classification authority rejection, package-set refs, and private binding redaction. |
 | `120-DERIVED-GRAPH-EDGE-COVERAGE-AC-001` | Validation rows prove derived-edge supporting-fact rejection, `090` routing, direct mutation rejection, `080` routing, exact replay, replay mismatch, and explicit no-op behavior. |
+| `120-OBSERVABILITY-COVERAGE-AC-001` | Observability validation rows prove telemetry non-authority, redaction, cardinality, exporter failure, health mapping, replay exclusion, audit independence, version-manifest completeness, and package activation gating. |
 | `120-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; explicit required mode rejects omission. |
 | `120-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, and missing package gates before mutation or query. |
 | `120-GRAPH-PROVIDER-CAPABILITY-AC-001` | Every active graph provider profile satisfies the required provider capability matrix or declares deterministic unsupported behavior for each query/apply/rebuild class. |
