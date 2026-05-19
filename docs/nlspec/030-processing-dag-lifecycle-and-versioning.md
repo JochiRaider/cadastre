@@ -68,7 +68,9 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 | `gold_derivation` | `GoldFact`, `GoldFactChangeSet`, temporal/correction diagnostics. |
 | `graph_projection` | `GraphDeltaSet`, graph projection diagnostics. |
 | `graph_apply` | `GraphApplyResult`, backend evidence rows, graph apply diagnostics. |
-| `analysis` | `AnalysisFinding`, `AnalysisMetric`, risk workflow records only. |
+| `analysis` | `AnalysisFinding`, `AnalysisMetric`, `RiskAcceptanceRecord` only. |
+| `enrichment` | `ThreatIntelEnrichmentRecord`, enrichment diagnostics, and required `StageStateRecord` only. |
+| `lineage` | `RunDatasetIOContract`, lineage diagnostics, and required `StageStateRecord` only. |
 | `validation` | `ValidationScenario` outputs, validation reports, diagnostics only. |
 
 Any stage emitting a record class outside its permitted set must fail with `FORBIDDEN_STAGE_OUTPUT` before the output is committed.
@@ -451,7 +453,19 @@ graph_apply_profile
 derived_view_lag_policy
 graph_rebuild_manifest_profile
 analysis_rule_bundle
+analysis_rule_row_set
+rule_graph_compatibility_matrix
+derivation_rule_bundle
+derived_graph_edge_rule_row_set
+threat_intel_enrichment_profile
+threat_intel_distribution_mapping_policy
+threat_intel_artifact_ref_policy
+lineage_facet_mapping_policy
+artifact_class_policy_row_set
 registry_governance_artifact
+registry_custom_property_schema
+registry_classification_policy
+analysis_output_replay_policy_row_set
 package_release
 production_package_set
 package_type_policy_row_set
@@ -603,6 +617,11 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Graph backend selection/defaulting | selected profile ref, selection policy ref, provider id, defaulting decision ref, explicit-or-omitted input checksum, provider capability matrix ref, backend package gate refs, and validation refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API/export output | `110.CommonApiResponseEnvelope` ref, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, and API/export validation refs. |
+| Analysis output | `AnalysisRuleBundle`, `AnalysisRule` row refs, `RuleGraphCompatibilityMatrix`, query target refs, graph derived-view refs when graph-backed, authorization/redaction refs, output checksum, replay policy output-class row, and validation refs. |
+| Threat-intel enrichment output | `ThreatIntelEnrichmentProfile`, `ThreatIntelArtifactRef`, distribution mapping policy, object-template/taxonomy/galaxy refs when used, redaction refs, artifact checksum, output checksum, and validation refs. |
+| Lineage output | `RunDatasetIOContract`, `LineageFacetMappingPolicy` row refs, schema URL, schema bytes checksum, facet bytes checksum, collision decision, redaction refs, and validation refs. |
+| Registry governance artifact activation | `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, `RegistryClassificationPolicy`, approval refs, lifecycle transition evidence, package-set ref when package-supplied, artifact checksum, activation scope, and validation refs. |
+| Derived graph edge output | `DerivedGraphEdgeRule`, supporting fact refs, authority/completeness/temporal refs where applicable, `090` projection/profile/semantics/eligibility refs, deterministic ID inputs, output checksum, and validation refs. |
 | Package activation | package-set manifest checksum, package release manifest refs and checksums, package type policy row refs, package repository model row refs, artifact digests, sizes, media types, subject digests, repository metadata refs, repository snapshot refs, repository freshness proof refs, repository anti-rollback state refs, trust policy refs, signature verification result refs, transparency evidence refs, attestation set refs, build provenance refs, SBOM refs, dependency lock refs, compatibility matrix refs, validation refs, package developer contract refs, package stage binding refs, promotion record refs, deployment revision refs, last-known-good health gate refs, last-known-good package-set refs when applicable, rollback compatibility policy refs, rollback plan/result refs, quarantine record refs, quarantine scope policy refs, emergency override refs, deprecation window policy refs, activation failure event refs when candidate activation fails, lifecycle transition evidence refs, and approval refs. |
 
 Package activation refs required by `VersionManifestCompletenessMatrix` must appear in `included_refs`. Package-specific manifest fields must not create a parallel manifest mechanism unless this spec explicitly adds a field row and defines checksum inclusion behavior.
@@ -710,6 +729,12 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 
 | ID | Criterion |
 | --- | --- |
+| `030-ANALYSIS-REGISTRY-ARTIFACT-CLASS-AC-001` | `ValidateActivationControlledArtifactRef` fails with `ACTIVATION_ARTIFACT_INCOMPLETE` when any `130` artifact class token is unknown, omitted, inactive, scope-mismatched, checksum-mismatched, or unvalidated. |
+| `030-ANALYSIS-REGISTRY-MANIFEST-AC-001` | Analysis output fails with `VERSION_MANIFEST_INCOMPLETE` when any rule bundle, rule row, compatibility matrix, query target, derived-view, authorization, redaction, replay policy, output checksum, or validation ref is missing. |
+| `030-THREAT-INTEL-MANIFEST-AC-001` | Threat-intel enrichment output fails with `VERSION_MANIFEST_INCOMPLETE` when profile, artifact, distribution, taxonomy, galaxy, object-template, redaction, checksum, or validation refs are missing. |
+| `030-LINEAGE-FACET-MANIFEST-AC-001` | Lineage output fails with `VERSION_MANIFEST_INCOMPLETE` when lineage policy rows, schema URL, schema bytes checksum, facet checksum, collision decision, redaction refs, or validation refs are missing. |
+| `030-DERIVED-GRAPH-EDGE-MANIFEST-AC-001` | Derived graph edge output fails with `VERSION_MANIFEST_INCOMPLETE` when rule, supporting fact, authority, completeness, temporal, projection, semantics, eligibility, deterministic ID input, output checksum, or validation refs are missing. |
+| `030-ENRICHMENT-LINEAGE-STAGE-OUTPUT-AC-001` | `ExecuteProcessingStageDAG` permits `enrichment` and `lineage` outputs listed in the stage table and fails with `FORBIDDEN_STAGE_OUTPUT` for any other production output class. |
 | `030-API-EXPORT-MANIFEST-AC-001` | API/export output fails with `VERSION_MANIFEST_INCOMPLETE` when request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated error-registry checksum, authorization decision ref, redaction context checksum, page-token policy ref, audit event ref, owner error ref, or required derived-view state ref is missing. |
 | `030-CLEANUP-AC-001` | No banned reference class remains. |
 | `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |

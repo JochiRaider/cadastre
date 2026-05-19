@@ -385,6 +385,8 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
 
+Generated-registry validation for `130` must include fixture families for `error-registry-130-lineage-facet-policy-missing`, `error-registry-130-lineage-facet-namespace-collision`, `error-registry-130-threat-intel-profile-missing`, `error-registry-130-threat-intel-distribution-unmapped`, `error-registry-130-threat-intel-artifact-checksum-mismatch`, `error-registry-130-registry-custom-property-schema-invalid`, `error-registry-130-registry-classification-authority-forbidden`, `error-registry-130-derived-graph-edge-supporting-facts-required`, `error-registry-130-derived-graph-edge-projection-forbidden`, and `error-registry-130-derived-graph-edge-replay-mismatch`. Missing, duplicate, unredacted, unfixtured, unknown-severity, unknown-retry, or owner-context-incomplete `130` rows must fail registry generation before API, export, health, compliance, audit, or validation output.
+
 ## Evidence Drillback
 
 Graph evidence chain:
@@ -413,6 +415,7 @@ Missing required lineage refs must return `LINEAGE_ERROR`. Raw payloads must be 
 - Source-extension values that fail redaction, secret scan, namespace validation, or OCSF reserved-name policy must be redacted from caller-visible errors.
 - External-schema non-authority failures must expose owner, external field path, and redaction state without exposing raw source values.
 - Resolver error context must not expose private scope selectors, concrete tenant inventories, credentials, raw payload values, private routes, scanner site names, directory tenant inventories, zone inventories, account lists, or environment-specific source bindings.
+- Analysis, enrichment, lineage, registry, and derived-edge error context must not expose raw threat-intel values, raw lineage facet bytes, registry custom-property raw values, private activation scopes, artifact payload bytes, backend/query text, or private source binding values unless the caller has the required owner-admin, raw-evidence, or secure-audit permission.
 
 ### AuthorizationPermissionMatrix
 
@@ -453,6 +456,12 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `backend_native_graph_ids` | Forbidden. | No display permission. | Redacted diagnostic only. | Fail with `GRAPH_BACKEND_ID_FORBIDDEN` or `PAGE_TOKEN_INVALID` before response. |
 | `source_extension_values` | Hidden unless rule permits display. | Active `050.SourceExtensionFieldRule` and redaction policy. | Redacted value class and field path. | Secret-scan failures render as security errors with value hidden. |
 | `package_evidence` | Metadata redacted by default. | Package/admin permission by evidence class. | Evidence refs and checksums; raw SBOM bytes hidden unless policy permits. | Never leak private artifact payloads, repository paths, signer secrets, or unauthorized package evidence. |
+| `raw_threat_intel_values` | Hidden. | `analysis.read` plus owner redaction policy allowing display. | Redacted value class, artifact ref, and checksum only unless secure audit policy permits more. | Hide raw indicators, sightings, taxonomy values, galaxies, object-template values, and distribution raw values in caller-visible errors and exports. |
+| `raw_lineage_facet_bytes` | Hidden. | Owner-admin or secure audit policy only. | Facet ref, schema checksum, facet checksum, and byte count. | Never inline raw facet bytes in API responses, errors, page tokens, graph properties, or evidence refs. |
+| `registry_custom_property_values` | Hidden unless the active schema redaction class allows display. | Active `130.RegistryCustomPropertySchema` and caller permission. | Property path, schema ref, redaction class, and checksum. | Redact values for private, raw-derived, bounded-secret, or undeclared properties. |
+| `private_activation_scope` | Hidden. | No public display permission. | Redacted ref/checksum only unless private implementation audit permits. | Public artifacts and API responses must not expose concrete activation scopes or private bindings. |
+| `artifact_payload_bytes` | Hidden. | Secure artifact-admin permission and owner policy. | Hash, byte count, artifact class, and package-set ref. | Never inline registry payload bytes, package payload bytes, schema payload bytes, or threat-intel artifact bytes in caller-visible output. |
+| `backend_query_text` | Hidden. | Owner-admin validation context only. | Query checksum, translation profile ref, and redacted text ref. | Hide provider-native query text unless the caller has owner-admin permission and the query is validation-only or translated. |
 | `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
 
 `RedactionPolicy` must apply this matrix after owner result materialization and before checksum-visible response output. Redaction must not change owner state labels, error codes, or version-manifest refs; it may only remove or replace fields whose data class requires hiding.
@@ -514,7 +523,7 @@ The generated error registry must include the following mapping, source-extensio
 | `090` | graph | `ErrorRecord` | backend, query, rebuild, drift, and flow-role evidence errors | owner row | `110` | graph rows |
 | `100` | package | `ErrorRecord` | activation, trust, rollback, quarantine errors | owner row | `110` | package rows |
 | `120` | validation | `ErrorRecord` | validation and acceptance errors | owner row | `110` | validation rows |
-| `130` | analysis/registry | `ErrorRecord` | mutation, lineage, registry errors | owner row | `110` | analysis rows |
+| `130` | analysis/enrichment/lineage/registry | `ErrorRecord` | analysis mutation errors, lineage facet errors, threat-intel enrichment errors, registry governance errors, registry custom-property errors, registry classification errors, and derived graph edge routing errors | owner row | `110` | analysis, enrichment, lineage, registry, and derived-edge rows |
 | `200` | reachability deferred | `ErrorRecord` | reachability prohibited output errors | owner row | `110` | reachability prohibition rows |
 
 ### IdentityResolverErrorObservableMapping
@@ -896,6 +905,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-STATE-LABEL-CONFLICT-AC-001` | `conflicted` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or ambiguity by default. |
 | `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
 | `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, or unfixtured owner error rows. |
+| `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
 | `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |
 | `110-REDACTION-MATRIX-AC-001` | Every data class in `RedactionDataClassMatrix` has caller-visible, audit-visible, and forbidden-output fixture coverage. |
 | `110-ENDPOINT-OUTCOME-TOTAL-AC-001` | Every endpoint row in `EndpointOutcomeMatrix` has deterministic success, empty, unauthorized, stale, partial, conflicted, ambiguous, pagination, redaction, and error-precedence behavior. |

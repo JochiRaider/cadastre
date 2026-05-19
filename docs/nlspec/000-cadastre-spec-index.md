@@ -412,6 +412,8 @@ Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMat
 
 `SpecSetVersion.validation_matrix_refs` must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows before authoritative handoff when any MVP observation-to-OCSF mapping row set is active.
 
+`SpecSetVersion.validation_matrix_refs` must include analysis/enrichment/lineage/registry handoff rows before authoritative handoff when analysis, enrichment, lineage, registry, derived graph edge, threat-intel, or analysis API output is in implementation scope. Required row families are `120-ANALYSIS-OUTPUT-AUTHORITY-*`, `120-ANALYSIS-REPLAY-*`, `120-THREAT-INTEL-*`, `120-LINEAGE-FACET-*`, `120-REGISTRY-GOVERNANCE-*`, `120-DERIVED-GRAPH-EDGE-*`, `120-ARTIFACT-CLASS-POLICY-*`, and `120-130-ERROR-REGISTRY-*`.
+
 A document that is not marked `authoritative` must not be used as product runtime authority. Candidate documents may be used only for validation or implementation spikes explicitly named by an acceptance report.
 
 `ValidateSpecSet` must fail before promotion when any exported implementation-relevant artifact lacks a volatility class, an activation-controlled artifact has no owner spec, a volatile production row is embedded in a stable core section without being marked example-only or `TODO:`, or a reference, ADR, or archive document is used as runtime authority.
@@ -425,6 +427,8 @@ A document that is not marked `authoritative` must not be used as product runtim
 `SpecSetVersion.validation_matrix_refs` must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when temporal, gold, correction, late-arrival, replay, export replay, analysis replay, or graph handoff behavior is in implementation scope.
 
 `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` or a more specific registry error when `000` marks temporal/gold/replay closed while `080` contains blocking placeholder rows in `TemporalSemanticsPolicy`, `GoldFactCorrectionPolicy`, `LateArrivalPolicy`, `ReplayEquivalencePolicy`, `CorrectionSnapshotRefPolicy`, or assertion-state transitions. It must also fail when `080` is closed but required `120` temporal/correction/replay validation rows are missing, or when a replay/correction artifact lacks a volatility class or `030.VersionManifest` representation.
+
+`ValidateSpecSet` must fail before promotion when `130` contains unresolved owner TODO rows, when any required `130` fixture family is absent, blocked, failed, not run, stale, or TODO-bearing, or when any `130` activation-controlled artifact lacks a volatility class, `030.ActivationControlledArtifactRef`, package-set ref when package-supplied, or `030.VersionManifest` requirement.
 
 ## Archival Policy
 
@@ -464,6 +468,9 @@ Archived documents are historical reference only and never implementation author
 | `000-GRAPH-PROFILE-CLOSURE-AC-001` | Promotion fails when graph projection, apply, query, rebuild, or serving is in scope and `SpecSetVersion.validation_matrix_refs` lacks required graph closure row families. |
 | `000-GRAPH-VOLATILITY-AC-001` | Every graph profile, edge semantics, output eligibility, taxonomy mapping, query translation, schema, apply, lag, rebuild, index consistency, and derived-view state artifact has exactly one volatility class. |
 | `000-GRAPH-BACKEND-DEFAULT-AC-001` | Promotion fails when graph serving is in scope and `GraphBackendProfile`, `GraphBackendSelectionPolicy`, provider capability rows, JanusGraph default rows, package gates, or required `120-GRAPH-BACKEND-*` validation refs are missing, inactive, checksum-mismatched, or unresolved. |
+| `000-ANALYSIS-REGISTRY-CLOSURE-AC-001` | Promotion fails when analysis, enrichment, lineage, registry, threat-intel, derived-edge, or analysis API output is in implementation scope and required `120` row families for `130` closure are absent, blocked, failed, not run, stale, or fixture-incomplete. |
+| `000-ANALYSIS-REGISTRY-TODO-BLOCK-AC-001` | Promotion fails when `130` contains unresolved owner TODO rows or when any `130` error, fixture, acceptance, manifest, package, or volatility row remains TODO-bearing. |
+| `000-ANALYSIS-REGISTRY-VOLATILITY-AC-001` | Promotion fails when any `130` activation-controlled artifact lacks a volatility class, `030.ActivationControlledArtifactRef`, package-set ref when package-supplied, or `030.VersionManifest` inclusion rule. |
 | `000-PAGE-TOKEN-CLOSURE-AC-001` | Page-token default, minimum, and maximum expiration bounds are closed in `110`; promotion still requires passing page-token validation refs. |
 | `000-RESEARCH-RUNTIME-AUTHORITY-AC-001` | Research reports, ADRs, reference, and archive documents fail validation when referenced as runtime authority. |
 | `000-DOMAIN-GRAPH-STATUS-AC-001` | `domain.md` graph edge-family status agrees with `090` owner closure and `120` graph validation status. |

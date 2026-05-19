@@ -58,7 +58,7 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 
 ## Non-Authority Rule
 
-Analysis, enrichment, lineage, and registry records must not mutate facts, graph state, completeness, watermarks, identity, package state, or source authority unless another active NLSpec grants a named interface.
+Analysis, enrichment, lineage, and registry outputs must not mutate facts, graph state, completeness, watermarks, identity, package state, or source authority unless another active owner spec grants a named interface.
 
 ## Analysis Rules
 
@@ -85,13 +85,116 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 
 ## Derivation Rule Boundary
 
-`DerivationRuleBundle` may emit `GoldFact` records only through the gold derivation interface owned by `080`. A derived graph edge rule may emit graph deltas only when the supporting facts, rule version, authority profile, completeness profile, deterministic ID inputs, and projection profile are persisted.
+`DerivationRuleBundle` may emit `GoldFact` records only through the gold derivation interface owned by `080`. A derived graph edge rule may emit graph deltas only through the graph projection interface owned by `090`. Direct graph mutation is forbidden.
+
+### DerivedGraphEdgeRule schema
+
+`DerivedGraphEdgeRule` is the row-level interface for backend-generated, query-generated, post-processed, or generated path edges. Concrete row sets are activation-controlled artifacts. Stable graph projection and apply behavior remains owned by `090`; stable gold derivation behavior remains owned by `080`.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `rule_id` | Yes | none | Stable ID scoped to the derived-edge rule row set. |
+| `rule_version` | Yes | none | Immutable owner version included in output identity and replay checksums. |
+| `input_fact_selector` | Yes | none | Names exact fact types and predicates. Wildcards are forbidden. |
+| `required_supporting_fact_refs_policy` | Required for graph-emitting rules | none | Non-empty for any rule whose output can affect graph output. Missing support fails with `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED`. |
+| `required_source_authority_refs` | Required when supporting facts affect output | none | Exact `060.SourceAuthorityProfileRow` refs. |
+| `required_completeness_refs` | Required for negative, absence-sensitive, cleanup-sensitive, or expiry-sensitive output | none | Exact completeness, coverage, staleness, absence, and progress-signal refs required by `060`. |
+| `required_temporal_refs` | Yes | none | Exact temporal resolution and replay refs required for deterministic replay. |
+| `graph_projection_profile_ref` | Required for graph output | null only when output effect is not graph-emitting | Missing graph output ref fails with `DERIVED_GRAPH_EDGE_PROJECTION_FORBIDDEN`. |
+| `graph_edge_semantics_ref` | Required for graph edge output | null only when no graph edge output is allowed | Must match `090.GraphEdgeSemantics`; mismatch fails before output. |
+| `graph_object_output_eligibility_refs` | Required for analysis-visible output | none | Exact `090.GraphObjectOutputEligibilityRow` refs controlling search, pathfinding, finding, metric, and identity-influence contexts. |
+| `deterministic_id_input_set` | Yes | none | Exact ordered list of rule refs, supporting fact refs, authority refs, completeness refs, temporal refs, and projection refs used for output identity. |
+| `allowed_output_effect` | Yes | `analysis_only` when analysis output is requested; `no_output` otherwise | Closed enum: `analysis_only`, `graph_delta_via_090`, `gold_fact_via_080`, `no_output`. |
+| `unsupported_behavior` | No | `explicit_no_op` | Unknown, unsupported, or unrepresentable rule outputs emit an explicit no-op unless the active row declares a stricter owner error. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` derived-edge positive, negative, no-op, replay, and routing rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`allowed_output_effect` defaults to `analysis_only` or `no_output`. Direct graph mutation is forbidden. Gold fact output must route through `080`. Graph delta output must route through `090`. Unsupported or supportless generated edges remain analysis-only or no-op outputs.
+
+### DerivedGraphEdgeRule effect routing
+
+| `allowed_output_effect` | Required route | Forbidden output | Failure or no-op condition |
+| --- | --- | --- | --- |
+| `analysis_only` | `AnalysisFinding` or `AnalysisMetric` only. | `GoldFact`, `GraphDeltaSet`, backend write, source authority, identity. | Missing analysis validation refs fails before output. |
+| `graph_delta_via_090` | `090.DerivedGraphEdgeRule graph handoff`. | Direct graph backend write or graph-serving mutation. | Missing supporting fact refs or projection refs fails before delta persistence. |
+| `gold_fact_via_080` | `080.DerivationRuleBundle handoff from 130`. | Package-emitted or analysis-emitted raw `GoldFact` bytes. | Missing temporal, authority, completeness, replay, or validation refs fails before fact ID computation. |
+| `no_output` | Explicit no-op record or no visible output as declared by validation row. | Any fact, graph, identity, completeness, package, or watermark mutation. | Unsupported behavior defaults to `explicit_no_op`. |
 
 ## Threat-Intel Enrichment
 
 Threat-intel indicators, sightings, taxonomies, galaxies, object templates, confidence labels, distribution labels, sharing groups, and TLP-like classifications are enrichment context by default. They must be materialized through `ThreatIntelEnrichmentProfile`, `ThreatIntelEnrichmentRecord`, `ThreatIntelDistributionMappingPolicy`, and `ThreatIntelArtifactRef`.
 
 They must not become identity, source completeness, source authority, gold fact, graph edge, graph serving, absence, cleanup, retraction, coverage, or watermark authority by themselves.
+
+### ThreatIntelEnrichmentProfile schema
+
+`ThreatIntelEnrichmentProfile` is an activation-controlled artifact. It permits enrichment record emission only; it does not grant fact, identity, source-authority, source-completeness, graph, package, coverage, absence, cleanup, retraction, or watermark effects.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `profile_id` | Yes | none | Stable profile ID. |
+| `profile_version` | Yes | none | Immutable owner version. |
+| `source_format` | Yes | none | Closed token declared by the profile row set; unknown formats fail with `THREAT_INTEL_PROFILE_MISSING`. |
+| `immutable_artifact_refs` | Yes | none | Non-empty `ThreatIntelArtifactRef` refs and checksums. |
+| `object_template_refs` | Required when object templates are used | `[]` only when unused | Exact immutable refs. Unknown template behavior is row-controlled and never coerces to a known template. |
+| `taxonomy_refs` | Required when taxonomies are used | `[]` only when unused | Exact immutable refs. Unknown values are preserved or rejected by row, never coerced. |
+| `galaxy_refs` | Required when galaxies are used | `[]` only when unused | Exact immutable refs. Unknown values are preserved or rejected by row, never coerced. |
+| `sighting_policy` | Yes | `observability_only` | Sightings are observability signals only and must not become source completeness. |
+| `distribution_policy_ref` | Yes | none | Active `ThreatIntelDistributionMappingPolicy` ref. Missing or unmapped distribution fails or restricts by table below. |
+| `unknown_value_behavior` | Yes | `preserve_as_unknown_enrichment_context` | Closed enum: `preserve_as_unknown_enrichment_context`, `reject_profile_row`. No coercion is permitted. |
+| `deprecated_artifact_behavior` | Yes | `reject_for_production` | Deprecated artifact use fails unless an active owner row grants validation-only behavior. |
+| `allowed_output_record_classes` | Yes | `ThreatIntelEnrichmentRecord` only | No other production record class may be emitted by the profile. |
+| `graph_effect` | Yes | `none` | Must be `none` for MVP. |
+| `identity_effect` | Yes | `none` | Must be `none` for MVP. |
+| `authority_effect` | Yes | `none` | Must be `none` for MVP. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` threat-intel positive, rejection, distribution, redaction, no-authority, and replay rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### ThreatIntelEnrichmentRecord schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `record_id` | Yes | none | Deterministic ID over profile ref, artifact refs, indicator context, distribution mapping, redaction refs, and canonical enrichment bytes. |
+| `profile_ref` | Yes | none | Active `ThreatIntelEnrichmentProfile` ref. |
+| `artifact_refs` | Yes | none | Non-empty immutable `ThreatIntelArtifactRef` refs and checksums. |
+| `indicator_context` | No | `{}` | Enrichment context only; indicator equality must not create identity evidence. |
+| `sighting_context` | No | `{}` | Observability only; must not satisfy source completeness or coverage. |
+| `taxonomy_context` | No | `{}` | Raw unknown values preserved when profile permits. |
+| `galaxy_context` | No | `{}` | Raw unknown values preserved when profile permits. |
+| `object_template_context` | No | `{}` | Object-template values are bounded by the active profile. |
+| `distribution_label` | No | `restricted_visibility` when missing | Missing label disables export. Conflicts select the most restrictive label. |
+| `visibility_class` | Yes | Derived from distribution mapping | Must not expose values beyond the selected mapping and `110.RedactionPolicy`. |
+| `redaction_policy_ref` | Yes | none | Required before raw or raw-derived threat-intel values are stored or exposed. |
+| `authority_class` | Yes | `non_authoritative_analysis` | Other authority classes are forbidden unless imported by exact active owner interface. |
+| `version_manifest_ref` | Yes for production-visible output | none | Must include profile, artifact, distribution, redaction, and validation refs. |
+
+### ThreatIntelDistributionMappingPolicy
+
+| Condition | Default behavior | Required diagnostic |
+| --- | --- | --- |
+| Unknown taxonomy, galaxy, category, type, or distribution value | Preserve raw value as unknown enrichment context or reject by explicit profile row. No coercion. | Owner diagnostic naming raw-value redaction class and profile row. |
+| Missing distribution label | Restricted visibility; export disabled. | Distribution omission diagnostic. |
+| Conflicting distribution labels | Most restrictive label wins. | Emit diagnostic naming all labels after redaction. |
+| Sightings | Observability signal only; not source completeness. | No completeness, absence, cleanup, retraction, coverage, or watermark effect. |
+| Indicator equality | Enrichment context only; not identity evidence or identity merge authority. | `THREAT_INTEL_IDENTITY_FORBIDDEN` for identity attempt. |
+| Graph effect | `none`. | Graph output attempts fail with `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION`. |
+| Identity effect | `none`. | Identity attempts fail with `THREAT_INTEL_IDENTITY_FORBIDDEN`. |
+| Authority effect | `none`. | Authority attempts fail with `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION`. |
+
+### ThreatIntelArtifactRef
+
+| Field | Required rule |
+| --- | --- |
+| `artifact_ref` | Immutable artifact identity. Mutable refs, branches, tags, and `latest` are forbidden. |
+| `artifact_format` | Closed token declared by active profile. |
+| `artifact_version` | Immutable version or checksum-addressed version. |
+| `artifact_bytes_checksum` | SHA-256 over exact artifact bytes. |
+| `artifact_schema_ref` | Required when profile uses schema validation. |
+| `redaction_policy_ref` | Required when raw or raw-derived values may be stored. |
+| `lifecycle_status` | Production use requires `active`. |
+| `validation_refs` | Non-empty refs to `120` checksum, deprecation, unknown-value, redaction, and no-authority rows. |
 
 ## Lineage and Artifact Boundary
 
@@ -102,6 +205,74 @@ They must not become identity, source completeness, source authority, gold fact,
 ## Registry Governance
 
 `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, and `RegistryClassificationPolicy` manage owners, domains, classifications, glossary labels, policies, approval, lifecycle, custom properties, and checksums. Registry metadata must not define Cadastre fact authority, source authority, graph edge semantics, evidence refs, source completeness, or production approval by itself.
+
+### RegistryArtifactGovernance schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `governance_id` | Yes | none | Stable ID for one registry governance artifact. |
+| `owner_spec` | Yes | none | Stable owner spec that exports the behavior or vocabulary being governed. |
+| `artifact_class` | Yes | none | Must match one closed `030.ActivationControlledArtifactRef.artifact_class`. |
+| `artifact_checksum` | Yes | none | SHA-256 over exact registry artifact bytes or row set. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+| `governance_purpose` | Yes | none | Closed purpose token: `ownership`, `classification`, `glossary`, `custom_property`, `approval_metadata`, `artifact_boundary`, `registry_context`. |
+| `classification_refs` | No | `[]` | Exact `RegistryClassificationPolicy` refs when labels affect redaction or export. |
+| `glossary_refs` | No | `[]` | Governance metadata only. |
+| `custom_property_schema_refs` | No | `[]` | Exact `RegistryCustomPropertySchema` refs for every custom property path. |
+| `approval_refs` | Yes | none | Approval metadata refs; approval by itself does not grant production activation. |
+| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `package_set_ref` | Required when package-supplied | null otherwise | Immutable `100.ProductionPackageSetManifest` ref. |
+| `authority_grant_ref` | No | null | Non-null is valid only when another active owner spec exports the exact authority interface and validation refs pass. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` registry activation, authority rejection, custom-property, classification, redaction, package-set, and replay rows. |
+
+`authority_grant_ref = null` by default. A non-null authority grant is valid only when another active owner spec exports the exact authority interface and validation refs pass. Otherwise activation fails with `REGISTRY_AUTHORITY_FORBIDDEN` or `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION`.
+
+### RegistryCustomPropertySchema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `schema_id` | Yes | none | Stable custom-property schema ID. |
+| `namespace` | Yes | none | Globally unique namespace in the active registry row set. |
+| `property_path` | Yes | none | Dot-separated property path. Empty segments and wildcards are forbidden. |
+| `scalar_type` | Yes | none | One `040.ScalarType` or bounded enum declared by this schema. |
+| `cardinality` | Yes | `one` | Closed enum: `one`, `optional_one`, `array`, `map`. |
+| `bounds` | Yes | none | Every string, array, map, object, and enum property must declare explicit minimum and maximum bounds or allowed value set. |
+| `default_value` | Required when omitted value affects output | null when no default exists | Default must validate against scalar type and bounds. |
+| `redaction_class` | Yes | none | One `110.RedactionDataClassMatrix` value or owner-declared subclass imported by `110`. |
+| `allowed_attachment_targets` | Yes | none | Closed set of registry artifact classes; wildcards are forbidden. |
+| `authority_effect` | Yes | `none` | Must be `none` unless another owner spec grants the exact authority interface. |
+| `validation_refs` | Yes | none | Non-empty refs to bounds, unknown field, redaction, attachment-target, authority-forbidden, and replay rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### RegistryClassificationPolicy
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `policy_id` | Yes | none | Stable classification policy ID. |
+| `label_namespace` | Yes | none | Globally unique namespace inside the active policy row set. |
+| `allowed_labels` | Yes | none | Non-empty closed label set. Unknown labels fail before attachment. |
+| `attachment_targets` | Yes | none | Closed set of registry artifact classes; wildcards are forbidden. |
+| `redaction_effect` | Yes | `none` | May narrow visibility only through `110.RedactionPolicy`. |
+| `export_effect` | Yes | `metadata_only` | Must not grant fact, source, graph, completeness, identity, package, approval, or watermark authority. |
+| `authority_effect` | Yes | `none` | Non-`none` fails with `REGISTRY_CLASSIFICATION_AUTHORITY_FORBIDDEN` unless imported by exact owner interface. |
+| `validation_refs` | Yes | none | Non-empty refs to label, attachment, redaction, authority-forbidden, and replay rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### ActivateRegistryArtifact
+
+```text
+ActivateRegistryArtifact(governance_row, artifact_ref, package_set_ref, validation_matrix):
+1. Validate `artifact_ref` through `030.ActivationControlledArtifactRef` using owner spec `130` or the imported owner spec named by the governance row.
+2. Validate lifecycle status is `active`, artifact checksum matches, activation scope covers the request, and validation refs are non-empty.
+3. If the artifact is package-supplied, require `package_set_ref` and require it to match `governance_row.package_set_ref`.
+4. Validate every referenced `RegistryCustomPropertySchema` and `RegistryClassificationPolicy` row.
+5. If `authority_grant_ref` is null, activate governance metadata only.
+6. If `authority_grant_ref` is non-null, resolve the exact exporting owner spec interface and validate owner refs before activation.
+7. If the authority interface is missing, inactive, mismatched, or unvalidated, fail with `REGISTRY_AUTHORITY_FORBIDDEN` or `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` before any effect.
+8. Emit activation metadata only; do not mutate raw, silver, identity, gold, graph-delta, graph-serving, completeness, watermark, package, or source-authority state.
+```
 
 ## Registry and analysis artifact volatility boundary
 
@@ -135,7 +306,10 @@ Analysis, enrichment, lineage, and registry activation-controlled artifacts use 
 | `DerivedGraphEdgeRule` | Routes graph output only through `090`, with supporting facts, rule refs, and profile refs persisted. | Emits graph deltas without supporting facts or active projection path. |
 | `ThreatIntelEnrichmentProfile` | Enrichment-only outputs and distribution mapping validate. | Attempts identity, source authority, completeness, or fact authority. |
 | `LineageFacetMappingPolicy` | Immutable schema URL, schema bytes, checksum, and collision behavior validate. | Schema checksum mismatch or mutable schema URL. |
-| `RegistryArtifactGovernance` | Owner, domain, lifecycle, checksum, approval, validation refs, activation scope present. | Registry metadata attempts production authority without owner spec. |
+| `RegistryArtifactGovernance` | Owner, domain, lifecycle, checksum, approval, validation refs, activation scope, and package-set ref when package-supplied are present. | Registry metadata attempts production authority without owner spec. |
+| `RegistryCustomPropertySchema` | Namespace, property path, scalar type, cardinality, explicit bounds, redaction class, allowed targets, authority effect, and validation refs pass. | Missing bounds, invalid redaction, or authority effect without owner interface. |
+| `RegistryClassificationPolicy` | Label namespace, allowed labels, attachment targets, redaction/export effects, authority effect, and validation refs pass. | Classification attempts authority without owner interface. |
+| `ThreatIntelDistributionMappingPolicy` | Distribution mapping is total for active profile values and redaction/export behavior passes. | Unmapped distribution or export of restricted values. |
 
 ## Analysis, Enrichment, and Registry Contract Details
 
@@ -160,16 +334,39 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 
 ### LineageFacetMappingPolicy
 
+`LineageFacetMappingPolicy` is an activation-controlled row set. Production lineage effects require a `LineageFacetMappingRow` whose schema, checksum, namespace, collision behavior, redaction behavior, validation refs, activation scope, and lifecycle status validate before output.
+
 | Facet namespace | Schema URL immutability | Schema bytes | Checksum | Collision behavior | Raw-facet storage | Mapped fields | Rejection behavior |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| OpenLineage run facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject namespace collision by default | may be stored as non-authoritative metadata | run ID, job ref, dataset IO refs when policy maps them | `LINEAGE_FACET_SCHEMA_MUTABLE` or `LINEAGE_FACET_CHECKSUM_MISMATCH` |
-| OpenLineage job facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | job namespace/name metadata only | same |
-| OpenLineage dataset facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | dataset version refs only when owner policy maps them | same |
-| custom facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision unless active policy grants namespace | raw facet may be stored as non-authoritative metadata | TODO owner-specific mapped fields required before production effect | `LINEAGE_FACET_SCHEMA_MUTABLE` or `LINEAGE_FACET_CHECKSUM_MISMATCH` |
-| schema facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | diagnostic only by default | schema diagnostic fields only | same |
-| freshness facet | required immutable | required | SHA-256 over schema bytes and facet bytes | reject collision | diagnostic only | freshness diagnostic only; no completeness proof | same |
-| source-code facet | required when used | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | source ref diagnostics only | same |
-| parent-run facet | required when used | required | SHA-256 over schema bytes and facet bytes | reject collision | non-authoritative metadata | parent lineage metadata only | same |
+| OpenLineage run facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject namespace collision by default | may be stored as non-authoritative metadata | run ID, job ref, dataset IO refs when policy maps them | `LINEAGE_FACET_SCHEMA_MUTABLE`, `LINEAGE_FACET_CHECKSUM_MISMATCH`, or `LINEAGE_FACET_POLICY_MISSING` |
+| OpenLineage job facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | non-authoritative metadata | job namespace/name metadata only | same |
+| OpenLineage dataset facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | non-authoritative metadata | dataset version refs only when owner policy maps them | same |
+| custom facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject collision unless active policy grants namespace | raw facet may be stored only as non-authoritative metadata | Custom facets are rejected for production effect by default. They may be stored only as non-authoritative metadata when the row declares immutable schema bytes, namespace ownership, bounded field types, collision behavior, redaction behavior, validation refs, activation scope, and lifecycle status. | `LINEAGE_FACET_POLICY_MISSING`, `LINEAGE_FACET_SCHEMA_MUTABLE`, `LINEAGE_FACET_NAMESPACE_COLLISION`, or `LINEAGE_FACET_CHECKSUM_MISMATCH` |
+| schema facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | diagnostic only by default | schema diagnostic fields only | same |
+| freshness facet | required immutable | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | diagnostic only | freshness diagnostic only; no completeness proof | same |
+| source-code facet | required when used | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | non-authoritative metadata | source ref diagnostics only | same |
+| parent-run facet | required when used | required | SHA-256 over schema bytes and canonical facet bytes | reject collision | non-authoritative metadata | parent lineage metadata only | same |
+
+#### LineageFacetMappingRow schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable ID scoped to the policy row set. |
+| `lineage_system` | Yes | none | Closed enum. MVP values: `openlineage`, `cadastre_internal_lineage`. Unknown systems fail with `LINEAGE_FACET_POLICY_MISSING`. |
+| `facet_namespace` | Yes | none | Required and globally unique inside the active row set. Namespace collision fails with `LINEAGE_FACET_NAMESPACE_COLLISION` unless an active collision rule exists. |
+| `facet_name` | Yes | none | Required exact facet name. Wildcards are forbidden. |
+| `schema_url` | Yes | none | Required immutable URL or immutable schema ref. Branch names, mutable tags, `latest`, and missing schema refs fail with `LINEAGE_FACET_SCHEMA_MUTABLE`. |
+| `schema_bytes_checksum` | Yes | none | SHA-256 over exact schema bytes. |
+| `facet_bytes_checksum_policy` | Yes | none | SHA-256 over canonical facet bytes. |
+| `collision_behavior` | No | `reject` | Closed enum: `reject`, `reject_unless_same_checksum`, `owner_explicit_namespace_override`. |
+| `raw_facet_storage` | No | `store_as_non_authoritative_metadata` | Raw facet bytes must not become evidence, completeness proof, source authority, identity, fact, graph, package, or watermark state. |
+| `mapped_field_set` | No | `[]` | Closed placement enum. Empty means raw non-authoritative metadata only. |
+| `authority_class` | No | `non_authoritative_analysis` | `supporting_evidence` is allowed only when another owner imports it by exact authority interface. |
+| `allowed_effects` | No | `[]` | Fact, identity, completeness, graph, package, or watermark effects are forbidden for MVP. |
+| `redaction_policy_ref` | Required when raw facet bytes or raw values may be stored | none | Missing redaction policy rejects production storage. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` lineage facet schema, checksum, collision, redaction, no-authority, and replay rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### ArtifactClassPolicy substitution matrix
 
@@ -187,17 +384,30 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 
 ### RegistryActivationPolicy
 
-Registry governance artifacts require `030.ActivationControlledArtifactRef`. Registry governance artifacts may become active only when owner, domain, classification, glossary labels, lifecycle, checksum, approval, custom-property schema, validation rows, activation scope, and package-set ref when package-supplied are present. Registry metadata remains governance metadata unless another active spec grants authority. Registry metadata cannot grant authority unless an owner stable core contract grants the specific behavior.
+Registry governance artifacts require `030.ActivationControlledArtifactRef`. Registry governance artifacts may become active only when owner, artifact class, artifact checksum, lifecycle status, governance purpose, classification refs, glossary refs, custom-property schema refs, approval refs, validation refs, activation scope, and package-set ref when package-supplied are present. Registry metadata remains governance metadata unless another active owner spec grants authority through an exact named interface.
+
+| Activation condition | Required behavior |
+| --- | --- |
+| Required governance field omitted | Activation fails with `REGISTRY_ARTIFACT_INACTIVE` or `REGISTRY_CUSTOM_PROPERTY_SCHEMA_INVALID` before effect. |
+| Artifact owner does not match owner behavior | Activation fails with `REGISTRY_ARTIFACT_OWNER_MISMATCH`. |
+| `authority_grant_ref = null` | Activate governance metadata only. |
+| `authority_grant_ref` names an active owner interface and validation refs pass | Activate only the imported owner behavior permitted by that interface. |
+| `authority_grant_ref` is non-null but owner interface is missing, inactive, mismatched, or unvalidated | Activation fails with `REGISTRY_AUTHORITY_FORBIDDEN` or `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION`. |
+| Package-supplied artifact omits package-set ref | Activation fails before output; package-set membership is execution eligibility only. |
 
 ### Analysis output authority table
 
-| Output class | Default authority | Permitted downstream use | Prohibited mutations | Owner of exception | Validation fixture |
-| --- | --- | --- | --- | --- | --- |
-| `AnalysisFinding` | non-authoritative | UI, audit, workflow context | raw, silver, identity, gold, graph, completeness, watermark | future accepted spec | `analysis-finding-non-authority` |
-| `AnalysisMetric` | non-authoritative | dashboards and reports | facts, risk authority, package state | future scoring contract | `analysis-metric-non-authority` |
-| `RiskAcceptanceRecord` | workflow metadata | audit and workflow | remediation, retraction, risk reduction proof | future workflow spec | `risk-acceptance-no-remediation` |
-| `ThreatIntelEnrichmentRecord` | enrichment context | context, filtering, analysis | identity, source authority, graph edge | future owner spec | `threat-intel-no-identity` |
-| `RegistryArtifactGovernance` | governance metadata | ownership, approval, labels | fact, graph, source authority | owner spec | `registry-label-no-fact-authority` |
+`AnalysisOutputAuthorityMatrix` is total for the analysis, enrichment, lineage, registry, and derived-edge output classes in this spec.
+
+| Output class | Required fields | Default authority | Permitted downstream use | Prohibited mutations | Replay checksum inputs | Fixture refs |
+| --- | --- | --- | --- | --- | --- | --- |
+| `AnalysisFinding` | `finding_id`, rule bundle ref, rule row refs, query target refs, graph compatibility refs when graph-backed, authorization refs, redaction refs, evidence metadata refs, canonical finding payload, output checksum, `VersionManifest` ref | `non_authoritative_analysis` | UI, API read-only analysis, audit, workflow context | raw, silver, identity, gold, graph-delta, graph-serving, completeness, watermark, package state, source authority | rule bundle refs, rule row refs, query target refs, graph derived-view refs, authorization/redaction refs, canonical output checksum, validation refs | `fixture-130-analysis-finding-non-authority`, `fixture-130-analysis-finding-mutation-forbidden`, `fixture-130-analysis-replay-exact` |
+| `AnalysisMetric` | `metric_id`, metric name, metric value, numeric precision row, rule refs, query target refs, authorization refs, redaction refs, output checksum, `VersionManifest` ref | `non_authoritative_analysis` | Dashboards, reports, read-only API output | authoritative risk score, fact mutation, remediation, graph mutation, package state | metric row refs, numeric scoring boundary refs, query target refs, derived-view refs, authorization/redaction refs, output checksum | `fixture-130-analysis-metric-non-authority`, `fixture-130-analysis-metric-risk-score-forbidden` |
+| `RiskAcceptanceRecord` | `risk_acceptance_id`, related finding refs, actor/approver authorization refs, workflow state, acceptance reason, `expires_at` or explicit null, redaction refs, output checksum, `VersionManifest` ref | `non_authoritative_analysis` workflow metadata | Audit and workflow context | remediation, retraction, risk reduction proof, graph edge removal, source completeness change | workflow record checksum, authorization refs, related finding refs, redaction refs, expiry/null marker, `VersionManifest` ref | `fixture-130-risk-acceptance-no-remediation` |
+| `ThreatIntelEnrichmentRecord` | `record_id`, profile ref, artifact refs, indicator context, sighting context, taxonomy/galaxy/object-template context, distribution mapping ref, visibility class, redaction policy ref, output checksum, `VersionManifest` ref | `non_authoritative_analysis` | Enrichment context, filtering, analysis display, restricted export when mapping permits | identity evidence, source authority, source completeness, gold fact, graph edge, absence, cleanup, retraction, coverage, watermark | profile ref, artifact refs, distribution mapping ref, raw-value redaction refs, output checksum, validation refs | `fixture-130-threat-intel-known-indicator`, `fixture-130-threat-intel-identity-forbidden`, `fixture-130-threat-intel-distribution-restricted` |
+| `RegistryArtifactGovernance` | `governance_id`, owner spec, artifact class, artifact checksum, lifecycle status, governance purpose, classification refs, glossary refs, custom-property schema refs, approval refs, activation scope, package-set ref when package-supplied, optional authority grant ref, validation refs | `non_authoritative_analysis` governance metadata | Ownership, approval metadata, labels, custom-property context, registry display | fact authority, source authority, graph edge semantics, evidence refs, source completeness, production approval by itself | governance row ref, custom-property schema refs, classification refs, lifecycle transition evidence, package-set ref when package-supplied, artifact checksum, activation scope, validation refs | `fixture-130-registry-activation-positive`, `fixture-130-registry-label-no-fact-authority`, `fixture-130-registry-package-set-ref-required` |
+
+Numeric scoring authority remains disabled by default. Risk and exposure metrics remain `AnalysisMetric` outputs only unless a future accepted scoring policy defines formula, bounds, inputs, defaults, calibration, authority, and validation rows.
 
 ### External lineage facet table
 
@@ -227,29 +437,53 @@ Analysis output exposed through API surfaces must import `110.CommonApiResponseE
 
 | Error code | Emitted when |
 | --- | --- |
-| `REGISTRY_ARTIFACT_INACTIVE` | Required analysis, lineage, enrichment, registry, classification, or custom-property artifact is not active. |
+| `REGISTRY_ARTIFACT_INACTIVE` | Required analysis, lineage, enrichment, registry, classification, custom-property, or derived-edge artifact is not active. |
 | `REGISTRY_ARTIFACT_OWNER_MISMATCH` | Registry artifact owner does not match the stable core behavior owner. |
-| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | Registry metadata, lineage facet, analysis rule, or threat-intel artifact attempts to become fact, identity, graph, source, completeness, package, or watermark authority without owner contract. |
+| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | Registry metadata, lineage facet, analysis rule, threat-intel artifact, or derived-edge artifact attempts to become fact, identity, graph, source, completeness, package, or watermark authority without owner contract. |
 | `ANALYSIS_MUTATION_FORBIDDEN` | Analysis, enrichment, lineage, or registry output attempts forbidden mutation. |
+| `LINEAGE_FACET_POLICY_MISSING` | A lineage system, facet namespace, facet name, or activation scope has no active policy row. |
 | `LINEAGE_FACET_SCHEMA_MUTABLE` | Facet schema URL is mutable or not immutable under policy. |
 | `LINEAGE_FACET_CHECKSUM_MISMATCH` | Schema bytes or facet bytes do not match recorded checksum. |
-| `REGISTRY_AUTHORITY_FORBIDDEN` | Registry metadata attempts fact, graph, source authority, evidence, or production approval authority. |
-| `THREAT_INTEL_IDENTITY_FORBIDDEN` | Threat-intel indicator/enrichment attempts identity authority. |
+| `LINEAGE_FACET_NAMESPACE_COLLISION` | Facet namespace collides and no active collision rule permits the collision. |
+| `REGISTRY_AUTHORITY_FORBIDDEN` | Registry metadata attempts fact, graph, source authority, evidence, production approval, or another authority effect without exact owner interface. |
+| `REGISTRY_CUSTOM_PROPERTY_SCHEMA_INVALID` | Custom-property schema omits required type, cardinality, bounds, default, redaction, attachment, authority, validation, activation, or lifecycle fields. |
+| `REGISTRY_CLASSIFICATION_AUTHORITY_FORBIDDEN` | Classification or glossary label attempts authority beyond governance metadata. |
+| `THREAT_INTEL_IDENTITY_FORBIDDEN` | Threat-intel indicator or enrichment attempts identity authority. |
+| `THREAT_INTEL_PROFILE_MISSING` | Threat-intel enrichment execution has no active profile covering the input format and scope. |
+| `THREAT_INTEL_DISTRIBUTION_UNMAPPED` | Distribution, sharing, or TLP-like value has no active mapping and the profile requires rejection. |
+| `THREAT_INTEL_ARTIFACT_CHECKSUM_MISMATCH` | Threat-intel artifact bytes do not match the recorded checksum. |
+| `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED` | Derived graph edge output lacks required supporting fact refs or support policy refs. |
+| `DERIVED_GRAPH_EDGE_PROJECTION_FORBIDDEN` | Derived graph edge output attempts graph output without active `090` projection, semantics, eligibility, and apply refs. |
+| `DERIVED_GRAPH_EDGE_REPLAY_MISMATCH` | Derived graph edge replay checksum, deterministic ID input set, supporting refs, or projection refs mismatch. |
 
 ### AnalysisErrorRegistryFragment
 
-This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Every row is closed for severity, retry class, caller-visible fields, audit-visible fields, redaction, owner context, and fixture family.
 
 | error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `REGISTRY_ARTIFACT_INACTIVE` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-artifact-inactive` |
-| `REGISTRY_ARTIFACT_OWNER_MISMATCH` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-artifact-owner-mismatch` |
-| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-volatility-boundary-violation` |
-| `ANALYSIS_MUTATION_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-analysis-mutation-forbidden` |
-| `LINEAGE_FACET_SCHEMA_MUTABLE` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-lineage-facet-schema-mutable` |
-| `LINEAGE_FACET_CHECKSUM_MISMATCH` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-lineage-facet-checksum-mismatch` |
-| `REGISTRY_AUTHORITY_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-registry-authority-forbidden` |
-| `THREAT_INTEL_IDENTITY_FORBIDDEN` | `130` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `130.AnalysisErrorContext` | `analysis-error-threat-intel-identity-forbidden` |
+| `REGISTRY_ARTIFACT_INACTIVE` | `130` | `blocked` | `retry_after_owner_repair` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-artifact-inactive` |
+| `REGISTRY_ARTIFACT_OWNER_MISMATCH` | `130` | `error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-artifact-owner-mismatch` |
+| `REGISTRY_VOLATILITY_BOUNDARY_VIOLATION` | `130` | `security_error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-volatility-boundary-violation` |
+| `ANALYSIS_MUTATION_FORBIDDEN` | `130` | `security_error` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-analysis-mutation-forbidden` |
+| `LINEAGE_FACET_SCHEMA_MUTABLE` | `130` | `blocked` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-lineage-facet-schema-mutable` |
+| `LINEAGE_FACET_CHECKSUM_MISMATCH` | `130` | `error` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-lineage-facet-checksum-mismatch` |
+| `REGISTRY_AUTHORITY_FORBIDDEN` | `130` | `security_error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-authority-forbidden` |
+| `THREAT_INTEL_IDENTITY_FORBIDDEN` | `130` | `security_error` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-threat-intel-identity-forbidden` |
+| `LINEAGE_FACET_POLICY_MISSING` | `130` | `blocked` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-lineage-facet-policy-missing` |
+| `LINEAGE_FACET_NAMESPACE_COLLISION` | `130` | `error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-lineage-facet-namespace-collision` |
+| `THREAT_INTEL_PROFILE_MISSING` | `130` | `blocked` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-threat-intel-profile-missing` |
+| `THREAT_INTEL_DISTRIBUTION_UNMAPPED` | `130` | `blocked` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-threat-intel-distribution-unmapped` |
+| `THREAT_INTEL_ARTIFACT_CHECKSUM_MISMATCH` | `130` | `error` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-threat-intel-artifact-checksum-mismatch` |
+| `REGISTRY_CUSTOM_PROPERTY_SCHEMA_INVALID` | `130` | `error` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-custom-property-schema-invalid` |
+| `REGISTRY_CLASSIFICATION_AUTHORITY_FORBIDDEN` | `130` | `security_error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-registry-classification-authority-forbidden` |
+| `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED` | `130` | `blocked` | `caller_correctable` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-derived-graph-edge-supporting-facts-required` |
+| `DERIVED_GRAPH_EDGE_PROJECTION_FORBIDDEN` | `130` | `security_error` | `policy_change_required` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-derived-graph-edge-projection-forbidden` |
+| `DERIVED_GRAPH_EDGE_REPLAY_MISMATCH` | `130` | `error` | `retry_after_owner_repair` | `code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | caller-visible fields plus `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `owner_refs`, `checksums`, `attempted_authority_effect`, `attempted_mutation_class`, `validation_refs` | hide raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, and backend/query text unless caller has required permission | `130.AnalysisErrorContext` | `error-registry-130-derived-graph-edge-replay-mismatch` |
+
+#### AnalysisErrorContext
+
+`AnalysisErrorContext` is the owner context schema for `130` error rows. It must include the specific owner refs, artifact refs, checksums, attempted authority effect, attempted mutation class, validation refs, lifecycle status, activation scope, package-set ref when package-supplied, and redaction class for any raw or private value. It must not expose raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, or backend/query text to callers without the required `110` permission.
 
 ### RuleGraphCompatibilityMatrix fixture expectations
 
@@ -286,6 +520,14 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 
 | ID | Criterion |
 | --- | --- |
+| `130-LINEAGE-FACET-ROW-SCHEMA-AC-001` | `120` lineage fixture families prove valid row activation, missing policy rejection, mutable schema rejection, checksum mismatch rejection, namespace collision rejection, raw facet redaction, freshness non-completeness, and facet-only non-evidence behavior. |
+| `130-THREAT-INTEL-PROFILE-SCHEMA-AC-001` | `120` threat-intel fixture families prove active profile success, missing profile rejection, unknown taxonomy handling, artifact checksum mismatch, sighting non-completeness, and identity-forbidden behavior. |
+| `130-THREAT-INTEL-DISTRIBUTION-AC-001` | `120` threat-intel distribution fixture families prove missing distribution label restricted visibility, conflicting distribution most-restrictive selection, unmapped distribution rejection when required, and export disablement. |
+| `130-REGISTRY-GOVERNANCE-SCHEMA-AC-001` | `120` registry fixture families prove activation success, inactive artifact rejection, owner mismatch rejection, package-set-ref requirement, private binding redaction, and authority-grant rejection. |
+| `130-REGISTRY-CUSTOM-PROPERTY-AC-001` | `120` registry fixture families prove custom-property bounds, type, cardinality, default, redaction, attachment-target, authority-forbidden, and replay behavior. |
+| `130-DERIVED-GRAPH-EDGE-RULE-AC-001` | `120` derived-edge fixture families prove supporting facts required, `090`-routed graph output, direct graph mutation rejection, `080`-routed gold output, exact replay, replay mismatch, and explicit no-op behavior. |
+| `130-ANALYSIS-OUTPUT-AUTHORITY-TOTAL-AC-001` | `120` analysis fixture families prove every output class in `AnalysisOutputAuthorityMatrix` is non-authoritative by default and cannot mutate raw, silver, identity, gold, graph, completeness, watermark, package, or source authority state. |
+| `130-ERROR-FRAGMENT-TOTAL-AC-001` | `120` error-registry fixture families cover every `130.AnalysisErrorRegistryFragment` row and `110.GenerateErrorCodeRegistry` rejects missing, duplicate, unknown severity, unknown retry class, unredacted, or unfixtured rows. |
 | `130-API-HANDOFF-AC-001` | Analysis API handoff fixtures cover analysis mutation rejection, graph compatibility mismatch, stale derived-view rejection or allowed stale display, empty read-only output, authorization/redaction mismatch, and lineage facet checksum mismatch. |
 | `130-CLEANUP-AC-001` | No banned reference class remains. |
 | `130-CLEANUP-AC-002` | Analysis, enrichment, lineage, and registry records still cannot mutate facts, graph state, completeness, watermarks, identity, package state, or source authority unless another active NLSpec grants a named interface. |
@@ -316,7 +558,8 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-AC-003` | External lineage facets with mutable schema URLs, missing schema bytes, checksum mismatches, or namespace collisions are rejected. |
 | `130-AC-004` | Registry labels and custom properties remain governance metadata unless another active spec grants authority. |
 | `130-AC-005` | Derived graph edges require persisted supporting facts and an active derivation/projection path. |
+| `130-AC-006` | All lineage, threat-intel, registry, analysis-output, derived-edge, and error-registry rows required by this spec have no owner-local placeholder cells. |
 
 ## Open Questions
 
-Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+Open questions marked `unresolved_question` block authoritative status for the affected contract. A downstream implementation must not resolve an unresolved owner decision by inference.

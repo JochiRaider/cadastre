@@ -115,7 +115,18 @@ lakehouse_feed_completeness_profile
 declared_dag_subset_profile
 resolver_profile
 analysis_rule_bundle
+analysis_rule_row_set
+rule_graph_compatibility_matrix
 derivation_rule_bundle
+derived_graph_edge_rule_set
+threat_intel_enrichment_profile
+threat_intel_distribution_mapping_policy
+threat_intel_artifact_package
+lineage_facet_mapping_policy
+artifact_class_policy_row_set
+registry_governance_artifact
+registry_custom_property_schema
+registry_classification_policy
 policy_bundle
 target_selector_safety_policy
 graph_edge_semantics
@@ -203,6 +214,28 @@ These rows are candidate package type policies until the canonical `PackageType`
 | `graph_backend_runtime_distribution` | runtime distribution | server/container/distribution | package checks, startup config, health, rollback |
 | `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | server mode, storage config, index config, schema-init config, health |
 
+### Analysis, enrichment, lineage, and registry package type policy rows
+
+These rows are candidate package type policies until the canonical `PackageType` enum blocker closes. They make package-supplied `130` artifacts eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, and `030.VersionManifest` inclusion.
+
+| Package type | Public API boundary | Allowed stage classes | Allowed output record classes | Required activation artifact refs |
+| --- | --- | --- | --- | --- |
+| `analysis_rule_bundle` | `130.AnalysisRuleBundle` | `analysis` | `AnalysisFinding`, `AnalysisMetric`, `RiskAcceptanceRecord`, analysis execution summary | `analysis_rule_bundle`, `rule_graph_compatibility_matrix`, `analysis_output_replay_policy_row_set` |
+| `analysis_rule_row_set` | `130.AnalysisRule` row set inside bundle | `analysis` | Same as parent bundle, only through bundle activation | `analysis_rule_row_set`, parent `analysis_rule_bundle` |
+| `rule_graph_compatibility_matrix` | `130.RuleGraphCompatibilityMatrix` | none or validation-only | No production record output | `rule_graph_compatibility_matrix` |
+| `derivation_rule_bundle` | `130.DerivationRuleBundle` and `080.DeriveFacts` handoff | `gold_derivation` | No direct package output; may invoke `080` only | `derivation_rule_bundle` |
+| `derived_graph_edge_rule_set` | `130.DerivedGraphEdgeRule` and `090` handoff | `analysis`, `graph_projection` only through owner handoff | No direct graph mutation | `derived_graph_edge_rule_row_set` |
+| `threat_intel_enrichment_profile` | `130.ThreatIntelEnrichmentProfile` | `enrichment` | `ThreatIntelEnrichmentRecord` | `threat_intel_enrichment_profile` |
+| `threat_intel_distribution_mapping_policy` | `130.ThreatIntelDistributionMappingPolicy` | none or `enrichment` support only | No direct production output | `threat_intel_distribution_mapping_policy` |
+| `threat_intel_artifact_package` | `130.ThreatIntelArtifactRef` through active profile | `enrichment` | `ThreatIntelEnrichmentRecord` only through active profile | `threat_intel_artifact_ref_policy`, `threat_intel_enrichment_profile` |
+| `lineage_facet_mapping_policy` | `130.LineageFacetMappingPolicy` | `lineage` | `RunDatasetIOContract` | `lineage_facet_mapping_policy` |
+| `artifact_class_policy_row_set` | `130.ArtifactClassPolicy` | none or validation-only | No production record output | `artifact_class_policy_row_set` |
+| `registry_governance_artifact` | `130.RegistryArtifactGovernance` | none | Activation metadata only | `registry_governance_artifact` |
+| `registry_custom_property_schema` | `130.RegistryCustomPropertySchema` | none | Activation metadata only | `registry_custom_property_schema` |
+| `registry_classification_policy` | `130.RegistryClassificationPolicy` | none | Activation metadata only | `registry_classification_policy` |
+
+The unresolved global `PackageType` enum blocker applies to every row in this subsection. Validation fixtures may use these candidate rows to prove fail-closed behavior, but authoritative package activation must fail until product governance confirms the canonical enum.
+
 ## Package Release Manifest
 
 `PackageReleaseManifest` must name one immutable package release, including package type, artifact digest, size, media type, subject digest, release version, dependency locks, public API version when applicable, package developer contract, stage bindings, validation matrix refs, supply-chain evidence refs, compatibility refs, and release checksum.
@@ -222,6 +255,8 @@ Package manifests must not define new canonical fields, authority classes, ident
 A `GraphBackendProfile` that references a package release or package set whose trust, SBOM, provenance, dependency, license, vulnerability, compatibility, rollback, quarantine, or health gate fails must fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED` before graph mutation, query serving, rebuild promotion, or drift check.
 
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
+
+Package-supplied analysis, enrichment, lineage, registry, and derived-edge artifacts must not redefine stable `130` non-authority rules, `080` gold derivation behavior, `090` graph projection behavior, `110` API/error/redaction behavior, or `120` validation shapes. A package may instantiate active `130` row sets only through the package type policy rows in this spec, immutable `ProductionPackageSetManifest` membership, `030.ActivationControlledArtifactRef`, exact checksums, active lifecycle status, activation scope, package compatibility rows, and passing `120` validation refs. Missing policy, missing package-set ref, unknown package type, ambiguous policy, compatibility failure, or manifest omission fails before production output.
 
 ## Trust Verification
 
@@ -650,6 +685,8 @@ Broad labels such as `feed reader`, `mapping`, `projection package`, and `valida
 
 A package type with no active policy row fails before activation with `PACKAGE_TYPE_POLICY_MISSING`. A known package type with multiple equally specific active rows fails before activation with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. A package type not in the confirmed token list fails before policy resolution with `PACKAGE_TYPE_UNKNOWN`.
 
+For every package-supplied `130` artifact, compatibility rows must include the selected package type policy row, public API boundary, allowed stage classes, allowed output record classes, required `030` artifact-class refs, package-set checksum, validation refs, and `VersionManifest` omission test. A package that supplies `130` artifacts without matching compatibility rows fails with `PACKAGE_COMPATIBILITY_FAILED` or `PACKAGE_VERSION_MANIFEST_INCOMPLETE` before output.
+
 TODO: Replace broad legacy package labels in every package fixture and active package-set manifest with confirmed `PackageType` tokens before authoritative handoff.
 
 ### PackageDeprecationWindowPolicy
@@ -845,6 +882,9 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `100-ANALYSIS-REGISTRY-PACKAGE-TYPE-AC-001` | Each candidate `130` package type has exactly one active `PackageTypePolicyRow` in validation scope, and missing-policy, unknown-type, and ambiguous-policy fixtures fail closed before package activation. |
+| `100-ANALYSIS-REGISTRY-PACKAGE-SET-AC-001` | Package-supplied `130` artifacts require immutable package-set membership, exact `030.ActivationControlledArtifactRef`, compatibility row, validation refs, and `VersionManifest` inclusion before output. |
+| `100-ANALYSIS-REGISTRY-STAGE-OUTPUT-AC-001` | Package policy permits only the stage classes and output record classes listed in the `130` package type table and fails with `FORBIDDEN_STAGE_OUTPUT` or package-policy errors for every other output. |
 | `100-CLEANUP-AC-001` | No banned reference class remains. |
 | `100-CLEANUP-AC-002` | Production activation still targets immutable package sets, not individual package artifacts or scalar signature summaries. |
 | `100-CLEANUP-AC-003` | Unauthorized signer with a cryptographically valid signature still fails closed. |

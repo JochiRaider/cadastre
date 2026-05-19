@@ -113,6 +113,20 @@ Implicit current-time fallback is forbidden.
 
 When a candidate gold fact depends on missing evidence, stale evidence, source-declared deletion, cleanup, retraction, source-history no-change, control result absence, vulnerability fixed state, DNS absence, DHCP/IPAM lease expiry, flow non-observation, cloud-resource disappearance, or CDC tombstone evidence, `DeriveFacts` must call `060.DeriveAbsenceOrUnknown` and must include the resulting `AbsenceDerivationResult` ref before emitting any absence, retraction, cleanup-derived correction, graph handoff, or watermark-affecting output.
 
+### DerivationRuleBundle handoff from 130
+
+`130` derivation artifacts may supply derivation rules and candidates only. `080` remains the sole gold derivation path. A package, analysis rule, registry artifact, enrichment profile, or derived-edge rule must not persist `GoldFact` bytes directly.
+
+| Input from `130` | Required `080` handling |
+| --- | --- |
+| `DerivationRuleBundle` active ref | May be consumed only as a derivation profile or rule artifact after activation ref validation. |
+| Candidate gold output | Must enter `DeriveFacts`; raw `GoldFact` bytes emitted by a package or analysis rule are rejected before persistence. |
+| Derived graph edge requesting `gold_fact_via_080` | Must satisfy temporal resolution, source authority, completeness, correction policy, replay policy, schema validation, and validation refs before any fact output. |
+| Missing authority/completeness/temporal refs | Deterministic owner error or no-op before fact ID computation. |
+| Replay | Use `ReplayInputSufficiencyCheck` and `ComputeReplayEquivalenceChecksum` before any replay output. |
+
+`080` emits graph handoff metadata only and never mutates graph state.
+
 ## Correction Contract
 
 Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` must emit `GoldFactChangeSet` operations and must not mutate original `GoldFact` bytes. Effective `known_to` closure must be materialized from `GoldFactChangeSet` at read or replay time; base `GoldFact.known_to` remains the value written in the immutable record.
@@ -555,6 +569,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `080-DERIVATION-RULE-BUNDLE-HANDOFF-AC-001` | A valid `130.DerivationRuleBundle` routes through `DeriveFacts`, missing authority/completeness/temporal refs block output before fact ID computation, and direct package-emitted `GoldFact` bytes fail before persistence. |
+| `080-DERIVED-EDGE-GOLD-OUTPUT-AC-001` | `130.DerivedGraphEdgeRule.allowed_output_effect = gold_fact_via_080` must pass temporal, authority, completeness, correction, replay, schema, and validation gates before any fact output. |
 | `080-API-HANDOFF-AC-001` | Temporal and replay handoff fixtures prove policy failures render as owner errors, duplicate no-op corrections render as no output change with audit evidence, replay failures do not become source-state labels, and stale known-state output renders as `source_stale`. |
 | `080-CLEANUP-AC-001` | No banned reference class remains. |
 | `080-CLEANUP-AC-002` | Source event time, observation time, supplier collection time, supplier delivery time, lakehouse commit time, table snapshot time, CDC time, graph apply time, replay time, and platform current time remain distinct. |

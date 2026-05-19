@@ -105,6 +105,21 @@ Missing flow evidence must not emit an observed-connection absence edge or graph
 
 Every projected delta from correction must include the source `GoldFactChangeSet` ref, graph handoff effect, projection profile ref, authority or absence result refs when applicable, and validation refs.
 
+### DerivedGraphEdgeRule graph handoff
+
+`090` owns the only graph projection path for `130.DerivedGraphEdgeRule.allowed_output_effect = graph_delta_via_090`. `130` owns the rule schema and rule activation. `090` owns graph projection validation, graph delta identity, graph edge semantics, output eligibility, apply profile, backend preflight, and derived-view lag behavior.
+
+| Condition | `090` behavior |
+| --- | --- |
+| `allowed_output_effect = graph_delta_via_090` and all refs present | Project only through active `GraphProjectionProfile`, `GraphEdgeSemantics`, `GraphObjectOutputEligibilityRow`, `GraphPropertyEvidencePolicy`, `GraphApplyProfile`, and `DerivedViewLagPolicy`. |
+| Missing supporting fact refs | Reject before delta persistence with `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED`. |
+| Missing graph projection profile ref | Reject before delta persistence with `DERIVED_GRAPH_EDGE_PROJECTION_FORBIDDEN`. |
+| Direct backend write or graph mutation attempt | Reject before backend execution; no provider-native mutation text may execute. |
+| Unsupported rule output | Emit explicit no-op when `130.unsupported_behavior = explicit_no_op`. |
+| Replay mismatch | Reject production replay before output with `DERIVED_GRAPH_EDGE_REPLAY_MISMATCH` or imported `080` replay error when replay preflight owns the failure. |
+
+This handoff does not add MVP edge types. The MVP active edge set remains exactly `observed_connection`; any additional active edge type requires profile, semantics, output eligibility, query translation, and fixture closure.
+
 ## Graph artifact activation boundary
 
 Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, query contract, and projection non-authority are stable core contracts. Projection rows, backend profiles, schema profiles, query translation rows, apply profiles, and lag policies are activation-controlled artifacts.
@@ -806,6 +821,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `090-DERIVED-GRAPH-EDGE-HANDOFF-AC-001` | Derived graph edge requests succeed only through active `GraphProjectionProfile`, `GraphEdgeSemantics`, `GraphObjectOutputEligibilityRow`, `GraphPropertyEvidencePolicy`, `GraphApplyProfile`, and `DerivedViewLagPolicy`; missing support, missing projection ref, direct mutation, unsupported output, and replay mismatch fail or no-op as specified. |
 | `090-GRAPH-QUERY-RESPONSE-HANDOFF-AC-001` | Every `query_class` in `GraphQueryResponseHandoffTo110` emits exactly one owner-level result shape consumed by `110` without backend inference. |
 | `090-GRAPH-CONFLICT-VISIBILITY-AC-001` | Conflicted graph objects are visible only when graph object output eligibility permits the query context and never authorize pathfinding, cleanup, or absence by default. |
 | `090-GRAPH-AMBIGUOUS-NONMUTATING-AC-001` | Ambiguous graph query states emit a non-mutating empty result, state label, or owner error and never mutate graph, identity, facts, or watermarks. |
