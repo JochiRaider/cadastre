@@ -123,6 +123,13 @@ graph_taxonomy_translation_policy
 graph_projection_profile
 graph_read_model_schema_profile
 graph_apply_profile
+graph_backend_provider_package
+graph_provider_adapter_package
+graph_backend_driver_package
+graph_storage_backend_adapter_package
+graph_index_backend_adapter_package
+graph_backend_runtime_distribution
+graph_backend_deployment_profile
 rule_graph_compatibility_matrix
 structural_global_node_alias_policy
 cim_projection_profile
@@ -182,6 +189,20 @@ ResolvePackageTypePolicyRow(package_type, target_environment, active_row_set):
 
 Every confirmed `PackageType` token must have exactly one active policy row in the active row set for each target environment in which package activation is in scope. A package activation implementation must run this resolver before compatibility checks, validation checks, stage binding, rollback preflight, quarantine evaluation, or health gating.
 
+### Graph backend package type policy rows
+
+These rows are candidate package type policies until the canonical `PackageType` enum TODO closes. They must not define graph semantics; they gate runtime artifacts required by `090.GraphBackendProfile`.
+
+| Package type | Public API boundary | Runtime protocol | Required compatibility inputs |
+| --- | --- | --- | --- |
+| `graph_backend_provider_package` | `090.GraphBackendProfile` and provider adapter contract | provider runtime | provider version, license, SBOM, vulnerabilities, storage/index compatibility |
+| `graph_provider_adapter_package` | `090.GraphProviderAdapterContract` | driver/client protocol | query translation, apply, rebuild, errors, raw-write bypass |
+| `graph_backend_driver_package` | provider driver API | TinkerPop/Gremlin driver for JanusGraph MVP | driver version, provider version, serialization compatibility |
+| `graph_storage_backend_adapter_package` | provider storage adapter | storage backend API | durable mode, topology, lock/ID behavior, failure modes |
+| `graph_index_backend_adapter_package` | provider index adapter | index provider API | index freshness, mapping, query feature compatibility |
+| `graph_backend_runtime_distribution` | runtime distribution | server/container/distribution | package checks, startup config, health, rollback |
+| `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | server mode, storage config, index config, schema-init config, health |
+
 ## Package Release Manifest
 
 `PackageReleaseManifest` must name one immutable package release, including package type, artifact digest, size, media type, subject digest, release version, dependency locks, public API version when applicable, package developer contract, stage bindings, validation matrix refs, supply-chain evidence refs, compatibility refs, and release checksum.
@@ -197,6 +218,8 @@ Partial package-set activation is forbidden unless a future accepted NLSpec defi
 `ProductionPackageSetManifest` may include activation-controlled artifact refs only as immutable `030.ActivationControlledArtifactRef` rows. A package set grants execution eligibility, not product authority. Runtime behavior still comes from owner specs and active artifact rows.
 
 Package manifests must not define new canonical fields, authority classes, identity semantics, temporal semantics, graph semantics, API states, validation report shapes, or trust semantics. A package set that contains a valid package release but invalid artifact refs must fail activation or block the dependent stage before output.
+
+A `GraphBackendProfile` that references a package release or package set whose trust, SBOM, provenance, dependency, license, vulnerability, compatibility, rollback, quarantine, or health gate fails must fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED` before graph mutation, query serving, rebuild promotion, or drift check.
 
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
 
@@ -606,6 +629,21 @@ Git commit timestamp, branch name, tag name, repository URL, or tree hash must n
 
 Every output-affecting axis named by `PackageTypePolicyRow` must have a passing compatibility row. A missing, expired, mismatched, or failed compatibility row emits `PACKAGE_COMPATIBILITY_FAILED` before activation or rollback.
 
+### JanusGraph backend compatibility axes
+
+| Compatibility axis | Required for JanusGraph MVP |
+| --- | --- |
+| provider runtime version | pinned immutable package or release ref |
+| TinkerPop version | must match `090.GraphBackendProfile` |
+| Gremlin driver version | must match provider adapter contract |
+| storage adapter | must match selected storage backend kind/version |
+| index adapter | must match selected index backend kind/version |
+| schema profile | must match `090.GraphReadModelSchemaProfile` checksum |
+| query translation | must match `090.GraphQueryTranslationProfile` checksum |
+| graph apply | must match `090.GraphApplyProfile` checksum |
+| license/SBOM/vulnerability | must pass package policy |
+| rollback | must preserve graph provider compatibility or block rollback |
+
 ### Package type compatibility closure
 
 Broad labels such as `feed reader`, `mapping`, `projection package`, and `validation package` must not be used for production compatibility selection. Compatibility inputs must come from the selected `PackageTypePolicyRow` and `PackageCompatibilityMatrixRow` keyed by a confirmed `PackageType` token.
@@ -818,6 +856,9 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, selected package type policy refs, repository refs, supply-chain policy/evidence refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, approval refs, and checksum. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing JanusGraph provider, adapter, driver, storage adapter, index adapter, runtime distribution, SBOM, provenance, compatibility, or package-set refs fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | Storage adapter version mismatch, index adapter version mismatch, or TinkerPop/driver compatibility mismatch fails candidate activation and preserves the current active package set. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes. |
 | `100-COMPATIBILITY-AC-001` | Missing or failed compatibility on any required output-affecting axis fails activation or rollback with `PACKAGE_COMPATIBILITY_FAILED`. |
 | `100-SBOM-AC-001` | Missing, subject-mismatched, expired, or policy-failed SBOM evidence fails activation with `PACKAGE_SBOM_MISSING`, `PACKAGE_SBOM_SUBJECT_MISMATCH`, or `PACKAGE_SBOM_POLICY_FAILED`. |
 | `100-ATTESTATION-AC-001` | Missing or subject-mismatched attestation fails activation with `PACKAGE_ATTESTATION_MISSING` or `PACKAGE_ATTESTATION_SUBJECT_MISMATCH`. |

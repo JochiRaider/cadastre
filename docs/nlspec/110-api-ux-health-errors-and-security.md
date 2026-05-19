@@ -692,6 +692,18 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `GRAPH_PAGE_TOKEN_EXPIRED` | `090`, observable handling by `110` | error | yes with fresh request | no backend query execution | token checksum, expiry, request checksum |
 | `GRAPH_PAGE_TOKEN_INVALID` | `090`, observable handling by `110` | security | no for supplied token | no backend query execution and no existence leak | token checksum, mismatch class, authorization checksum |
 | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090`, observable handling by `110` | error | yes with corrected request | request rejected before backend query | query class and request checksum |
+| `GRAPH_BACKEND_CONFIG_INCOMPLETE` | `090` | blocked | no, until profile changes | graph backend preflight blocked | profile ref, missing field path, validation refs |
+| `GRAPH_BACKEND_DEFAULT_UNRESOLVED` | `090` | blocked | no, until product governance resolves default | graph backend default cannot materialize for production | selection policy ref, unresolved field paths, implementation scope |
+| `GRAPH_PROVIDER_CAPABILITY_MISSING` | `090` | blocked | no, until capability matrix changes | backend activation blocked | capability matrix ref, backend profile ref |
+| `GRAPH_PROVIDER_CAPABILITY_UNSUPPORTED` | `090` | blocked | no, until profile or capability rows change | unsupported query/apply/rebuild capability blocked | capability row, provider ref, affected class |
+| `GRAPH_BACKEND_VERSION_UNPINNED` | `090` | blocked | no, until version/package refs change | backend activation blocked | provider package refs |
+| `GRAPH_BACKEND_PACKAGE_GATE_FAILED` | `090`, evidence from `100` | blocked | yes after owner repair | graph backend blocked by package activation gate | package-set ref, gate result ref |
+| `GRAPH_SCHEMA_IMPLICIT_CREATION_FORBIDDEN` | `090` | blocked | no, until policy changes | backend schema preflight blocked | schema profile ref, provider config checksum |
+| `GRAPH_STORAGE_MODE_UNSAFE` | `090` | blocked | no, until profile changes | backend mutation/query blocked | storage mode, profile ref |
+| `GRAPH_INDEX_BACKEND_UNAVAILABLE` | `090` | blocked | yes after owner repair or provider recovery | affected query classes blocked | index backend ref, freshness check ref |
+| `GRAPH_INDEX_FRESHNESS_REQUIRED` | `090` | blocked | yes after refresh | affected query classes blocked | index consistency ref |
+| `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | `090` | error | yes with narrower query or index policy | query rejected before backend traversal | query class, translation profile ref |
+| `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | no, until adapter/profile changes | backend profile activation blocked | adapter ref, provider ref |
 | `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `200`, observable handling by `110` | error | no until wording or policy changes | output wording rejected | output checksum and owner policy refs |
 
 ### Shared error codes
@@ -707,6 +719,18 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `DERIVED_VIEW_LAG_ERROR` | `090`, `110` | Query class requires current graph-derived state and derived view is stale. |
 
 All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
+
+### GraphBackendOperationalHealthComponents
+
+| Graph health component | Required state refs | Caller-visible behavior | Audit-visible refs |
+| --- | --- | --- | --- |
+| provider profile | selected backend profile, selection policy, defaulting decision | `healthy`, `degraded`, or `blocked` | profile checksum |
+| provider package gates | package-set, release, compatibility, SBOM, provenance gates | block graph serving when failed | package refs redacted by policy |
+| schema fingerprint | backend schema fingerprint and schema profile | stale schema labels graph component blocked | fingerprint ref |
+| index freshness | index consistency check and affected query classes | stale index blocks affected query classes | index check ref |
+| raw-write bypass | bypass evidence | unsafe bypass blocks graph serving | bypass evidence ref |
+
+Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, credentials, private provider configuration, raw package evidence, or provider exception class names to callers.
 
 ### SourceStateLabelMapping
 
@@ -877,6 +901,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-ENDPOINT-OUTCOME-TOTAL-AC-001` | Every endpoint row in `EndpointOutcomeMatrix` has deterministic success, empty, unauthorized, stale, partial, conflicted, ambiguous, pagination, redaction, and error-precedence behavior. |
 | `110-COMPLIANCE-NONNEGATIVE-AC-001` | Compliance export rows for `unknown`, `error`, `not_checked`, `not_applicable`, `conflicted`, and `ambiguous` are nonnegative counts and never pass/fail by default. |
 | `110-GRAPH-STATE-SEPARATION-AC-001` | `source_stale` and `derived_view_stale` remain separate in graph query, asset detail graph context, compliance export, audit export, and health output. |
+| `110-GRAPH-BACKEND-HEALTH-AC-001` | Operational health exposes provider profile, package gate, schema fingerprint, index freshness, and raw-write bypass states without leaking backend-native IDs, credentials, private config, or raw package evidence. |
+| `110-GRAPH-BACKEND-ERROR-AC-001` | New `090` graph backend errors appear in `GenerateErrorCodeRegistry` with no `TODO:` values, owner-specific precedence over generic errors, redacted caller fields, audit refs, and fixture families. |
 | `110-CLEANUP-AC-001` | No banned reference class remains. |
 | `110-CLEANUP-AC-002` | API and UI state labels remain distinct and cannot imply authorized negative facts unless the owning domain spec emitted the authoritative output. |
 | `110-CLEANUP-AC-003` | Raw payload exposure remains false by default and requires raw-evidence permission. |

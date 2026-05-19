@@ -18,7 +18,8 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - Gold fact authority.
 - Identity decisions.
 - Source completeness.
-- Graph backend product selection.
+- Market/vendor evaluation outside active `GraphBackendProfile` rows.
+- Provider-specific implementation internals except where they affect observable graph apply, query, rebuild, schema, configuration, package activation, error, or replay behavior.
 
 ## Imports
 
@@ -49,6 +50,10 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `StructuralGlobalNode`
 - `StructuralGlobalNodeAliasPolicy`
 - `GraphBackendProfile`
+- `GraphBackendSelectionPolicy`
+- `GraphProviderCapabilityMatrix`
+- `GraphProviderAdapterContract`
+- `GraphProviderErrorMappingProfile`
 - `GraphBackendPreflightResult`
 - `BackendSchemaFingerprint`
 - `GraphBackendTaxonomyMappingProfile`
@@ -113,6 +118,9 @@ Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, que
 | `StructuralGlobalNode` rows | `activation_controlled_artifact` | Disabled by default. |
 | `StructuralGlobalNodeAliasPolicy` | `activation_controlled_artifact` | Required before aliases or wildcard-like globals. |
 | `GraphBackendProfile` | `activation_controlled_artifact` | Required before mutation, query, rebuild, drift check, or serving promotion. |
+| `GraphBackendSelectionPolicy` | stable core selection contract plus activation-controlled default rows where applicable | Required when graph serving is enabled and backend profile input is omitted. |
+| `GraphProviderCapabilityMatrix` | `activation_controlled_artifact` | Required before provider profile activation. |
+| `GraphProviderErrorMappingProfile` | `activation_controlled_artifact` | Required before provider-native errors are exposed as Cadastre errors. |
 | `GraphBackendPreflightResult` | `runtime_state_record` | Runtime validation state. |
 | `BackendSchemaFingerprint` | `runtime_state_record` | Runtime schema state. |
 | `GraphBackendTaxonomyMappingProfile` | `activation_controlled_artifact` | Required before backend labels/properties are accepted. |
@@ -126,6 +134,140 @@ Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, que
 | `DerivedViewState` | `runtime_state_record` | Runtime serving state. |
 
 `ProjectGraphDeltas`, `ApplyGraphDelta`, `QueryGraph`, and `RebuildGraph` must validate required activation artifact refs through `030.ActivationControlledArtifactRef` and include every output-affecting ref in `VersionManifest`.
+
+### GraphBackendSelectionPolicy
+
+Graph backend selection is active only when graph serving, graph apply, graph query, graph rebuild, graph drift check, or graph-serving promotion is in implementation scope. Backend selection is not fact authority, identity authority, source-completeness authority, or graph truth.
+
+| Input condition | Required behavior |
+| --- | --- |
+| graph serving disabled | No backend profile is selected; graph-serving endpoints remain unavailable or validation-only according to `110`. |
+| graph serving enabled and `graph_backend.profile_id` omitted | Materialize `graph_backend.profile_id = mvp-janusgraph.v1` and record a defaulting decision ref. |
+| graph serving enabled and `graph_backend.profile_id` supplied | Resolve exactly one active `GraphBackendProfile` with that ID. |
+| selected profile missing | Fail with `GRAPH_BACKEND_PROFILE_MISSING` before backend mutation or query. |
+| selected profile inactive | Fail with `GRAPH_ARTIFACT_INACTIVE` before backend mutation or query. |
+| selected profile checksum mismatch | Fail with `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` before backend mutation or query. |
+| required profile field omitted | Fail with `GRAPH_BACKEND_CONFIG_INCOMPLETE`; do not inherit provider runtime defaults. |
+| selected default profile contains unresolved production fields | Fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED` before backend mutation, query, rebuild promotion, or drift check. |
+
+### GraphBackendProfile schema
+
+A `GraphBackendProfile` is provider-neutral. Provider-specific fields may appear only inside declared provider subprofiles and must not alter Cadastre graph IDs, output ordering, page-token identity, error categories, evidence refs, or replay semantics.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `backend_profile_id` | Yes | none | Stable ID. MVP default is `mvp-janusgraph.v1`. |
+| `provider` | Yes | none | Closed token. MVP value: `janusgraph`. |
+| `provider_version_ref` | Yes | none | Immutable version or package ref; snapshot-only refs fail production activation unless package policy permits validation-only use. |
+| `provider_adapter_ref` | Yes | none | Ref to adapter contract and package. |
+| `query_language` | Yes | none | MVP JanusGraph value: `gremlin`. |
+| `driver_ref` | Yes | none | Driver artifact, version, and package ref. |
+| `storage_backend_kind` | Yes | none | Provider-specific storage backend token mapped by this profile. |
+| `storage_backend_version_ref` | Required for external storage | none | Required for CQL, Scylla, HBase, Bigtable, and other external storage. |
+| `index_backend_kind` | Yes | none | `none` allowed only when query translation rows declare affected query classes unsupported. |
+| `index_backend_version_ref` | Required when index backend is not `none` | none | Required for Elasticsearch, Solr, Lucene, or future index backends. |
+| `schema_policy_ref` | Yes | none | Active `GraphReadModelSchemaProfile`. |
+| `taxonomy_mapping_ref` | Yes | none | Active `GraphBackendTaxonomyMappingProfile`. |
+| `query_translation_profile_ref` | Yes | none | Active `GraphQueryTranslationProfile`. |
+| `apply_profile_ref` | Yes | none | Active `GraphApplyProfile`. |
+| `capability_matrix_ref` | Yes | none | Active `GraphProviderCapabilityMatrix`. |
+| `raw_write_bypass_policy_ref` | Yes | none | Must prove raw Gremlin/admin/import writes are blocked, detected, or excluded from production. |
+| `package_set_manifest_ref` | Yes | none | Active `100.ProductionPackageSetManifest`. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` backend-profile validation rows. |
+| `activation_scope` | Yes | none | Graph serving scope. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### MVP JanusGraph default backend profile
+
+The default profile row is a selection default, not a domain decision. It must not become production-active while any `TODO:` value in this table is unresolved.
+
+| Field | Required MVP value |
+| --- | --- |
+| `backend_profile_id` | `mvp-janusgraph.v1` |
+| `provider` | `janusgraph` |
+| `query_language` | `gremlin` |
+| `provider_adapter_ref` | `janusgraph.gremlin_remote.v1` unless a later active row selects embedded mode |
+| `server_mode` | `janusgraph_server_gremlin_remote` |
+| `gRPC` | disabled unless a separate active profile row enables it |
+| `implicit_schema_creation` | forbidden in production |
+| `backend_internal_ids` | forbidden as Cadastre IDs, selectors, cursors, evidence refs, replay keys, drillback keys, response IDs, or page-token identity |
+| `storage_backend_kind` | TODO: product governance must select a durable storage backend or require explicit deployment configuration before active use |
+| `index_backend_kind` | TODO: product governance must select an index backend or declare affected query classes unsupported before active use |
+
+### GraphProviderCapabilityMatrix
+
+Each active provider profile must satisfy this matrix for every enabled graph-serving scope. Unsupported provider behavior must fail closed or mark the affected query/apply/rebuild class unsupported before backend execution.
+
+| Capability | Required for MVP graph serving | Default when unsupported |
+| --- | --- | --- |
+| directed property graph | yes | profile activation fails |
+| user-supplied Cadastre graph IDs as properties or keys | yes | profile activation fails |
+| backend internal ID non-exposure | yes | `GRAPH_BACKEND_ID_FORBIDDEN` |
+| explicit schema creation and validation | yes | `GRAPH_SCHEMA_IMPLICIT_CREATION_FORBIDDEN` or `GRAPH_SCHEMA_FINGERPRINT_STALE` |
+| deterministic query candidate materialization | yes | query class unsupported |
+| index readiness/freshness evidence | required for indexed query classes | affected query classes blocked |
+| transaction evidence | yes for graph apply | apply blocked |
+| partial-apply resume evidence | yes | `GRAPH_APPLY_RESUME_UNSAFE` |
+| rebuild from Cadastre deltas | yes | promotion blocked |
+| raw-write bypass control | yes | `GRAPH_RAW_WRITE_BYPASS` |
+
+### JanusGraph mapping tables
+
+The following mappings are exhaustive for the active MVP graph scope. Any Cadastre graph object not listed here is unsupported for `mvp-janusgraph.v1` until a later active mapping row adds it.
+
+| Cadastre concept | JanusGraph concept | Required mapping | Forbidden mapping |
+| --- | --- | --- | --- |
+| `projected_canonical_node` | vertex | vertex label `cadastre_projected_canonical_node`; Cadastre `graph_node_id` stored as property `cadastre_graph_node_id` | JanusGraph vertex ID as Cadastre ID |
+| `observed_connection` | edge | edge label `cadastre_observed_connection`; Cadastre `graph_edge_id` stored as property `cadastre_graph_edge_id` | JanusGraph edge ID as Cadastre ID |
+| graph object evidence refs | vertex or edge properties | canonical array property `cadastre_evidence_refs` after redaction and bounds checks | raw payload bytes or backend-native evidence IDs |
+| assertion and temporal fields | vertex or edge properties | Cadastre-owned assertion state, valid time, known time, confidence, and source refs | JanusGraph transaction time, index time, or storage time as fact time |
+
+| Cadastre node or edge type | JanusGraph label | Active MVP status |
+| --- | --- | --- |
+| `projected_canonical_node` | vertex label `cadastre_projected_canonical_node` | active when projection row emits a resolved canonical node |
+| `observed_connection` | edge label `cadastre_observed_connection` | active when projection row emits a qualifying flow edge |
+| all other node types | none | unsupported; fail with `GRAPH_EDGE_SEMANTICS_ROW_MISSING` or mapped owner error before output |
+| all other edge types | none | unsupported; fail with `GRAPH_EDGE_SEMANTICS_ROW_MISSING` before projection/query |
+
+| Cadastre property class | JanusGraph property key | Cardinality or multiplicity rule |
+| --- | --- | --- |
+| stable graph IDs | `cadastre_graph_node_id`, `cadastre_graph_edge_id` | single cardinality; unique by Cadastre preflight and validation rows |
+| scalar graph fields | mapped lower snake-case property keys with `cadastre_` prefix | single cardinality unless the property policy declares array serialization |
+| evidence ref arrays | `cadastre_evidence_refs` | single property containing canonical array bytes, not repeated provider values |
+| edge uniqueness | `cadastre_graph_edge_id` plus endpoint IDs and edge type | simple JanusGraph edge multiplicity is not authority; Cadastre idempotency key decides reapply behavior |
+
+| Query or index purpose | JanusGraph index family | Required behavior |
+| --- | --- | --- |
+| Cadastre graph ID lookup | composite index or provider-equivalent exact lookup | required for `node_detail` and evidence drillback |
+| endpoint adjacency | vertex-centric index when high-degree adjacency fixtures require it | required before affected neighbor/path classes serve |
+| text, range, or mixed predicates | mixed index | required only when query translation row enables those predicates |
+| no declared index | none | affected query class unsupported; full scan is forbidden in production |
+
+| JanusGraph configuration surface | Cadastre profile field | Required behavior |
+| --- | --- | --- |
+| storage backend | `storage_backend_kind`, `storage_backend_version_ref`, storage config checksum | required before active use |
+| mixed index backend | `index_backend_kind`, `index_backend_version_ref`, index config checksum | required when indexed query classes are enabled |
+| schema initialization | `schema_policy_ref`, schema-init config checksum | implicit schema and destructive drop forbidden in production |
+| server mode | `provider_adapter_ref`, `server_mode`, driver refs | default is Gremlin remote server mode |
+| TinkerPop/Gremlin versions | `driver_ref`, `provider_version_ref`, `tinkerpop_version_ref` | included in `VersionManifest` |
+
+### JanusGraph schema strategy and operational assumptions
+
+A production JanusGraph profile must use explicit schema. It must fail when implicit schema creation is enabled, when required schema constraints are disabled without an explicit provider exception row and validation fixture, or when schema/index readiness cannot be proven.
+
+`schema.init.drop-before-startup` is forbidden in production apply, query, rebuild promotion, and normal startup. `schema.init.force-close-other-instances` is forbidden unless a controlled rebuild or maintenance profile permits it.
+
+`BackendSchemaFingerprint` for JanusGraph must include vertex labels, edge labels, property keys, cardinality, multiplicity, composite indexes, mixed indexes, vertex-centric indexes, schema-init strategy, provider version, TinkerPop version, storage backend config checksum, index backend config checksum, and provider capability rows.
+
+| Assumption | Required spec behavior |
+| --- | --- |
+| server mode | default adapter uses JanusGraph Server over Gremlin remote |
+| embedded JVM mode | allowed only through a separate active profile row |
+| gRPC management | disabled by default; enabling requires separate profile, package, API, and validation rows |
+| in-memory storage | validation-only unless a future active profile proves durable snapshot/restore semantics |
+| destructive drop | forbidden in production apply and query paths |
+| Bigtable | unsupported for MVP until unresolved adapter behavior closes |
+| Docker/container entrypoint | unsupported as a production default until entrypoint behavior is inspected and package-gated |
 
 ### MVPActiveGraphProjectionProfile
 
@@ -248,6 +390,23 @@ ApplyGraphDelta(delta_set, apply_profile):
 11. On failure, record committed batch IDs or prove no committed writes.
 12. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
 ```
+
+### GraphApplyBackendEvidenceRow JanusGraph fields
+
+`ApplyGraphDelta` must persist provider evidence before derived-view advancement when the selected backend profile uses JanusGraph. JanusGraph commit evidence is not a single cross-system distributed transaction proof; it must expose the storage, composite index, mixed index, log, rollback, and read-after-write components that can affect correctness.
+
+| Evidence field | Required for JanusGraph MVP |
+| --- | --- |
+| `janusgraph_transaction_id_or_ref` | required when available; redacted if backend-specific |
+| `storage_commit_status` | required |
+| `composite_index_commit_status` | required |
+| `mixed_index_commit_status` | required when mixed indexes are configured |
+| `transaction_log_status` | required when logs are configured or recovery depends on logs |
+| `rollback_attempt_status` | required on failure |
+| `read_after_write_probe_ref` | required before derived-view advancement |
+| `committed_batch_ids` | required for partial or resumed apply |
+| `resume_boundary` | required when partial apply occurs |
+| `index_freshness_ref` | required for affected query classes |
 
 ## Graph Apply Lifecycle
 
@@ -429,6 +588,20 @@ A delta operation not listed in this table fails with `CORE_FIELD_TYPE_INVALID` 
 | authorization and redaction | Applied after backend candidate materialization and before response emission. |
 | output eligibility | Every returned object must pass `GraphObjectOutputEligibilityRow` for the response context. |
 
+### JanusGraph Gremlin query translation matrix
+
+JanusGraph Gremlin translation is allowed only as backend candidate materialization. Cadastre ordering, authorization, redaction, page-token identity, and error selection occur after candidate materialization.
+
+| Query class | Gremlin translation boundary | Required post-processing | Unsupported or unsafe provider behavior |
+| --- | --- | --- | --- |
+| `node_detail` | bounded lookup by Cadastre graph ID property | enforce single candidate, authorization, redaction, deterministic output | more than one candidate emits `GRAPH_QUERY_TRANSLATION_ERROR` |
+| `neighbor_expansion` | bounded adjacent edge traversal using mapped labels/properties | sort by Cadastre ordering; enforce candidate limit | candidate overflow emits `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` |
+| `bounded_path` | bounded repeat traversal over named traversal classes only | sort paths by `090` path ordering | omitted traversal classes emit `GRAPH_TRAVERSAL_CLASS_REQUIRED`; full graph traversal forbidden |
+| `evidence_drillback` | lookup by Cadastre graph object refs only | no raw bytes; preserve evidence chain | backend IDs rejected |
+| `analysis_read_only` | only via active `130.RuleGraphCompatibilityMatrix` | no mutation; expected checksum | provider-specific Gremlin text forbidden unless imported and validated |
+
+Production JanusGraph profiles must block any graph-centric query translation that would perform an unbounded full scan. Backend natural order must never become response order. When JanusGraph `query.force-index` behavior would allow a scan or throw because no index is available, Cadastre must emit `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` or block the affected query class before backend traversal.
+
 #### GraphQueryCandidateLimitTable
 
 | Query class | Default candidate limit | Minimum | Maximum | Limit reached behavior |
@@ -516,6 +689,17 @@ The active MVP output eligibility rows are closed. Graph object existence alone 
 | query translation | ordering, pagination, timeout, authorization, redaction | blocks query serving if missing |
 | rebuild/import | rebuild manifest, import evidence, index consistency | blocks promotion if missing |
 
+### JanusGraph GraphIndexConsistencyCheck rows
+
+| Check | Required behavior |
+| --- | --- |
+| composite index status | must be query-ready before affected query classes serve |
+| mixed index provider availability | must pass before mixed-index query classes serve |
+| mixed index freshness | stale index blocks affected query classes |
+| vertex-centric index presence | required for high-degree adjacency query classes that depend on it |
+| schema fingerprint match | stale or mismatched fingerprint blocks mutation/query |
+| full-scan prohibition | unbounded graph scan is rejected unless a validation-only row permits it |
+
 ### GraphRebuildEquivalencePolicy boundary
 
 `080` owns checksum rules for replay equivalence. This spec imports `GraphRebuildEquivalencePolicy` by name and defines graph-specific use: rebuild promotion must compare graph-serving output, schema fingerprint, index consistency, delta input set, projection profile, graph handoff refs, and derived-view state using the imported policy. Replay output classes `graph_delta`, `graph_apply`, and `graph_rebuild` must remain distinct and must not share owner-specific included/excluded field rows.
@@ -552,37 +736,71 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_PAGE_TOKEN_EXPIRED` | A graph page token is past its declared expiry. |
 | `GRAPH_PAGE_TOKEN_INVALID` | A graph page token identity input mismatches the request context or contains backend cursor identity. |
 | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | A bounded path query omits `allowed_traversal_classes`. |
+| `GRAPH_QUERY_TIMEOUT` | Backend candidate materialization or owner post-processing exceeds the active timeout and partial output is not permitted. |
+| `GRAPH_QUERY_TRANSLATION_ERROR` | Query translation produces zero required mappings, multiple candidates for a single-object query, unsafe backend plan, or non-deterministic materialization. |
+| `GRAPH_DELTA_IDEMPOTENCY_CONFLICT` | A repeated graph apply uses the same idempotency key with different output-affecting inputs. |
+| `GRAPH_BACKEND_PROFILE_MISSING` | Graph serving is in scope and no selected backend profile resolves. |
+| `GRAPH_SCHEMA_FINGERPRINT_STALE` | Backend schema fingerprint is absent, stale, mismatched, or incomplete. |
+| `GRAPH_RAW_WRITE_BYPASS` | Provider console, admin, import, or raw query path can mutate graph state outside `ApplyGraphDelta`, or bypass evidence is missing. |
+| `GRAPH_DRIFT_REPAIR_FORBIDDEN` | A drift check attempts repair, mutation, graph delta emission, authoritative record mutation, or watermark advancement. |
+| `GRAPH_APPLY_RESUME_UNSAFE` | Partial graph apply cannot prove committed batch boundary and resume safety. |
+| `GRAPH_REBUILD_EQUIVALENCE_FAILED` | Graph rebuild output, schema, index, delta input, or derived-view state does not match the declared rebuild equivalence policy. |
+| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | MVP graph behavior attempts theoretical reachability output. |
+| `GRAPH_BACKEND_CONFIG_INCOMPLETE` | A required `GraphBackendProfile` field is omitted or empty. |
+| `GRAPH_BACKEND_DEFAULT_UNRESOLVED` | Omitted backend selection materializes the JanusGraph default but required default fields remain `TODO` or unresolved. |
+| `GRAPH_PROVIDER_CAPABILITY_MISSING` | The selected profile lacks an active provider capability matrix. |
+| `GRAPH_PROVIDER_CAPABILITY_UNSUPPORTED` | The provider capability matrix declares an enabled query, apply, rebuild, or serving capability unsupported. |
+| `GRAPH_BACKEND_VERSION_UNPINNED` | Provider, driver, storage adapter, index adapter, or TinkerPop version ref is mutable, missing, or snapshot-only in production scope. |
+| `GRAPH_BACKEND_PACKAGE_GATE_FAILED` | A required provider, driver, storage adapter, index adapter, runtime distribution, package release, or package-set gate from `100` failed. |
+| `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | The selected provider adapter cannot satisfy the declared provider profile, server mode, query language, or driver contract. |
+| `GRAPH_SCHEMA_IMPLICIT_CREATION_FORBIDDEN` | Production provider config enables implicit schema creation or omits explicit schema proof. |
+| `GRAPH_STORAGE_MODE_UNSAFE` | Storage mode is ephemeral, destructive, validation-only, or lacks durability evidence for production serving. |
+| `GRAPH_INDEX_BACKEND_UNAVAILABLE` | Required index provider or mixed-index integration is unavailable for affected query classes. |
+| `GRAPH_INDEX_FRESHNESS_REQUIRED` | Index freshness evidence is missing or stale for affected query classes. |
+| `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | Query translation would require unbounded full graph scan or backend natural-order traversal in production. |
 
 ### GraphErrorRegistryFragment
 
-This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. No row may contain `TODO:` when graph serving, graph apply, graph query, graph rebuild, or graph backend activation is in promotion scope.
 
 | error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `GRAPH_ARTIFACT_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-missing` |
-| `GRAPH_ARTIFACT_INACTIVE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-inactive` |
-| `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-checksum-mismatch` |
-| `GRAPH_ARTIFACT_SCOPE_MISMATCH` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-artifact-scope-mismatch` |
-| `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-projection-core-override-forbidden` |
-| `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-flow-role-evidence-required` |
-| `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-expiry-source-authority-required` |
-| `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-handoff-effect-unsupported` |
-| `GRAPH_EDGE_SEMANTICS_ROW_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-edge-semantics-row-missing` |
-| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-endpoint-identity-unresolved` |
-| `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-candidate-limit-reached` |
-| `GRAPH_PAGE_TOKEN_EXPIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-page-token-expired` |
-| `GRAPH_PAGE_TOKEN_INVALID` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-page-token-invalid` |
-| `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-traversal-class-required` |
-| `GRAPH_QUERY_TIMEOUT` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-timeout` |
-| `GRAPH_QUERY_TRANSLATION_ERROR` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-query-translation-error` |
-| `GRAPH_DELTA_IDEMPOTENCY_CONFLICT` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-delta-idempotency-conflict` |
-| `GRAPH_BACKEND_PROFILE_MISSING` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-backend-profile-missing` |
-| `GRAPH_SCHEMA_FINGERPRINT_STALE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-schema-fingerprint-stale` |
-| `GRAPH_RAW_WRITE_BYPASS` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-raw-write-bypass` |
-| `GRAPH_DRIFT_REPAIR_FORBIDDEN` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-drift-repair-forbidden` |
-| `GRAPH_APPLY_RESUME_UNSAFE` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-apply-resume-unsafe` |
-| `GRAPH_REBUILD_EQUIVALENCE_FAILED` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-graph-rebuild-equivalence-failed` |
-| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | `090` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `090.GraphErrorContext` | `graph-error-theoretical-reachability-scope-error` |
+| `GRAPH_ARTIFACT_MISSING` | `090` | blocked | policy_change_required | error_code, owner_spec, artifact_class, artifact_id | artifact_ref, manifest_ref, validation_refs | redact private refs; no raw payloads | `090.GraphErrorContext` | `graph-error-graph-artifact-missing` |
+| `GRAPH_ARTIFACT_INACTIVE` | `090` | blocked | policy_change_required | error_code, owner_spec, artifact_class, lifecycle_status | artifact_ref, lifecycle_evidence_ref, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-artifact-inactive` |
+| `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` | `090` | blocked | policy_change_required | error_code, owner_spec, artifact_class | expected_checksum_ref, actual_checksum_ref, manifest_ref | checksums visible; payload refs redacted | `090.GraphErrorContext` | `graph-error-graph-artifact-checksum-mismatch` |
+| `GRAPH_ARTIFACT_SCOPE_MISMATCH` | `090` | blocked | policy_change_required | error_code, owner_spec, artifact_class, requested_scope | artifact_ref, activation_scope, validation_refs | redact private scope values | `090.GraphErrorContext` | `graph-error-graph-artifact-scope-mismatch` |
+| `GRAPH_PROJECTION_CORE_OVERRIDE_FORBIDDEN` | `090` | security_error | none | error_code, owner_spec, attempted_contract | artifact_ref, attempted_field, stable_owner_ref | redact artifact payload | `090.GraphErrorContext` | `graph-error-graph-projection-core-override-forbidden` |
+| `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` | `090` | error | caller_correctable | error_code, owner_spec, graph_edge_type, missing_evidence_class | projection_profile_ref, source_observation_ref, validation_refs | redact private source refs | `090.GraphErrorContext` | `graph-error-graph-flow-role-evidence-required` |
+| `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED` | `090` | blocked | policy_change_required | error_code, owner_spec, requested_effect | graph_delta_ref, missing_absence_ref, source_authority_refs | redact private source refs | `090.GraphErrorContext` | `graph-error-graph-expiry-source-authority-required` |
+| `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` | `090` | error | policy_change_required | error_code, owner_spec, graph_handoff_effect | change_set_ref, projection_profile_ref, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-handoff-effect-unsupported` |
+| `GRAPH_EDGE_SEMANTICS_ROW_MISSING` | `090` | error | policy_change_required | error_code, owner_spec, edge_type | graph_profile_ref, edge_semantics_ref, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-edge-semantics-row-missing` |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090` | error | retry_after_owner_repair | error_code, owner_spec, endpoint_role | unresolved_target_ref, identity_decision_ref, projection_profile_ref | redact identity private refs | `090.GraphErrorContext` | `graph-error-graph-endpoint-identity-unresolved` |
+| `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` | `090` | error | caller_correctable | error_code, owner_spec, query_class, candidate_limit | query_checksum, profile_ref, derived_view_state_ref | redact candidate IDs when unauthorized | `090.GraphErrorContext` | `graph-error-graph-query-candidate-limit-reached` |
+| `GRAPH_PAGE_TOKEN_EXPIRED` | `090` | error | caller_correctable | error_code, owner_spec, query_class | token_checksum, expiry, request_checksum | token bytes hidden | `090.GraphErrorContext` | `graph-error-graph-page-token-expired` |
+| `GRAPH_PAGE_TOKEN_INVALID` | `090` | security_error | none | error_code, owner_spec, mismatch_class | token_checksum, authorization_checksum, request_checksum | token bytes and backend cursor hidden | `090.GraphErrorContext` | `graph-error-graph-page-token-invalid` |
+| `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090` | error | caller_correctable | error_code, owner_spec, query_class | query_checksum, translation_profile_ref | no raw payloads | `090.GraphErrorContext` | `graph-error-graph-traversal-class-required` |
+| `GRAPH_QUERY_TIMEOUT` | `090` | error | transient_retryable | error_code, owner_spec, query_class, timeout_seconds | query_checksum, translation_profile_ref, derived_view_state_ref | redact candidate refs | `090.GraphErrorContext` | `graph-error-graph-query-timeout` |
+| `GRAPH_QUERY_TRANSLATION_ERROR` | `090` | error | policy_change_required | error_code, owner_spec, query_class | translation_profile_ref, mapping_row_ref, query_checksum | redact backend query text unless validation permits | `090.GraphErrorContext` | `graph-error-graph-query-translation-error` |
+| `GRAPH_DELTA_IDEMPOTENCY_CONFLICT` | `090` | error | none | error_code, owner_spec, idempotency_key_ref | prior_apply_ref, attempted_apply_ref, manifest_ref | no backend IDs | `090.GraphErrorContext` | `graph-error-graph-delta-idempotency-conflict` |
+| `GRAPH_BACKEND_PROFILE_MISSING` | `090` | blocked | policy_change_required | error_code, owner_spec, profile_id | selection_policy_ref, validation_refs | redact private backend config | `090.GraphErrorContext` | `graph-error-graph-backend-profile-missing` |
+| `GRAPH_SCHEMA_FINGERPRINT_STALE` | `090` | blocked | retry_after_refresh | error_code, owner_spec, backend_profile_id | schema_fingerprint_ref, schema_profile_ref, provider_ref | redact backend internals | `090.GraphErrorContext` | `graph-error-graph-schema-fingerprint-stale` |
+| `GRAPH_RAW_WRITE_BYPASS` | `090` | security_error | none | error_code, owner_spec, bypass_class | bypass_evidence_ref, backend_profile_ref, audit_ref | redact command text and private refs | `090.GraphErrorContext` | `graph-error-graph-raw-write-bypass` |
+| `GRAPH_DRIFT_REPAIR_FORBIDDEN` | `090` | security_error | none | error_code, owner_spec, attempted_effect | drift_check_ref, attempted_mutation_ref | redact attempted payload | `090.GraphErrorContext` | `graph-error-graph-drift-repair-forbidden` |
+| `GRAPH_APPLY_RESUME_UNSAFE` | `090` | blocked | retry_after_owner_repair | error_code, owner_spec, apply_result_ref | committed_batch_refs, resume_boundary_ref, idempotency_key_ref | redact backend transaction refs | `090.GraphErrorContext` | `graph-error-graph-apply-resume-unsafe` |
+| `GRAPH_REBUILD_EQUIVALENCE_FAILED` | `090` | blocked | retry_after_owner_repair | error_code, owner_spec, rebuild_manifest_ref | output_checksum_refs, schema_fingerprint_ref, index_check_ref | redact backend internals | `090.GraphErrorContext` | `graph-error-graph-rebuild-equivalence-failed` |
+| `THEORETICAL_REACHABILITY_SCOPE_ERROR` | `090` | blocked | policy_change_required | error_code, owner_spec, attempted_output | graph_profile_ref, deferred_doc_ref, validation_refs | no private refs | `090.GraphErrorContext` | `graph-error-theoretical-reachability-scope-error` |
+| `GRAPH_BACKEND_CONFIG_INCOMPLETE` | `090` | blocked | policy_change_required | error_code, owner_spec, missing_field_path | backend_profile_ref, validation_refs | redact private config values | `090.GraphErrorContext` | `graph-error-graph-backend-config-incomplete` |
+| `GRAPH_BACKEND_DEFAULT_UNRESOLVED` | `090` | blocked | policy_change_required | error_code, owner_spec, backend_profile_id | selection_policy_ref, unresolved_field_paths, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-backend-default-unresolved` |
+| `GRAPH_PROVIDER_CAPABILITY_MISSING` | `090` | blocked | policy_change_required | error_code, owner_spec, capability_matrix_ref | backend_profile_ref, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-provider-capability-missing` |
+| `GRAPH_PROVIDER_CAPABILITY_UNSUPPORTED` | `090` | blocked | policy_change_required | error_code, owner_spec, capability, affected_class | capability_matrix_ref, backend_profile_ref, validation_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-provider-capability-unsupported` |
+| `GRAPH_BACKEND_VERSION_UNPINNED` | `090` | blocked | policy_change_required | error_code, owner_spec, version_field_path | backend_profile_ref, package_release_ref | redact private package refs by policy | `090.GraphErrorContext` | `graph-error-graph-backend-version-unpinned` |
+| `GRAPH_BACKEND_PACKAGE_GATE_FAILED` | `090` | blocked | retry_after_owner_repair | error_code, owner_spec, package_gate | package_set_ref, package_release_ref, gate_result_ref | package evidence redacted by `110` | `090.GraphErrorContext` | `graph-error-graph-backend-package-gate-failed` |
+| `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | policy_change_required | error_code, owner_spec, provider, adapter_ref | backend_profile_ref, driver_ref, validation_refs | redact private config | `090.GraphErrorContext` | `graph-error-graph-provider-adapter-unsupported` |
+| `GRAPH_SCHEMA_IMPLICIT_CREATION_FORBIDDEN` | `090` | blocked | policy_change_required | error_code, owner_spec, schema_policy_ref | provider_config_checksum, backend_profile_ref, validation_refs | redact config payload | `090.GraphErrorContext` | `graph-error-graph-schema-implicit-creation-forbidden` |
+| `GRAPH_STORAGE_MODE_UNSAFE` | `090` | blocked | policy_change_required | error_code, owner_spec, storage_backend_kind | backend_profile_ref, storage_config_checksum, validation_refs | redact storage config | `090.GraphErrorContext` | `graph-error-graph-storage-mode-unsafe` |
+| `GRAPH_INDEX_BACKEND_UNAVAILABLE` | `090` | blocked | retry_after_owner_repair | error_code, owner_spec, index_backend_kind, affected_query_classes | index_check_ref, backend_profile_ref, package_refs | redact private refs | `090.GraphErrorContext` | `graph-error-graph-index-backend-unavailable` |
+| `GRAPH_INDEX_FRESHNESS_REQUIRED` | `090` | blocked | retry_after_refresh | error_code, owner_spec, affected_query_classes | index_freshness_ref, derived_view_state_ref, backend_profile_ref | redact backend internals | `090.GraphErrorContext` | `graph-error-graph-index-freshness-required` |
+| `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | `090` | error | caller_correctable | error_code, owner_spec, query_class | translation_profile_ref, index_check_ref, query_checksum | redact backend query text | `090.GraphErrorContext` | `graph-error-graph-query-full-scan-forbidden` |
 
 ### Acceptance Criteria
 
@@ -635,6 +853,13 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-GRAPH-QUERY-CLOSURE-AC-002` | Candidate-limit, expired-token, and token-mismatch cases fail before backend query execution with the declared graph error codes. |
 | `090-GRAPH-APPLY-ORDER-AC-001` | Same graph delta set and apply profile produce byte-identical canonical delta ordering and batch membership. |
 | `090-GRAPH-REBUILD-CLOSURE-AC-001` | Rebuild equivalence includes profile, edge semantics, output eligibility, taxonomy, query translation, property policy, schema, index consistency, and canonical output checksums. |
+| `090-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; unresolved default fields block production serving with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
+| `090-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, implicit schema creation, and missing package gates before mutation or query. |
+| `090-GRAPH-PROVIDER-CAPABILITY-AC-001` | Every active graph provider profile satisfies `GraphProviderCapabilityMatrix` or declares deterministic unsupported behavior for each query, apply, rebuild, and serving class. |
+| `090-GRAPH-JANUSGRAPH-SCHEMA-AC-001` | JanusGraph implicit schema creation, destructive schema drop, stale fingerprint, missing schema constraints without exception, and missing index readiness fail closed. |
+| `090-GRAPH-JANUSGRAPH-QUERY-AC-001` | JanusGraph Gremlin translation fixtures produce provider-neutral `QueryGraph` outputs, reject full scans, enforce candidate limits, reject backend IDs, and sort by Cadastre ordering. |
+| `090-GRAPH-JANUSGRAPH-APPLY-AC-001` | JanusGraph partial-commit fixtures require storage, composite-index, mixed-index, rollback, committed-batch, read-after-write, and resume-boundary evidence. |
+| `090-GRAPH-PROVIDER-PORTABILITY-AC-001` | A future provider can satisfy the same capability, taxonomy, query translation, schema, apply, rebuild, ordering, ID, page-token, and error contracts without JanusGraph-specific fields leaking into Cadastre outputs. |
 
 ## Definition of Done
 
@@ -653,3 +878,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+| `090-TODO-JANUSGRAPH-RELEASE-PIN` | TODO: Pin JanusGraph provider release/package, provider adapter package, driver package, and TinkerPop version refs before active production profile. | P0 before active production profile. | Product governance plus `100` package-set evidence. | Validation-only profile may remain selected but blocked for production. |
+| `090-TODO-JANUSGRAPH-STORAGE-BACKEND` | TODO: Select durable storage backend or require explicit deployment-supplied storage backend configuration and validation refs. | P0 unless deployment config explicitly supplies and validates it. | Product governance plus `100` package gates and `120` fixtures. | `mvp-janusgraph.v1` fails with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
+| `090-TODO-JANUSGRAPH-INDEX-BACKEND` | TODO: Select index backend or declare query classes unsupported. | P0 for query classes requiring mixed or text/range index support. | Product governance plus `120-GRAPH-JANUSGRAPH-INDEX-*`. | Affected query classes are blocked. |
+| `090-TODO-JANUSGRAPH-BIGTABLE` | TODO: Resolve Bigtable adapter behavior if Bigtable is selected. | P2 unless selected, then P0. | JanusGraph source inspection and provider fixtures. | Bigtable unsupported for MVP. |
+| `090-TODO-JANUSGRAPH-GRPC` | TODO: Resolve gRPC management surface before enabling it. | P2 unless enabled, then P0. | `090`, `100`, `110`, and `120`. | gRPC disabled by default. |
+| `090-TODO-JANUSGRAPH-CONFIG-PRECEDENCE` | TODO: Confirm complete selected-field configuration precedence. | P1 for selected profile fields. | Provider source inspection and config fixtures. | Omitted or ambiguous selected config fields fail closed. |
+| `090-TODO-JANUSGRAPH-DOCKER-ENTRYPOINT` | TODO: Inspect Docker/container entrypoint before containerized mode becomes MVP default. | P1 if containerized mode is MVP default. | Package and deployment validation. | Container entrypoint is not a production default. |
+| `090-TODO-JANUSGRAPH-ID-BINARY-ENCODING` | TODO: Resolve full ID binary encoding only if migration/export depends on it. | P2 unless migration/export depends on binary encoding. | Provider source inspection. | Backend IDs remain forbidden. |
+| `090-TODO-JANUSGRAPH-QUERY-OPTIMIZER` | TODO: Trace query optimizer strategies for performance-sensitive portability. | P1 for performance-sensitive query portability. | Provider source inspection and query fixtures. | Full-scan and natural-order behavior remain forbidden. |
+| `090-TODO-JANUSGRAPH-EXAMPLES` | TODO: Treat examples as non-blocking rationale only unless adopted by owner validation rows. | Non-blocking. | Owner spec review. | Examples do not define behavior. |

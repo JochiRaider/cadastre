@@ -4,6 +4,14 @@ project: Cadastre
 title: JanusGraph Repository Research Report
 status: research-report
 inspection_date: 2026-05-18
+related_cadastre_specs:
+  - docs/nlspec/090-graph-projection-serving-and-backends.md
+  - docs/nlspec/100-packages-supply-chain-and-activation.md
+  - docs/nlspec/110-api-ux-health-errors-and-security.md
+  - docs/nlspec/120-validation-fixtures-and-acceptance.md
+  - docs/nlspec/domain.md
+related_research:
+  - docs/reference/research/RES-012-graph-backend-comparison.md
 ---
 
 Repository: `JanusGraph/janusgraph`
@@ -652,6 +660,8 @@ Repository-to-repository comparison status: only one repository was provided. No
 
 ## 22. Risks, ambiguities, and unresolved questions
 
+A Cadastre profile, package, deployment, query translation row, or validation fixture must not depend on any `Not determined` JanusGraph area until that area has an owner decision and passing validation evidence.
+
 | Unknown or ambiguity | Why it matters | Source to inspect next | Affects |
 | --- | --- | --- | --- |
 | Full Bigtable adapter behavior was not resolved beyond module POM dependency | Bigtable operational behavior may be inherited or configured through HBase-compatible classes not inspected here | Full `janusgraph-bigtable` tree and docs | Architecture, operations |
@@ -662,6 +672,19 @@ Repository-to-repository comparison status: only one repository was provided. No
 | Docker entrypoint behavior was not fully inspected | Containerized operations depend on entrypoint/env behavior | `janusgraph-dist/docker/**` | Operations |
 | Examples were not used as primary evidence | Examples may demonstrate supported usage patterns and edge cases | `janusgraph-examples/**` | Onboarding, docs |
 | Full release process was not reconstructed | Release engineering may require signing/publishing/versioning details | `RELEASING.md`, release workflows, plugin configs | Build/release |
+
+## Cadastre transfer ledger
+
+This section is non-normative. Runtime behavior must be adopted only through owner NLSpecs.
+
+| Finding | Owning spec for any transfer | Transfer status | Required validation before production |
+| --- | --- | --- | --- |
+| JanusGraph as MVP default provider candidate | `090` | evidence only until profile row is active | default-provider, package, schema, index, query, apply, and rebuild fixtures |
+| Gremlin/TinkerPop query surface | `090` | mapping input | Gremlin translation parity fixtures |
+| Storage and mixed-index adapter families | `090`, `100` | provider-profile and package-gate input | storage/index capability and freshness fixtures |
+| Schema defaults and schema initialization behavior | `090` | schema strategy input | implicit-schema rejection and fingerprint fixtures |
+| Transaction and partial-commit behavior | `090` | graph apply evidence input | partial-apply and resume-safety fixtures |
+| Packaging, distribution, and dependency evidence | `100` | package-gate input | package release, SBOM, provenance, compatibility, and rollback fixtures |
 
 ## 23. Evidence ledger
 

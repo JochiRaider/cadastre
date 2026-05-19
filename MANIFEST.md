@@ -45,4 +45,5 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/reference/research/RES-012-graph-backend-comparison.md` |
 | `docs/reference/research/RES-013-extension-package-supply-chain.md` |
 | `docs/reference/research/RES-014-source-authority-staleness-coverage-absence.md` |
+| `docs/reference/research/RES-015-janusgraph.md` |
 | `docs/archive/PRD-Cadastre.revised-draft.md` |

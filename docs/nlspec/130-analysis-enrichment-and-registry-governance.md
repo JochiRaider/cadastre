@@ -64,6 +64,8 @@ Analysis, enrichment, lineage, and registry records must not mutate facts, graph
 
 `AnalysisRuleBundle` contains read-only rules. A rule may query declared read models only when `RuleGraphCompatibilityMatrix` passes for the active graph projection profile, graph edge semantics row refs, traversal class set, graph object output eligibility row refs, graph property refs, query translation profile, derived-view lag policy, query class, node types, edge types, edge directions, temporal fields, authorization/redaction refs, expected query checksum, expected result checksum, and read-only mutation proof.
 
+An `AnalysisRule` must not embed provider-native Gremlin, Cypher, AQL, or other backend query text as production graph behavior unless `ValidateAnalysisQueryImport` maps the query into an active `090.GraphQueryTranslationProfile` row and `RuleGraphCompatibilityMatrix` proves read-only behavior, expected result checksum, authorization/redaction behavior, and mutation prohibition. Provider-native query text is validation-only by default.
+
 `observed_connection` is analysis-readable only when the compatibility matrix names `observed_connection_path` or a read-only detail query and the active output eligibility row permits that context. `generic_external_graph_payload` must not produce findings, metrics, identity influence, or pathfinding input.
 
 `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are workflow outputs. They must not represent remediation, risk reduction, fact retraction, graph edge removal, or source completeness change.
@@ -274,6 +276,7 @@ Default graph compatibility rules:
 | `generic_external_graph_payload` | Cannot produce findings, metrics, identity influence, or pathfinding input. |
 | derived-view stale state | Rejected for compliance/audit analysis by default; otherwise labeled only when `110` permits. |
 | mutation attempt | Fails with `ANALYSIS_MUTATION_FORBIDDEN` before any owner state changes. |
+| `gremlin_text` under JanusGraph default | Rejected unless translated into a declared `QueryGraph` class or validation-only import row; no production mutation; expected checksum required. |
 
 ### RiskScoringBoundary validation
 
@@ -294,6 +297,7 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-ANALYSIS-REPLAY-AC-001` | Analysis replay exact match includes rule bundle refs, rule row refs, graph compatibility refs, query target refs, derived-view refs, authorization/redaction refs, output checksum, and `VersionManifest` ref. |
 | `130-ANALYSIS-REPLAY-AC-002` | Rule bundle mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, or mutation attempt rejects production replay before output. |
 | `130-ANALYSIS-REPLAY-AC-003` | Shadow-only comparison is non-production and may not mutate facts, graph state, completeness, watermarks, identity, package state, or source authority. |
+| `130-PROVIDER-NATIVE-QUERY-IMPORT-AC-001` | Gremlin analysis import without translation fails before execution; valid translated read-only import passes with expected result checksum; mutation attempts fail before graph/backend execution. |
 | `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
 | `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
 | `130-LIFECYCLE-AC-001` | Every analysis, enrichment, lineage, and registry activation-controlled artifact entering `active` status has generic artifact lifecycle transition evidence and owner-specific guard results. |
