@@ -29,6 +29,8 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `RedactionPolicy`
 - `ValidationMatrix`
 - `ActivationControlledArtifactRef`
+- `EvidenceRef`
+- `EvidenceArtifactClassRegistry`
 
 ## Exports
 
@@ -201,6 +203,14 @@ They must not become identity, source completeness, source authority, gold fact,
 `RunDatasetIOContract` and `LineageFacetMappingPolicy` may map external lineage facets to Cadastre lineage fields, diagnostic fields, non-authoritative metadata, or rejection. External lineage events and facets are non-authoritative by default.
 
 `ArtifactClassPolicy` must prevent static DAG artifacts, executed-run artifacts, freshness artifacts, semantic artifacts, validation artifacts, lineage artifacts, table snapshot artifacts, table commit artifacts, and graph rebuild artifacts from substituting for one another.
+
+### EvidenceArtifactSubstitutionHandoff
+
+`ArtifactClassPolicy` rows may classify and constrain artifacts, but they must not add `EvidenceRef.artifact_id` kinds or authorize artifact substitution. `EvidenceRef` eligibility requires the referenced artifact class to match one `040.EvidenceArtifactClassRegistry` row and the referenced owner artifact to satisfy its owner checksum, lifecycle, redaction, and `VersionManifest` rules.
+
+Lineage facets cannot substitute for evidence refs unless an owner row maps them to a specific non-authoritative artifact class. Registry governance artifacts cannot define evidence refs by themselves. Analysis findings and metrics may reference evidence metadata but must not become source evidence, source completeness, source authority, gold facts, graph truth, package activation, or validation acceptance.
+
+Artifact substitution failures must use owner-specific errors when available and must be covered by `120` volatility-boundary and evidence-ref fixture rows.
 
 ## Registry Governance
 
@@ -381,6 +391,7 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 | table snapshot artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source time, graph rebuild correctness by itself |
 | table commit artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source authority, source completeness by itself |
 | graph rebuild artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | source truth, identity truth, completeness, validation by itself |
+| evidence artifact class row set | `activation_controlled_artifact` | `040` for stable class/kind pairing; owner spec for class-specific rows | new `artifact_id.kind` values, source evidence authority, production evidence by itself |
 
 ### RegistryActivationPolicy
 
@@ -548,6 +559,9 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-GENERIC-PAYLOAD-AC-001` | Generic external graph payload cannot produce analysis findings, metrics, pathfinding input, or identity influence. |
 | `130-DERIVED-VIEW-STALE-AC-001` | Stale graph derived-view state rejects or labels according to `090` and `110`; compliance/audit analysis rejects by default. |
 | `130-ANALYSIS-MUTATION-AC-001` | Any analysis attempt to mutate authoritative or graph-serving state fails before mutation. |
+| `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-001` | Lineage facets cannot substitute for table snapshot evidence or source evidence without an exact owner artifact-class row. |
+| `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-002` | Registry labels, validation reports, analysis findings, and metrics cannot substitute for fact authority, source evidence, production evidence, graph truth, or package activation. |
+| `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-003` | Evidence refs to analysis, lineage, registry, validation, or freshness artifacts validate both `130.ArtifactClassPolicy` and `040.EvidenceArtifactClassRegistry` before visibility. |
 
 ## Definition of Done
 

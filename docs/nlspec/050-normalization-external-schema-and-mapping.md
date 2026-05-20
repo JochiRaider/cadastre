@@ -108,6 +108,14 @@ If a mapping bundle intends an external schema field to be considered by authori
 
 Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must fail with `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
 
+### GoldFactObjectBoundaryHandoff
+
+`NormalizeObservation` and `ResolveOCSFMapping` must not emit `GoldFact` bytes, `GoldFact.subject_ref`, `GoldFact.object_value`, `EvidenceRef.artifact_id`, graph deltas, source authority decisions, absence outcomes, correction outputs, or watermark effects. Mapping output may supply observation metadata only. Gold object values may be derived only by `080.DeriveFacts` after `040` one-of validation, `060` authority validation, and `080` predicate-contract validation.
+
+OCSF objects may become `structured_value` only through an active `080.GoldFactPredicateContractRow.structured_value_schema_refs` entry and a matching `060` authority row when authority is required. OCSF `raw_data`, `unmapped`, observables, enrichments, status, severity, and confidence remain non-authoritative unless exact `050`, `060`, and `080` handoff rows permit a bounded interpretation.
+
+`source_extension_fields` are never subject/object authority by themselves. A mapping bundle that attempts to set `object_kind`, `object_value.kind`, `GoldFact.subject_ref`, `EvidenceRef.artifact_id`, `absence_outcome`, source authority, correction output, graph output, or watermark output must fail before silver output or emit a mapping diagnostic using the most specific owner error.
+
 ### FlowRoleEvidenceMappingHandoff
 
 `FlowRoleEvidence` is Cadastre-owned evidence outside OCSF `normalized_fields`. Mapping bundles may preserve OCSF endpoint fields as normalized observation metadata, but they must not synthesize `FlowRoleEvidence` from endpoint field order.
@@ -538,6 +546,10 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-FLOW-ROLE-HANDOFF-AC-003` | Ambiguous endpoint roles, NAT/proxy uncertainty, aggregation uncertainty, DNS, and DHCP defaults emit no observed-connection direction. |
 | `050-FLOW-ROLE-HANDOFF-AC-004` | `cadastre_only` network-context rows remain metadata unless `090` consumes qualifying flow-role evidence. |
 | `050-MVP-OCSF-CLOSURE-AC-001` | Every active MVP observation type resolves to exactly one active mapping row or exact `cadastre_only` row, and every row has compiled artifact refs, policy refs, validation refs, and non-`TODO` expected output checksums. |
+| `050-GOLD-OBJECT-BOUNDARY-AC-001` | OCSF object fields do not become `GoldFact.object_value.structured_value` without an active `080` structured schema ref and matching authority handoff when authority is required. |
+| `050-GOLD-OBJECT-BOUNDARY-AC-002` | OCSF `raw_data` and `unmapped` are not `EvidenceRef` artifacts and cannot set `EvidenceRef.artifact_id`. |
+| `050-GOLD-OBJECT-BOUNDARY-AC-003` | Observables, enrichments, source-extension fields, and endpoint fields are not `GoldFact.subject_ref` or `GoldFact.object_value` references by mapping-side inference. |
+| `050-GOLD-OBJECT-BOUNDARY-AC-004` | A mapping attempt to set `GoldFact.object_value`, `GoldFact.subject_ref`, `object_kind`, source authority, absence outcome, correction output, graph output, or watermark output fails before silver output or emits the most specific owner diagnostic. |
 
 ## Definition of Done
 

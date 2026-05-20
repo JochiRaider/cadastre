@@ -30,6 +30,8 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `ComputeRawRecordId`
 - `CoreRecordValidationAlgorithm`
 - `ActivationControlledArtifactRef`
+- `EvidenceRef`
+- `EvidenceArtifactIdKindRegistry`
 
 ## Exports
 
@@ -171,6 +173,24 @@ Every authoritative read that can affect production output, replay, graph rebuil
 | `LakehouseSnapshotRef` | Names table-format-native snapshot, metadata/log, schema, partition, delete/tombstone, catalog, and checksum identity. |
 | `DatasetVersionRef` | Names logical dataset or table-set version consumed or produced by a run. |
 | `LakehouseCommitRef` | Names attempted or completed write and its table-format-native commit evidence. |
+
+### EvidenceRef lakehouse artifact handoff
+
+`020` runtime records that are persisted Cadastre records may be referenced by `EvidenceRef.artifact_id.kind = cadastre_record_ref` with `artifact_checksum` equal to the referenced record checksum. Lakehouse external artifacts that are not Cadastre records must use `EvidenceRef.artifact_id.kind = lakehouse_artifact_ref` with `artifact_checksum` computed over immutable bytes or owner-declared canonical metadata bytes.
+
+| Lakehouse artifact or record | Required `EvidenceRef.artifact_id.kind` | Required checksum basis |
+| --- | --- | --- |
+| `RawFeedManifest` persisted as a Cadastre record | `cadastre_record_ref` | Referenced record checksum. |
+| `RawFeedManifest` referenced manifest or object bytes | `lakehouse_artifact_ref` | Immutable manifest or object bytes, or owner-declared canonical metadata bytes. |
+| `LakehouseSnapshotRef` | `cadastre_record_ref` | Referenced record checksum. |
+| `DatasetVersionRef` | `cadastre_record_ref` | Referenced record checksum. |
+| `LakehouseCommitRef` | `cadastre_record_ref` | Referenced record checksum. |
+| `LakehouseReadCompletenessReceipt` | `cadastre_record_ref` | Referenced record checksum. |
+| `UpstreamCompletenessEvidence` | `cadastre_record_ref` | Referenced record checksum. |
+| Raw object ref inside `RawFeedManifest` | `lakehouse_artifact_ref` | Immutable object bytes or owner-declared canonical metadata bytes. |
+| Partition ref inside `RawFeedManifest` | `lakehouse_artifact_ref` | Immutable partition manifest bytes or owner-declared canonical metadata bytes. |
+
+Raw payload bytes must not be inlined into `EvidenceRef`. Object-store path alone is not sufficient evidence identity; `artifact_checksum` is mandatory. Mutable table refs such as `latest`, branch name alone, unpinned catalog ref, unresolved object prefix, and unpinned partition prefix must not satisfy `EvidenceRef`. Output-affecting reads and writes must still be represented by `LakehouseSnapshotRef`, `DatasetVersionRef`, or `LakehouseCommitRef`.
 
 ## Feed and Table Volatility Classification
 
@@ -569,6 +589,9 @@ Profile, category, manifest, table-state, and activation errors render through `
 | `020-SOURCE-CLOSURE-AC-002` | `allowed_effects` without matching `060` row refs permits no absence-sensitive effect. |
 | `020-SOURCE-CLOSURE-AC-003` | Each feed category in `LakehouseFeedCategoryClosureRequirementTable` appears exactly once in `FeedCategoryToSourceAuthorityClosureRequirements`. |
 | `020-SOURCE-CLOSURE-HANDOFF-AC-001` | Every active feed category that names an absence-sensitive domain has exact `060` closure refs and `120` validation refs, or a deterministic block row. Missing, ambiguous, inactive, or checksum-mismatched refs fail before read/import output can authorize absence-sensitive effects. |
+| `020-EVIDENCE-LAKEHOUSE-AC-001` | `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef`, `LakehouseReadCompletenessReceipt`, and `UpstreamCompletenessEvidence` evidence use `cadastre_record_ref` with referenced record checksum. |
+| `020-EVIDENCE-LAKEHOUSE-AC-002` | Raw object, manifest, and partition evidence use `lakehouse_artifact_ref` with immutable bytes or owner-declared canonical metadata bytes. |
+| `020-EVIDENCE-LAKEHOUSE-AC-003` | Missing artifact checksum, mutable `latest` refs, branch-only refs, unresolved prefixes, and raw payload bytes fail before `EvidenceRef` ID computation. |
 
 | `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |

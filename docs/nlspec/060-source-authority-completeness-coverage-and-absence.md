@@ -35,6 +35,9 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `FactAbsenceOutcome`
 - `EvidenceRef`
 - `ActivationControlledArtifactRef`
+- `GoldFactPredicateContractRow`
+- `GoldFactSubjectRefKindRegistry`
+- `GoldFactObjectValueKindRegistry`
 
 ## Exports
 
@@ -60,7 +63,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 
 ## Source Authority Contract
 
-Gold derivation must use an active `SourceAuthorityProfileRow` for the exact fact type, predicate, source category, source dataset, source instance override when present, subject scope, object scope, staleness requirement, coverage requirement, and requested absence authority.
+Gold derivation must use an active `SourceAuthorityProfileRow` for the exact fact type, predicate, source category, source dataset, source instance override when present, subject scope, object scope, subject reference kind, object value kind, object kind, null-object state, structured object schema ref when present, staleness requirement, coverage requirement, and requested absence authority.
 
 A broad source-category ranking must not act as fallback authority when the exact row is missing.
 
@@ -104,6 +107,11 @@ Graph derived-view lag, missing graph objects, graph apply success, graph index 
 | `instance_default_allowed` | Yes | `false` | `true` permits dataset-default matching only when no exact source-instance row exists. |
 | `subject_scope_selector` | Yes | none | Canonical selector covering the subject scope. |
 | `object_scope_selector` | Yes | none | Canonical selector covering the object scope. |
+| `required_gold_fact_predicate_contract_ref` | Yes | none | Exact active `080.GoldFactPredicateContractRow` ref covering `fact_type` and `predicate`. |
+| `subject_ref_kind_scope` | Yes | none | Non-empty subset of the selected `080.allowed_subject_ref_kinds`; it must not broaden the predicate contract. |
+| `object_value_kind_scope` | Yes | none | Non-empty subset of the selected `080.allowed_object_value_kinds`; it must not broaden the predicate contract. |
+| `null_object_authority` | No | `false` | `true` is valid only when `080.null_object_policy = allowed`; `false` does not authorize `null_value`. |
+| `structured_object_authority_refs` | Required when structured values are authoritative | `[]` when structured values are not authoritative | Exact schema refs from `080.structured_value_schema_refs` that this authority row may authorize. |
 | `authority_mode` | Yes | none | One of `positive_only`, `positive_and_absence`, `control_result_only`, `history_only`, `non_authoritative`. |
 | `allowed_effects` | Yes | `[]` | Closed array of `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Empty permits positive observations only. |
 | `required_completeness_profile_row_refs` | Yes when any effect is allowed | `[]` only for `positive_only` | Exact `LakehouseFeedCompletenessProfileRow` refs. |
@@ -137,6 +145,14 @@ retraction
 graph_expiry
 watermark
 ```
+
+### GoldFactShapeAuthorityHandoff
+
+A `SourceAuthorityProfileRow` may authorize only a `GoldFact` candidate whose `fact_type`, `predicate`, `subject_ref.kind`, `object_value.kind`, `object_kind`, null-object state, structured schema ref, source dataset, subject scope, object scope, staleness state, coverage state, and requested effect all match both the active `080.GoldFactPredicateContractRow` and the selected source-authority row.
+
+`subject_ref_kind_scope` and `object_value_kind_scope` must be subsets of the selected `080` predicate contract row. A `060` row must not broaden the `080` allowed kind set. `null_object_authority = true` is valid only when `080.null_object_policy = allowed`. A structured-object authority ref is valid only when the referenced schema ref appears in `080.structured_value_schema_refs` for the selected predicate.
+
+External schema field presence, external schema field absence, OCSF object metadata, progress signals, freshness signals, and source-history metadata must not satisfy object authority without an exact `060` row and a matching `080` predicate contract row. Missing, inactive, checksum-mismatched, out-of-scope, or stale predicate contract refs block authority before gold output.
 
 ### ResolveSourceAuthorityProfileRow
 
@@ -533,6 +549,8 @@ Every attempted production source, projection, graph-apply, or presence-only wat
 
 Missing rows, stale states, partial states, permission-limited states, weak progress signals, destination cleanup, omitted fields, missing lakehouse rows, and OCSF field absence must remain unable to create absence by themselves.
 
+A source-authority row that references a predicate contract must not authorize a `GoldFact` candidate whose `subject_ref.kind`, `object_value.kind`, `object_kind`, null-object state, or structured schema ref is outside that predicate contract. Such a candidate must fail before `gold_fact_key_id` computation with the most specific `080` predicate-contract error or `040.CORE_ONE_OF_INVALID` when the one-of shape is invalid.
+
 ### External schema non-authority boundary
 
 OCSF class, category, activity, type, object paths, observables, enrichments, status, severity, confidence, endpoint order, field presence, and field absence are normalized observation metadata only. They must not satisfy `SourceAuthorityProfileRow`, `CoverageAssertion`, `SourceStalenessPolicy`, `LakehouseFeedCompletenessProfileRow`, `AbsenceDerivationPolicy`, or `ControlResultMappingRow` requirements unless an active `060`-owned row explicitly maps the exact signal to the exact effect.
@@ -793,6 +811,11 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-GRAPH-EFFECT-AUTH-AC-003` | Missing or ambiguous flow-role evidence maps to unknown, ambiguous, or deterministic no-op and emits no graph mutation. |
 | `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
 | `060-SOURCE-CLOSURE-AC-014` | Every active absence-sensitive effect resolves one `SourceAuthorityClosureMatrixRow` with complete refs and passing validation, or resolves one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, or `TODO` rows fail before any absence-sensitive effect. |
+| `060-GOLD-SHAPE-AUTHORITY-AC-001` | A source-authority row cannot widen `080.allowed_subject_ref_kinds` or `080.allowed_object_value_kinds`; widening attempts fail before authority selection. |
+| `060-GOLD-SHAPE-AUTHORITY-AC-002` | A source-authority row cannot permit `null_value` when the selected predicate contract forbids it. |
+| `060-GOLD-SHAPE-AUTHORITY-AC-003` | External schema field presence or absence remains non-authoritative without exact `050`, `060`, and `080` handoff rows. |
+| `060-GOLD-SHAPE-AUTHORITY-AC-004` | Missing, inactive, checksum-mismatched, or out-of-scope predicate contract refs block source authority before gold output. |
+| `060-GOLD-SHAPE-AUTHORITY-REPLAY-AC-001` | Authority checksum changes and predicate-contract checksum changes are replay-affecting for gold output. |
 
 ## Definition of Done
 

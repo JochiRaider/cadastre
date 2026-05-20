@@ -163,18 +163,30 @@ Persisted records must contain the canonical six-fractional-digit string. A pers
 
 Every `enum_token` field must be governed by exactly one closed enum owner before authoritative promotion. `040` owns only the enum-token scalar grammar unless the row below assigns the enum to `040`.
 
-| Enum family | Owner | Applies to | Closure state |
+Closed closure-status values for this table are:
+
+```text
+closed_in_040
+closed_in_owner_spec
+activation_controlled_row_set_required
+blocked_validation
+inactive_deferred
+```
+
+| Enum family | Owner | Applies to | Closure status |
 | --- | --- | --- | --- |
-| core record tokens and schema record types | `040` | `CommonRecordHeader.record_type` and core schema selectors | closed by exported core record set |
-| omission states | `040` | `OmissionState` | closed by `040.Omission Semantics` |
-| fact absence outcomes | `040` | `FactAbsenceOutcome` and `GoldFact.absence_outcome` | closed by `040.FactAbsenceOutcome`; production derivation owned by `060` |
-| assertion states | `040`, `080` | `GoldFact.assertion_state` and correction transitions | closed for default states; owner-specific transitions in `080` |
-| raw import and payload enums | `020`, `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | owner enum row required before promotion |
-| silver observation enums | `050`, `040` | observation type, source category, field quality, external profile state | owner enum row required before promotion |
-| identity enums | `070`, `040` | identity decision, evidence role, review state, selector mechanism | closed by `070.Identity closed enum tables` after resolver closure; promotion blocks if `070` enum closure is absent or inconsistent. |
-| temporal and correction enums | `080`, `040` | temporal quality, correction class, replay result, bitemporal query mode | owner enum row required before promotion |
-| graph enums | `090`, `040` | graph node type, edge type, operation, traversal class, assertion visibility | owner enum row required before promotion |
-| API, package, validation, and analysis enums | `100`, `110`, `120`, `130` | status, health, error, validation, and analysis tokens | owner enum row required before promotion |
+| core record tokens and schema record types | `040` | `CommonRecordHeader.record_type` and core schema selectors | `closed_in_040` |
+| omission states | `040` | `OmissionState` | `closed_in_040` |
+| fact absence outcomes | `040`, production derivation by `060` | `FactAbsenceOutcome` and `GoldFact.absence_outcome` | `closed_in_040` for token set; `closed_in_owner_spec` for production derivation |
+| assertion states | `040`, transition behavior by `080` | `GoldFact.assertion_state` and correction transitions | `closed_in_040` for default state tokens; `closed_in_owner_spec` for transitions |
+| raw import and payload enums | `020`, scalar grammar by `040` | `read_target_kind`, `payload_hash_algorithm`, `payload_format`, `duplicate_status`, `quarantine_status`, `evidence_visibility` | `closed_in_owner_spec` |
+| silver observation enums | `050`, scalar grammar by `040` | observation type, source category, field quality, external profile state | `closed_in_owner_spec` |
+| identity enums | `070`, scalar grammar by `040` | identity decision, evidence role, review state, selector mechanism | `closed_in_owner_spec` |
+| temporal and correction enums | `080`, scalar grammar by `040` | temporal quality, correction class, replay result, bitemporal query mode | `closed_in_owner_spec` |
+| graph enums | `090`, scalar grammar by `040` | graph node type, edge type, operation, traversal class, assertion visibility | `closed_in_owner_spec` |
+| API, package, validation, and analysis enums | `100`, `110`, `120`, `130`, scalar grammar by `040` | status, health, error, validation, and analysis tokens | `closed_in_owner_spec` |
+
+An owner enum family marked `closed_in_owner_spec` must resolve through the named owner before authoritative promotion. No enum family row may use an unrecognized closure status.
 
 ### CoreOneOfRegistry
 
@@ -182,11 +194,91 @@ Each `one_of` field must use a tagged object with `kind` plus exactly one member
 
 | Union | Owning spec | Allowed `kind` values | Value member rule | Null/omission behavior | ID/checksum behavior | Invalid-kind error | Closure state |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `GoldFact.subject_ref` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null and omission forbidden. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
-| `GoldFact.object_value` | `040`, behavior imported by `080` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`. | Null permitted only when the owning fact predicate declares null-object semantics. | Included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `GoldFact.subject_ref` | `040`, predicate permission imported from `080` | `canonical_entity_ref`; `source_asset_ref`; `identifier_ref` | Exactly one value member defined by `GoldFactSubjectRefKindRegistry`. | Null and omission forbidden. | Complete one-of object included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | closed_in_040 |
+| `GoldFact.object_value` | `040`, predicate permission imported from `080` | `canonical_entity_ref`; `source_asset_ref`; `identifier_ref`; `string_value`; `enum_value`; `boolean_value`; `int64_value`; `uint64_value`; `decimal_value`; `timestamp_value`; `structured_value`; `null_value` | Exactly one value member defined by `GoldFactObjectValueKindRegistry`. | Null and omission forbidden at the `object_value` field. `kind = null_value` is allowed only when `080.GoldFactPredicateContractRow.null_object_policy = allowed`. | Complete one-of object included in gold fact key and record checksum. | `CORE_ONE_OF_INVALID` | closed_in_040 |
 | `GraphNodeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | `canonical_entity_ref`; `structural_synthetic_ref` inactive until `090` activates structural output; `generic_external_graph_ref` forbidden in MVP. | Exactly one value member matching `kind`; MVP projected canonical nodes must use `canonical_entity_ref`. | Null and omission forbidden. `structural_synthetic_ref` may be used only when a future active `090` structural row permits it. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | closed_mvp_graph |
 | `GraphEdgeDeltaShape.source_object_ref` | `040`, behavior imported by `090` | `gold_fact_ref` only for MVP `observed_connection`; structural and generic external graph refs are forbidden in MVP. | Exactly one value member matching `kind`; MVP observed-connection edges must use `gold_fact_ref`. | Null and omission forbidden. | Included in graph delta checksum; graph ID input is imported from `090`. | `CORE_ONE_OF_INVALID` | closed_mvp_graph |
-| `EvidenceRef.artifact_id` | `040`, behavior imported by `110` and `120` | TODO: owner-specific closed list required before authoritative promotion | Exactly one value member matching `kind`; raw payload bytes are forbidden. | Null and omission forbidden. | Included in evidence-ref ID and record checksum. | `CORE_ONE_OF_INVALID` | blocked_owner_todo |
+| `EvidenceRef.artifact_id` | `040`, class permission imported by `020`, `030`, `100`, and `130` | `cadastre_record_ref`; `activation_artifact_ref`; `lakehouse_artifact_ref`; `external_artifact_ref` | Exactly one value member defined by `EvidenceArtifactIdKindRegistry`; raw payload bytes are forbidden. | Null and omission forbidden. | Complete one-of object included in evidence-ref ID and record checksum. | `CORE_ONE_OF_INVALID` | closed_in_040 |
+
+### GoldFactSubjectRefKindRegistry
+
+`GoldFact.subject_ref.kind` is a closed token set owned by `040`. Predicate-specific permission to use a subject kind is owned by `080.GoldFactPredicateContractRow`.
+
+| `subject_ref.kind` | Required value member | Member type | Required behavior |
+| --- | --- | --- | --- |
+| `canonical_entity_ref` | `canonical_entity_id` | `cadastre_id` | The referenced record must be an eligible `CanonicalEntity` under `070` when the selected predicate contract permits this kind. |
+| `source_asset_ref` | `source_asset_id` | `cadastre_id` | The referenced record must be an eligible `SourceAsset` under `070` when the selected predicate contract permits this kind. |
+| `identifier_ref` | `identifier_id` | `cadastre_id` | The referenced record must be an eligible `Identifier` under `070` when the selected predicate contract permits this kind. |
+
+`subject_ref.kind` must be one of the values in this registry. The one-of object must contain `kind` and exactly one matching value member. Null, omission, multiple value members, unknown kinds, mismatched members, and null value members fail with `CORE_ONE_OF_INVALID` before `gold_fact_key_id` computation.
+
+Raw records, silver observations, evidence refs, graph node IDs, graph edge IDs, backend IDs, package IDs, validation artifacts, lineage artifacts, telemetry IDs, external schema objects, OCSF objects, and source-native strings are not valid `GoldFact.subject_ref` kinds.
+
+### GoldFactObjectValueKindRegistry
+
+`GoldFact.object_value.kind` is a closed token set owned by `040`. Predicate-specific permission, null-object permission, and structured-value schema permission are owned by `080.GoldFactPredicateContractRow`.
+
+| `object_value.kind` | Required value member | Member type | Required behavior |
+| --- | --- | --- | --- |
+| `canonical_entity_ref` | `canonical_entity_id` | `cadastre_id` | Identity-like object value carried by canonical entity reference. |
+| `source_asset_ref` | `source_asset_id` | `cadastre_id` | Identity-like object value carried by source asset reference. |
+| `identifier_ref` | `identifier_id` | `cadastre_id` | Identity-like object value carried by typed identifier reference. |
+| `string_value` | `value` | `string` | Bounded string value. It must not carry an identity-like object when `080.identity_like_string_policy = reject`. |
+| `enum_value` | `value` | `enum_token` | Closed owner enum value selected by the active predicate contract. |
+| `boolean_value` | `value` | `boolean` | JSON boolean. |
+| `int64_value` | `value` | `int64` | Signed 64-bit integer. |
+| `uint64_value` | `value` | `uint64` | Unsigned 64-bit integer. |
+| `decimal_value` | `decimal_value` | `canonical_object` | Object containing `decimal_class` and canonical `value`; binary floating point is forbidden. |
+| `timestamp_value` | `value` | `timestamp_utc` | RFC3339 UTC timestamp with `Z`. |
+| `structured_value` | `structured_value` | `canonical_object` | Object containing `schema_ref` and `value`; `schema_ref` must reference an active owner-declared object-value schema row. |
+| `null_value` | `null_value` | JSON null | Explicit null object sentinel; allowed only when `080.GoldFactPredicateContractRow.null_object_policy = allowed`. |
+
+`GoldFact.object_kind` must equal `GoldFact.object_value.kind` before `gold_fact_key_id` computation. The one-of object must contain `kind` and exactly one matching value member. Null, omission, multiple value members, unknown kinds, mismatched members, null value members other than the `null_value` sentinel, and `object_kind` mismatch fail before ID computation.
+
+Identity-like object values, including IP addresses, hostnames, DNS names, PTR names, provider keys, mapped targets, graph keys, source-native identities, and selector-only values, must use one of the reference kinds when an active predicate contract treats the value as identity-like. They must not be encoded as `string_value` to bypass resolver governance.
+
+`structured_value.schema_ref` must reference an active owner-declared object-value schema row and must not serve as an unbounded escape hatch. OCSF objects, observables, raw data, unmapped fields, lineage facets, detection results, registry labels, graph backend objects, and external taxonomies are not object authority unless an owning spec derives a bounded value through the gold derivation interface.
+
+### EvidenceArtifactIdKindRegistry
+
+`EvidenceRef.artifact_id.kind` is a closed token set owned by `040`. Artifact-class eligibility is governed by `EvidenceArtifactClassRegistry` and owner handoffs from `020`, `030`, `100`, and `130`.
+
+| `artifact_id.kind` | Required value member | Member type | Required behavior |
+| --- | --- | --- | --- |
+| `cadastre_record_ref` | `record_id` | `cadastre_id` | References a persisted Cadastre record. `artifact_checksum` must equal the referenced record checksum. |
+| `activation_artifact_ref` | `artifact_id` | `external_ref_id` | References an activation-controlled artifact through `030.ActivationControlledArtifactRef`. |
+| `lakehouse_artifact_ref` | `artifact_id` | `external_ref_id` | References immutable lakehouse object, manifest, table, snapshot, commit, or canonical metadata bytes declared by `020`. |
+| `external_artifact_ref` | `artifact_id` | `external_ref_id` | References external standard, report, repository metadata, provenance, SBOM, compiled schema, or source-native artifact bytes or owner-declared canonical metadata bytes. |
+
+`artifact_id.kind` must be one of the four values in this registry. The one-of object must contain `kind` and exactly one matching value member. Null, omission, unknown kind, multiple value members, mismatched members, null value members, and raw payload bytes fail before `evidence_ref_id` computation.
+
+`artifact_checksum` is mandatory for every `artifact_id.kind`. For `cadastre_record_ref`, `artifact_checksum` must equal the referenced record checksum. For `activation_artifact_ref`, `lakehouse_artifact_ref`, and `external_artifact_ref`, `artifact_checksum` must equal immutable artifact bytes or owner-declared canonical metadata bytes. A mutable label, object prefix, table name, branch name, latest pointer, or payload-inline value must not satisfy `EvidenceRef`.
+
+### EvidenceArtifactClassRegistry
+
+`EvidenceArtifactClassRegistry` is the stable `040` pairing contract between `EvidenceRef.artifact_class` and `EvidenceRef.artifact_id.kind`. Concrete artifact-class row sets may be activated by owner specs, but new `artifact_id.kind` values require a new `040` schema version.
+
+| Registry field | Required behavior |
+| --- | --- |
+| `artifact_class` | Closed owner-declared artifact class token. |
+| `allowed_artifact_id_kind` | One token from `EvidenceArtifactIdKindRegistry`. |
+| `owner_spec` | Spec that owns the artifact class and checksum basis. |
+| `allowed_authority_class` | Authority class permitted for the evidence citation. |
+| `checksum_basis` | `referenced_record_checksum`, `immutable_artifact_bytes`, or `owner_declared_canonical_metadata_bytes`. |
+| `payload_inline_policy` | Default `forbidden`; no row may permit raw payload bytes in `EvidenceRef`. |
+| `redaction_owner` | Spec that owns caller-visible and audit-visible exposure. |
+| `version_manifest_requirement` | Required manifest refs for output-affecting evidence. |
+| `validation_refs` | Non-empty refs to `120` evidence-artifact validation rows. |
+| `closure_status` | `closed_in_040`, `closed_in_owner_spec`, `activation_controlled_row_set_required`, `blocked_validation`, or `inactive_deferred`. |
+
+| Top-level artifact class family | Allowed `artifact_id.kind` | Owner spec | Required checksum basis |
+| --- | --- | --- | --- |
+| Cadastre persisted record classes | `cadastre_record_ref` | Owner of the referenced record class | Referenced record checksum. |
+| `030.ActivationControlledArtifactRef` classes | `activation_artifact_ref` | `030` plus artifact owner | Immutable activation artifact bytes or owner-declared canonical metadata bytes. |
+| `020` lakehouse table, object, manifest, snapshot, and commit artifacts | `lakehouse_artifact_ref` | `020` | Immutable lakehouse bytes or owner-declared canonical metadata bytes. |
+| External standards, reports, source-native artifacts, compiled schemas, package repository metadata, provenance, and SBOM artifacts | `external_artifact_ref` | Owner spec that imports the artifact | Immutable external bytes or owner-declared canonical metadata bytes. |
+
+A new artifact class may be activated through the owning spec only when it maps to one existing `artifact_id.kind`, declares checksum basis, declares redaction owner, declares `VersionManifest` requirements, and has passing validation refs. `EvidenceRef.artifact_class` and `EvidenceRef.artifact_id.kind` mismatch fails with `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` before `evidence_ref_id` computation.
 
 ### CommonRecordHeader
 
@@ -359,10 +451,10 @@ Shape validation materializes required defaults before checksum computation. Unk
 | `gold_fact_id` | `cadastre_id` | yes | none | no | no | scalar default | n/a | derived | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `gold_fact_key_id` | `cadastre_id` | yes | none | no | no | scalar default | n/a | derived | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `fact_type` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:1 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `subject_ref` | `one_of` | yes | none | no | no | closed union declared by fact type | n/a | ordered:2 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+| `subject_ref` | `one_of` | yes | none | no | no | `040.GoldFactSubjectRefKindRegistry`; predicate-specific subset owned by `080` | n/a | ordered:2 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_ONE_OF_INVALID` |
 | `predicate` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:3 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `object_kind` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:4 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `object_value` | `one_of` | yes | none | no | no | closed union declared by object_kind | n/a | ordered:5 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+| `object_kind` | `enum_token` | yes | none | no | no | Must equal `object_value.kind` before ID computation. | n/a | ordered:4 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_ONE_OF_INVALID` |
+| `object_value` | `one_of` | yes | none | no | no | `040.GoldFactObjectValueKindRegistry`; predicate-specific subset and null policy owned by `080` | n/a | ordered:5 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_ONE_OF_INVALID` |
 | `valid_from` | `timestamp_utc` | yes | null when valid start is unknown and policy permits | yes | no | scalar default | n/a | ordered:6 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `valid_to` | `timestamp_utc` | yes | null means open valid interval | yes | no | scalar default | n/a | ordered:7 for key | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `known_from` | `timestamp_utc` | yes | none | no | no | scalar default | n/a | ordered:2 for immutable ID | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
@@ -383,7 +475,7 @@ Shape validation materializes required defaults before checksum computation. Unk
 | --- | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `evidence_ref_id` | `cadastre_id` | yes | none | no | no | scalar default | n/a | derived | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `artifact_class` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:1 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
-| `artifact_id` | `one_of` | yes | none | no | no | `cadastre_id` or `external_ref_id` | n/a | ordered:2 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
+| `artifact_id` | `one_of` | yes | none | no | no | `040.EvidenceArtifactIdKindRegistry`; class/kind pair must match `040.EvidenceArtifactClassRegistry` | n/a | ordered:2 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_ONE_OF_INVALID` |
 | `artifact_checksum` | `sha256_hex` | yes | none | no | no | scalar default | n/a | ordered:3 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `evidence_role` | `enum_token` | yes | none | no | no | scalar default | n/a | ordered:4 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `field_paths` | `array<field_path>` | yes | `[]` | no | no | scalar default | lexical by field path | ordered:5 | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
@@ -437,6 +529,10 @@ Shape validation materializes required defaults before checksum computation. Unk
 
 ID algorithms must serialize ordered ID inputs as a JSON array with `CanonicalJSON`, hash the UTF-8 canonical bytes with SHA-256, and return `<prefix>_<lowercase_hex_digest>`. Digest truncation is forbidden. If different canonical input bytes produce the same ID, validation must emit the record-specific collision error and commit no record.
 
+The complete canonical `one_of` object, including `kind` and the matching value member, is serialized into ID inputs exactly as materialized by `CanonicalJSON`. Implementations must not hash only the value member or replace the `one_of` object with an owner-local string.
+
+Any pre-closure record that used inferred `one_of` kinds, inferred value members, inferred null behavior, or inferred artifact-class pairing is not promotion-eligible. It must be replayed and rekeyed under the closed `schema_version`.
+
 | Record or algorithm | Prefix | Ordered ID inputs | Missing-input behavior | Null sentinel behavior | Collision error | Schema-version behavior |
 | --- | --- | --- | --- | --- | --- | --- |
 | `ComputeRawRecordId` | `raw` | `feed_profile_id`, `read_target_kind`, `source_dataset`, `scope_key_set`, `supplier_batch_or_object_identity`, `source_native_record_identity`, `canonical_payload_hash`, `import_profile_version` | Required inputs reject with `CORE_REQUIRED_FIELD_MISSING`. | `source_native_record_identity` materializes JSON null when absent. | `RAW_RECORD_ID_COLLISION` | Input order change requires new `schema_version`. |
@@ -453,6 +549,8 @@ ID algorithms must serialize ordered ID inputs as a JSON array with `CanonicalJS
 ### CoreRecordChecksumPolicy
 
 `record_checksum` is SHA-256 over `CanonicalJSON` bytes for the full materialized record, including `CommonRecordHeader` and body fields, excluding only `record_checksum`. Raw payload bytes must not be inlined into any core record checksum input; payload hashes and bounded refs are checksum inputs. Unknown fields outside declared extension maps fail before checksum computation.
+
+The complete canonical `one_of` object, including `kind` and the matching value member, is included in record checksums exactly as materialized by `CanonicalJSON`. Implementations must not substitute owner-local display strings, backend IDs, raw source strings, or artifact labels for a closed `one_of` object in checksum input.
 
 | Record | Included fields | Excluded fields | Extension-map checksum rule | Replay rule |
 | --- | --- | --- | --- | --- |
@@ -519,6 +617,9 @@ ComputeGoldFactKeyId(fact):
 2. Materialize nullable valid interval endpoints as JSON null.
 3. Serialize the ordered array from `CoreRecordIdPolicy.ComputeGoldFactKeyId` with `CanonicalJSON`.
 4. Return `gfkey_` plus SHA-256 lowercase hex over the UTF-8 canonical bytes.
+
+
+`ComputeGoldFactKeyId` must validate `subject_ref` through `GoldFactSubjectRefKindRegistry`, validate `object_value` through `GoldFactObjectValueKindRegistry`, and require `object_kind == object_value.kind` before serialization. The ID input contains the complete canonical `subject_ref` and `object_value` objects, not only their value members.
 ```
 
 ### ComputeGoldFactId
@@ -541,6 +642,9 @@ ComputeEvidenceRefId(evidence_ref):
 3. Reject inline payload bytes with `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`.
 4. Serialize the ordered array from `CoreRecordIdPolicy.ComputeEvidenceRefId` with `CanonicalJSON`.
 5. Return `eref_` plus SHA-256 lowercase hex over the UTF-8 canonical bytes.
+
+
+`ComputeEvidenceRefId` must validate `artifact_id` through `EvidenceArtifactIdKindRegistry` and validate the `artifact_class`/`artifact_id.kind` pair through `EvidenceArtifactClassRegistry` before serialization. The ID input contains the complete canonical `artifact_id` object, not only its value member.
 ```
 
 ### CoreRecordErrorCodeSet
@@ -567,37 +671,41 @@ ComputeEvidenceRefId(evidence_ref):
 | `EVIDENCE_REF_ID_COLLISION` | Different evidence-ref ID inputs produce the same evidence-ref ID. |
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `EvidenceRef` embeds raw payload bytes. |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | Backend-generated ID appears in graph delta shape, graph response, selector, evidence ref, replay key, drillback key, or pagination identity. |
+| `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` | `EvidenceRef.artifact_class` does not permit the observed `artifact_id.kind` under `EvidenceArtifactClassRegistry`. |
 | `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | Activation-controlled artifact attempts to modify stable core schema behavior. |
 | `PRIVATE_BINDING_LEAK` | A core record or public core-shaped artifact exposes concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories. |
 
 ### CoreRecordErrorRegistryFragment
 
-This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Every row below is complete enough for `110.GenerateErrorCodeRegistry`. A future owner patch may narrow presentation through `110` overrides, but it must not remove caller-visible code, severity, retryability, owner, affected record type, field path, redaction state, or correlation fields.
 
 | error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CORE_UNKNOWN_FIELD` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-unknown-field` |
-| `CORE_REQUIRED_FIELD_MISSING` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-required-field-missing` |
-| `CORE_NULL_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-null-forbidden` |
-| `CORE_FIELD_TYPE_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-field-type-invalid` |
-| `CORE_FIELD_BOUNDS_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-field-bounds-invalid` |
-| `CORE_DECIMAL_PRECISION_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-decimal-precision-invalid` |
-| `CORE_ENUM_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-enum-invalid` |
-| `CORE_ONE_OF_INVALID` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-one-of-invalid` |
-| `CORE_RECORD_ID_MISMATCH` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-record-id-mismatch` |
-| `CORE_RECORD_CHECKSUM_MISMATCH` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-record-checksum-mismatch` |
-| `CORE_SCHEMA_VERSION_UNSUPPORTED` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-schema-version-unsupported` |
-| `RAW_RECORD_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-raw-record-id-collision` |
-| `SILVER_OBSERVATION_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-silver-observation-id-collision` |
-| `CANONICAL_ENTITY_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-canonical-entity-id-collision` |
-| `SOURCE_ASSET_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-source-asset-id-collision` |
-| `IDENTIFIER_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-identifier-id-collision` |
-| `GOLD_FACT_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-gold-fact-id-collision` |
-| `EVIDENCE_REF_ID_COLLISION` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-id-collision` |
-| `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-raw-payload-forbidden` |
-| `GRAPH_BACKEND_ID_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-graph-backend-id-forbidden` |
-| `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-core-schema-runtime-override-forbidden` |
-| `PRIVATE_BINDING_LEAK` | `040` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `040.CoreRecordErrorContext` | `core-record-error-private-binding-leak` |
+| `CORE_UNKNOWN_FIELD` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | record_id, source_artifact_refs, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | field path visible; value and unknown field value redacted | `040.CoreRecordErrorContext` | `core-record-error-core-unknown-field` |
+| `CORE_REQUIRED_FIELD_MISSING` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | record_id, source_artifact_refs, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | field path visible; missing value absent | `040.CoreRecordErrorContext` | `core-record-error-core-required-field-missing` |
+| `CORE_NULL_FORBIDDEN` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | record_id, source_artifact_refs, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | field path visible; surrounding value redacted | `040.CoreRecordErrorContext` | `core-record-error-core-null-forbidden` |
+| `CORE_FIELD_TYPE_INVALID` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | record_id, observed_type, expected_type, source_artifact_refs, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | field path and type names visible; value redacted | `040.CoreRecordErrorContext` | `core-record-error-core-field-type-invalid` |
+| `CORE_FIELD_BOUNDS_INVALID` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | record_id, declared_bound, source_artifact_refs, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | field path and bounds visible; value redacted | `040.CoreRecordErrorContext` | `core-record-error-core-field-bounds-invalid` |
+| `CORE_DECIMAL_PRECISION_INVALID` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | decimal_class, declared_scale, record_id, input_checksum, validation_fixture_ref, version_manifest_ref | decimal class and scale visible; value redacted unless audit permits | `040.CoreRecordErrorContext` | `core-record-error-core-decimal-precision-invalid` |
+| `CORE_ENUM_INVALID` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | enum_family, observed_token, owner_error_context, input_checksum, validation_fixture_ref, version_manifest_ref | observed token visible only when non-sensitive; raw source values redacted | `040.CoreRecordErrorContext` | `core-record-error-core-enum-invalid` |
+| `CORE_ONE_OF_INVALID` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | allowed_kind_set, observed_kind_token, value_member_names, artifact_class, artifact_id_kind, input_checksum, validation_fixture_ref, version_manifest_ref | never expose raw payload bytes, private source bindings, backend IDs, source-native identity values, or artifact payload bytes | `040.CoreRecordErrorContext` | `core-record-error-core-one-of-invalid` |
+| `CORE_RECORD_ID_MISMATCH` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | supplied_record_id, computed_record_id, id_input_checksum, validation_fixture_ref, version_manifest_ref | IDs visible only when caller may see the record; ID inputs redacted | `040.CoreRecordErrorContext` | `core-record-error-core-record-id-mismatch` |
+| `CORE_RECORD_CHECKSUM_MISMATCH` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | supplied_checksum, computed_checksum, checksum_input_ref, validation_fixture_ref, version_manifest_ref | checksums visible; checksum input bytes redacted | `040.CoreRecordErrorContext` | `core-record-error-core-record-checksum-mismatch` |
+| `CORE_SCHEMA_VERSION_UNSUPPORTED` | `040` | blocked | policy_change_required | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | schema_version, supported_schema_versions, version_manifest_ref, validation_fixture_ref | schema tokens visible; payload redacted | `040.CoreRecordErrorContext` | `core-record-error-core-schema-version-unsupported` |
+| `RAW_RECORD_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | colliding input values redacted | `040.CoreRecordErrorContext` | `core-record-error-raw-record-id-collision` |
+| `SILVER_OBSERVATION_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | colliding input values redacted | `040.CoreRecordErrorContext` | `core-record-error-silver-observation-id-collision` |
+| `CANONICAL_ENTITY_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | colliding identity inputs redacted | `040.CoreRecordErrorContext` | `core-record-error-canonical-entity-id-collision` |
+| `SOURCE_ASSET_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | colliding source-native identity values redacted | `040.CoreRecordErrorContext` | `core-record-error-source-asset-id-collision` |
+| `IDENTIFIER_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | colliding identifier values redacted | `040.CoreRecordErrorContext` | `core-record-error-identifier-id-collision` |
+| `GOLD_FACT_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | fact input values redacted unless audit permits | `040.CoreRecordErrorContext` | `core-record-error-gold-fact-id-collision` |
+| `EVIDENCE_REF_ID_COLLISION` | `040` | error | retry_after_owner_repair | error_code, message, severity, retryability, owner_spec, affected_record_type, redaction_state, error_correlation_id | colliding_record_ids, id_input_checksums, validation_fixture_ref, version_manifest_ref | artifact refs redacted by evidence policy | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-id-collision` |
+| `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | security_error | none | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | artifact_class, artifact_id_kind, input_checksum, validation_fixture_ref, version_manifest_ref | raw payload bytes and artifact payload bytes never exposed | `040.CoreRecordErrorContext` | `core-record-error-evidence-ref-raw-payload-forbidden` |
+| `GRAPH_BACKEND_ID_FORBIDDEN` | `040` | security_error | none | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | backend_id_class, graph_profile_ref, input_checksum, validation_fixture_ref, version_manifest_ref | backend IDs hidden from caller and redacted from normal audit | `040.CoreRecordErrorContext` | `core-record-error-graph-backend-id-forbidden` |
+| `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` | `040` | error | caller_correctable | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | artifact_class, artifact_id_kind, allowed_artifact_id_kind, artifact_checksum, validation_fixture_ref, version_manifest_ref | artifact payload bytes hidden; checksums visible when authorized | `040.CoreRecordErrorContext` | `core-record-error-evidence-artifact-class-kind-mismatch` |
+| `CORE_SCHEMA_RUNTIME_OVERRIDE_FORBIDDEN` | `040` | security_error | none | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | attempted_contract, attempted_field, artifact_ref, stable_owner_ref, validation_fixture_ref, version_manifest_ref | artifact payloads and private refs redacted | `040.CoreRecordErrorContext` | `core-record-error-core-schema-runtime-override-forbidden` |
+| `PRIVATE_BINDING_LEAK` | `040` | security_error | none | error_code, message, severity, retryability, owner_spec, affected_record_type, field_path, redaction_state, error_correlation_id | leaked_binding_class, public_artifact_ref, validation_fixture_ref, version_manifest_ref | private binding value, credential, route, tenant inventory, and host list hidden | `040.CoreRecordErrorContext` | `core-record-error-private-binding-leak` |
+
+`CORE_ONE_OF_INVALID` fixture coverage must include subject-ref, object-value, and evidence artifact failures. It must distinguish unknown kind, missing member, extra member, forbidden null, omitted field, object-kind mismatch, raw payload, backend ID, and artifact-class/kind mismatch.
 
 ### Core schema security and extensibility constraints
 
@@ -609,6 +717,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | Forward compatibility | Unknown fields fail closed. New fields require a new `schema_version`, migration row, and validation fixtures. |
 | Extensibility | Extension maps must be owner-declared. `040` validates `SourceExtensionFieldRuleShape` bytes and unknown-field behavior; `050` validates activation and path permission. Undeclared extension fields fail before production output. |
 | Minimal coupling | `040` defines record bytes and validation behavior only. It must not define parser mechanisms, resolver scoring, graph backend products, package runtimes, or source-specific mappings. |
+| Closed one-of boundary | `GoldFact.subject_ref`, `GoldFact.object_value`, and `EvidenceRef.artifact_id` must use the closed registries in this spec. Downstream specs may restrict allowed subsets but must not add `kind` values, change value members, alter null behavior, or replace canonical one-of bytes with local strings. |
 
 ### Core schema volatility boundary
 
@@ -626,16 +735,16 @@ If a record carries an activation-artifact value outside a declared extension ma
 
 ### Core schema closure rows
 
-`040` closes decimal precision and validation precedence. Owner-specific enum and one-of value sets remain explicit owner-local blockers and must be represented in `120` validation rows; downstream implementations must not invent missing enum tokens or union members.
+`040` closes decimal precision, validation precedence, and the core `one_of` kind universe for `GoldFact.subject_ref`, `GoldFact.object_value`, and `EvidenceRef.artifact_id`. Owner-specific enum value sets and predicate-specific or artifact-class-specific subsets remain owner-routed and must be represented in `120` validation rows; downstream implementations must not invent missing enum tokens or union members.
 
 | Closure row | Required behavior | Closure state |
 | --- | --- | --- |
 | decimal precision | Use `DecimalPrecisionPolicy.confidence_0_1`; no rounding; persisted value has six fractional digits. | closed_local |
-| one-of members | Use `CoreOneOfRegistry`; any row with TODO allowed kinds blocks authoritative promotion for affected outputs. | blocked_owner_todo |
-| enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_owner_todo |
+| one-of members | Use `CoreOneOfRegistry`, `GoldFactSubjectRefKindRegistry`, `GoldFactObjectValueKindRegistry`, `EvidenceArtifactIdKindRegistry`, and `EvidenceArtifactClassRegistry`. | closed_local |
+| enum registries | Use `CoreEnumRegistryOwnership`; any field lacking a closed owner enum blocks authoritative promotion for affected outputs. | blocked_validation |
 | identity enum closure | `070.Identity closed enum tables` must pass `120` validation before authoritative promotion when identity output is in scope. | blocked_validation |
 | private binding error | `PRIVATE_BINDING_LEAK` is available to core schema and imported from `010`/`110` for public artifact rejection. | closed_local |
-| core schema volatility | Core schemas, omission states, ID/checksum policies, scalar bounds, and validation precedence are stable core; activation artifacts cannot alter them. | closed_local |
+| core schema volatility | Core schemas, omission states, ID/checksum policies, scalar bounds, validation precedence, and core one-of registries are stable core; activation artifacts cannot alter them. | closed_local |
 
 ## Assertion States
 
@@ -768,6 +877,14 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-GRAPH-SOURCE-REF-AC-002` | MVP observed-connection edge deltas accept `gold_fact_ref` source refs and reject null, generic external graph refs, and structural refs. |
 | `040-GRAPH-CONFIDENCE-AC-001` | Graph edge confidence uses `DecimalPrecisionPolicy.confidence_0_1` and rejects non-canonical persisted spellings or more than six fractional digits. |
 | `040-GRAPH-DELTA-OPERATION-AC-001` | Graph delta operations are limited to `upsert`, `update_visibility`, `expire`, `cleanup`, and `no_op`; all other tokens fail before apply. |
+| `040-CORE-ONEOF-SUBJECT-AC-001` | `GoldFact.subject_ref` accepts only `canonical_entity_ref`, `source_asset_ref`, and `identifier_ref`, each with exactly one matching value member, and rejects raw records, silver observations, evidence refs, graph/backend IDs, package IDs, telemetry IDs, source-native strings, unknown kinds, missing members, extra members, null, and omission. |
+| `040-CORE-ONEOF-OBJECT-AC-001` | `GoldFact.object_value` accepts only the closed object-value kind set, requires `object_kind == object_value.kind`, and rejects identity-like strings when predicate contracts require reference kinds. |
+| `040-CORE-ONEOF-NULL-AC-001` | `null_value` is distinct from omission and is valid only when `080.GoldFactPredicateContractRow.null_object_policy = allowed`; forbidden null fails before `gold_fact_key_id` computation. |
+| `040-CORE-ONEOF-EVIDENCE-AC-001` | `EvidenceRef.artifact_id` accepts only `cadastre_record_ref`, `activation_artifact_ref`, `lakehouse_artifact_ref`, and `external_artifact_ref`, requires exactly one matching value member, requires `artifact_checksum`, and rejects raw payload bytes before `evidence_ref_id` computation. |
+| `040-EVIDENCE-ARTIFACT-CLASS-AC-001` | `EvidenceRef.artifact_class` and `artifact_id.kind` pairing is total for declared artifact-class families, and mismatches fail with `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH`. |
+| `040-CORE-ONEOF-ID-CHECKSUM-AC-001` | Complete canonical `one_of` objects, including `kind` and matching value member, are included in ID and checksum inputs; hashing only value members or owner-local strings fails validation. |
+| `040-CORE-ONEOF-MIGRATION-AC-001` | Pre-closure records using inferred kinds, inferred members, inferred null behavior, or inferred artifact-class pairing are not promotion-eligible and must be replayed and rekeyed under the closed schema version. |
+| `040-ERROR-FRAGMENT-CORE-AC-001` | `040.CoreRecordErrorRegistryFragment` has no `TODO:` cells and generates deterministic `110.ErrorCodeRegistryRow` values for every `040.CoreRecordErrorCodeSet` code. |
 
 ## Definition of Done
 
@@ -780,6 +897,8 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-AC-005` | Unknown fields are rejected unless declared through a namespaced extension field rule owned by `050`. |
 | `040-AC-007` | `SourceExtensionFieldRuleShape` validates primitive row bytes while `050` remains the sole owner of runtime source-extension permission. |
 | `040-AC-006` | The spec cannot become authoritative while any `TODO:` row remains in the core schema registry, ID policy, enum registry, one-of registry, decimal precision policy, or validation fixture set. |
+| `040-AC-008` | `GoldFact.subject_ref`, `GoldFact.object_value`, and `EvidenceRef.artifact_id` use closed one-of registries with deterministic value members, null behavior, ID inputs, checksum inputs, and validation fixtures. |
+| `040-AC-009` | Every `EvidenceRef.artifact_class` in declared scope maps to exactly one allowed `EvidenceRef.artifact_id.kind` or fails before evidence-ref ID computation. |
 
 ## Open Questions
 

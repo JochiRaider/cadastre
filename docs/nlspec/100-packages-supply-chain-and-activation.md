@@ -27,6 +27,8 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `ValidationMatrix`
 - `VersionManifest`
 - `ActivationControlledArtifactRef`
+- `EvidenceRef`
+- `EvidenceArtifactIdKindRegistry`
 
 ## Exports
 
@@ -272,6 +274,14 @@ A `GraphBackendProfile` that references a package release or package set whose t
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
 
 Package-supplied analysis, enrichment, lineage, registry, and derived-edge artifacts must not redefine stable `130` non-authority rules, `080` gold derivation behavior, `090` graph projection behavior, `110` API/error/redaction behavior, or `120` validation shapes. A package may instantiate active `130` row sets only through the package type policy rows in this spec, immutable `ProductionPackageSetManifest` membership, `030.ActivationControlledArtifactRef`, exact checksums, active lifecycle status, activation scope, package compatibility rows, and passing `120` validation refs. Missing policy, missing package-set ref, unknown package type, ambiguous policy, compatibility failure, or manifest omission fails before production output.
+
+### PackageEvidenceArtifactHandoff
+
+`PackageReleaseManifest`, `ProductionPackageSetManifest`, `PackageSignatureVerificationResult`, `PackageRepositoryMetadata`, `PackageRepositorySnapshot`, `PackageRepositoryFreshnessProof`, `PackageRepositoryAntiRollbackState`, `PackageAttestationSet`, `PackageBuildProvenance`, `PackageSBOMRef`, `PackagePromotionRecord`, `PackageRollbackPlan`, `PackageRollbackResult`, `PackageQuarantineRecord`, and `EmergencyPackageOverrideRecord` may be referenced by `EvidenceRef` only through the `040.EvidenceArtifactIdKindRegistry` and the `030.EvidenceRefArtifactClassManifestHandoff`.
+
+Persisted package records use `cadastre_record_ref`. Repository metadata, provenance, SBOM, external attestations, and other external supply-chain artifacts use `external_artifact_ref` unless materialized as a Cadastre record. Package-supplied activation artifacts use `activation_artifact_ref`.
+
+Every package evidence ref must include `artifact_checksum` and must not inline package payload, SBOM bytes, provenance bytes, registry metadata bytes, signature bundles, or repository metadata bytes. A package evidence ref must not activate, authorize, promote, roll back, quarantine, or mark last-known-good for a package set. Package activation remains governed only by immutable `ProductionPackageSetManifest` plus the package gates in this spec.
 
 ## Trust Verification
 
@@ -937,6 +947,10 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `100-VERSION-MANIFEST-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, lifecycle, or validation ref is omitted from `030.VersionManifest.included_refs`. |
 | `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
 | `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
+| `100-PACKAGE-EVIDENCE-ARTIFACT-AC-001` | Package release and package-set evidence refs succeed only with an allowed `EvidenceRef.artifact_id.kind` and checksum. |
+| `100-PACKAGE-EVIDENCE-ARTIFACT-AC-002` | Package payload bytes, SBOM bytes, provenance bytes, registry metadata bytes, and signature bundles are rejected when inlined into evidence refs. |
+| `100-PACKAGE-EVIDENCE-ARTIFACT-AC-003` | Scalar signature status, evidence ref existence, SBOM existence, or provenance existence cannot activate or authorize a package set. |
+| `100-PACKAGE-EVIDENCE-ARTIFACT-AC-004` | Package evidence omitted from `VersionManifest` blocks package-related output. |
 | `100-RESOLVER-ARTIFACT-AC-001` | A package-supplied resolver artifact that permits weak-only, selector-only, mapped-target-only, source-native-merge-history-only, or graph-key-only create, attach, or merge fails activation and preserves the current active set. |
 | `100-RESOLVER-ARTIFACT-AC-002` | A package-supplied resolver artifact with missing identity validation refs fails activation before candidate production output. |
 | `100-RESOLVER-ARTIFACT-AC-003` | Resolver profile checksum mismatch in a candidate package set fails activation, keeps the current active set, and writes no candidate production output. |

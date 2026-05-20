@@ -68,7 +68,7 @@ Every active domain spec must include at least one negative validation case for 
 | Source authority | Missing exact authority row, ambiguous authority row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
-| Graph | Backend internal ID appears in response or selector and fails; active MVP edge set is exactly `observed_connection`; missing or ambiguous `FlowRoleEvidence` emits no edge; OCSF endpoint order cannot determine direction; unresolved endpoint identity emits no edge; generic external graph payload is not pathfinding; theoretical reachability and boolean reachability properties are prohibited; query candidate limits and page tokens fail closed; graph backend omitted/defaulted behavior, missing provider profile fields, unsupported provider capability, unsafe storage mode, implicit schema creation, stale schema fingerprint, stale mixed index, full-scan Gremlin translation, missing package gate, backend-generated ID leakage, raw-write bypass, and provider-specific query bypass fail closed or no-op with no forbidden mutation. |
+| Graph | Backend internal ID appears in response or selector and fails; active MVP edge set is exactly `observed_connection`; missing or ambiguous `FlowRoleEvidence` emits no edge; OCSF endpoint order cannot determine direction; unresolved endpoint identity emits no edge; string endpoint identity does not project; identifier and source-asset refs require resolver handoff; invalid gold subject/object kind produces no mutation; generic external graph payload is not pathfinding; theoretical reachability and boolean reachability properties are prohibited; query candidate limits and page tokens fail closed; graph backend omitted/defaulted behavior, missing provider profile fields, unsupported provider capability, unsafe storage mode, implicit schema creation, stale schema fingerprint, stale mixed index, full-scan Gremlin translation, missing package gate, backend-generated ID leakage, raw-write bypass, and provider-specific query bypass fail closed or no-op with no forbidden mutation. |
 | Package | Missing package-type policy, ambiguous package-type policy, unknown package type, unsupported repository form, unauthorized signer, missing transparency evidence, missing attestation, missing SBOM, dependency live resolution, compatibility failure, deprecation expiry, failed post-activation health gate, mutable rollback target, rollback compatibility failure, quarantine target block, emergency trust bypass, and package `VersionManifest` omission fail or no-op with no forbidden mutation. |
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
@@ -121,6 +121,8 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `SPECSET-AC-014` | Stable core specs contain no production-active volatile rows except non-normative examples or blocking `TODO:` rows. |
 | `SPECSET-AC-015` | Every active absence-sensitive feed category has `SourceAuthorityClosureMatrix` validation rows or deterministic block rows. |
 | `SPECSET-AC-016` | When observability is in implementation scope, every telemetry contract, artifact, metric catalog, runtime state record, redaction rule, exporter profile, health mapping, replay exclusion, and non-authority rule has exactly one owner, one volatility class, and passing `120-OBSERVABILITY-*` validation rows. |
+| `SPECSET-AC-017` | Core one-of closure rows for `GoldFact.subject_ref`, `GoldFact.object_value`, and `EvidenceRef.artifact_id` are present, non-`TODO`, and covered by `CoreOneOfClosureValidationMatrix` and `CoreEvidenceArtifactValidationMatrix`. |
+| `SPECSET-AC-018` | Evidence artifact class/kind pairings are total for declared artifact classes and missing, ambiguous, inactive, checksum-mismatched, or unvalidated pairings block promotion. |
 
 ## Validation Contract Details
 
@@ -140,6 +142,8 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `040-backend-id-rejection` | Backend-generated graph IDs fail. |
 | `040-gold-fact-key-id-separation` | Comparable semantic fact key remains stable while immutable fact record ID changes across knowledge versions. |
 | `040-two-independent-implementers` | Two implementations produce byte-identical IDs and checksums for every core record fixture. |
+| `040-core-oneof-closure` | Closed subject, object, and evidence artifact one-of fixtures prove valid serialization, invalid-shape rejection, null/omission distinction, artifact-class pairing, ID input inclusion, checksum input inclusion, and two-implementation parity. |
+| `040-core-evidence-artifact-closure` | Evidence artifact fixture families prove class/kind pairing, checksum basis, raw-payload rejection, and manifest ref requirements. |
 | `040-source-extension-rule-shape` | Valid, missing-field, unknown-field, bounds, non-canonical ordering, checksum replay, and pre-activation rejection fixtures for `SourceExtensionFieldRuleShape`. |
 
 ### CoreRecordSchema fixture families
@@ -157,6 +161,67 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `core-evidence-raw-payload-*` | Raw payload leak rejection. |
 | `core-graph-backend-id-*` | Backend ID rejection. |
 | `core-goldfact-correction-*` | Key ID versus immutable ID replay sequence. |
+| `core-oneof-subject-*` | Valid subject refs, unknown kind, missing member, extra member, null member, raw record ref, silver observation ref, and graph/backend ID rejection. |
+| `core-oneof-object-*` | Valid reference and scalar object values, object-kind mismatch, unknown kind, missing member, extra member, forbidden null, identity-like string rejection, and structured schema missing rejection. |
+| `core-oneof-evidence-*` | Valid evidence artifact refs, unknown kind, missing member, multiple members, null, missing checksum, checksum mismatch, raw payload rejection, and artifact-class/kind mismatch. |
+| `core-oneof-id-replay-*` | Same-bytes replay, kind-change ID/checksum changes, null/omission/empty distinction, and two-independent-implementer parity. |
+
+### CoreOneOfClosureValidationMatrix
+
+| Fixture family | Required result |
+| --- | --- |
+| `core-oneof-subject-valid-canonical-entity-ref` | Valid `canonical_entity_ref` serializes canonically and participates in `gold_fact_key_id`. |
+| `core-oneof-subject-valid-source-asset-ref` | Valid `source_asset_ref` serializes canonically and participates in `gold_fact_key_id`. |
+| `core-oneof-subject-valid-identifier-ref` | Valid `identifier_ref` serializes canonically and participates in `gold_fact_key_id`. |
+| `core-oneof-subject-reject-unknown-kind` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-subject-reject-missing-member` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-subject-reject-extra-member` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-subject-reject-null-member` | Fails with `CORE_ONE_OF_INVALID` or `CORE_NULL_FORBIDDEN` as declared by field shape. |
+| `core-oneof-subject-reject-raw-record-ref` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-subject-reject-silver-observation-ref` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-subject-reject-graph-backend-id` | Fails with `GRAPH_BACKEND_ID_FORBIDDEN` or `CORE_ONE_OF_INVALID` when presented as a malformed one-of. |
+| `core-oneof-object-valid-canonical-entity-ref` | Valid reference object serializes canonically. |
+| `core-oneof-object-valid-source-asset-ref` | Valid reference object serializes canonically. |
+| `core-oneof-object-valid-identifier-ref` | Valid reference object serializes canonically. |
+| `core-oneof-object-valid-string` | Valid bounded string object serializes canonically. |
+| `core-oneof-object-valid-enum` | Valid enum object serializes canonically. |
+| `core-oneof-object-valid-boolean` | Valid boolean object serializes canonically. |
+| `core-oneof-object-valid-int64` | Valid int64 object serializes canonically. |
+| `core-oneof-object-valid-uint64` | Valid uint64 object serializes canonically. |
+| `core-oneof-object-valid-decimal` | Valid decimal object serializes canonically under `040.DecimalPrecisionPolicy`. |
+| `core-oneof-object-valid-timestamp` | Valid UTC timestamp object serializes canonically. |
+| `core-oneof-object-valid-structured` | Valid structured object requires active schema ref. |
+| `core-oneof-object-valid-null` | Valid only when `080.null_object_policy = allowed`. |
+| `core-oneof-object-reject-object-kind-mismatch` | Fails before `gold_fact_key_id` computation. |
+| `core-oneof-object-reject-unknown-kind` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-object-reject-missing-member` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-object-reject-extra-member` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-object-reject-forbidden-null` | Fails before ID computation. |
+| `core-oneof-object-reject-identity-like-string` | Fails with the most specific `080` predicate-contract error. |
+| `core-oneof-object-reject-structured-schema-missing` | Fails before ID computation. |
+| `core-oneof-id-replay-same-bytes` | Same materialized bytes produce the same IDs and checksums. |
+| `core-oneof-id-change-subject-kind` | Changing `subject_ref.kind` changes affected IDs and checksums exactly as `040` declares. |
+| `core-oneof-id-change-object-kind` | Changing `object_value.kind` changes affected IDs and checksums exactly as `040` declares. |
+| `core-oneof-null-omission-empty-distinction` | Null sentinel, field omission, empty string, empty object, and empty array remain distinct. |
+| `core-oneof-two-independent-implementers` | Two independent implementations produce byte-identical IDs and checksums for all closure fixtures. |
+
+### CoreEvidenceArtifactValidationMatrix
+
+| Fixture family | Required result |
+| --- | --- |
+| `core-oneof-evidence-valid-cadastre-record-ref` | Valid `cadastre_record_ref` uses referenced record checksum. |
+| `core-oneof-evidence-valid-activation-artifact-ref` | Valid `activation_artifact_ref` uses immutable artifact bytes or owner-declared canonical metadata bytes. |
+| `core-oneof-evidence-valid-lakehouse-artifact-ref` | Valid `lakehouse_artifact_ref` uses immutable lakehouse bytes or owner-declared canonical metadata bytes. |
+| `core-oneof-evidence-valid-external-artifact-ref` | Valid `external_artifact_ref` uses immutable external bytes or owner-declared canonical metadata bytes. |
+| `core-oneof-evidence-reject-unknown-kind` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-evidence-reject-missing-member` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-evidence-reject-multiple-members` | Fails with `CORE_ONE_OF_INVALID`. |
+| `core-oneof-evidence-reject-null` | Fails with `CORE_ONE_OF_INVALID` or `CORE_NULL_FORBIDDEN` as declared by field shape. |
+| `core-oneof-evidence-reject-missing-checksum` | Fails with `CORE_REQUIRED_FIELD_MISSING`. |
+| `core-oneof-evidence-reject-checksum-mismatch` | Fails with `CORE_RECORD_CHECKSUM_MISMATCH` or the most specific owner checksum code. |
+| `core-oneof-evidence-reject-raw-payload` | Fails with `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`. |
+| `core-oneof-evidence-reject-artifact-class-kind-mismatch` | Fails with `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH`. |
+| `core-oneof-id-change-evidence-artifact-kind` | Changing `artifact_id.kind` changes `evidence_ref_id` and record checksum. |
 
 ### ValidationMatrixRow schema
 
@@ -1171,6 +1236,9 @@ graph-provider-portability-equivalence
 | `120-PACKAGE-MATRIX-AC-001` | Every `PackageActivationValidationMatrix` row has fixture checksum, expected output checksum, expected error or no-op, mutation prohibition, owner spec, and version manifest requirement. |
 | `120-DEFINE-ONCE-CLOSURE-AC-001` | The spec set cannot pass while any domain Section 25 row, owner closure row, required validation fixture, expected output checksum, expected no-op/error assertion, or owner error fragment contains `TODO` in required promotion scope. |
 | `120-DEFINE-ONCE-CLOSURE-AC-002` | No active spec restates another active spec's runtime behavior except by exact imported contract name and one-sentence routing reference; violations fail with `DOMAIN_RUNTIME_RESTATEMENT` or `OWNER_SPEC_CONTRADICTION` as applicable. |
+| `120-CORE-ONEOF-CLOSURE-AC-001` | Every subject, object, and evidence artifact one-of fixture family listed in `CoreOneOfClosureValidationMatrix` and `CoreEvidenceArtifactValidationMatrix` passes. |
+| `120-CORE-ONEOF-CLOSURE-AC-002` | Expected output checksum, expected error, expected no-op, fixture checksum, activation artifact ref, and version manifest ref values cannot be `TODO`, omitted, stale, or checksum-mismatched when `pass_fail_evidence = pass`. |
+| `120-CORE-ONEOF-CLOSURE-AC-003` | Two independent implementations produce byte-identical IDs and checksums for every one-of closure fixture. |
 
 ## Definition of Done
 

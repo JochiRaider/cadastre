@@ -379,6 +379,12 @@ A production output without a complete immutable `VersionManifest` must fail wit
 
 When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
 
+### EvidenceRefArtifactClassManifestHandoff
+
+When any output emits `EvidenceRef`, `VersionManifest` must include the active `040.EvidenceArtifactIdKindRegistry` checksum, every consulted `040.EvidenceArtifactClassRegistry` row-set ref, the referenced artifact checksum, and the owner artifact refs required by the referenced artifact class.
+
+`ActivationControlledArtifactRef` remains the canonical reference shape for activation artifacts. `EvidenceRef.artifact_id.kind = activation_artifact_ref` must not bypass artifact lifecycle, checksum, validation refs, activation scope, package-set membership when required, or artifact-class policy. Missing registry checksum or artifact checksum fails with `VERSION_MANIFEST_INCOMPLETE` or the most specific owner artifact error before evidence ref creation.
+
 A `SourceAuthorityClosureMatrix` validation result may be referenced in `VersionManifest`, but it must not substitute for the underlying activation-controlled artifact refs and checksums. Absence-sensitive output must include every consulted `060` row-set ref even when the closure validation result is also included.
 
 ## Activation-Controlled Artifact Reference Contract
@@ -491,6 +497,7 @@ threat_intel_distribution_mapping_policy
 threat_intel_artifact_ref_policy
 lineage_facet_mapping_policy
 artifact_class_policy_row_set
+evidence_artifact_class_row_set
 registry_governance_artifact
 registry_custom_property_schema
 registry_classification_policy
@@ -631,6 +638,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | --- | --- |
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
+| `EvidenceRef` output | core schema registry checksum, evidence artifact kind registry checksum, consulted evidence artifact class row-set refs, referenced record or artifact checksum, redaction policy refs, owner artifact refs, validation refs, and artifact lifecycle refs when the evidence cites an activation artifact. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
 | Identity output | resolver profile row set, identifier evidence class row set, identifier scope row set, candidate generation profile, asset generation boundary row set, target selector safety policy, resolver decision matrix row set, identity confidence band row set, identity review routing policy, identity split policy, resolver explanation policy, evidence item refs/checksums, identity decision refs, review case refs when applicable, resolver explanation refs/checksums, graph correction handoff refs when applicable, activation report refs when activation or promotion is in scope, and shadow/canary refs when promotion uses them. |
 | Temporal resolution output | `TemporalSemanticsPolicy` row ref, `KnowledgeTimeImportPolicy` row ref, source evidence refs, selected input path/value checksum, `TemporalObservationTimeResolution` ref, and resolution checksum. |
@@ -819,6 +827,8 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `030-GRAPH-REBUILD-MANIFEST-AC-001` | Graph rebuild promotion fails unless manifest refs include rebuild manifest, index consistency check, schema fingerprint, and canonical output checksum inputs. |
 | `030-IDENTITY-SPLIT-GRAPH-HANDOFF-AC-001` | Identity split graph handoff output includes `070.GraphCorrectionHandoff` refs and resolver explanation checksum refs. |
 | `030-PACKAGE-ARTIFACT-CLASS-AC-001` | Every package activation-controlled artifact class required by `100` appears in the closed `artifact_class` registry. |
+| `030-EVIDENCE-ARTIFACT-MANIFEST-AC-001` | Any run that emits `EvidenceRef` includes evidence artifact kind registry checksum, evidence artifact class row-set refs, referenced artifact checksum, redaction refs, owner artifact refs, and validation refs in `VersionManifest`. |
+| `030-EVIDENCE-ARTIFACT-MANIFEST-AC-002` | Activation artifact evidence fails when artifact lifecycle is inactive, checksum mismatches, package-set membership is required but absent, or evidence artifact class row-set refs are omitted. |
 | `030-PACKAGE-VM-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, validation, lifecycle, or approval ref is missing from `VersionManifest.included_refs`. |
 
 ## Definition of Done

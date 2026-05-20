@@ -38,6 +38,9 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `ActivationControlledArtifactRef`
 - `CanonicalJSON`
 - `DecimalPrecisionPolicy.confidence_0_1`
+- `GoldFactSubjectRefKindRegistry`
+- `GoldFactObjectValueKindRegistry`
+- `GoldFactPredicateContractRow`
 
 ## Exports
 
@@ -272,6 +275,16 @@ A graph endpoint may become `090.projected_canonical_node` only after a qualifyi
 | Identity split handoff | Resolver emits `GraphCorrectionHandoff` metadata only. | `090` routes affected facts through projection; resolver must not mutate graph state. |
 
 Handoff records consumed by graph projection must include endpoint canonical refs, selected identity decision refs, and resolver explanation checksum refs when those fields affect projection, replay, or audit. Omitted handoff fields block graph delta persistence with the most specific `070`, `090`, or manifest error.
+
+### GoldFactReferenceEligibilityHandoff
+
+A `CanonicalEntity`, `SourceAsset`, or `Identifier` may appear in `GoldFact.subject_ref` or `GoldFact.object_value` only when the referenced record has passed its `040` schema, the producing or attaching `IdentityDecision` is terminal or otherwise permitted by the active `ResolverProfileRow`, and the selected `080.GoldFactPredicateContractRow` permits that reference kind.
+
+`IdentityEvidenceItem` is not a valid `GoldFact.subject_ref` or `GoldFact.object_value`. `UnresolvedTargetReference` is not a valid subject or object reference. `TargetSelectorSafetyPolicy` can restrict selector influence but cannot create a subject or object reference.
+
+IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-history-only, mapped-target-only, learned-only, telemetry-only, and selector-only evidence must not become `canonical_entity_ref`, `source_asset_ref`, or `identifier_ref` by themselves. A package-supplied resolver artifact that attempts to weaken this rule fails activation before identity or gold output.
+
+`Identifier` reference eligibility requires typed scope and validated `IdentifierScope`. `SourceAsset` reference eligibility requires sufficient `source_scope`, `source_native_identity`, and `source_asset_type`. `CanonicalEntity` reference eligibility requires a qualifying identity decision and resolver explanation ref when those fields affect replay, projection, or audit.
 
 ## Identity Resolution Contract Details
 
@@ -585,6 +598,10 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `070-GRAPH-ENDPOINT-HANDOFF-AC-001` | Graph endpoint projection requires a qualifying identity decision and canonical entity ref. |
 | `070-GRAPH-ENDPOINT-HANDOFF-AC-002` | Selector-only, graph-key-only, mapped-target-only, and OpenGraph property-match-only inputs cannot create graph endpoint identity. |
 | `070-GRAPH-ENDPOINT-HANDOFF-AC-003` | Unresolved endpoint identity is reported to `090` as a projection blocker and never mutates identity. |
+| `070-GOLD-REF-ELIGIBILITY-AC-001` | Terminal or explicitly permitted identity decisions allow eligible `canonical_entity_ref`, `source_asset_ref`, or `identifier_ref` only when the selected `080` predicate contract permits the reference kind. |
+| `070-GOLD-REF-ELIGIBILITY-AC-002` | Weak-only, selector-only, unresolved-target, graph-key-only, source-native-merge-history-only, learned-only, and telemetry-only inputs cannot become `GoldFact.subject_ref` or `GoldFact.object_value` references. |
+| `070-GOLD-REF-ELIGIBILITY-AC-003` | `Identifier` refs require typed scope and validated `IdentifierScope`; `SourceAsset` refs require sufficient source scope, native identity, and asset type. |
+| `070-GOLD-REF-ELIGIBILITY-AC-004` | Package-supplied resolver artifacts cannot weaken gold reference eligibility defaults. |
 
 ## Definition of Done
 

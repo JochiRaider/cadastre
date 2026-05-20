@@ -216,6 +216,11 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Runtime telemetry versus audit | Telemetry records runtime diagnostics; audit records authorized operation evidence. | Treating exporter delivery as audit persistence. | `110`, `140` |
 | Runtime telemetry versus replay | Telemetry runtime IDs and sampling/exporter state are excluded from domain replay by default. | Including trace IDs, span IDs, or runtime duration in replay equivalence. | `080`, `140` |
 | Runtime telemetry versus graph health | Graph metrics may report backend or derived-view state, but cannot repair graph drift or authorize graph mutation. | Treating graph telemetry as graph truth. | `090`, `140` |
+| GoldFact subject ref versus identity evidence | `GoldFact.subject_ref` is a core reference to an eligible canonical entity, source asset, or identifier. | Treating raw identity evidence, selector hints, graph keys, source-native strings, or unresolved targets as `GoldFact.subject_ref`. | `040`, `070`, `080` |
+| GoldFact object value versus external schema object | `GoldFact.object_value` is a typed object value governed by `040` and permitted by `080`. | Treating OCSF objects, observables, enrichments, unmapped fields, or external taxonomies as object authority by themselves. | `040`, `050`, `060`, `080` |
+| EvidenceRef artifact ref versus raw payload | `EvidenceRef.artifact_id` is a checksummed reference, not payload. | Inlining raw payload bytes, package bytes, SBOM bytes, provenance bytes, or object-store path strings as evidence artifacts. | `040`, `020`, `030`, `100`, `130` |
+| EvidenceRef artifact class versus activation artifact class | `EvidenceRef.artifact_class` selects evidence citation rules; activation artifact classes govern activatable rows and package-supplied artifacts. | Treating activation eligibility as evidence authority or adding evidence artifact ID kinds through owner artifacts. | `040`, `030`, `100`, `130` |
+| Null object value versus omitted object value versus absence outcome | `null_value`, field omission, and `GoldFact.absence_outcome` are distinct concepts owned by different contracts. | Rendering omitted object value as null, null as absence, or absence outcome as a missing object. | `040`, `060`, `080`, `110` |
 
 ### 8.1 Volatility class versus authority class
 
@@ -263,7 +268,6 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | Analysis, enrichment, lineage, registry | Read-only analysis, findings, metrics, enrichment records, lineage mapping, artifact-class policy, registry governance. | Fact, identity, graph, completeness, package, or watermark authority. | `130` |
 | Observability and runtime telemetry | Runtime telemetry signals, trace context, metric instruments, telemetry attributes, telemetry redaction, exporter behavior, telemetry runtime state, telemetry health mapping, and telemetry replay exclusion. | Domain truth, source authority, identity, graph projection, package activation, API response schema, audit persistence, validation harness behavior, or replay checksum algorithms outside named telemetry handoffs. | `140` |
 | Future reachability | Deferred reachability claim kinds, result states, model capability, analysis artifacts, claim policy. | Active MVP graph/gold behavior, solver selection, negative reachability facts. | `200`, inactive |
-
 
 ### 9.1 Context map authority boundary
 
@@ -761,6 +765,7 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | Context-map relationship type omitted | Default: edge row is invalid. | `domain.md`, `120` | Validation fails before the edge can be used for owner routing. |
 | Crossing artifact omitted | Default: `no_implicit_effect`. | Named owner spec | No authority, mutation, projection, activation, validation pass, or telemetry effect may be inferred. |
 | Behavior owner omitted | Default: edge is non-runtime only or invalid. | `domain.md`, `000`, `120` | Runtime-affecting claim must fail document validation. |
+| Missing behavior owner for subject, object, or evidence refs | Default: `no_implicit_effect`. | `040`, owner spec, `120` | No subject ref, object value, evidence ref, authority, mutation, graph projection, package activation, or validation pass may be inferred. |
 | Validation route omitted | Default: `blocked_validation`. | `120` | Section 25 ledger must carry a blocker until validation rows exist. |
 
 ## 18. Boundaries to adjacent specs
@@ -832,6 +837,9 @@ This section defines cross-representation mappings not already defined in Sectio
 | `Identifier` | Graph property or node candidate. | Must not become identity or graph selector unless projection and selector policy permit. | `090`, `070` | Resolved boundary. |
 | `GoldFact` | Graph node, edge, or property source. | May project only through active graph projection row and `GraphEdgeSemantics` when edge. | `090`, `080` | Resolved. |
 | `EvidenceRef` | Graph property or drillback ref. | May be exposed only through evidence and redaction policy. | `090`, `110`, `040` | Resolved. |
+| `GoldFact.subject_ref` | Graph endpoint or graph property source only after owner routing. | May project only when `040` shape, `070` identity eligibility, `080` predicate contract, and `090` projection rules permit it. | `040`, `070`, `080`, `090` | Vocabulary routed. |
+| `GoldFact.object_value` | Graph endpoint or graph property source only after owner routing. | May project only when `040` shape, `080` predicate contract, `060` authority, and `090` projection rules permit it. | `040`, `060`, `080`, `090` | Vocabulary routed. |
+| `EvidenceRef.artifact_id` | Drillback ref, not graph identity. | May be exposed only as checksummed evidence metadata; raw payload and backend IDs remain forbidden. | `040`, `110` | Vocabulary routed. |
 | `AnalysisFinding` | Analysis result, not default graph node. | May appear in graph only if future owner mapping grants it. | `130`, `090` | No default graph authority. |
 | `ReachabilityResult` | No active graph concept in MVP. | Must not project until `ReachabilityClaimPolicy` is active. | `200`, `090` | Inactive deferred. |
 
@@ -845,6 +853,8 @@ This section defines cross-representation mappings not already defined in Sectio
 | Threat-intel enrichment relationship | Analysis/enrichment edge only if declared. | Must not become gold/graph authority without separate contract. | `130`, `090` | No default authority. |
 | Future reachability relationship | `has_theoretical_reachability` or equivalent. | Forbidden in MVP. Future activation requires `ReachabilityClaimPolicy`. | `200`, `090` | Inactive deferred. |
 | MVP active graph edge-family routing | `observed_connection` only for MVP observed network relationship output. | Active runtime behavior must be read from `090.GraphEdgeSemanticsRegistry`, `090.MVPActiveGraphProjectionProfile`, and `120.GraphActiveProfileClosureValidationMatrix`, not from `domain.md`. | `090`, `120` | Routing resolved; authoritative closure remains validation-gated until `120` graph closure rows have non-TODO fixture and expected-output checksums. |
+| GoldFact subject/object reference relationship | Owner-defined projection relationship only when predicate and projection rows permit it. | Runtime behavior must be read from `040` one-of registries, `070` reference eligibility, `080` predicate contracts, `060` authority, and `090` projection rows. | `040`, `060`, `070`, `080`, `090` | Vocabulary routed; no runtime behavior defined here. |
+| Evidence artifact drillback relationship | Evidence drillback, not a graph edge by default. | Runtime behavior must be read from `040.EvidenceArtifactClassRegistry`, owner artifact handoffs, and `110` evidence/redaction rules. | `040`, `020`, `030`, `100`, `110`, `130` | Vocabulary routed; no runtime behavior defined here. |
 
 ### 19.3 Source evidence concept to Cadastre observation or fact concept
 
@@ -1064,6 +1074,7 @@ Closed `domain_behavior_until_closed` values are `owner governs`, `validation fa
 | `DOM-TODO-015` | `domain.md.ContextMapEdgeMatrix` | `blocked_validation` | `120-DOMAIN-CMAP-EDGE-*` rows validating edge coverage, unique edge IDs, owner coverage, crossing-artifact exactness, no-effect defaults, and prohibited dependency rows | validation fails | `120-DOMAIN-CMAP-*` |
 | `DOM-TODO-016` | `140.TelemetryNonAuthorityRule` and `110.TelemetryHealthMappingPolicy` | `blocked_validation` | observability context-map rows and telemetry non-authority negative cases | validation fails | `120-DOMAIN-CMAP-*`; `120-OBSERVABILITY-*` |
 | `DOM-TODO-017` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | provider-neutral backend-selection wording confirmed in Section 5, Section 7, Section 20, and Section 25, with selected backend activation remaining owner-routed | validation fails | `120-DOMAIN-CMAP-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
+| `DOM-TODO-018` | `040.CoreOneOfRegistry` and `040.EvidenceArtifactClassRegistry` | `blocked_validation` | `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` rows must pass | validation fails | `120-DOMAIN-SECTION25-*`; `120-CORE-ONEOF-CLOSURE-*`; `120-CORE-EVIDENCE-ARTIFACT-*` |
 
 Stable source-authority behavior is owned by `060.SourceAuthorityClosureMatrix`. Production promotion remains blocked until every active absence-sensitive feed category has exact closure rows or deterministic block rows validated by `120-SOURCE-CLOSURE-*`.
 
@@ -1082,6 +1093,8 @@ Lifecycle behavior is owner-routed to `030` lifecycle machines and owner-specifi
 `100.PackageType` owns the canonical package type enum.
 
 `090.GraphBackendSelectionPolicy` owns any named backend default selection. A backend selection token is not domain truth and is not production activation. Production activation remains blocked until the selected `090` backend profile, `100` package-set gates, and `120` backend/package validation rows pass.
+
+Gold fact subject refs, gold fact object values, and evidence artifact refs are vocabulary-routed to `040` for closed shape, `080` for predicate-specific fact semantics, `060` for source authority, `070` for identity reference eligibility, `090` for graph consumption, `110` for API/error/redaction, and `120` for validation. Missing owner behavior has `no_implicit_effect`.
 
 A downstream implementation must not resolve a blocker by inference. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this ledger marks a row resolved while a named owner-local blocker remains, or marks a row blocked-owner when the owner contract is closed and required validation rows pass. `ValidateSpecSet` must fail with `DOMAIN_RUNTIME_RESTATEMENT` when this ledger copies runtime schema, algorithm, default, failure precedence, activation behavior, or validation harness behavior from an owner spec instead of routing by exact owner contract name.
 

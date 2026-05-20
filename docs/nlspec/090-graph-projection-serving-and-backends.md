@@ -39,6 +39,9 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `EvidenceRef`
 - `CoreRecordValidationAlgorithm`
 - `ActivationControlledArtifactRef`
+- `GoldFactPredicateContractRow`
+- `GoldFactSubjectRefKindRegistry`
+- `GoldFactObjectValueKindRegistry`
 
 ## Exports
 
@@ -324,7 +327,7 @@ The only active MVP graph projection profile is `mvp-observed-flow-graph.v1`. A 
 | `profile_id` | `mvp-observed-flow-graph.v1` |
 | Active edge type set | Exactly `observed_connection`. |
 | Active node output set | Exactly `projected_canonical_node`. |
-| Source fact family | Authorized `GoldFact` records with fact type `observed_network_flow_fact` and qualifying flow-role evidence. |
+| Source fact family | Authorized `GoldFact` records with fact type `observed_network_flow_fact`, an active `080.GoldFactPredicateContractRow`, permitted subject/object one-of kinds, and qualifying flow-role evidence. |
 | Endpoint identity | Both endpoints must resolve to `070.CanonicalEntity` refs through qualifying `070.IdentityDecision` output. |
 | Direction source | `FlowRoleEvidence` consumed under `mvp-flow-role-directed-v1`; OCSF endpoint order and backend edge convention are forbidden direction inputs. |
 | Structural globals | None emitted. `StructuralGlobalNode` rows are inactive for MVP. |
@@ -342,6 +345,10 @@ A concrete graph projection profile row may affect output only through `030.Acti
 | `profile_id` | Yes | none | Stable profile ID. MVP value is `mvp-observed-flow-graph.v1`. |
 | `input_fact_type` | Yes | none | Exact `GoldFact` fact type. Wildcards are forbidden. |
 | `source_predicate` | Yes | none | Exact predicate or fact-family discriminator consumed by the row. |
+| `required_gold_fact_predicate_contract_ref` | Yes | none | Exact active `080.GoldFactPredicateContractRow` ref for the consumed fact family. |
+| `allowed_subject_ref_kinds` | Yes | none | Non-empty subset of the selected predicate contract and `040.GoldFactSubjectRefKindRegistry`. |
+| `allowed_object_value_kinds` | Yes | none | Non-empty subset of the selected predicate contract and `040.GoldFactObjectValueKindRegistry`. |
+| `endpoint_ref_resolution_policy` | Yes | `canonical_entity_required` | Closed enum: `canonical_entity_required`, `resolver_handoff_required`, `not_endpoint_identity`. MVP observed-connection endpoints require canonical entity refs before edge output. |
 | `allowed_assertion_states` | Yes | none | Closed set imported from `040` and `080`; omission rejects projection. |
 | `temporal_policy_ref` | Yes | none | Exact `080` temporal or correction policy ref that governs valid/known intervals. |
 | `authority_ref` | Yes | none | Exact `060.SourceAuthorityProfileRow` ref or authorized positive-fact source ref. |
@@ -358,6 +365,14 @@ A concrete graph projection profile row may affect output only through `030.Acti
 | `activation_scope` | Yes | none | Scope in which the row may affect graph output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
+### Closed GoldFact consumption for graph projection
+
+`ProjectGraphDeltas` may consume only `GoldFact` records that pass `040.GoldFactSchema`, resolve one active `080.GoldFactPredicateContractRow`, and pass exact `060` source authority for the fact. Graph projection must not reinterpret `string_value`, OCSF endpoint objects, source-native graph payloads, backend-native IDs, package artifact IDs, telemetry IDs, or selector-only values as endpoint identity.
+
+MVP `observed_connection` projection must require `required_gold_fact_predicate_contract_ref` for the source fact family. Endpoint identities must resolve to `canonical_entity_ref` before emitting `projected_canonical_node`. If the source fact uses `source_asset_ref` or `identifier_ref`, projection may continue only after `070` supplies a qualifying identity decision that resolves the endpoint to a canonical entity. `string_value` must never be treated as endpoint identity.
+
+Backend-native IDs remain forbidden in graph IDs, selectors, evidence refs, page tokens, query cursors, and drillback keys. Missing or ambiguous `FlowRoleEvidence`, unresolved endpoint identity, and invalid subject/object kind must produce no edge and the most specific graph, identity, predicate-contract, or core schema error.
+
 ### MVPGraphNodeProjectionRows
 
 | Node projection row | Input | Required identity | Emitted object | Default when unavailable | Validation rows |
@@ -370,7 +385,7 @@ A concrete graph projection profile row may affect output only through `030.Acti
 
 | Edge projection row | Required inputs | Direction rule | Edge ID inputs | Confidence | Temporal fields | Evidence refs | Traversal class | Non-implication | No-op or error behavior |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `mvp-observed-connection-edge-v1` | `GoldFact` fact type `observed_network_flow_fact`; two resolved endpoint canonical entity refs; qualifying `FlowRoleEvidence`; source `GoldFact` ref | `mvp-flow-role-directed-v1`; source and target endpoint are selected only from qualifying flow-role evidence | projection profile ID, source gold fact key/ref, from canonical entity ref, to canonical entity ref, direction rule ref, valid interval, known interval, edge type | Import from source fact and serialize through `040.DecimalPrecisionPolicy.confidence_0_1`. | Import from source fact or correction handoff under `080` policies. | Source `GoldFact`, silver observation, raw metadata, temporal resolution, authority refs, and flow-role evidence refs. | `observed_connection_path` | Observed traffic only; not theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity access. | Missing flow-role evidence emits `GRAPH_FLOW_ROLE_EVIDENCE_REQUIRED` or no-op; ambiguous flow-role evidence emits no edge; unresolved endpoint emits `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; OCSF endpoint order emits no edge. |
+| `mvp-observed-connection-edge-v1` | `GoldFact` fact type `observed_network_flow_fact`; active predicate-contract ref; allowed subject/object kinds; two resolved endpoint canonical entity refs; qualifying `FlowRoleEvidence`; source `GoldFact` ref | `mvp-flow-role-directed-v1`; source and target endpoint are selected only from qualifying flow-role evidence and resolved canonical entity refs | projection profile ID, predicate contract ref, source gold fact key/ref, from canonical entity ref, to canonical entity ref, direction rule ref, valid interval, known interval, edge type | Import from source fact and serialize through `040.DecimalPrecisionPolicy.confidence_0_1`. | Import from source fact or correction handoff under `080` policies. | Source `GoldFact`, predicate contract, silver observation, raw metadata, temporal resolution, authority refs, identity refs, and flow-role evidence refs. | `observed_connection_path` | Observed traffic only; not theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity access. | Missing or invalid predicate contract, string endpoint identity, missing flow-role evidence, ambiguous flow-role evidence, unresolved endpoint, backend ID, or OCSF endpoint order emits no edge. |
 
 ### MVPGraphPropertyMapping
 
@@ -920,6 +935,10 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-GRAPH-JANUSGRAPH-QUERY-AC-001` | JanusGraph Gremlin translation fixtures produce provider-neutral `QueryGraph` outputs, reject full scans, enforce candidate limits, reject backend IDs, and sort by Cadastre ordering. |
 | `090-GRAPH-JANUSGRAPH-APPLY-AC-001` | JanusGraph partial-commit fixtures require storage, composite-index, mixed-index, rollback, committed-batch, read-after-write, and resume-boundary evidence. |
 | `090-GRAPH-PROVIDER-PORTABILITY-AC-001` | A future provider can satisfy the same capability, taxonomy, query translation, schema, apply, rebuild, ordering, ID, page-token, and error contracts without JanusGraph-specific fields leaking into Cadastre outputs. |
+| `090-CLOSED-FACT-CONSUMPTION-AC-001` | `observed_connection` emits only when both endpoints resolve to canonical entities through qualifying identity decisions. |
+| `090-CLOSED-FACT-CONSUMPTION-AC-002` | `string_value` endpoints, OCSF endpoint objects, graph keys, backend IDs, and source-native graph payloads do not project as endpoint identity. |
+| `090-CLOSED-FACT-CONSUMPTION-AC-003` | `identifier_ref` and `source_asset_ref` endpoint candidates require `070` resolver handoff before graph output. |
+| `090-CLOSED-FACT-CONSUMPTION-AC-004` | Invalid `GoldFact.subject_ref` or `GoldFact.object_value` kinds produce no graph mutation and emit the most specific owner error. |
 
 ## Definition of Done
 

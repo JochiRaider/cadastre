@@ -38,6 +38,8 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ComputeGoldFactId`
 - `CoreRecordValidationAlgorithm`
 - `ActivationControlledArtifactRef`
+- `GoldFactSubjectRefKindRegistry`
+- `GoldFactObjectValueKindRegistry`
 
 ## Exports
 
@@ -59,6 +61,7 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `DeriveFacts`
 - `ComputeReplayEquivalenceChecksum`
 - `LifecycleEvidenceReplayEquivalence`
+- `GoldFactPredicateContractRow`
 
 ## Temporal Axes
 
@@ -111,7 +114,7 @@ Implicit current-time fallback is forbidden.
 
 ## Gold Derivation
 
-`DeriveFacts` must validate required temporal, authority, correction, late-arrival, replay, and schema artifact refs before output. It must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, active derivation profiles, and absence derivation results where applicable. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, explicit no-op, conflict, or deterministic error. Every emitted `GoldFact` must pass `040.GoldFactSchema` before persistence or graph projection.
+`DeriveFacts` must validate required temporal, authority, correction, late-arrival, replay, predicate-contract, and schema artifact refs before output. It must consume silver observations, identity decisions, source authority decisions, coverage assertions, temporal resolutions, active derivation profiles, active `GoldFactPredicateContractRow` refs, and absence derivation results where applicable. It must resolve exactly one active predicate contract row before `gold_fact_key_id` computation. It must compute `gold_fact_key_id` through `040.ComputeGoldFactKeyId` from subject, predicate, object/value, and valid interval only after `GoldFact.subject_ref`, `GoldFact.object_value`, and `GoldFact.object_kind` pass the `040` one-of rules and the selected predicate contract. It must compute immutable `gold_fact_id` through `040.ComputeGoldFactId` from `gold_fact_key_id`, `known_from`, assertion state, authority row, temporal resolution, evidence set, and correction policy. It must emit `GoldFact`, `GoldFactChangeSet`, explicit no-op, conflict, or deterministic error. Every emitted `GoldFact` must pass `040.GoldFactSchema` before persistence or graph projection.
 
 When a candidate gold fact depends on missing evidence, stale evidence, source-declared deletion, cleanup, retraction, source-history no-change, control result absence, vulnerability fixed state, DNS absence, DHCP/IPAM lease expiry, flow non-observation, cloud-resource disappearance, or CDC tombstone evidence, `DeriveFacts` must call `060.DeriveAbsenceOrUnknown` and must include the resulting `AbsenceDerivationResult` ref before emitting any absence, retraction, cleanup-derived correction, graph handoff, or watermark-affecting output.
 
@@ -128,6 +131,35 @@ When a candidate gold fact depends on missing evidence, stale evidence, source-d
 | Replay | Use `ReplayInputSufficiencyCheck` and `ComputeReplayEquivalenceChecksum` before any replay output. |
 
 `080` emits graph handoff metadata only and never mutates graph state.
+
+### GoldFactPredicateContractRow
+
+`GoldFactPredicateContractRow` is the row-level semantic contract for one exact `GoldFact.fact_type` and `GoldFact.predicate`. It imports the closed `040` one-of kind registries and owns only predicate-specific permission, null-object permission, structured object schema refs, correction behavior refs, source authority refs, temporal refs, and replay inclusion.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the active predicate-contract row set. |
+| `fact_type` | Yes | none | Exact token. Wildcards are forbidden. |
+| `predicate` | Yes | none | Exact token. Wildcards are forbidden. |
+| `allowed_subject_ref_kinds` | Yes | none | Non-empty subset of `040.GoldFactSubjectRefKindRegistry`. |
+| `allowed_object_value_kinds` | Yes | none | Non-empty subset of `040.GoldFactObjectValueKindRegistry`. |
+| `object_kind_required_value` | Yes | none | Must equal `GoldFact.object_kind`; `GoldFact.object_kind` must equal `GoldFact.object_value.kind`. |
+| `null_object_policy` | No | `forbidden` | Closed enum: `forbidden`, `allowed`. `allowed` permits only `object_value.kind = null_value`. |
+| `structured_value_schema_refs` | Required when `structured_value` is allowed | `[]` when `structured_value` is not allowed | Non-empty active schema refs when `allowed_object_value_kinds` contains `structured_value`. |
+| `identity_like_string_policy` | No | `reject` | Closed enum: `reject`, `allow_bounded_non_identity_string`. Default rejects IP, hostname, DNS, PTR, provider key, mapped target, graph key, and source-native identity strings. |
+| `required_source_authority_refs` | Yes | none | Exact `060.SourceAuthorityProfileRow` refs or row-set refs required before output. |
+| `required_temporal_policy_refs` | Yes | none | Exact temporal policy refs required before fact-time resolution. |
+| `required_correction_policy_refs` | Yes | none | Exact correction policy refs required for correction-producing facts. |
+| `required_replay_policy_refs` | Yes | none | Exact replay policy row refs included in replay equivalence. |
+| `validation_refs` | Yes | none | Non-empty refs to `120` predicate-contract positive, negative, null, structured, identity-like-string, and replay rows. |
+| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`DeriveFacts` must resolve exactly one active `GoldFactPredicateContractRow` for the candidate `fact_type` and `predicate` before computing `gold_fact_key_id`. Zero matching rows fail with `GOLD_FACT_PREDICATE_CONTRACT_MISSING`. More than one equally specific row fails with `GOLD_FACT_PREDICATE_CONTRACT_AMBIGUOUS`. Disallowed subject kinds, disallowed object kinds, forbidden null objects, missing structured schema refs, and rejected identity-like strings fail before ID computation. If the one-of shape itself is invalid, `040.CORE_ONE_OF_INVALID` owns the failure.
+
+`structured_value_schema_refs` must not be used as an unbounded object escape hatch. A structured object value may be emitted only when the selected predicate row names the exact schema ref and the schema ref is active, checksum-valid, and included in `VersionManifest`.
+
+Predicate contract refs and predicate contract checksums are replay-affecting for `gold` and `gold_correction` output classes.
 
 ## Correction Contract
 
@@ -373,8 +405,8 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `raw` | feed profile refs, feed manifest refs, raw IDs, payload hashes, import profile, supplier metadata refs | run correlation ID, execution duration | `sha256` | canonical raw record ID | compare only; no production write | active default |
 | `silver` | raw refs, parser profile, mapping bundle, external schema profile, normalized payload checksum, source-extension rule refs | diagnostic correlation ID, execution duration | `sha256` | observation ID | compare only | active default |
 | `identity` | evidence refs, resolver profile, candidate profile, identity decision bytes, resolver explanation checksum | reviewer display labels, request correlation ID | `sha256` | decision ID | compare only | active default |
-| `gold` | temporal resolution, authority refs, evidence refs, fact bytes, absence refs, correction policy refs, consulted `060` row refs | processing timestamp, run correlation ID | `sha256` | fact ID then known interval | compare only | active default |
-| `gold_correction` | `GoldFactChangeSet`, correction policy, snapshot refs, table-set checksum, temporal refs, authority refs, transition row, graph handoff effect | execution timestamp, diagnostic display order | `sha256` | changeset ID then operation order | compare only | active default |
+| `gold` | temporal resolution, authority refs, predicate contract refs and checksums, evidence refs, fact bytes, absence refs, correction policy refs, consulted `060` row refs | processing timestamp, run correlation ID | `sha256` | fact ID then known interval | compare only | active default |
+| `gold_correction` | `GoldFactChangeSet`, correction policy, predicate contract refs and checksums, snapshot refs, table-set checksum, temporal refs, authority refs, transition row, graph handoff effect | execution timestamp, diagnostic display order | `sha256` | changeset ID then operation order | compare only | active default |
 | `graph_delta` | imported `090` delta included fields, graph handoff refs, projection profile checksum, edge semantics row-set checksum, output eligibility row-set checksum, property mapping refs, graph correction handoff refs, resolver explanation checksum when split-driven, and graph delta checksum | backend transient IDs, runtime duration | `sha256` | delta ID | compare only | active default |
 | `graph_apply` | imported `090` apply included fields, idempotency key, apply profile, backend taxonomy mapping profile, query translation profile, schema profile, backend evidence, index consistency refs, and derived-view state refs | backend physical IDs, runtime duration | `sha256` | apply result ID | compare only | active default |
 | `graph_rebuild` | imported `090` rebuild included fields, rebuild manifest, projection profile checksum, edge semantics row-set checksum, output eligibility row-set checksum, backend taxonomy mapping profile, query translation profile, schema fingerprint, index consistency, derived-view state, and output checksum | backend import job ID, runtime duration | `sha256` | rebuild manifest ID | compare only | active default |
@@ -620,6 +652,12 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-GRAPH-HANDOFF-PROFILE-AC-001` | Unsupported active graph profile handoff emits no graph delta and does not restate graph projection behavior. |
 | `080-GRAPH-HANDOFF-CHECKSUM-AC-001` | Identity split handoff checksum drift rejects replay before graph output. |
 | `080-GRAPH-HANDOFF-DENIED-EXPIRY-AC-001` | Denied expiry or cleanup authorization emits no graph handoff effect other than no-op. |
+| `080-GOLD-PREDICATE-CONTRACT-AC-001` | Missing predicate contract row blocks `GoldFact` output before `gold_fact_key_id` computation with `GOLD_FACT_PREDICATE_CONTRACT_MISSING`. |
+| `080-GOLD-PREDICATE-CONTRACT-AC-002` | Disallowed subject kind, disallowed object kind, and `object_kind != object_value.kind` block output before ID computation. |
+| `080-GOLD-PREDICATE-CONTRACT-AC-003` | `null_value` is accepted only when the selected predicate contract sets `null_object_policy = allowed`; otherwise it fails before ID computation. |
+| `080-GOLD-PREDICATE-CONTRACT-AC-004` | Identity-like string object values are rejected when the predicate contract requires a reference kind. |
+| `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
+| `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
 
 ## Definition of Done
 
