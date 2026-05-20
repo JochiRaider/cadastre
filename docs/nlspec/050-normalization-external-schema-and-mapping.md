@@ -89,6 +89,29 @@ MVP OCSF baseline is `OCSF 1.8.0` as a candidate production baseline. The profil
 
 Production OCSF profile status must be `active` only after `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `OCSFBaseEventFieldPolicy`, `ExternalEnumMappingRule`, `OCSFProfileUpgradeReport` when applicable, and `ObservationTypeExternalMappingValidationMatrix` pass.
 
+### ExternalSchemaProfile row schema
+
+`ExternalSchemaProfile` is the stable interface for a production-eligible external schema profile. Concrete profile rows are activation-controlled artifacts. A profile row may affect output only when lifecycle status is `active`, validation refs are non-empty, and every output-affecting ref appears in `030.VersionManifest`.
+
+| Field | Required behavior |
+| --- | --- |
+| `external_schema_profile_id` | Stable ID scoped to `050`. |
+| `schema_name` | `OCSF` for MVP. |
+| `schema_version` | Exact version; default MVP candidate is `1.8.0`. |
+| `schema_artifact_ref` | Active `ExternalSchemaArtifactRef`. |
+| `profile_resolution_manifest_refs` | Non-empty for every emitted class or object path. |
+| `class_allowlist_checksum` | Must match the active artifact ref. |
+| `profile_set` | Explicit set; empty set is allowed only when the compiled artifact permits no profiles. |
+| `extension_set` | Explicit set; empty set is allowed and checksummed. |
+| `deprecated_field_policy_ref` | Active row or default reject policy. |
+| `enum_rule_set_ref` | Active rule set when any enum path maps. |
+| `base_event_field_policy_set_ref` | Active policy set. |
+| `source_extension_rule_set_ref` | Active rule set or explicit empty rule set. |
+| `upgrade_report_ref` | Required when replacing an active production profile. |
+| `validation_refs` | Non-empty. |
+| `activation_scope` | Vendor-neutral scope. |
+| `lifecycle_status` | Production use requires `active`. |
+
 ## OCSF Mapping Requirements
 
 | Mapping element | Required behavior |
@@ -297,6 +320,24 @@ Concrete rows in `### Observation-to-OCSF mapping matrix` are activation-control
 
 ### MappingArtifactLifecycleGuardRows
 
+### ValidateOCSFMappingActivation algorithm
+
+```text
+ValidateOCSFMappingActivation(mapping_row_set, external_schema_profile, artifact_refs, validation_matrix, version_manifest):
+1. Validate every required artifact ref through `030.ActivationControlledArtifactRef`.
+2. Validate lifecycle status `active` for the selected profile, artifact ref, profile-resolution manifests, enum rule set, base-event policy set, source-extension rule set, mapping row set, and validation matrix.
+3. Validate the compiled artifact checksum, class allowlist checksum, profile set, extension set, compiler evidence, and validator evidence.
+4. Validate that every active MVP observation family resolves to at least one required row family and that every emitted observation fixture resolves to exactly one row.
+5. Validate that each active OCSF row has exact category UID, class UID, activity ID, type UID, required paths, forbidden paths, enum refs, base-event policy refs, source-extension refs, fixture refs, activation scope, lifecycle status, and manifest refs.
+6. Validate that `cadastre_only` rows have null external schema values and that no missing row defaults to `cadastre_only`.
+7. Validate that every enum path used by any active row has exactly one active enum mapping rule.
+8. Validate that every source-extension path emitted by any success fixture has exactly one active source-extension rule.
+9. Validate that positive, negative, non-authority, and direction fixtures have non-`TODO` fixture checksums and expected output or expected error checksums.
+10. Reject activation with the most specific owner error when any condition fails.
+```
+
+`ValidateOCSFMappingActivation` must run before any mapping row set, external schema profile, enum rule set, base-event policy set, source-extension rule set, or observation-type validation matrix can enter production-active scope. A missing catalog path for concrete row instances remains an owner `TODO:` blocker and must not be inferred from stable prose.
+
 `050` activation-controlled artifacts use `030.ActivationControlledArtifactLifecycleMachine.v1`. `050` owns only the mapping-specific guard rows below.
 
 | Artifact class | Required guard before `validated` | Required guard before `active` | Quarantine trigger |
@@ -325,6 +366,29 @@ A mapping artifact entering `active` status must have `030.LifecycleTransitionEv
 | `extension_set` | Yes | Declared extensions only; empty set is explicit. |
 | `class_allowlist` | Yes | Every active observation mapping must use an allowed class. |
 | `expiration` | Yes | Non-expired for production activation. |
+
+### ProfileResolutionManifest schema
+
+`ProfileResolutionManifest` records the compiled OCSF profile, inheritance, object-path, constraint, and enum resolution that governs emitted normalized fields. Concrete manifests are activation-controlled artifacts and must be checksummed over canonical manifest bytes.
+
+| Field | Required behavior |
+| --- | --- |
+| `manifest_id` | Stable ID. |
+| `external_schema_artifact_ref` | Exact active `ExternalSchemaArtifactRef`. |
+| `schema_name` / `schema_version` | Must match the artifact ref. |
+| `profile_set` / `extension_set` | Must match the compiled artifact and active profile. |
+| `resolved_class_uid` | Required for event-class output. |
+| `resolved_object_path` | Required for every emitted object path. |
+| `inherited_field_set` | Canonically sorted resolved inherited fields. |
+| `required_field_set` | Canonically sorted required fields. |
+| `recommended_field_set` | Canonically sorted recommended fields. |
+| `constraint_set` | Canonically sorted compiled constraints. |
+| `enum_ref_set` | Canonically sorted enum refs used by mapping. |
+| `deprecated_field_set` | Canonically sorted deprecated fields and waiver refs. |
+| `manifest_checksum` | SHA-256 over canonical manifest bytes. |
+| `validation_refs` | Non-empty. |
+| `activation_scope` | Vendor-neutral scope. |
+| `lifecycle_status` | Production use requires `active`. |
 
 ### Observation-to-OCSF mapping matrix
 
@@ -358,6 +422,24 @@ A required path may be absent only when the active row declares a field-quality 
 
 ### OCSFBaseEventFieldPolicy
 
+`OCSFBaseEventFieldPolicySet` is an activation-controlled artifact. It instantiates field-path policy rows for OCSF base-event fields and must not grant Cadastre source authority.
+
+| Field | Required behavior |
+| --- | --- |
+| `policy_set_id` | Stable row-set ID. |
+| `policy_id` | Stable row ID. |
+| `external_schema_profile_ref` | Exact active profile. |
+| `field_path` | Exact OCSF base-event path. |
+| `policy_class` | Closed enum: `disabled`, `non_authoritative_metadata`, `allowed_metadata_bounded`, `rejected_deprecated`, `waived_deprecated`. |
+| `default_behavior` | Required. |
+| `redaction_policy_ref` | Required when value may persist or display. |
+| `authority_effect` | Must be `none`; any other value fails activation. |
+| `validation_refs` | Non-empty. |
+| `activation_scope` | Vendor-neutral scope. |
+| `lifecycle_status` | Production use requires `active`. |
+
+`raw_data`, `raw_data_hash`, and `unmapped` are disabled by default. Observables, enrichments, severity, status, and confidence are non-authoritative by default. Any active policy that permits bounded metadata persistence must include redaction refs and validation fixtures proving no raw evidence, omission, identity, gold, graph, source-authority, or confidence-policy substitution.
+
 | Base-event field | Default | Required behavior |
 | --- | --- | --- |
 | `raw_data` | disabled | Raw payload remains in `RawRecord`; enabling requires explicit bounded policy and redaction rows. |
@@ -369,6 +451,28 @@ A required path may be absent only when the active row declares a field-quality 
 | `metadata`, `message`, timezone fields | allowed as normalized metadata only | Must not override Cadastre timestamps or evidence refs. |
 
 ### ExternalEnumMappingRule
+
+`ExternalEnumMappingRuleSet` is an activation-controlled artifact. It contains total enum mapping rows for each enum path used by an active OCSF mapping row.
+
+| Field | Required behavior |
+| --- | --- |
+| `rule_set_id` | Stable row-set ID. |
+| `rule_id` | Stable row ID. |
+| `external_schema_profile_ref` | Exact active profile. |
+| `class_uid` / `object_path` | Exact compiled class or object context. |
+| `enum_field_path` | Exact field path; wildcards are forbidden. |
+| `compiled_enum_ref` | Exact compiled enum ID/name domain. |
+| `source_value_selector` | Canonical selector over normalized parse fields or mapping inputs. |
+| `known_value_map` | Total map for known source values claimed by the row. |
+| `unknown_value_behavior` | Closed enum: `reject`, `emit_other_with_raw_preservation`, `cadastre_only`. |
+| `other_value_policy` | Required when `Other` may be emitted. |
+| `raw_value_preservation_path` | Required for `Other` or unknown diagnostics. |
+| `deprecated_enum_behavior` | Default `reject`; waiver ref required otherwise. |
+| `validation_refs` | Non-empty. |
+| `activation_scope` | Vendor-neutral scope. |
+| `lifecycle_status` | Production use requires `active`. |
+
+Unknown enum values must not invent enum IDs. `Other` may be emitted only when the compiled enum contains `Other`, the active rule permits `emit_other_with_raw_preservation`, and `raw_value_preservation_path` names a declared diagnostic or source-extension path permitted by the active source-extension policy.
 
 | Case | Required behavior | Validation failure code |
 | --- | --- | --- |
@@ -540,22 +644,24 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-SCHEMA-PATCH-AC-003` | `cadastre_only` observations are the only silver observations allowed to have null `external_schema_profile_id`. |
 | `050-SCHEMA-PATCH-AC-004` | OCSF fields cannot create identity, gold, graph, authority, or omission semantics outside the owning specs. |
 | `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
-| `050-OCSF-BASELINE-AC-001` | MVP OCSF production activation is blocked until exact `OCSF 1.8.0` artifact identity, compiled artifact checksum, class allowlist, profile set, extension set, enum rules, and validation fixtures are recorded. |
+| `050-OCSF-BASELINE-AC-001` | Active production output uses compiled OCSF `1.8.0` for the MVP profile; OCSF `main`, development versions, and main-only fields fail production activation before silver output. |
 | `050-SOURCE-EXTENSION-AC-001` | Undeclared, namespace-invalid, unbounded, secret-scan-failing, or OCSF-reserved-colliding source extension fields fail before production output. |
 | `050-VOLATILITY-AC-001` | Every production mapping-related artifact validates through `030.ActivationControlledArtifactRef` before silver output. |
 | `050-VOLATILITY-AC-002` | OCSF artifact checksum mismatch, inactive enum rule sets, omitted source-extension row refs, and mapping core overrides fail before production output. |
 | `050-VOLATILITY-AC-003` | `cadastre_only` mapping with null schema profile is allowed only by an active mapping row. |
-| `050-OCSF-MAP-AC-001` | Every active MVP observation mapping resolves to exactly one `ObservationToOCSFMappingRow` or fails before normalized output. |
-| `050-OCSF-MAP-AC-002` | Every active row's category UID, class UID, activity ID, and type UID match the compiled OCSF 1.8.0 artifact recorded by `ExternalSchemaArtifactRef`. |
+| `050-OCSF-MAP-AC-001` | Every active MVP mapping fixture resolves to exactly one `ObservationToOCSFMappingRow` or fails before silver output with `MAP_OCSF_ROW_MISSING` or `MAP_OCSF_ROW_AMBIGUOUS`. |
+| `050-OCSF-MAP-AC-002` | Every active row's category UID, class UID, activity ID, type UID, required object paths, and forbidden paths match the compiled OCSF `1.8.0` artifact and are enforced before silver output. |
 | `050-OCSF-MAP-AC-003` | The active class allowlist contains exactly the class UIDs used by active mapping rows. |
-| `050-OCSF-MAP-AC-004` | Unknown enum and source-action values do not invent OCSF enum IDs. |
+| `050-OCSF-MAP-AC-004` | Unknown enum and source-action values do not invent OCSF enum IDs; `Other` enum use requires compiled support, active permission, and raw-value preservation. |
 | `050-OCSF-MAP-AC-005` | Authentication has no default activity. |
 | `050-OCSF-MAP-AC-006` | IPAM-only assignment rows do not map to OCSF DHCP Activity. |
 | `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-001` | A mapping bundle that attempts to use OCSF class, status, severity, confidence, observables, enrichments, endpoint order, field presence, or field absence as authority without an active `060.ExternalSchemaAuthoritySignalMappingRow` fails before authority, absence, cleanup, graph expiry, retraction, control-state, or watermark effect. |
 | `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-002` | Valid normalized metadata remains persistable when the authority effect is blocked, provided the mapping itself is valid and emits no forbidden authority output. |
-| `050-SOURCE-EXT-AC-002` | The default `SourceExtensionFieldRuleSet` is empty. |
-| `050-SOURCE-EXT-AC-003` | Wildcard source-extension paths are rejected. |
-| `050-BASE-FIELD-AC-001` | `raw_data`, `raw_data_hash`, and `unmapped` remain absent unless an explicit bounded policy permits them. |
+| `050-OCSF-MAP-AC-007` | `Other` enum output is permitted only when the compiled enum contains `Other`, the active enum rule permits it, and raw-value preservation is declared. |
+| `050-SOURCE-EXT-AC-001` | Every emitted `source_extension_fields` path has exactly one active `SourceExtensionFieldRule`; zero or multiple matching rules fail before silver output. |
+| `050-SOURCE-EXT-AC-002` | Missing or empty `SourceExtensionFieldRuleSet` permits no `source_extension_fields` output. |
+| `050-SOURCE-EXT-AC-003` | Wildcards, namespace errors, reserved-name collisions, missing redaction, and secret-scan failures reject before output. |
+| `050-BASE-FIELD-AC-001` | Disabled base-event fields, including `raw_data`, `raw_data_hash`, and `unmapped`, fail before output unless an active bounded policy permits non-authoritative metadata persistence with required redaction refs. |
 | `050-NONAUTH-AC-001` | OCSF observables, enrichments, status, severity, confidence, and endpoint ordering cannot create identity, source authority, omission, gold, temporal, graph, or reachability effects. |
 | `050-LIFECYCLE-AC-001` | Every `050` activation-controlled artifact entering `active` status has a `030.LifecycleTransitionEvidence` ref for the generic artifact lifecycle and mapping-specific guard rows. |
 | `050-PROJECTION-REPLAY-AC-001` | Exact projection replay matches projection profile, mapping refs, redaction refs, output checksum, loss-manifest checksum, and `VersionManifest` ref. |

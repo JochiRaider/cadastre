@@ -178,6 +178,8 @@ Every row in this matrix must route through `060.DeriveAbsenceOrUnknown` before 
 
 `structured_value_schema_refs` must not be used as an unbounded object escape hatch. A structured object value may be emitted only when the selected predicate row names the exact schema ref and the schema ref is active, checksum-valid, and included in `VersionManifest`.
 
+When a candidate `structured_value` is derived from `CadastreSilverObservation.normalized_fields` governed by OCSF, the selected `GoldFactPredicateContractRow` must name the exact structured schema ref, the producing `050.ProfileResolutionManifest` ref, and the producing external schema profile ref. When authority is required, an exact `060.SourceAuthorityProfileRow` and, when applicable, exact `060.ExternalSchemaAuthoritySignalMappingRow` must also validate. OCSF object presence, object absence, observables, enrichments, `unmapped`, status, severity, and confidence must not satisfy `structured_value_schema_refs` or object authority by themselves.
+
 Predicate contract refs and predicate contract checksums are replay-affecting for `gold` and `gold_correction` output classes.
 
 ## Correction Contract
@@ -677,6 +679,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-GOLD-PREDICATE-CONTRACT-AC-003` | `null_value` is accepted only when the selected predicate contract sets `null_object_policy = allowed`; otherwise it fails before ID computation. |
 | `080-GOLD-PREDICATE-CONTRACT-AC-004` | Identity-like string object values are rejected when the predicate contract requires a reference kind. |
 | `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
+| `080-OCSF-STRUCTURED-OBJECT-AC-001` | OCSF-derived structured object output fails before `gold_fact_key_id` computation unless `050.ProfileResolutionManifest`, `080.GoldFactPredicateContractRow.structured_value_schema_refs`, and required `060` authority refs validate and appear in `VersionManifest`. |
 | `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
 
 ## Definition of Done

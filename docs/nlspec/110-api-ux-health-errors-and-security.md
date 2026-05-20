@@ -633,6 +633,15 @@ The generated error registry must include the following mapping, source-extensio
 
 | Error code | Owner | Severity | Retryability | Redaction |
 | --- | --- | --- | --- | --- |
+| `OCSF_ARTIFACT_MISMATCH` | `050` | error | no, until schema artifact/profile changes | artifact refs and checksums redacted by policy |
+| `OCSF_CLASS_NOT_ALLOWED` | `050` | blocked | no, until profile allowlist changes | class UID visible; source values redacted |
+| `EXTERNAL_ENUM_UNKNOWN` | `050` | error | no, until enum rule or source mapping changes | enum path visible; raw value redacted |
+| `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | `050` | error | no, until enum rule changes | enum path visible; raw value redacted |
+| `EXTERNAL_ENUM_DEPRECATED` | `050` | blocked | no, until waiver/profile changes | enum path visible |
+| `EXTERNAL_ENUM_SIBLING_MISMATCH` | `050` | error | no, until input or mapping changes | enum path visible; raw value redacted |
+| `SOURCE_EXTENSION_FIELD_UNDECLARED` | `050` | blocked | no, until source-extension rule activates | source-extension path visible; value redacted |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `060` | error | no, until authority signal row activates | external field path visible; private refs redacted |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` | `060` | error | no, until authority signal rows change | matching row refs redacted |
 | `MAP_OCSF_ROW_MISSING` | `050` | error | no, until mapping bundle/profile changes | observation type visible; source values redacted |
 | `MAP_OCSF_ROW_AMBIGUOUS` | `050` | error | no, until mapping rows change | row IDs visible; raw source values redacted |
 | `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | `050` | error | no, until parser/mapping changes | field path visible |

@@ -110,6 +110,13 @@ toolchain_dependency_review
 external_tool_capability_evidence
 mapping_toolchain_package
 external_schema_profile
+observation_to_ocsf_mapping_row_set
+external_schema_artifact_ref
+profile_resolution_manifest
+external_enum_mapping_rule_set
+ocsf_base_event_field_policy_set
+source_extension_field_rule_set
+observation_type_external_mapping_validation_matrix
 lakehouse_read_policy
 lakehouse_feed_completeness_profile
 lakehouse_feed_category_closure_row_set
@@ -215,6 +222,23 @@ ResolvePackageTypePolicyRow(package_type, target_environment, active_row_set):
 
 Every confirmed `PackageType` token must have exactly one active policy row in the active row set for each target environment in which package activation is in scope. A package activation implementation must run this resolver before compatibility checks, validation checks, stage binding, rollback preflight, quarantine evaluation, or health gating.
 
+### Mapping and external schema package type policy rows
+
+These rows are package type policies for mapping and external-schema row-catalog packages. They make OCSF mapping catalogs package-set members without making packages runtime authority. Runtime behavior remains owned by `050`, with validation closure owned by `120` and manifest inclusion owned by `030`.
+
+| Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required policy fields |
+| --- | --- | --- | --- | --- | --- |
+| `mapping_bundle` | `050.ValidateMappingBundle` | none or mapping compiler runtime when executable | `normalize`, `validation` | `CadastreSilverObservation` only through `050.NormalizeObservation`; validation output only in validation stage | trust, compatibility, mapping validation, forbidden-output fixtures |
+| `observation_to_ocsf_mapping_row_set` | `050.ObservationToOCSFMappingRowSet` | none | none or validation-only | no direct production records | row schema validation, discriminator coverage, class allowlist, object-path, enum, base-event, source-extension, fixture refs |
+| `external_schema_artifact_ref` | `050.ExternalSchemaArtifactRef` | none | none | no direct production records | compiled artifact checksum, compiler, validator, source tag, source commit, class allowlist |
+| `profile_resolution_manifest` | `050.ProfileResolutionManifest` | none | none | no direct production records | required and recommended fields, constraints, enum refs, deprecated fields, checksum |
+| `external_enum_mapping_rule_set` | `050.ExternalEnumMappingRuleSet` | none | none | no direct production records | unknown enum, `Other`, raw preservation, deprecated enum fixtures |
+| `ocsf_base_event_field_policy_set` | `050.OCSFBaseEventFieldPolicySet` | none | none | no direct production records | raw/unmapped/observable/enrichment/status/severity/confidence non-authority fixtures |
+| `source_extension_field_rule_set` | `050.SourceExtensionFieldRuleSet` | none | none | no direct production records | namespace, exact path, bounds, redaction, secret-scan, reserved-name fixtures |
+| `observation_type_external_mapping_validation_matrix` | `050` and `120` | none | validation-only | validation report only | positive, negative, non-authority, direction, mutation-prohibition fixtures |
+
+A broad `policy_bundle`, `mapping_bundle`, or `external_schema_profile` package type must not substitute for a row-catalog package type unless the `PackageTypePolicyRow` explicitly declares the catalog is bundled and the `ProductionPackageSetManifest` includes separate immutable artifact refs and checksums for each required catalog.
+
 ### Graph backend package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. They must not define graph semantics; they gate runtime artifacts required by `090.GraphBackendProfile`.
@@ -307,6 +331,8 @@ A `GraphBackendProfile` that references a package release or package set whose t
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
 
 Package-supplied analysis, enrichment, lineage, registry, and derived-edge artifacts must not redefine stable `130` non-authority rules, `080` gold derivation behavior, `090` graph projection behavior, `110` API/error/redaction behavior, or `120` validation shapes. A package may instantiate active `130` row sets only through the package type policy rows in this spec, immutable `ProductionPackageSetManifest` membership, `030.ActivationControlledArtifactRef`, exact checksums, active lifecycle status, activation scope, package compatibility rows, and passing `120` validation refs. Missing policy, missing package-set ref, unknown package type, ambiguous policy, compatibility failure, or manifest omission fails before production output.
+
+Package-supplied mapping and external-schema catalogs must resolve the mapping row-catalog package type policies in this spec. Missing mapping row-set package type policy, broad-label substitution, incompatible compiled artifact checksums, missing required catalog refs, missing package-set membership, or rollback to a package set with mismatched OCSF artifact checksums fails before validation acceptance or production silver output.
 
 Package-supplied source-authority closure row catalogs must use the explicit package types in `Source-authority closure package type policy rows`. A broad `policy_bundle` must not substitute for a source-closure row-catalog package type.
 
@@ -981,6 +1007,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-PACKAGE-TYPE-POLICY-AC-003` | Known package type with no active policy row fails with `PACKAGE_TYPE_POLICY_MISSING`. |
 | `100-PACKAGE-TYPE-POLICY-AC-004` | Ambiguous package type policy resolution fails with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. |
 | `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has no duplicate tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
+| `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, selected package type policy refs, repository refs, supply-chain policy/evidence refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, approval refs, and checksum. |

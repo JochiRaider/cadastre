@@ -107,6 +107,16 @@ A source-closure row, deterministic block row, validation report, `VersionManife
 
 Private source binding artifacts may map concrete upstream systems to public vendor-neutral datasets. Private mappings must not alter the public `060` row-resolution algorithm, matching specificity, default omission behavior, error precedence, or allowed effect semantics.
 
+### MappingArtifactPublicBindingRule
+
+Public OCSF mapping row catalogs, external enum rule catalogs, profile-resolution manifests, base-event policy sets, source-extension rule sets, observation-type validation matrices, and canonical validation output summaries may contain only vendor-neutral `source_category`, `source_dataset`, observation type tokens, row IDs, redacted artifact refs, field paths, checksummed public policy refs, lifecycle status, activation scope, and validation refs.
+
+Public instances of these artifacts must not contain concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventories, zone inventories, account lists, raw fixture bytes, source-native secrets, or environment-specific source target lists.
+
+Any public mapping artifact, validation report, API output, export output, audit output, or `VersionManifest` ref that leaks those values must fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, or validation-report materialization.
+
+Private artifacts may bind concrete upstream source systems and private source schemas to public mapping rows. Private bindings must not alter public `050.ResolveOCSFMapping` row-selection order, default behavior, error precedence, source-extension policy, enum policy, OCSF non-authority behavior, or `cadastre_only` behavior.
+
 ### IdentityResolverRowPublicBindingRule
 
 Public identity resolver row catalogs may contain only vendor-neutral source categories, source datasets, row IDs, redacted artifact refs, canonical scope selectors, lifecycle status, validation refs, and checksummed policy refs.
@@ -250,6 +260,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-CLEANUP-AC-002` | Direct source calls still fail before output with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | `010-CLEANUP-AC-003` | Private binding leakage validation still rejects public artifacts that expose private source binding artifacts. |
 | `010-CLEANUP-AC-004` | Every output class still maps to exactly one authority class. |
+| `010-MAPPING-PRIVATE-BINDING-AC-001` | Public mapping catalogs, source-extension rule sets, validation summaries, and `VersionManifest` refs that expose private bindings, raw fixture bytes, tenant inventories, private routes, credentials, or source-native secrets fail with `PRIVATE_BINDING_LEAK` before persistence or publication. |
 | `010-SCHEMA-PATCH-AC-001` | Every 040 exported record maps to exactly one authority class. |
 | `010-SCHEMA-PATCH-AC-002` | `EvidenceRef` remains supporting evidence and cannot become raw payload storage or fact authority by itself. |
 | `010-SCHEMA-PATCH-AC-003` | Graph delta primitive shapes remain derived projection records. |

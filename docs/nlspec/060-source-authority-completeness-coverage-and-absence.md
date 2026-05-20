@@ -649,6 +649,22 @@ A `060` row that maps an external-schema signal must name the external schema pr
 
 Vulnerability Finding status must not become Cadastre `assertion_state` without a `060` or `080` derivation path. DNS and DHCP field absence must not become absence without exact completeness, coverage, staleness, and authority rows. OCSF endpoint order must not become graph direction authority.
 
+#### ExternalSchemaAuthoritySignalMappingRowSet default
+
+- The default active row set is empty.
+- Empty row set means every external schema signal remains non-authoritative.
+- Missing row set, inactive row set, checksum mismatch, or out-of-scope row set blocks any attempted authority effect.
+- Wildcard field paths, wildcard source datasets, wildcard fact types, wildcard predicates, and wildcard requested effects are forbidden.
+
+Deterministic error handling for external-schema authority signal resolution is:
+
+| Condition | Required result |
+| --- | --- |
+| No exact row | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` or imported `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN`; no authority effect. |
+| More than one equally specific row | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS`; no authority effect. |
+| Row missing closure refs | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN`; no authority effect. |
+| Row exact and validated | Signal may be consulted only for the named fact type, predicate, source dataset, field path, and requested effect. |
+
 ## Source Authority Contract Details
 
 ### CoverageDimensionProfile catalog
@@ -906,6 +922,8 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `060-SOURCE-CLOSURE-AC-016` | Deterministic block rows emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof. |
 | `060-SOURCE-CLOSURE-AC-017` | Source-history no-change proof fails without both retention and coverage rows. |
 | `060-EXTERNAL-SCHEMA-AUTHORITY-AC-001` | External schema signals remain non-authoritative without an exact active `ExternalSchemaAuthoritySignalMappingRow`. |
+| `060-EXTERNAL-SCHEMA-AUTHORITY-AC-002` | Missing, inactive, checksum-mismatched, or out-of-scope external-schema authority signal row sets block authority effects and do not reinterpret normalized metadata as source authority. |
+| `060-EXTERNAL-SCHEMA-AUTHORITY-AC-003` | Ambiguous external-schema authority signal rows emit `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` and no authority, absence, cleanup, graph expiry, control-state, or watermark effect. |
 | `060-ERROR-REGISTRY-CLOSURE-AC-001` | All `060` source-closure owner errors generate complete `110.ErrorCodeRegistryRow` rows with no `TODO` values. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-001` | A source-authority row cannot widen `080.allowed_subject_ref_kinds` or `080.allowed_object_value_kinds`; widening attempts fail before authority selection. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-002` | A source-authority row cannot permit `null_value` when the selected predicate contract forbids it. |

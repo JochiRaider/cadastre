@@ -341,6 +341,22 @@ Every active `ObservationToOCSFMappingRow` must have one validation row in this 
 | `acceptance_criterion` | Exact `050-OCSF-*`, `050-SOURCE-EXT-*`, `060-OCSF-*`, or `090-OCSF-*` criterion. |
 | `blocking_status` | `blocking` until fixture checksum, expected output checksum or expected error, and version-manifest refs are filled. |
 
+Each mapping validation row must include the following row class. Row classes are closed for OCSF mapping activation; unknown row classes fail validation before acceptance aggregation.
+
+| Row class | Required coverage |
+| --- | --- |
+| `050-ocsf-positive` | One success row per active `ObservationToOCSFMappingRow`. |
+| `050-ocsf-row-missing` | Missing row fails before silver output. |
+| `050-ocsf-row-ambiguous` | Ambiguous row fails before silver output. |
+| `050-activity-discriminator` | Missing or ambiguous activity discriminator fails before output. |
+| `050-object-path` | Required path missing and forbidden path emitted cases. |
+| `050-enum` | Unknown enum, `Other` not permitted, deprecated enum, sibling mismatch. |
+| `050-source-extension` | Declared success, undeclared path, wildcard namespace, reserved collision, missing redaction, secret scan failure. |
+| `050-cadastre-only` | Null external profile accepted only for exact active `cadastre_only` row. |
+| `050-dhcp-ipam-split` | DHCP maps only for `assignment_source = dhcp`; IPAM requires `cadastre_only` or fails. |
+| `060-ocsf-nonauthority` | OCSF status, severity, confidence, observables, enrichments, class/activity, field presence, field absence. |
+| `090-ocsf-direction` | Endpoint order cannot determine direction; missing or ambiguous flow-role evidence emits no edge. |
+
 Required `050` fixture families:
 
 ```text
@@ -377,6 +393,25 @@ Required `090` fixture families:
 ocsf-endpoint-order-no-graph-direction-*
 flow-role-evidence-required-*
 ```
+
+Each mapping validation row must include:
+
+```text
+fixture_id
+fixture_checksum
+input_artifact_refs
+selected_or_blocked_mapping_row_refs
+expected_output_checksum for success
+expected_error for rejection
+mutation_prohibition
+version_manifest_refs
+acceptance_criterion
+blocking_status
+```
+
+`blocking_status` must become `passed` only when fixture checksum, expected output checksum or expected error, mutation prohibition, and manifest refs are complete. `090-ocsf-direction` rows must include active `050.ObservationToOCSFMappingRow` refs, the source silver observation checksum, graph projection profile ref, graph edge semantics row ref, and `VersionManifest` ref.
+
+TODO: Governance must provide exact fixture bytes, fixture checksums, and expected output checksums for every active OCSF mapping, source-extension, non-authority, and endpoint-direction row before this matrix can pass acceptance. Until those catalog paths and bytes exist, rows with `TODO` checksums remain `blocking` and the corresponding production artifact must remain inactive.
 
 ### GraphActiveProfileClosureValidationMatrix
 
@@ -1066,6 +1101,8 @@ graph-provider-portability-equivalence
 | `120-SOURCE-EXT-AC-001` | `AcceptanceReport` cannot pass while any emitted source-extension path lacks a matching rule fixture and undeclared-path rejection fixture. |
 | `120-OCSF-NONAUTH-AC-001` | `AcceptanceReport` cannot pass unless OCSF status, severity, confidence, observables, enrichments, and field absence non-authority fixtures pass. |
 | `120-OCSF-DIRECTION-AC-001` | `AcceptanceReport` cannot pass unless OCSF endpoint-order graph-direction rejection fixtures pass. |
+| `120-OCSF-MAP-AC-004` | `AcceptanceReport` cannot pass while any active mapping validation row lacks `fixture_id`, `fixture_checksum`, `input_artifact_refs`, selected or blocked mapping row refs, expected output checksum or expected error, mutation prohibition, version manifest refs, acceptance criterion, or non-blocking status. |
+| `120-OCSF-DIRECTION-AC-002` | Endpoint-order direction fixtures must be produced from active mapping-row fixtures, not graph-only synthetic inputs. |
 | `120-LIFECYCLE-AC-004` | Domain/owner lifecycle closure status contradiction fails with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `120-IDENTITY-CLOSURE-AC-001` | Aggregate acceptance fails while any `070` resolver row coverage, evidence class, scope, decision matrix, confidence band, review routing, split policy, explanation policy, activation report, or selector safety fixture is missing, blocked, failed, not run, checksum-mismatched, or has a `TODO` expected output. |
 | `120-IDENTITY-CLOSURE-AC-002` | Validation proves deterministic resolver pair ordering and byte-identical decision/explanation checksums across two independent implementations. |
