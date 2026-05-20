@@ -39,6 +39,7 @@ This document must:
 
 - define canonical Cadastre domain terms and forbidden substitutions;
 - map domain concepts to primary owner specs or owner sections;
+- define bounded-context relationship types, context-map edge routing, crossing-artifact vocabulary, and default no-effect behavior for unowned or invalid cross-context dependencies;
 - distinguish domain concepts from implementation modules, storage artifacts, UI labels, graph backend labels, package names, route names, and external-system terms;
 - preserve Cadastre authority boundaries and owner routing;
 - provide stable context for implementers, reviewers, specification authors, and coding agents;
@@ -61,6 +62,7 @@ This document is not an API reference, schema reference, persistence spec, graph
 | Graph concepts | Domain boundary between graph concepts and authoritative facts when graph applicability is established by Cadastre owner specs. |
 | Workflow vocabulary | Domain distinction between processing stages, lifecycle states, validation artifacts, analysis outputs, and user-facing states. |
 | Spec-owner routing | The primary owner spec for each domain concept and boundary. |
+| Context map | Bounded-context relationship type vocabulary, context-map edge routing, crossing-artifact owner lookup, prohibited dependency classes, and default root-domain no-effect interpretation. |
 | Review discipline | Rules for agents and reviewers when terminology or ownership is unresolved. |
 | Volatility vocabulary | Canonical names and owner routing for stable core contracts, activatable artifacts, runtime state records, reference evidence, rationale, and inactive future material. |
 
@@ -83,6 +85,7 @@ This document is not an API reference, schema reference, persistence spec, graph
 | Analysis rules, enrichment, lineage mapping, artifact-class boundaries, registry governance | `130-analysis-enrichment-and-registry-governance.md` |
 | Observability instrumentation, telemetry signals, telemetry attributes, metric catalogs, trace context, exporter behavior, telemetry health mapping, and telemetry replay exclusion | `140-observability-instrumentation.md` |
 | Future theoretical reachability candidate contracts | `200-future-reachability-analysis-domain.md`, inactive until promoted |
+| Runtime effects of context-map edges, crossing-artifact schemas, handoff algorithms, failure codes, mutation behavior, query behavior, activation behavior, telemetry behavior, and validation harness execution | The owner spec named by the context-map edge and `120-validation-fixtures-and-acceptance.md` for validation evidence only. |
 | Volatility activation algorithms, artifact schemas, package-set behavior, and version-manifest field schemas | `000`, `010`, `030`, `100`, `120`, and the domain owner specs named for the artifact class |
 | Implementation code structure, package/module names, route names, database schemas, CSS classes, local config, private source binding artifacts | Implementation repository and private artifacts; not domain authority by default |
 
@@ -139,7 +142,7 @@ Consequences:
 | `RES-012-graph-backend-comparison.md` | Research report on graph backends. | Supporting evidence for backend-neutral graph-serving boundaries. | Selecting production graph backend or backend-specific domain truth. |
 | `RES-013-extension-package-supply-chain.md` | Research report on package supply chain. | Supporting evidence for package-set activation and trust refinements. | Registry/product selection or activation authority by itself. |
 | `RES-014-source-authority-staleness-coverage-absence.md` | Research report on authority, staleness, coverage, absence. | Supporting evidence for source authority and absence boundary refinements. | Source truth unless adopted by `060`. |
-| `RES-015-janusgraph.md` | Research report on JanusGraph. | Supporting evidence for JanusGraph as an MVP graph backend default and for provider-neutral backend contracts when adopted by owner specs. | Runtime authority, graph model authority, identity authority, source authority, package activation authority, or future-provider exclusion. |
+| `RES-015-janusgraph.md` | Research report on JanusGraph. | Supporting evidence for provider-specific backend risk analysis and provider-neutral graph backend contracts when adopted by owner specs. | Runtime authority, graph model authority, identity authority, source authority, package activation authority, backend selection authority, or future-provider exclusion. |
 | Implementation repository files, when present | Code, package structure, local module names, tests, comments. | May map implementation objects to domain terms after exact inspection. | Defining Cadastre domain concepts by package/module/table/route names. |
 
 ## 6. Domain inclusion rule
@@ -183,7 +186,7 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | External schema term versus Cadastre term | OCSF and CIM terms are external schema/projection vocabulary mapped through profiles. | OCSF/CIM fields as Cadastre identity, authority, completeness, fact, or graph authority. | `050`, `040`, `060` | `050` External Schema Profile and CIM Projection Contract | Resolved. |
 | Analysis finding versus fact | `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are analysis or workflow outputs. | Analysis output as remediation, risk reduction, fact retraction, graph edge removal, or source completeness. | `130` | `130` Analysis Rules and Non-Authority Rule | Resolved. |
 | Package artifact versus package activation | A package artifact is immutable release material; production activation occurs only through a `ProductionPackageSetManifest`. | Single artifact, version string, signature status, SBOM, provenance, dependency lock, or validation run as activation authority. | `100` | `100` Activation Unit and Package Set Manifest | Resolved. |
-| MVP graph backend provider default | JanusGraph may be the MVP default only through an active `090.GraphBackendProfile` and package-gated runtime artifacts. | JanusGraph as Cadastre graph semantics, fact authority, identity authority, source completeness authority, or the only future backend. | `090`, `100`, `120` | `090.GraphBackendProfile`; `100.ProductionPackageSetManifest`; `120` graph backend validation rows | Resolved as owner-routed default; activation remains validation-gated. |
+| Graph backend selection default | Any named graph backend selection default may exist only as an owner-routed `090.GraphBackendSelectionPolicy` result with required `090`, `100`, and `120` gates. | Any backend product as Cadastre graph semantics, fact authority, identity authority, source completeness authority, activation authority, or future-provider exclusion. | `090`, `100`, `120` | `090.GraphBackendSelectionPolicy`; `090.GraphBackendProfile`; `100.ProductionPackageSetManifest`; `120` graph backend validation rows | Resolved as owner-routed selection; activation remains validation-gated. |
 | Lifecycle status versus lifecycle machine | `LifecycleStatus` names shared states; runtime lifecycle behavior comes from a declared machine or pure deterministic algorithm authority. | Inferring transitions from diagrams, process status, logs, caches, or names. | `030` | `030` Lifecycle Contract | Resolved. |
 | `docs/nlspec/domain.md` authority | Root domain document authority is `candidate` until `000` marks it `authoritative`. | Treating this candidate document as implementation authority without registry status. | `000` | `000` Document Registry. | Resolved. |
 | Runtime telemetry versus domain truth | Runtime telemetry is operational diagnostic material emitted through `140`; it may support health and troubleshooting only through owner policies. | Trace, span, metric, structured log, exporter success, Collector state, or dashboard state as fact authority, identity evidence, source completeness, graph truth, audit ledger, or replay input. | `010`, `140`, `110`, `120` | `010.RuntimeTelemetryAuthorityRule`; `140.TelemetryNonAuthorityRule`; `110.TelemetryHealthMappingHandoff`; `120-OBSERVABILITY-*` rows | Resolved after `140` patch. |
@@ -258,12 +261,138 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | API, UX, health, error, security | API request/response contracts, state labels, health, errors, redaction, authorization, audit. | Domain-specific behavior owned by source, identity, temporal, graph, or package specs. | `110` |
 | Validation and acceptance | Validation matrices, fixtures, golden corpus, acceptance reports, validation acceptance. | New behavioral requirements not owned by a domain spec. | `120` |
 | Analysis, enrichment, lineage, registry | Read-only analysis, findings, metrics, enrichment records, lineage mapping, artifact-class policy, registry governance. | Fact, identity, graph, completeness, package, or watermark authority. | `130` |
+| Observability and runtime telemetry | Runtime telemetry signals, trace context, metric instruments, telemetry attributes, telemetry redaction, exporter behavior, telemetry runtime state, telemetry health mapping, and telemetry replay exclusion. | Domain truth, source authority, identity, graph projection, package activation, API response schema, audit persistence, validation harness behavior, or replay checksum algorithms outside named telemetry handoffs. | `140` |
 | Future reachability | Deferred reachability claim kinds, result states, model capability, analysis artifacts, claim policy. | Active MVP graph/gold behavior, solver selection, negative reachability facts. | `200`, inactive |
+
+
+### 9.1 Context map authority boundary
+
+A bounded context defines a semantic ownership boundary. A context-map edge defines how domain language, artifacts, authority, projection, validation, activation, diagnostics, or deferred material may cross from one bounded context to another.
+
+The context map is a root-domain routing artifact. It must not define runtime record schemas, algorithms, failure precedence, lifecycle transitions, graph mutation behavior, package activation behavior, validation harness execution, API response behavior, or telemetry export behavior.
+
+Every runtime-affecting context-map edge must name exactly one primary behavior owner spec and at least one exported owner contract. If no owner spec exports the required handoff, the edge is not active. The root-domain default is `no_implicit_effect`.
+
+When a crossing artifact is missing, inactive, stale, ambiguous, checksum-invalid, out of scope, not covered by the active owner contract, or omitted from the declared edge row, `domain.md` must route the issue to the owner spec or Section 25 closure ledger. It must not infer fallback behavior.
+
+`all_active_contexts` means every bounded context in Section 9 whose primary owner is not marked inactive. `none` means the edge is prohibited or deferred and has no active target context. `external_boundary` means non-Cadastre source material or product/system behavior outside the public Cadastre model.
+
+### 9.2 Context map relationship type vocabulary
+
+`ContextMapRelationshipType` is a closed root-domain vocabulary. A relationship type not listed in this table is invalid until a future `domain.md` revision adds it and `120-DOMAIN-CMAP-*` validation rows cover it.
+
+| Relationship type | Required root-domain meaning | Forbidden interpretation |
+| --- | --- | --- |
+| `owner_import` | One context imports an exported contract name from another owner spec. | Copying or redefining the imported owner behavior. |
+| `published_language` | One context supplies stable terminology or record names used by other contexts. | Treating terminology as runtime authorization. |
+| `anti_corruption_translation` | External or adjacent terminology is translated into Cadastre-owned terms before use. | Letting external schemas, graph labels, source keys, or tool outputs define Cadastre truth. |
+| `authority_handoff` | A context provides an owner-approved authorization or denial artifact consumed by another context. | Downstream inference without the handoff artifact. |
+| `projection_handoff` | Authoritative records or owner-approved change records become derived projection input. | Projection state becoming source of record. |
+| `activation_gate` | Production behavior may execute only after package, profile, policy, lifecycle, and manifest gates pass. | Single artifact, version string, signature scalar, or validation run as activation. |
+| `validation_gate` | Validation proves behavior owned elsewhere through fixtures and acceptance reports. | Validation inventing new owner behavior. |
+| `read_only_query` | A downstream context may query declared read models without mutation authority. | Query output mutating facts, identity, graph state, completeness, packages, or watermarks. |
+| `telemetry_handoff` | Runtime diagnostics may support health or troubleshooting only through named telemetry and API/health policies. | Telemetry becoming fact, identity, completeness, graph, package, audit, watermark, or replay authority. |
+| `deferred_no_effect` | Future-domain material is preserved but has no MVP production effect. | Deferred material emitting active facts, graph edges, graph properties, or user-facing claims. |
+| `prohibited_dependency` | A tempting or unsafe dependency is explicitly forbidden. | Treating absence of a positive edge as permission by omission. |
+
+### 9.3 Context map edge row shape
+
+The context-map matrix is the root-domain interface for cross-context routing. It is not a runtime API, schema, event, graph edge, package dependency, processing DAG, or validation fixture.
+
+The relationship matrix is split into two tables for readability. A context-map edge is complete only when its `edge_id` appears exactly once in both tables in Sections 9.4 and 9.5. Each edge row must populate every required field in this shape.
+
+| Field | Required behavior |
+| --- | --- |
+| `edge_id` | Stable lower-snake-case identifier unique within Section 9. |
+| `from_context` | One bounded context named in Section 9, `all_active_contexts`, or `external_boundary` for non-Cadastre inputs. |
+| `to_context` | One bounded context named in Section 9, `all_active_contexts`, or `none` for prohibited or deferred edges. |
+| `relationship_type` | One token from `ContextMapRelationshipType`. |
+| `crossing_artifacts` | Exact exported contract names, exact owner-state names, or `none`. Broad prose such as “profile permits” is invalid. |
+| `authority_class` | One `010.AuthorityClass` token when the edge concerns authority, otherwise `not_applicable`. |
+| `behavior_owner` | Exact owner spec and exported contract that owns the primary runtime behavior, or `none` when the edge is prohibited, deferred, or root-domain-only. |
+| `allowed_root_domain_effect` | One closed value: `owner_lookup`, `term_translation`, `boundary_warning`, `validation_route`, `deferred_no_effect`, or `none`. |
+| `forbidden_runtime_effects` | Closed list of runtime effects that the edge must not imply. Empty lists are invalid for `anti_corruption_translation`, `prohibited_dependency`, `telemetry_handoff`, and `deferred_no_effect`. |
+| `default_when_missing_or_invalid` | Default must be `no_implicit_effect` unless the referenced owner spec exports a stricter named default. Deferred material must use `deferred_no_effect`. |
+| `validation_route` | Exact `120` validation row family, or `TODO:` when the row family is not yet defined. |
+| `status` | Closed value: `resolved_owner_routed`, `blocked_validation`, `blocked_owner_todo`, or `inactive_deferred`. |
+
+### 9.4 Context map relationship matrix: identity and owner routing
+
+| `edge_id` | `from_context` | `to_context` | `relationship_type` | `crossing_artifacts` | `authority_class` | `behavior_owner` |
+| --- | --- | --- | --- | --- | --- | --- |
+| `doc_governance_to_all_contexts` | Documentation governance | `all_active_contexts` | `owner_import` | `SpecStatus`, `DocumentClass`, `SourceOfTruthRow`, `VolatilityClass` | `not_applicable` | `000.SourceOfTruthRow` |
+| `system_boundary_to_all_contexts` | System boundary and authority | `all_active_contexts` | `published_language` | `AuthorityClass`, `DirectSourceProhibition`, `ProjectionAuthorityRule`, `RuntimeTelemetryAuthorityRule` | `not_applicable` | `010.AuthorityClass` |
+| `lakehouse_feed_to_processing` | Lakehouse feed and table state | Processing and versioning | `authority_handoff` | `LakehouseFeedProfile`, `RawFeedManifest`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef`, `LakehouseReadCompletenessReceipt` | `supporting_evidence` | `020.LakehouseReadCompletenessReceipt` |
+| `processing_to_stage_owners` | Processing and versioning | `all_active_contexts` | `activation_gate` | `ProcessingStageDAG`, `StageStateRecord`, `VersionManifest`, `ActivationControlledArtifactRef`, `RunLockSet` | `not_applicable` | `030.ExecuteProcessingStageDAG` |
+| `core_model_to_all_contexts` | Core data model | `all_active_contexts` | `published_language` | `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `GoldFact`, `EvidenceRef`, `FactAbsenceOutcome`, `CanonicalJSON` | `not_applicable` | `040.CoreRecordSchema` |
+| `normalization_to_source_authority` | Normalization and external schema | Source authority and absence | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet` | `supporting_evidence` | `050.NormalizeObservation` |
+| `normalization_to_identity` | Normalization and external schema | Identity resolution | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet` | `supporting_evidence` | `050.NormalizeObservation` |
+| `normalization_to_gold` | Normalization and external schema | Temporal and gold facts | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet` | `supporting_evidence` | `050.NormalizeObservation` |
+| `normalization_to_graph` | Normalization and external schema | Graph projection and serving | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet` | `supporting_evidence` | `050.NormalizeObservation` |
+| `source_authority_to_gold` | Source authority and absence | Temporal and gold facts | `authority_handoff` | `SourceAuthorityProfileRow`, `SourceStalenessPolicy`, `CoverageAssertion`, `AbsenceDerivationResult`, `ControlResultMappingRow` | `system_of_record` | `060.DeriveAbsenceOrUnknown` |
+| `source_authority_to_graph_expiry` | Source authority and absence | Graph projection and serving | `authority_handoff` | `AbsenceDerivationResult` with requested graph effect | `derived_projection` | `060.DeriveAbsenceOrUnknown` |
+| `identity_to_gold_subjects` | Identity resolution | Temporal and gold facts | `authority_handoff` | `IdentityDecision`, `ResolverExplanation`, `CanonicalEntity`, `SourceAsset`, `Identifier` | `system_of_record` | `070.ResolveIdentity` |
+| `identity_to_graph_projection` | Identity resolution | Graph projection and serving | `projection_handoff` | `IdentityDecision`, `GraphCorrectionHandoff` | `derived_projection` | `070.GraphCorrectionHandoff` |
+| `gold_to_graph_projection` | Temporal and gold facts | Graph projection and serving | `projection_handoff` | `GoldFact`, `GoldFactChangeSet`, `TemporalObservationTimeResolution` | `derived_projection` | `080.GoldFactChangeSet` |
+| `graph_to_api_serving` | Graph projection and serving | API, UX, health, error, security | `read_only_query` | `DerivedViewState`, `GraphQueryTranslationProfile`, `GraphApplyResult`, `GraphQueryResponse` | `derived_projection` | `090.QueryGraph` |
+| `package_activation_to_stage_runtime` | Package activation | `all_active_contexts` | `activation_gate` | `ProductionPackageSetManifest`, `PackageReleaseManifest`, `PackageStageBinding`, `PackageCompatibilityMatrix`, `PackagePromotionRecord` | `not_applicable` | `100.ActivatePackageSet` |
+| `validation_to_all_contexts` | Validation and acceptance | `all_active_contexts` | `validation_gate` | `ValidationMatrix`, `ValidationScenario`, `GoldenCorpus`, `AcceptanceReport` | `not_applicable` | `120.RunValidationMatrix` |
+| `analysis_to_graph_read_model` | Analysis, enrichment, lineage, registry | Graph projection and serving | `read_only_query` | `AnalysisRuleBundle`, `RuleGraphCompatibilityMatrix`, `AnalysisFinding`, `AnalysisMetric` | `non_authoritative_analysis` | `130.AnalyzeGraph` |
+| `analysis_to_api_rendering` | Analysis, enrichment, lineage, registry | API, UX, health, error, security | `read_only_query` | `AnalysisFinding`, `AnalysisMetric`, `RiskAcceptanceRecord` | `non_authoritative_analysis` | `130.AnalysisFinding` |
+| `observability_to_health` | Observability and runtime telemetry | API, UX, health, error, security | `telemetry_handoff` | `TelemetryRuntimeState`, `TelemetryHealthMappingPolicy`, `TelemetrySignalPolicy`, `ObservabilityInstrumentationProfile` | `not_applicable` | `140.TelemetryHealthMappingPolicy` |
+| `future_reachability_to_no_active_context` | Future reachability | `none` | `deferred_no_effect` | `ReachabilityResult`, `ReachabilityAnalysisArtifact`, `ReachabilityClaimPolicy` | `inactive_future_domain` | `none` |
+
+### 9.5 Context map relationship matrix: effects, defaults, validation, and status
+
+| `edge_id` | `allowed_root_domain_effect` | `forbidden_runtime_effects` | `default_when_missing_or_invalid` | `validation_route` | `status` |
+| --- | --- | --- | --- | --- | --- |
+| `doc_governance_to_all_contexts` | `owner_lookup` | Product runtime behavior; domain record fields; owner behavior promotion by implication. | `no_implicit_effect`; candidate or unregistered text must not drive implementation. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
+| `system_boundary_to_all_contexts` | `owner_lookup` | Data schemas; identity algorithms; graph algorithms; package activation; telemetry authority by implication. | `no_implicit_effect`; unowned authority claims fail or route to `TODO:`. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
+| `lakehouse_feed_to_processing` | `owner_lookup` | Raw import; absence; cleanup; retraction; graph expiry; watermark effect by read success alone. | `no_implicit_effect`; feed-read evidence alone has no source-level effect. | `120-DOMAIN-CMAP-*`; `120-SOURCE-CLOSURE-*` | `blocked_validation` |
+| `processing_to_stage_owners` | `owner_lookup` | Stage output outside owner-permitted classes; owner algorithm substitution; package activation by stage presence. | `no_implicit_effect`; stages cannot emit outside permitted owner outputs. | `120-DOMAIN-CMAP-*`; stage-specific validation rows | `blocked_validation` |
+| `core_model_to_all_contexts` | `owner_lookup` | Runtime authorization; owner algorithm selection; source authority; identity merge; graph projection by record name alone. | `no_implicit_effect`; core names do not authorize owner behavior. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
+| `normalization_to_source_authority` | `term_translation` | Source authority; completeness; absence; cleanup; watermark advancement by parser or external schema output. | `no_implicit_effect`; mapped silver output is supporting evidence only. | `120-DOMAIN-CMAP-*`; `120-OCSF-MAP-*`; `120-SOURCE-CLOSURE-*` | `blocked_validation` |
+| `normalization_to_identity` | `term_translation` | Canonical identity; create; attach; merge; split; reject; score by parser or external schema output. | `no_implicit_effect`; identity requires `070` resolver ownership. | `120-DOMAIN-CMAP-*`; identity validation rows | `blocked_validation` |
+| `normalization_to_gold` | `term_translation` | Gold fact creation; fact-time selection; correction; replay authority by parser or external schema output. | `no_implicit_effect`; gold derivation requires authority and temporal owners. | `120-DOMAIN-CMAP-*`; `120-TEMPORAL-CORRECTION-*` | `blocked_validation` |
+| `normalization_to_graph` | `term_translation` | Graph node; graph edge; graph direction; pathfinding; traversal; graph expiry by parser or external schema output. | `no_implicit_effect`; graph projection requires `090` owner rows. | `120-DOMAIN-CMAP-*`; `120-GRAPH-PROFILE-CLOSURE-*` | `blocked_validation` |
+| `source_authority_to_gold` | `owner_lookup` | Direct downstream use of negative evidence; broad source-category fallback; correction without exact absence handoff. | `no_implicit_effect`; missing exact authority or absence handoff blocks fact or correction effect. | `120-DOMAIN-CMAP-*`; `120-SOURCE-CLOSURE-*`; `120-TEMPORAL-CORRECTION-*` | `blocked_validation` |
+| `source_authority_to_graph_expiry` | `owner_lookup` | Graph expiry; graph cleanup; graph retraction from missing graph object, stale derived view, backend cleanup, or drift check. | `no_implicit_effect`; no graph expiry or cleanup without exact checksum-valid authorization. | `120-DOMAIN-CMAP-*`; `120-GRAPH-PROFILE-CLOSURE-*` | `blocked_validation` |
+| `identity_to_gold_subjects` | `owner_lookup` | Fact subject creation from unresolved, weak, selector-only, review-only, or blocked identity. | `no_implicit_effect`; unresolved or blocked identity does not become a fact subject. | `120-DOMAIN-CMAP-*`; identity validation rows | `blocked_validation` |
+| `identity_to_graph_projection` | `owner_lookup` | Direct graph mutation; graph edge projection; backend taxonomy selection; source authority for non-identity facts. | `no_implicit_effect`; resolver must not mutate graph state directly. | `120-DOMAIN-CMAP-*`; graph correction validation rows | `blocked_validation` |
+| `gold_to_graph_projection` | `owner_lookup` | Backend graph truth; unsupported graph delta; unauthorized projection; graph edge as source fact. | `no_implicit_effect`; unsupported or unauthorized handoff emits no graph delta. | `120-DOMAIN-CMAP-*`; `120-GRAPH-PROFILE-CLOSURE-*` | `blocked_validation` |
+| `graph_to_api_serving` | `owner_lookup` | Source truth; fact truth; identity creation; source completeness; audit persistence by graph read state. | `no_implicit_effect`; graph read model cannot create source truth, fact truth, or identity. | `120-DOMAIN-CMAP-*`; graph/API validation rows | `blocked_validation` |
+| `package_activation_to_stage_runtime` | `owner_lookup` | Production activation from package artifact, version string, signature scalar, SBOM, provenance, dependency lock, or validation run alone. | `no_implicit_effect`; package artifacts do not activate production behavior alone. | `120-DOMAIN-CMAP-*`; package validation rows | `blocked_validation` |
+| `validation_to_all_contexts` | `validation_route` | New domain behavior; owner behavior invention; runtime mutation by fixture or acceptance report. | `no_implicit_effect`; validation verifies owner behavior and cannot invent behavior. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
+| `analysis_to_graph_read_model` | `owner_lookup` | Fact mutation; graph mutation; completeness mutation; watermark mutation; identity mutation; package mutation; source-authority mutation. | `no_implicit_effect`; findings and metrics are non-authoritative. | `120-DOMAIN-CMAP-*`; analysis validation rows | `blocked_validation` |
+| `analysis_to_api_rendering` | `owner_lookup` | API output that represents analysis as remediation, fact retraction, graph edge removal, or source completeness change. | `no_implicit_effect`; API rendering must preserve analysis non-authority. | `120-DOMAIN-CMAP-*`; analysis/API validation rows | `blocked_validation` |
+| `observability_to_health` | `owner_lookup` | Domain truth; source authority; identity; graph projection; package activation; audit persistence; replay input. | `no_implicit_effect`; telemetry may affect caller-visible health only through named health mapping and must not affect authoritative records. | `120-DOMAIN-CMAP-*`; `120-OBSERVABILITY-*` | `blocked_validation` |
+| `future_reachability_to_no_active_context` | `deferred_no_effect` | MVP facts; graph edges; graph properties; solver selection; negative reachability facts; unqualified reachability claims. | `deferred_no_effect`; no MVP effect exists. | `120-DOMAIN-CMAP-*`; reachability negative rows | `inactive_deferred` |
+
+### 9.6 Prohibited context dependencies
+
+Each row in this table is a `prohibited_dependency` context-map edge. Unless the row states otherwise, its `crossing_artifacts` value is `none`, its `authority_class` is `not_applicable`, its `allowed_root_domain_effect` is `boundary_warning`, its `default_when_missing_or_invalid` is `no_implicit_effect`, its `validation_route` is `120-DOMAIN-CMAP-PROHIBITED-*`, and its `status` is `blocked_validation`.
+
+| `edge_id` | `from_context` | `to_context` | `behavior_owner` | Forbidden effect | Required routing |
+| --- | --- | --- | --- | --- | --- |
+| `prohibit_enterprise_source_direct_call` | `external_boundary` | System boundary and authority | `010.DirectSourceProhibition` | Raw evidence, completeness, identity, fact, graph, or production output authority from a production enterprise source call. | `010.DirectSourceProhibition`; `020` lakehouse feed contracts. |
+| `prohibit_external_schema_as_authority` | `external_boundary` | Normalization and external schema | `050.ExternalSchemaProfile` | Canonical identity, source authority, completeness, gold fact, graph edge, or temporal semantics from OCSF, CIM, external schemas, observables, labels, or fields. | `050` mapping profile first, then consuming owner. |
+| `prohibit_weak_progress_as_absence` | Lakehouse feed and table state | Source authority and absence | `060.DeriveAbsenceOrUnknown` | Negative fact, cleanup, retraction, graph expiry, or watermark advancement from missing rows, missing fields, TTL expiry, queue drain, heartbeat, watermark, ack, or freshness signal. | `060.DeriveAbsenceOrUnknown`. |
+| `prohibit_resolver_direct_graph_mutation` | Identity resolution | Graph projection and serving | `070.GraphCorrectionHandoff` | Graph node/edge creation, expiry, cleanup, or graph apply directly from resolver output. | `070.GraphCorrectionHandoff`; `090.ProjectGraphDeltas`. |
+| `prohibit_graph_backend_as_record_truth` | Graph projection and serving | `all_active_contexts` | `090.ProjectionAuthority` | Fact creation, identity inference, completeness decision, fact retraction, bitemporal semantics, drift repair as truth, or backend internal ID leakage. | `090` derived read-model contracts. |
+| `prohibit_package_artifact_as_activation` | Package activation | `all_active_contexts` | `100.ActivatePackageSet` | Production runtime behavior from a package artifact, version string, signature scalar, SBOM, provenance, dependency lock, or validation run alone. | `100.ProductionPackageSetManifest`. |
+| `prohibit_analysis_as_mutation_authority` | Analysis, enrichment, lineage, registry | `all_active_contexts` | `130.Non-Authority Rule` | Fact, graph, completeness, watermark, identity, package, or source-authority mutation from analysis finding, metric, enrichment, lineage facet, registry label, or risk acceptance. | `130` non-authority rule and owner-specific named interface. |
+| `prohibit_telemetry_as_domain_authority` | Observability and runtime telemetry | `all_active_contexts` | `140.TelemetryNonAuthorityRule` | Fact, identity, completeness, graph, package, audit, replay, or watermark authority from span, metric, structured log, exporter state, Collector state, dashboard, trace ID, or span ID. | `140.TelemetryNonAuthorityRule`; `110` health handoff only. |
+| `prohibit_future_reachability_mvp_effect` | Future reachability | `none` | `200.Activation Rule` | `has_theoretical_reachability`, negative reachability, service-access claim, solver-selected truth, active graph edge, or active gold fact. | `200` inactive deferred boundary. |
 
 ## 10. Domain vocabulary
 
 | Term | Definition | Not this | Canonical identifiers or tokens | Primary owner | Status |
 | --- | --- | --- | --- | --- | --- |
+| Bounded context | Semantic ownership boundary for domain language, owner routing, and forbidden substitutions. | Implementation module, package, table, route, or runtime service boundary. | Section 9 bounded-context names | `domain.md`, owner specs | Resolved. |
+| Context map | Root-domain routing map of relationships between bounded contexts. | Runtime dependency graph, processing DAG, package dependency graph, graph read model, or validation harness. | Section 9 context-map edge rows | `domain.md` | Resolved. |
+| Context-map edge | Documented relationship between two bounded contexts, with relationship type, crossing artifacts, behavior owner, no-effect default, and validation route. | Runtime API, schema, event, package dependency, graph edge, or source relationship. | `edge_id` in Section 9 | `domain.md`; runtime behavior owner named by row | Resolved. |
+| Context-map relationship type | Closed root-domain vocabulary describing how a context-map edge crosses a boundary. | Free-form dependency prose or implementation coupling. | `ContextMapRelationshipType` tokens in Section 9 | `domain.md` | Resolved. |
+| Crossing artifact | Exact exported contract, state name, or owner-approved artifact named by a context-map edge. | Broad prose, implementation object, private binding, external product field, or implicit dependency. | Exact owner-exported contract names | Named owner spec | Resolved owner-routed. |
 | Cadastre | A lakehouse-fed interpretation, normalization, identity, fact, and projection system for temporal asset intelligence. | Enterprise source collector, SIEM replacement, graph-first sync engine. | `Cadastre` | `010` | Resolved. |
 | Enterprise source system | External operational system that supplies or originates security, identity, endpoint, vulnerability, configuration, network, DNS, DHCP, IPAM, or related observations. | Cadastre production component. | None defined in public model. | `010`, `020` | Resolved as external. |
 | External raw supplier | External pipeline, tool, team, or supplier class that delivers raw feeds into the lakehouse. | Cadastre production collector. | `RawSupplierProfile` | `020` | Resolved. |
@@ -429,6 +558,8 @@ A glossary term may become canonical only when `docs/nlspec/domain.md` adds or u
 | Reachability analysis artifact | Future inactive reachability analysis output. | Future query/result/artifact checksum when activated. | Inactive deferred until promoted. | Must not emit MVP facts, graph edges, or graph properties. | `200` | Inactive deferred. |
 
 ## 12. Entity relationships
+
+Section 12 defines domain relationship families among Cadastre concepts, records, and evidence chains. Section 9 defines bounded-context relationship edges among owner contexts. A relationship family in Section 12 must not be used to infer a runtime dependency, handoff, projection, query, validation, activation, or telemetry permission unless Section 9 names the context-map edge or an owner spec exports the required handoff.
 
 | Relationship family | Domain meaning | Authoritative representation | Direction rule | Evidence requirement | Primary owner | Non-implication rule |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -599,6 +730,10 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | `DOM-INV-018` | Future reachability terms must remain inactive and graph-neutral until promoted. | `200`, `090` | MVP graph profiles cannot emit `has_theoretical_reachability` or equivalent properties. |
 | `DOM-INV-019` | Root `domain.md` must not define runtime behavior owned by active owner specs. | `domain.md`, `000` | Review confirms every root requirement is vocabulary, boundary, or owner-routing only. |
 | `DOM-INV-020` | Template-specific Cartulary content must not become Cadastre vocabulary or requirements. | `domain.md` | Generated document contains no template-specific imported model except the exclusion note. |
+| `DOM-INV-021` | Every runtime-affecting cross-context claim must be routed by a Section 9 context-map edge or by an exact owner-exported contract. | `domain.md`, named owner spec | Context-map validation rejects unlisted runtime-affecting dependencies. |
+| `DOM-INV-022` | Missing, inactive, stale, ambiguous, checksum-invalid, out-of-scope, or owner-uncovered crossing artifacts default to `no_implicit_effect`. | `domain.md`, named owner spec | Negative validation proves no fallback authority or mutation occurs. |
+| `DOM-INV-023` | Context-map edges must not create runtime interfaces, schemas, errors, algorithms, lifecycle transitions, graph mutation behavior, package activation behavior, validation harness execution, API response behavior, or telemetry export behavior not exported by owner specs. | `domain.md`, `000`, `120` | Document validation rejects runtime restatement. |
+| `DOM-INV-024` | Observability and runtime telemetry must remain diagnostic and must not become domain truth, source authority, identity evidence, graph authority, package activation, audit persistence, or replay input. | `140`, `110`, `010` | Observability negative validation rows pass. |
 
 ## 17. Defaults and omitted cases with domain significance
 
@@ -622,6 +757,11 @@ Stable IDs must not be inferred from labels, display text, backend-generated IDs
 | Analysis output | Default: analysis/enrichment/lineage/registry outputs are non-authoritative. | `130` | No mutation of facts, graph state, completeness, identity, package state, source authority, or watermarks. |
 | Future reachability | Default: graph effect is `none`; active MVP cannot emit theoretical reachability. | `200`, `090` | Fail/no-op with future-scope boundary error. |
 | TODO values | Default: downstream implementation must not resolve `TODO:` by inference. | `domain.md`, `120` | Block affected implementation or document update until owner decision exists. |
+| Context-map edge omitted | Default: unlisted runtime-affecting dependency is not permitted. | `domain.md`, `120` | Add `TODO:` or fail validation; do not infer dependency. |
+| Context-map relationship type omitted | Default: edge row is invalid. | `domain.md`, `120` | Validation fails before the edge can be used for owner routing. |
+| Crossing artifact omitted | Default: `no_implicit_effect`. | Named owner spec | No authority, mutation, projection, activation, validation pass, or telemetry effect may be inferred. |
+| Behavior owner omitted | Default: edge is non-runtime only or invalid. | `domain.md`, `000`, `120` | Runtime-affecting claim must fail document validation. |
+| Validation route omitted | Default: `blocked_validation`. | `120` | Section 25 ledger must carry a blocker until validation rows exist. |
 
 ## 18. Boundaries to adjacent specs
 
@@ -797,7 +937,7 @@ These entries route vocabulary only. Runtime behavior remains owned by `110` and
 | Splunk CIM | Lossy deterministic projection target. | “CIM projection with loss manifest.” | “CIM is silver source of truth.” |
 | Semantic overlays and Taxi-like tooling | Non-authoritative authoring and validation aids. | “semantic overlay supports mapping validation.” | “semantic type is identity evidence by itself.” |
 | External graph systems | Cautionary references and taxonomy inputs only when mapped. | “external graph taxonomy translation.” | “external graph key resolves identity,” “traversable edge proves reachability.” |
-| Graph backends | Replaceable read-model apply/query targets. JanusGraph may be the MVP default provider only through an active backend profile and package-set gates. | “backend profile and preflight,” “MVP default provider profile.” | “JanusGraph defines Cadastre semantics,” “backend default is graph truth,” “future providers are prohibited.” |
+| Graph backends | Replaceable read-model apply/query targets. A named backend selection default may be used only through active `090` backend selection/profile contracts and `100` package-set gates. | “backend selection policy,” “backend profile and preflight,” “package-gated backend activation.” | “backend product defines Cadastre semantics,” “backend default is graph truth,” “future providers are prohibited.” |
 | Package registries and signing systems | Evidence sources for package acquisition/trust. | “package signature verification result under trust policy.” | “valid signature means active package.” |
 | Threat-intel systems | Enrichment context by default. | “threat-intel enrichment record.” | “indicator equality creates asset identity.” |
 | Lineage and metadata systems | Governance/lineage metadata unless mapped. | “lineage facet mapping policy.” | “facet proves evidence or completeness.” |
@@ -825,6 +965,11 @@ Root-domain-owned requirements only:
 | `DOM-REQ-009` | `domain.md` must define external-system boundaries without allowing external schema, taxonomy, lineage, registry, package, or analyzer terms to become Cadastre authority by default. | `domain.md` | Section 20 table. |
 | `DOM-REQ-010` | `domain.md` must include binary Definition of Done criteria sufficient to judge root-domain completeness. | `domain.md` | Section 26. |
 | `DOM-REQ-011` | `domain.md` must route volatility classes to owner specs and must not define activation algorithms, artifact schemas, version-manifest schemas, or package-set behavior. | `domain.md`, `000`, `010`, `030`, `100`, `120` | Sections 8.1, 10A, and 24. |
+| `DOM-REQ-012` | `domain.md` must define a closed context-map relationship type vocabulary and must reject unknown relationship types. | `domain.md` | Section 9 relationship type table and `120-DOMAIN-CMAP-*` validation. |
+| `DOM-REQ-013` | Every runtime-affecting cross-context claim must name a Section 9 edge, an exact behavior owner, exact crossing artifacts, a no-effect default, and a validation route. | `domain.md`, named owner spec | Context-map matrix review and owner export lookup. |
+| `DOM-REQ-014` | Context-map edges must default to `no_implicit_effect` when crossing artifacts are missing, inactive, stale, ambiguous, checksum-invalid, out of scope, or not covered by the owner contract. | `domain.md`, named owner spec | Negative validation rows prove no fallback effect. |
+| `DOM-REQ-015` | `domain.md` must include `140` as a bounded context and must route telemetry through `telemetry_handoff` or `prohibited_dependency` edges only. | `domain.md`, `140`, `110`, `010` | Section 9 coverage and observability negative validation rows. |
+| `DOM-REQ-016` | `domain.md` must keep graph backend product selection owner-routed and must not make a backend product a domain concept, default authority, graph semantics source, activation source, or future-provider exclusion. | `domain.md`, `090`, `100`, `120` | Section 5, Section 7, Section 20, and Section 25 wording review. |
 
 ## 22. Intentional implementation latitude
 
@@ -844,6 +989,9 @@ Root-domain-owned requirements only:
 Reviewers, agents, and specification authors must:
 
 - identify the bounded context before asserting behavior;
+- identify the Section 9 context-map edge before asserting any cross-context dependency;
+- classify the dependency with exactly one `ContextMapRelationshipType`;
+- reject cross-context behavior claims when the crossing artifact, behavior owner, default missing behavior, or validation route is absent;
 - use canonical Cadastre terms from Section 10;
 - consult the primary owner spec before asserting behavior;
 - use stable identifiers instead of labels, route names, module names, graph backend IDs, storage keys, package names, or external-system identifiers;
@@ -852,6 +1000,7 @@ Reviewers, agents, and specification authors must:
 - reject candidate text that defines high-risk terms without owners;
 - reject text that imports template-specific concepts, workflows, identifiers, entity models, lifecycle states, or acceptance criteria;
 - reject text that creates synonyms for exact Cadastre tokens unless an owner spec defines the synonym and canonical replacement;
+- reject text that uses a Section 12 domain relationship family as a substitute for a Section 9 context-map edge;
 - reject text that turns future, deferred, research, external, candidate, draft, or implementation content into active domain authority;
 - reject graph, CIM, OCSF, lineage, metadata, analysis, package, or UI wording that implies authority not granted by an owner spec;
 - reject source absence, identity merge, graph traversal, reachability, package activation, or lifecycle claims that lack the required owner profile or state machine.
@@ -862,6 +1011,11 @@ Reviewers, agents, and specification authors must:
 
 - core entity membership;
 - domain relationship families;
+- bounded-context membership;
+- context-map relationship types;
+- context-map edge rows;
+- crossing-artifact owner routing;
+- prohibited context dependencies;
 - canonical identifiers or identifier classes;
 - closed vocabulary tokens;
 - lifecycle vocabulary;
@@ -885,6 +1039,7 @@ Drift-control rules:
 - External product names must remain external references unless an owner spec declares a vendor-neutral contract mapping.
 - `TODO:` rows must not be deleted without an owner decision or source update that resolves them.
 - Any change that reclassifies a contract, profile, row set, package, fixture, registry object, or runtime state by volatility class must update `000`, `010`, `030`, `100` when package activation is involved, and `120` validation rows. `domain.md` must route the change and must not define the runtime behavior.
+- Any change that adds a runtime-affecting dependency between owner specs must update Section 9 or add a `TODO:` ledger row. The change must not rely on Section 12 relationship families, implementation dependencies, package dependencies, graph edges, validation fixtures, or telemetry signals as substitutes for a context-map edge.
 
 ## 25. Open questions, blockers, and required owner confirmation
 
@@ -904,7 +1059,11 @@ Closed `domain_behavior_until_closed` values are `owner governs`, `validation fa
 | `DOM-TODO-010` | `030.RequiredLifecycleMachineBindings` plus owner-specific machine bindings | `blocked_validation` | lifecycle validation rows for `030`, `070`, `090`, `100`, and `120` machines | validation fails | `120-DOMAIN-SECTION25-*`; `120-LIFECYCLE-*` |
 | `DOM-TODO-011` | `domain.md.Runtime exports` | `resolved_owner_routed` | none | not runtime | `120-DOMAIN-SECTION25-*` |
 | `DOM-TODO-012` | `100.PackageType` | `resolved_owner_routed` | none for enum closure; `100-TODO-PACKAGE-TYPE-POLICY-ROWS` remains owner-local activation scope | owner governs | `120-DOMAIN-SECTION25-*`; `120-PACKAGE-TYPE-*` |
-| `DOM-TODO-013` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | `090`, `100`, and `120` backend/profile/package validation rows for production activation | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-JANUSGRAPH-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
+| `DOM-TODO-013` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | `090`, `100`, and `120` backend/profile/package validation rows for any named backend selection and production activation | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
+| `DOM-TODO-014` | `domain.md.ContextMapRelationshipType` | `blocked_validation` | `120-DOMAIN-CMAP-RELATIONSHIP-TYPE-*` rows validating closed vocabulary, unknown-token rejection, and no runtime restatement | validation fails | `120-DOMAIN-CMAP-*` |
+| `DOM-TODO-015` | `domain.md.ContextMapEdgeMatrix` | `blocked_validation` | `120-DOMAIN-CMAP-EDGE-*` rows validating edge coverage, unique edge IDs, owner coverage, crossing-artifact exactness, no-effect defaults, and prohibited dependency rows | validation fails | `120-DOMAIN-CMAP-*` |
+| `DOM-TODO-016` | `140.TelemetryNonAuthorityRule` and `110.TelemetryHealthMappingPolicy` | `blocked_validation` | observability context-map rows and telemetry non-authority negative cases | validation fails | `120-DOMAIN-CMAP-*`; `120-OBSERVABILITY-*` |
+| `DOM-TODO-017` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | provider-neutral backend-selection wording confirmed in Section 5, Section 7, Section 20, and Section 25, with selected backend activation remaining owner-routed | validation fails | `120-DOMAIN-CMAP-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
 
 Stable source-authority behavior is owned by `060.SourceAuthorityClosureMatrix`. Production promotion remains blocked until every active absence-sensitive feed category has exact closure rows or deterministic block rows validated by `120-SOURCE-CLOSURE-*`.
 
@@ -922,7 +1081,7 @@ Lifecycle behavior is owner-routed to `030` lifecycle machines and owner-specifi
 
 `100.PackageType` owns the canonical package type enum.
 
-`090.GraphBackendSelectionPolicy` owns backend default selection. `mvp-janusgraph.v1` is a selection default only, and production activation remains blocked until `090`, `100`, and `120` backend and package validation rows pass.
+`090.GraphBackendSelectionPolicy` owns any named backend default selection. A backend selection token is not domain truth and is not production activation. Production activation remains blocked until the selected `090` backend profile, `100` package-set gates, and `120` backend/package validation rows pass.
 
 A downstream implementation must not resolve a blocker by inference. `ValidateSpecSet` must fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when this ledger marks a row resolved while a named owner-local blocker remains, or marks a row blocked-owner when the owner contract is closed and required validation rows pass. `ValidateSpecSet` must fail with `DOMAIN_RUNTIME_RESTATEMENT` when this ledger copies runtime schema, algorithm, default, failure precedence, activation behavior, or validation harness behavior from an owner spec instead of routing by exact owner contract name.
 
@@ -964,3 +1123,13 @@ A downstream implementation must not resolve a blocker by inference. `ValidateSp
 | `DOMAIN-CLEANUP-AC-005` | Private implementation artifacts are described without deprecated artifact-index wording. |
 | `DOM-VOLATILITY-AC-001` | Every volatility term in `domain.md` has a canonical definition, forbidden interpretation, owner route, and non-runtime boundary. |
 | `DOM-VOLATILITY-AC-002` | `domain.md` contains no activation algorithm, artifact field schema, version-manifest field schema, or package-set activation behavior. |
+| `DOM-CMAP-AC-001` | Section 9 includes every active bounded context owner named in the document relationship map, including `140`. |
+| `DOM-CMAP-AC-002` | Section 9 defines a closed `ContextMapRelationshipType` vocabulary and rejects unknown relationship types. |
+| `DOM-CMAP-AC-003` | Every context-map edge has `edge_id`, `from_context`, `to_context`, `relationship_type`, `crossing_artifacts`, `authority_class`, `behavior_owner`, `allowed_root_domain_effect`, `forbidden_runtime_effects`, `default_when_missing_or_invalid`, `validation_route`, and `status`. |
+| `DOM-CMAP-AC-004` | Every bounded context appears in at least one context-map edge or is explicitly marked inactive/deferred. |
+| `DOM-CMAP-AC-005` | Every runtime-affecting context-map edge names exactly one primary behavior owner or carries a blocking Section 25 `TODO:` ledger row. |
+| `DOM-CMAP-AC-006` | Every `anti_corruption_translation`, `authority_handoff`, `projection_handoff`, `activation_gate`, `validation_gate`, `telemetry_handoff`, `deferred_no_effect`, and `prohibited_dependency` edge has at least one negative validation route. |
+| `DOM-CMAP-AC-007` | Section 9 and Section 12 are not interchangeable: context-map edges define inter-context routing, and entity relationship families define domain concept relationships. |
+| `DOM-CMAP-AC-008` | Missing, inactive, stale, ambiguous, checksum-invalid, out-of-scope, or owner-uncovered crossing artifacts default to `no_implicit_effect` or `deferred_no_effect`. |
+| `DOM-CMAP-AC-009` | Graph backend product names do not define root-domain defaults, graph semantics, identity, source authority, package activation, or future-provider exclusion. |
+| `DOM-CMAP-AC-010` | The context-map revision adds no runtime exports to `domain.md`. |
