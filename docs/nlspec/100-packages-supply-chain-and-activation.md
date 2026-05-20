@@ -133,6 +133,17 @@ projection_watermark_policy_row_set
 external_schema_authority_signal_mapping_row_set
 declared_dag_subset_profile
 resolver_profile
+identifier_evidence_class_row_set
+identifier_scope_row_set
+candidate_generation_profile
+identity_hard_blocker_row_set
+asset_generation_boundary_row_set
+resolver_decision_matrix_row_set
+identity_confidence_band_row_set
+identity_review_routing_policy
+identity_split_policy
+resolver_explanation_policy
+resolver_activation_report_policy
 analysis_rule_bundle
 analysis_rule_row_set
 rule_graph_compatibility_matrix
@@ -239,6 +250,20 @@ These rows are package type policies for mapping and external-schema row-catalog
 
 A broad `policy_bundle`, `mapping_bundle`, or `external_schema_profile` package type must not substitute for a row-catalog package type unless the `PackageTypePolicyRow` explicitly declares the catalog is bundled and the `ProductionPackageSetManifest` includes separate immutable artifact refs and checksums for each required catalog.
 
+### Identity resolver package type policy rows
+
+These rows make resolver activation artifacts package-set members without making packages runtime resolver authority. Runtime behavior remains owned by `070`; manifest inclusion remains owned by `030`; validation closure remains owned by `120`.
+
+| Package type family | Included package types | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes |
+| --- | --- | --- | --- | --- | --- |
+| resolver profile and row-set artifacts | `resolver_profile`, `identifier_evidence_class_row_set`, `identifier_scope_row_set` | `070.ResolveIdentity` and `070.ResolverProfileRow` | none | validation only unless owner permits activation | no direct production records |
+| candidate generation profile | `candidate_generation_profile` | `070.CandidateGenerationProfile` | none | validation only | no direct production records |
+| hard blocker and generation boundary row sets | `identity_hard_blocker_row_set`, `asset_generation_boundary_row_set` | `070.IdentityHardBlockerRow` and `070.AssetGenerationBoundary` | none | validation only | no direct production records |
+| decision, confidence, review, split, and explanation policies | `resolver_decision_matrix_row_set`, `identity_confidence_band_row_set`, `identity_review_routing_policy`, `identity_split_policy`, `resolver_explanation_policy`, `resolver_activation_report_policy` | owning `070` row schema | none | validation only | no direct production records |
+| selector safety policy | `target_selector_safety_policy` | `070.TargetSelectorSafetyPolicy` | none | validation only | no direct production records |
+
+Every identity resolver package type must resolve exactly one active `PackageTypePolicyRow`. The row must require trust policy evidence, compatibility matrix evidence, validation matrix refs, immutable package-set membership, and a `030.ActivationControlledArtifactRef` for each supplied resolver artifact. A package-supplied resolver artifact must not weaken stable weak-evidence defaults, grant create/attach/merge authority to weak evidence, redefine hard-blocker precedence, redefine decision states, alter review terminality, bypass split handoff, bypass selector safety, or omit explanation checksum inputs. Candidate activation failure must preserve the current active package set and write no candidate production identity output.
+
 ### Graph backend package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. They must not define graph semantics; they gate runtime artifacts required by `090.GraphBackendProfile`.
@@ -329,6 +354,8 @@ Package manifests must not define new canonical fields, authority classes, ident
 A `GraphBackendProfile` that references a package release or package set whose trust, SBOM, provenance, dependency, license, vulnerability, compatibility, rollback, quarantine, or health gate fails must fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED` before graph mutation, query serving, rebuild promotion, or drift check.
 
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
+
+Package-supplied resolver artifacts must use the explicit identity resolver package types in `Identity resolver package type policy rows`. A broad `policy_bundle`, `resolver_profile`, module name, package filename, or developer label must not substitute for a specific resolver row-set package type.
 
 Package-supplied analysis, enrichment, lineage, registry, and derived-edge artifacts must not redefine stable `130` non-authority rules, `080` gold derivation behavior, `090` graph projection behavior, `110` API/error/redaction behavior, or `120` validation shapes. A package may instantiate active `130` row sets only through the package type policy rows in this spec, immutable `ProductionPackageSetManifest` membership, `030.ActivationControlledArtifactRef`, exact checksums, active lifecycle status, activation scope, package compatibility rows, and passing `120` validation refs. Missing policy, missing package-set ref, unknown package type, ambiguous policy, compatibility failure, or manifest omission fails before production output.
 
@@ -1043,6 +1070,9 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-RESOLVER-ARTIFACT-AC-001` | A package-supplied resolver artifact that permits weak-only, selector-only, mapped-target-only, source-native-merge-history-only, or graph-key-only create, attach, or merge fails activation and preserves the current active set. |
 | `100-RESOLVER-ARTIFACT-AC-002` | A package-supplied resolver artifact with missing identity validation refs fails activation before candidate production output. |
 | `100-RESOLVER-ARTIFACT-AC-003` | Resolver profile checksum mismatch in a candidate package set fails activation, keeps the current active set, and writes no candidate production output. |
+| `100-IDENTITY-RESOLVER-PACKAGE-TYPE-AC-001` | Every resolver artifact package type resolves exactly one active `PackageTypePolicyRow`. |
+| `100-IDENTITY-RESOLVER-WEAKENING-AC-001` | A package-supplied resolver artifact that grants create, attach, or merge authority to stable weak evidence fails activation and preserves the current active package set. |
+| `100-IDENTITY-RESOLVER-MANIFEST-AC-001` | Resolver artifact packages missing package-set membership, artifact refs, compatibility rows, or validation refs fail before production identity output. |
 | `100-LIFECYCLE-AC-001` | Package activation lifecycle matrix is total. |
 | `100-LIFECYCLE-AC-002` | Failed candidate activation preserves current active package set and writes no candidate production output. |
 | `100-LIFECYCLE-AC-003` | Canary and shadow never mark last-known-good or advance watermarks. |

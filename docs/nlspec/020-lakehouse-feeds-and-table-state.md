@@ -639,7 +639,6 @@ Profile, category, manifest, table-state, and activation errors render through `
 | `020-EVIDENCE-LAKEHOUSE-AC-001` | `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef`, `LakehouseReadCompletenessReceipt`, and `UpstreamCompletenessEvidence` evidence use `cadastre_record_ref` with referenced record checksum. |
 | `020-EVIDENCE-LAKEHOUSE-AC-002` | Raw object, manifest, and partition evidence use `lakehouse_artifact_ref` with immutable bytes or owner-declared canonical metadata bytes. |
 | `020-EVIDENCE-LAKEHOUSE-AC-003` | Missing artifact checksum, mutable `latest` refs, branch-only refs, unresolved prefixes, and raw payload bytes fail before `EvidenceRef` ID computation. |
-
 | `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
 | `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |

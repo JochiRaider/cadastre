@@ -91,6 +91,12 @@ Promotion must fail when any active absence-sensitive feed category or category 
 
 Promotion must fail when any active MVP OCSF mapping row set exists and the spec set lacks registered, classified, validated, and manifest-included refs for `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, and `CanonicalValidationOutput`.
 
+Additional promotion gates:
+
+| Gate | Blocking condition |
+| --- | --- |
+| identity resolver closure | When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, promotion fails if any required resolver artifact row set, activation report, validation row, fixture checksum, expected output checksum, manifest ref, package weakening row, or decision-ambiguity closure row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
+
 ## SpecSetVersion Record
 
 | Field | Type | Required | Default | Rule |
@@ -109,6 +115,27 @@ Promotion must fail when any active MVP OCSF mapping row set exists and the spec
 | `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including `120-DOMAIN-SECTION25-*`, `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` before authoritative handoff for core one-of closure and domain closure-ledger status consistency, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, reachability-prohibition rows, `120-GRAPH-BACKEND-SELECTION-*`, `120-GRAPH-BACKEND-PREFLIGHT-*`, `120-GRAPH-PROVIDER-CAPABILITY-*`, `120-GRAPH-JANUSGRAPH-*`, `120-GRAPH-PROVIDER-PORTABILITY-*`, `120-GRAPH-INDEX-FRESHNESS-*`, `120-GRAPH-PARTIAL-APPLY-*`, and `120-GRAPH-BACKEND-PACKAGE-GATE-*` rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, graph-serving output, backend defaulting, or provider activation is in implementation scope. Package activation handoff must include `120-PACKAGE-TYPE-*`, `120-PACKAGE-REPOSITORY-*`, `120-PACKAGE-TRUST-*`, `120-PACKAGE-ATTESTATION-SBOM-*`, `120-PACKAGE-COMPATIBILITY-*`, `120-PACKAGE-DEPRECATION-*`, `120-PACKAGE-LKG-*`, `120-PACKAGE-ROLLBACK-*`, `120-PACKAGE-QUARANTINE-*`, `120-PACKAGE-EMERGENCY-*`, and `120-PACKAGE-VERSION-MANIFEST-*` rows before authoritative handoff when `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope. API and observable-state handoff must include `120-API-SCHEMA-TOTAL-*`, `120-STATE-LABEL-TOTAL-*`, `120-ENDPOINT-OUTCOME-*`, `120-ERROR-REGISTRY-*`, `120-AUTH-REDACTION-*`, and `120-PAGE-TOKEN-*` rows before authoritative handoff when API, export, health, audit, compliance, or graph-query response output is in implementation scope. Observability handoff must include `120-OBSERVABILITY-SIGNAL-*`, `120-OBSERVABILITY-ATTRIBUTE-*`, `120-OBSERVABILITY-REDACTION-*`, `120-OBSERVABILITY-CARDINALITY-*`, `120-OBSERVABILITY-EXPORTER-*`, `120-OBSERVABILITY-HEALTH-*`, `120-OBSERVABILITY-REPLAY-*`, `120-OBSERVABILITY-NONAUTH-*`, and `120-OBSERVABILITY-VERSION-MANIFEST-*` rows before authoritative handoff when telemetry, observability health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state visibility is in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
+
+### Identity resolver spec-set registry refs
+
+When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, `SpecSetVersion.activation_artifact_registry_refs` must include active registry refs for the following identity resolver artifacts, or an owner `TODO:` blocker that explicitly keeps identity output out of implementation scope:
+
+| Required registry ref | Owner |
+| --- | --- |
+| `ResolverProfileRowSet` | `070` |
+| `IdentifierEvidenceClassRowSet` | `070` |
+| `IdentifierScopeRowSet` | `070` |
+| `CandidateGenerationProfile` | `070` |
+| `IdentityHardBlockerRowSet` | `070` |
+| `AssetGenerationBoundaryRowSet` | `070` |
+| `ResolverDecisionMatrixRowSet` | `070` |
+| `IdentityConfidenceBandRowSet` | `070` |
+| `IdentityReviewRoutingPolicy` | `070` |
+| `IdentitySplitPolicy` | `070` |
+| `ResolverExplanationPolicy` | `070` |
+| `TargetSelectorSafetyPolicy` | `070` |
+
+Missing refs block promotion before authoritative handoff. Registry refs must match the artifact names and classes used by `030`, `070`, `100`, and `120`.
 
 ## Volatility Classification Governance
 
@@ -265,6 +292,7 @@ The following identity resolver artifacts and runtime state records must have ex
 | `IdentifierEvidenceClassRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before identity output |
 | `IdentifierScopeRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before candidate generation |
 | `AssetGenerationBoundaryRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before blocker evaluation |
+| `IdentityHardBlockerRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before blocker evaluation |
 | `CandidateGenerationProfile` | `activation_controlled_artifact` | `070` | `070` | yes | required before candidate generation |
 | `TargetSelectorSafetyPolicy` | `activation_controlled_artifact` | `070` | `070` | yes | required before selectors influence output |
 | `ResolverDecisionMatrixRowSet` | `activation_controlled_artifact` | `070` | `070` | yes | required before decision output |
@@ -387,7 +415,7 @@ The following `140` contracts must have exactly one owner and one volatility cla
 | Source authority and absence | `060` | 010,020,080,090,110,130 | runtime_authority | `stable_core_contract` | 120 | blocked_validation | stable schemas, matching algorithms, error precedence, and fail-closed behavior are closed by `060`; active source-specific row instances and fixture checksums remain validation-blocked |
 | `SourceAuthorityClosureMatrix` | `060` | `020`, `030`, `080`, `090`, `110`, `120`, `domain` | `runtime_authority_validation` | `stable_core_contract` | 120 | blocked_validation | stable owner contract exists in `060`; production activation remains blocked until every active absence-sensitive feed category has exact closure rows or deterministic block rows |
 | LakehouseFeedCompletenessProfileRow | `060` | 020,030,080,090,110,120,domain | runtime_authority | `activation_controlled_artifact` | 120 | blocked_validation | every absence-sensitive active category/effect requires exact completeness rows and fixtures |
-| Identity resolution | `070` | 040,060,080,090,100,110,120,domain | runtime_identity | `stable_core_contract` | 120 | blocked_validation | stable resolver rows, candidate caps, review totality, confidence bands, split handoff, and weak-evidence defaults are closed by `070`; active row instances and fixture checksums remain validation-blocked |
+| Identity resolution | `070` | 040,060,080,090,100,110,120,domain | runtime_identity | `stable_core_contract` | 120 | blocked_validation | stable resolver rows, active row instances, identity hard blocker row set, activation report scenario evidence, fixture checksums, decision ambiguity closure, review expiration, selector safety, confidence bands, split handoff, and weak-evidence defaults are closed by `070`; active row instances and fixture checksums remain validation-blocked |
 | IdentityReviewCaseStateMachine | `070` | `030`, `110`, `120`, `domain` | runtime_identity | `stable_core_contract` | 120 | blocked_validation | runtime owner is `070`; generic lifecycle behavior imports `030`; validation owner is `120` |
 | Temporal, gold, replay | `080` | 030,040,060,090,120 | runtime_gold | `stable_core_contract` | 120 | closed_local | validation rows required; concrete activation-controlled row instances remain blockers only when selected for production scope |
 | Graph projection and serving | `090` | 040,050,060,070,080,110,120,130 | derived_projection | `stable_core_contract` | 120 | blocked_validation | active profile closure is owner-closed only when `090` has no graph-profile TODOs and `120` graph profile, query, eligibility, endpoint identity, page-token, apply-order, rebuild, and reachability-prohibition rows pass |

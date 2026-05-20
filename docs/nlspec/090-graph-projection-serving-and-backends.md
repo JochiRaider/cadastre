@@ -130,9 +130,21 @@ Graph expiry and cleanup deltas require all of the following:
 | `cleanup_projected_object` | Emit cleanup delta only when `060.AbsenceDerivationResult.allowed_effects` contains `cleanup`. | `GoldFactChangeSet` ref and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
 | `source_authority_blocked` | Emit no graph delta and record graph no-op diagnostic. | deterministic block row ref | no-op; no backend mutation |
 | `conflict_visibility_update` | Update graph visibility only when `GraphEdgeSemantics` and `GraphObjectOutputEligibilityRow` permit conflicted or stale assertions. | `GoldFactChangeSet` ref, graph semantics row ref, eligibility row ref. | no pathfinding-visible delta. |
-| `identity_split_handoff` | Consume `070.GraphCorrectionHandoff`, validate retained and new canonical partition refs, sort affected fact refs lexically, and route affected facts through the active `GraphProjectionProfile` only. | `GraphCorrectionHandoff` ref/checksum, affected fact refs or affected fact-selection checksum, split partition refs, retained and new canonical refs, projection profile ref, resolver explanation checksum. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` when the active projection profile does not support the handoff; missing metadata rejects before delta persistence. |
+| `identity_split_handoff` | Consume `070.GraphCorrectionHandoff`, validate `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, `resolver_explanation_checksum`, and `version_manifest_ref`, sort affected fact refs lexically when enumerated, and route affected facts through the active `GraphProjectionProfile` only. | `GraphCorrectionHandoff` ref/checksum, `split_identity_decision_ref`, `split_policy_ref`, `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, projection profile ref, resolver explanation checksum. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` when the active projection profile does not support the handoff; missing or invalid metadata rejects before delta persistence. |
 
 Every projected delta from correction must include the source `GoldFactChangeSet` ref, graph handoff effect, projection profile ref, authority or absence result refs when applicable, and validation refs.
+
+Identity split handoff input validation must fail before delta persistence according to this table:
+
+| Missing or invalid input | Required graph behavior |
+| --- | --- |
+| missing handoff ref | reject before delta persistence |
+| checksum-mismatched handoff | reject before delta persistence |
+| missing retained or new canonical refs | reject before delta persistence |
+| missing affected fact refs and selection checksum | reject before delta persistence |
+| unresolved endpoint identity | emit `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; no node and no edge |
+
+`090` must not re-evaluate `070` evidence classes, candidate pairs, review cases, blockers, confidence bands, split partitions, or decision rows. Graph projection consumes resolver outputs only through persisted identity decisions, resolver explanations, and `GraphCorrectionHandoff` records.
 
 ### DerivedGraphEdgeRule graph handoff
 
@@ -958,6 +970,11 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-OCSF-DIRECTION-AC-003` | DNS and DHCP observations do not emit `observed_connection` edges unless a graph projection row and `FlowRoleEvidence` explicitly permit the edge, and direction fixtures include active mapping-row refs and expected no graph mutation. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-001` | Identity split handoff projection consumes `070.GraphCorrectionHandoff` only as projection input and never permits resolver graph mutation. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-002` | The same split handoff, affected fact refs, projection profile, and version manifest produce byte-identical graph deltas across replay. |
+| `090-IDENTITY-SPLIT-HANDOFF-VALID-AC-001` | `val-090-identity-split-handoff-valid` proves complete `070.GraphCorrectionHandoff` metadata projects deterministic graph deltas. |
+| `090-IDENTITY-SPLIT-HANDOFF-MISSING-AC-001` | `val-090-identity-split-handoff-missing-metadata` rejects before delta persistence when required handoff fields are absent. |
+| `090-IDENTITY-SPLIT-HANDOFF-CHECKSUM-AC-001` | `val-090-identity-split-handoff-checksum-drift` rejects before delta persistence when the handoff checksum drifts. |
+| `090-UNRESOLVED-ENDPOINT-NO-EDGE-AC-001` | `val-090-unresolved-endpoint-no-edge` emits `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`, no node, no edge, and no identity mutation. |
+| `090-SELECTOR-ONLY-NO-ENDPOINT-AC-001` | `val-090-selector-only-no-endpoint` proves selector-only input cannot create graph endpoint identity. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-003` | Missing split handoff metadata emits no graph delta and rejects before delta persistence. |
 | `090-IDENTITY-SPLIT-PROJECTION-AC-004` | `VersionManifest` includes graph correction handoff refs and resolver explanation checksum refs when identity split projection occurs. |
 | `090-GRAPH-PROFILE-CLOSURE-AC-001` | `mvp-observed-flow-graph.v1` has exactly one active edge type, `observed_connection`, and rejects all other edge types. |

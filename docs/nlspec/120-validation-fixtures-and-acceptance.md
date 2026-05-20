@@ -100,6 +100,41 @@ Validation must prove that volatile material cannot redefine stable behavior and
 
 `RunValidationMatrix` must produce a deterministic `AcceptanceReport` containing row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref.
 
+### IdentityResolverClosureValidationMatrix
+
+This matrix is the executable validation interface for identity resolver closure. A row may pass only when `fixture_checksum` and `expected_output_checksum` are non-`TODO` SHA-256 values, every input artifact ref is present, and the observed output matches the expected output bytes. Rows with `TODO` checksums must remain `blocked` and must block authoritative promotion when identity output is in scope.
+
+| validation_row_id | owner_spec | fixture_id | fixture_checksum | input_artifact_refs | expected_output_class | expected_error_or_no_op | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion | blocking_status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-070-resolver-profile-row-selection` | `070` | `fixture-070-profile-row-selection` | TODO | resolver profile, evidence classes, scopes, candidate profile, hard blocker row set, generation boundary row set, decision matrix, confidence bands, review, split, explanation, selector policy | decision | none | TODO | no unselected-row mutation | all resolver artifact refs and checksums | `070-RESOLVER-ROW-AC-001` | blocked |
+| `val-070-evidence-class-registry-totality` | `070` | `fixture-070-evidence-totality` | TODO | evidence class row set and coverage matrix refs | owner error | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | TODO | no candidate pairs | evidence class row-set ref | `070-EVIDENCE-REGISTRY-TOTALITY-AC-001` | blocked |
+| `val-070-identifier-scope-coverage` | `070` | `fixture-070-under-scoped-evidence` | TODO | identifier scope row set | owner error | `IDENTITY_EVIDENCE_UNDER_SCOPED` | TODO | no candidate pairs | identifier scope refs | `070-PAIR-ORDER-AC-001` | blocked |
+| `val-070-durable-creation` | `070` | `fixture-070-durable-creation` | TODO | full resolver catalog | decision and explanation | none | TODO | no merge | full resolver catalog refs | `070-DURABLE-MERGE-AC-001` | blocked |
+| `val-070-durable-attachment` | `070` | `fixture-070-durable-attachment` | TODO | full resolver catalog | decision and explanation | none | TODO | no merge of two canonical entities | full resolver catalog refs | `070-DURABLE-MERGE-AC-001` | blocked |
+| `val-070-durable-merge` | `070` | `fixture-070-durable-merge` | TODO | full resolver catalog | decision and explanation | none | TODO | no weak evidence contribution | full resolver catalog refs | `070-DURABLE-MERGE-AC-001` | blocked |
+| `val-070-weak-rejection` | `070` | `fixture-070-weak-rejection` | TODO | evidence classes, decision matrix, selector policy | no-op | `no_decision` | TODO | no create, attach, merge, split, or gold reference | full resolver catalog refs | `070-WEAK-REJECTION-AC-001` | blocked |
+| `val-070-selector-safety` | `070` | `fixture-070-selector-safety` | TODO | selector safety policy | no-op | `TARGET_SELECTOR_UNSAFE` or no-op | TODO | no identity mutation and no graph endpoint | selector policy ref | `070-SELECTOR-SAFETY-TOTALITY-AC-001` | blocked |
+| `val-070-source-native-merge-history-nonauthority` | `070` | `fixture-070-source-native-merge-history-only` | TODO | evidence classes and decision matrix | no-op | `no_decision` | TODO | no identity mutation | evidence class and decision refs | `070-WEAK-REJECTION-AC-001` | blocked |
+| `val-070-learned-only-nonauthority` | `070` | `fixture-070-learned-only` | TODO | candidate profile and decision matrix | no-op | `no_decision` | TODO | no identity mutation | candidate profile and decision refs | `070-WEAK-REJECTION-AC-001` | blocked |
+| `val-070-blocker-precedence` | `070` | `fixture-070-blocker-precedence` | TODO | hard blocker row set and generation boundary row set | owner error or rejection | `IDENTITY_HARD_BLOCKER_TRIGGERED` | TODO | no confidence-selected mutation | hard blocker and boundary refs | `070-BLOCKER-PRECEDENCE-AC-001` | blocked |
+| `val-070-block-overflow` | `070` | `fixture-070-block-overflow` | TODO | candidate generation profile | owner error | `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | TODO | no mutation from overflowed block | candidate profile ref | `070-OVERFLOW-AC-001` | blocked |
+| `val-070-partition-overflow` | `070` | `fixture-070-partition-overflow` | TODO | candidate generation profile | owner error | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | TODO | no mutation from overflowed partition | candidate profile ref | `070-OVERFLOW-AC-001` | blocked |
+| `val-070-decision-row-missing` | `070` | `fixture-070-decision-row-missing` | TODO | decision matrix row set | owner error | `RESOLVER_DECISION_ROW_MISSING` | TODO | no identity mutation | decision matrix ref | `070-RESOLVER-ROW-AC-001` | blocked |
+| `val-070-decision-row-ambiguous` | `070` | `fixture-070-decision-row-ambiguous` | TODO | decision matrix row set | owner error | `RESOLVER_DECISION_ROW_AMBIGUOUS` | TODO | no identity mutation | decision matrix ref | `070-DECISION-ROW-AMBIGUITY-AC-001` | blocked |
+| `val-070-confidence-band-row-selection` | `070` | `fixture-070-confidence-band-selection` | TODO | confidence band row set | decision | none | TODO | no score-derived mutation without decision row | confidence band ref | `070-DURABLE-MERGE-AC-001` | blocked |
+| `val-070-review-totality` | `070` | `fixture-070-review-totality` | TODO | review routing policy and review state machine | review case | none | TODO | mutation only through terminal decision | review policy and transition refs | `070-REVIEW-TOTALITY-AC-001` | blocked |
+| `val-070-review-expiration` | `070` | `fixture-070-review-expiration` | TODO | review routing policy | review case | expired no-op | TODO | no identity mutation | review policy ref and transition evidence | `070-REVIEW-EXPIRATION-AC-001` | blocked |
+| `val-070-reviewer-authority-missing` | `070` | `fixture-070-reviewer-authority-missing` | TODO | review routing policy | owner error | `IDENTITY_REVIEW_AUTHORITY_MISSING` | TODO | no identity mutation | review case and auth refs | `070-REVIEW-TOTALITY-AC-001` | blocked |
+| `val-070-evidence-snapshot-mismatch` | `070` | `fixture-070-evidence-snapshot-mismatch` | TODO | review routing policy | owner error | `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | TODO | no identity mutation | review case refs | `070-REVIEW-TOTALITY-AC-001` | blocked |
+| `val-070-hard-blocker-override-rejection` | `070` | `fixture-070-hard-blocker-override` | TODO | hard blocker row set and review policy | owner error or rejection | `IDENTITY_HARD_BLOCKER_TRIGGERED` | TODO | no reviewer override mutation | hard blocker and review refs | `070-BLOCKER-PRECEDENCE-AC-001` | blocked |
+| `val-070-split-handoff` | `070` | `fixture-070-split-handoff` | TODO | split policy and explanation policy | handoff | none | TODO | resolver emits no graph mutation | split, explanation, and manifest refs | `070-GRAPH-CORRECTION-HANDOFF-SCHEMA-AC-001` | blocked |
+| `val-070-ambiguous-split-partition` | `070` | `fixture-070-ambiguous-split-partition` | TODO | split policy | owner error or conflicted decision | `conflicted` or policy error | TODO | no graph handoff unless policy permits | split policy ref | `070-SPLIT-HANDOFF-AC-001` | blocked |
+| `val-070-explanation-checksum` | `070` | `fixture-070-explanation-checksum` | TODO | explanation policy | explanation | none | TODO | no decision visibility without explanation | explanation policy and manifest refs | `070-EXPLANATION-AC-001` | blocked |
+| `val-070-replay-exactness` | `070` | `fixture-070-replay-exactness` | TODO | full resolver catalog | replay decision/explanation | none | TODO | no nondeterministic divergence | full manifest refs | `070-AC-007` | blocked |
+| `val-070-manifest-artifact-omission` | `070`, `030` | `fixture-070-manifest-artifact-omission` | TODO | omitted resolver catalog member | owner error | `VERSION_MANIFEST_INCOMPLETE` | TODO | no identity output | missing ref detected | `030-IDENTITY-MANIFEST-AC-001` | blocked |
+| `val-070-package-weak-default-weakening` | `070`, `100` | `fixture-070-package-weak-default-override` | TODO | package-supplied resolver artifact | owner error | package activation failure | TODO | preserve active package set; no identity output | package set and artifact refs | `100-IDENTITY-RESOLVER-WEAKENING-AC-001` | blocked |
+| `val-070-two-independent-implementer-parity` | `070`, `120` | `fixture-070-implementer-parity` | TODO | full resolver catalog | decision/explanation/handoff | none | TODO | no byte divergence | full manifest refs | `070-AC-007` | blocked |
+
 ## Spec Set Acceptance Criteria
 
 | ID | Criterion |
@@ -685,6 +720,34 @@ Lifecycle transition evidence is required for acceptance status changes that aff
 | `060` | OCSF field absence as absence | `ocsf-field-absence-non-authority-*` | TODO | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | TODO | no absence, cleanup, retraction, graph expiry, or watermark | `060-OCSF-NONAUTH-AC-003` | blocking |
 | `070` | weak evidence auto-merge | `fixture-070-weak-evidence-auto-merge` | TODO | `no_decision` | TODO | no identity mutation | `070-CLEANUP-AC-002` | blocking |
 | `070` | invalid review transition | `fixture-070-invalid-review-transition` | TODO | `IDENTITY_REVIEW_TRANSITION_INVALID` | TODO | no identity mutation | `070-REVIEW-TOTALITY-AC-001` | blocking |
+| `070` | IP-only no mutation | `fixture-070-ip-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | hostname-only no mutation | `fixture-070-hostname-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | DNS-only no mutation | `fixture-070-dns-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | PTR-only no mutation | `fixture-070-ptr-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | scanner-name-only no mutation | `fixture-070-scanner-name-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | weak-management-name-only no mutation | `fixture-070-weak-management-name-only` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | weak-user-name/mail/UPN-only no mutation | `fixture-070-weak-user-name-mail-upn-only` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | group-membership-only no mutation | `fixture-070-group-membership-only` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | weak-service-account-display-name-only no mutation | `fixture-070-weak-service-account-display-name-only` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | selector-only no mutation | `fixture-070-selector-only-no-mutation` | TODO | no-op | TODO | no identity mutation | `070-SELECTOR-SAFETY-TOTALITY-AC-001` | blocking |
+| `070` | graph-key-only no mutation | `fixture-070-graph-key-only-no-mutation` | TODO | no-op | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | OpenGraph property-match no mutation | `fixture-070-opengraph-property-match-only` | TODO | no-op | TODO | no identity mutation | `070-SELECTOR-SAFETY-TOTALITY-AC-001` | blocking |
+| `070` | mapped-target-only no mutation | `fixture-070-mapped-target-only` | TODO | no-op | TODO | no identity mutation | `070-SELECTOR-SAFETY-TOTALITY-AC-001` | blocking |
+| `070` | source-native-merge-history-only no mutation | `fixture-070-source-native-merge-history-only` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | learned-only no mutation | `fixture-070-learned-only-no-mutation` | TODO | `no_decision` | TODO | no identity mutation | `070-WEAK-REJECTION-AC-001` | blocking |
+| `070` | missing resolver row | `fixture-070-resolver-row-missing` | TODO | `RESOLVER_PROFILE_ROW_MISSING` | TODO | no identity mutation | `070-RESOLVER-ROW-AC-001` | blocking |
+| `070` | ambiguous resolver row | `fixture-070-resolver-row-ambiguous` | TODO | `RESOLVER_PROFILE_ROW_AMBIGUOUS` | TODO | no identity mutation | `070-RESOLVER-ROW-AC-001` | blocking |
+| `070` | missing hard blocker row | `fixture-070-hard-blocker-row-missing` | TODO | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | TODO | no identity mutation | `070-HARD-BLOCKER-ROWSET-TOTALITY-AC-001` | blocking |
+| `070` | ambiguous hard blocker row | `fixture-070-hard-blocker-row-ambiguous` | TODO | `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` | TODO | no identity mutation | `070-HARD-BLOCKER-ROWSET-TOTALITY-AC-001` | blocking |
+| `070` | decision row ambiguity | `fixture-070-decision-row-ambiguous` | TODO | `RESOLVER_DECISION_ROW_AMBIGUOUS` | TODO | no identity mutation | `070-DECISION-ROW-AMBIGUITY-AC-001` | blocking |
+| `070` | missing explanation field | `fixture-070-missing-explanation-field` | TODO | `RESOLVER_EXPLANATION_INCOMPLETE` | TODO | no externally visible decision | `070-EXPLANATION-AC-001` | blocking |
+| `070` | explanation volatile-field drift | `fixture-070-explanation-volatile-drift` | TODO | no-op or replay mismatch | TODO | no identity mutation | `070-EXPLANATION-AC-001` | blocking |
+| `070` | candidate block overflow | `fixture-070-candidate-block-overflow` | TODO | `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | TODO | no identity mutation | `070-OVERFLOW-AC-001` | blocking |
+| `070` | candidate partition overflow | `fixture-070-candidate-partition-overflow` | TODO | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | TODO | no identity mutation | `070-OVERFLOW-AC-001` | blocking |
+| `070` | reviewer override of hard blocker | `fixture-070-reviewer-hard-blocker-override` | TODO | `IDENTITY_HARD_BLOCKER_TRIGGERED` | TODO | no identity mutation | `070-BLOCKER-PRECEDENCE-AC-001` | blocking |
+| `070` | review expiration | `fixture-070-review-expiration` | TODO | expired no-op | TODO | no identity mutation | `070-REVIEW-EXPIRATION-AC-001` | blocking |
+| `070` | split handoff missing metadata | `fixture-070-split-handoff-missing-metadata` | TODO | `RESOLVER_EXPLANATION_INCOMPLETE` or owner handoff error | TODO | no graph mutation | `070-GRAPH-CORRECTION-HANDOFF-SCHEMA-AC-001` | blocking |
+| `070` | package-supplied weak-default override | `fixture-070-package-weak-default-override` | TODO | package activation failure | TODO | preserve active package set and no identity output | `100-IDENTITY-RESOLVER-WEAKENING-AC-001` | blocking |
 | `080` | missing temporal policy | `temporal-resolution-missing-policy` | TODO | `TEMPORAL_POLICY_UNRESOLVED` | TODO | no gold fact | `080-TEMPORAL-POLICY-AC-001` | blocking |
 | `080` | absent source time | `temporal-resolution-absent-time` | TODO | temporal error or unknown per active row | TODO | no unauthorized fallback | `080-TEMPORAL-RESOLUTION-AC-001` | blocking |
 | `080` | malformed source time | `temporal-resolution-malformed-time` | TODO | temporal error | TODO | no gold fact | `080-TEMPORAL-RESOLUTION-AC-001` | blocking |
@@ -1015,6 +1078,7 @@ graph-provider-portability-equivalence
 | `120-GRAPH-JANUSGRAPH-*` | Backend selection, unresolved default, storage/index declaration, Gremlin translation, schema/index apply, stale mixed index, raw-write bypass, backend ID leak, package gate, partial apply, and rebuild equivalence. |
 | `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, unknown token rejection, missing policy, ambiguous policy, and exact policy success. |
 | `120-LIFECYCLE-*` | `030`, `070`, `090`, `100`, and validation acceptance lifecycle totality, idempotency, illegal transition, no mutation, and manifest inclusion. |
+| `120-IDENTITY-CLOSURE-*` | Resolver profile row selection, evidence class totality, scope coverage, durable create/attach/merge, weak rejection, selector safety, blocker precedence, decision row missing/ambiguous, review totality, review expiration, split handoff, explanation checksum, replay exactness, manifest omission, package weak-default weakening, and two-independent-implementer parity. |
 | `120-ERROR-REGISTRY-*` | No owner error fragment contains `TODO`; final owners include `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`; duplicate owner decisions are enforced; generic code is rejected when owner-specific code exists. |
 
 ### Owner-specific fixture families
@@ -1025,7 +1089,7 @@ graph-provider-portability-equivalence
 | `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
 | `050` | OCSF mapping row success, missing row, ambiguous row, activity discriminator missing, required object path missing, forbidden field, unknown enum, OCSF Other not permitted, deprecated field, source extension rule success, undeclared source extension, wildcard rejection, secret scan, cadastre-only null profile, DHCP/IPAM split required. |
 | `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating, OCSF status non-authority, OCSF severity non-authority, OCSF confidence non-authority, OCSF observable non-authority, OCSF field absence non-authority. |
-| `070` | identity-create, identity-attach, identity-durable-merge, identity-weak-rejection, identity-hard-blocker, identity-candidate-overflow, identity-confidence-band, identity-review-state-machine, identity-selector-safety, identity-split-handoff, identity-explanation-checksum, identity-replay, identity-package-artifact-core-conflict. |
+| `070` | identity-create, identity-attach, identity-durable-merge, identity-weak-rejection, identity-evidence-totality, identity-scope-coverage, identity-hard-blocker, identity-hard-blocker-row-missing, identity-hard-blocker-row-ambiguous, identity-candidate-overflow, identity-decision-row-missing, identity-decision-row-ambiguous, identity-confidence-band, identity-review-state-machine, identity-review-expiration, identity-selector-safety, identity-split-handoff, identity-explanation-checksum, identity-replay, identity-manifest-artifact-omission, identity-package-artifact-core-conflict, identity-package-weak-default-weakening, identity-two-implementer-parity. |
 | `080` | temporal-resolution, knowledge-time-import, late-arrival, gold-correction, assertion-transition, correction-snapshot-ref, gold-correction-no-op-error, replay-equivalence, graph-handoff, temporal-version-manifest. |
 | `090` | active profile exact edge set, observed-connection positive projection, missing/ambiguous flow-role no-edge, unresolved endpoint no-edge, traversal behavior, graph apply lifecycle, graph apply ordering, page-token behavior, query candidate limit, rebuild equivalence, backend taxonomy rejection, reachability prohibition, backend ID rejection, OCSF endpoint-order no graph direction, generic external payload non-pathfinding, source-kind cleanup safety, backend selection omitted/defaulted, JanusGraph profile preflight, provider capability matrix, Gremlin translation parity, implicit schema rejection, schema fingerprint mismatch, storage mode unsafe, stale mixed index, full-scan forbidden, transaction partial-apply evidence, raw-write bypass, provider package-gate failure, and future-provider parity. |
 | `100` | package type policy, repository form, trust, transparency, attestation, SBOM, dependency lock, compatibility, deprecation, health/LKG, rollback, quarantine, emergency, package manifest completeness, canary and shadow isolation. |
@@ -1033,12 +1097,37 @@ graph-provider-portability-equivalence
 | `140` | observability-profile-valid, observability-profile-missing, observability-signal-forbidden, observability-attribute-forbidden, observability-cardinality-unbounded, observability-exporter-outage, observability-health-degraded, observability-replay-different-trace-id, observability-audit-export-failure, observability-version-manifest-missing, observability-package-policy-invalid. |
 | `130` | analysis finding non-authority, analysis mutation, metric non-authority, metric risk-score forbidden, risk acceptance no-remediation, analysis replay exact/mismatch, threat-intel known indicator, threat-intel identity forbidden, threat-intel distribution restricted/unmapped, threat-intel unknown taxonomy, threat-intel missing profile, threat-intel artifact checksum mismatch, threat-intel sighting no-completeness, lineage run/job/dataset, lineage custom policy missing, lineage mutable schema, lineage checksum mismatch, lineage namespace collision, lineage freshness no-completeness, lineage facet-only not-evidence, registry activation positive, inactive artifact, owner mismatch, label no-fact-authority, custom-property bounds, custom-property redaction, classification authority forbidden, package-set-ref required, private binding redaction, derived-edge supporting facts required, `090` routing, outside-`090` forbidden, `080` routing, exact replay, replay mismatch, explicit no-op, and risk scoring boundary. |
 
+### ResolverActivationReportValidationMatrix
+
+`ResolverActivationReportValidationMatrix` validates promotion eligibility for active identity resolver catalogs. Rows with `TODO` fixture or expected checksum values are blockers and must not be marked passing.
+
+| scenario_id | fixture_checksum | expected_decision_checksum | expected_explanation_checksum | expected_review_or_handoff_refs | result | promotion_eligibility |
+| --- | --- | --- | --- | --- | --- | --- |
+| `activation-070-creation` | TODO | TODO | TODO | none | blocked | not_eligible |
+| `activation-070-attachment` | TODO | TODO | TODO | none | blocked | not_eligible |
+| `activation-070-durable-merge` | TODO | TODO | TODO | none | blocked | not_eligible |
+| `activation-070-weak-evidence-rejection` | TODO | TODO | TODO | none | blocked | not_eligible |
+| `activation-070-blocker-precedence` | TODO | TODO | TODO | blocker fixture refs | blocked | not_eligible |
+| `activation-070-overflow` | TODO | TODO | TODO | overflow error refs | blocked | not_eligible |
+| `activation-070-review-totality` | TODO | TODO | TODO | review case refs | blocked | not_eligible |
+| `activation-070-split-handoff` | TODO | TODO | TODO | graph correction handoff refs | blocked | not_eligible |
+| `activation-070-selector-safety` | TODO | TODO | TODO | unresolved target refs | blocked | not_eligible |
+| `activation-070-explanation-checksum-replay` | TODO | TODO | TODO | explanation refs | blocked | not_eligible |
+| `activation-070-shadow-canary-determinism` | TODO | TODO | TODO | resolver shadow run refs | blocked | not_eligible |
+
+A report is promotion-eligible only when every required scenario row is `pass`, every checksum is non-`TODO`, and every required review or handoff ref is manifest-included.
+
 ### Acceptance Criteria
 
 | ID | Criterion |
 | --- | --- |
 | `120-API-SCHEMA-TOTAL-AC-001` | `ApiSurfaceClosureValidationMatrix` has coverage for every exported `110` request and response schema and fails while any required checksum or expected error is missing. |
 | `120-STATE-LABEL-TOTAL-AC-001` | `SourceStateLabelTotalityValidationMatrix` has one row per declared `110.SourceStateLabel` and proves `conflicted` and `ambiguous` do not collapse. |
+| `120-IDENTITY-ACTIVATION-CATALOG-AC-001` | Aggregate acceptance fails unless every active identity resolver artifact row set has passing validation refs and non-`TODO` fixture and output checksums. |
+| `120-IDENTITY-HARD-BLOCKER-AC-001` | Every hard blocker family has fired and not-fired fixtures proving precedence before confidence and review. |
+| `120-IDENTITY-DECISION-MATRIX-AC-001` | Missing and ambiguous decision rows fail before mutation. |
+| `120-IDENTITY-REVIEW-EXPIRATION-AC-001` | Review expiration emits deterministic transition evidence and no identity mutation. |
+| `120-IDENTITY-SELECTOR-SAFETY-AC-001` | OpenGraph property matching, graph keys, mapped targets, and deprecated name matching cannot create endpoint identity. |
 | `120-ENDPOINT-OUTCOME-TOTAL-AC-001` | `EndpointOutcomeValidationMatrix` has one row per `110.EndpointOutcomeMatrix` endpoint and verifies success, empty, unauthorized, stale, partial, conflict, ambiguity, pagination, redaction, and error precedence. |
 | `120-ERROR-REGISTRY-TOTAL-AC-001` | `ErrorCodeRegistryValidationMatrix` covers every final owner error fragment row from `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, shared `110` rows, `120`, `130`, and `140`; it rejects missing, duplicate, TODO, legacy `code` caller fields, wildcard-only fixture refs, generic substitutions, unredacted sensitive classes, missing registry checksum, nondeterministic bytes, or unfixtured registry rows. |
 | `120-ANALYSIS-OUTPUT-AUTHORITY-AC-001` | Validation rows prove `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are non-authoritative and cannot mutate facts, graph, completeness, watermarks, identity, package state, or source authority. |

@@ -32,7 +32,6 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `TelemetryCorrelationPolicy`
 - `TelemetryRuntimeState`
 - `TelemetryReplayExclusionPolicy`
-
 - `CoreRecordSchema`
 - `CoreRecordValidationAlgorithm`
 - `CoreRecordChecksumPolicy`
@@ -457,6 +456,7 @@ resolver_profile
 identifier_evidence_class_row_set
 identifier_scope_row_set
 asset_generation_boundary_row_set
+identity_hard_blocker_row_set
 target_selector_safety_policy
 resolver_decision_matrix_row_set
 identity_confidence_band_row_set
@@ -652,7 +652,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | `EvidenceRef` output | core schema registry checksum, evidence artifact kind registry checksum, consulted evidence artifact class row-set refs, referenced record or artifact checksum, redaction policy refs, owner artifact refs, validation refs, and artifact lifecycle refs when the evidence cites an activation artifact. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `MappingProjectManifest`, `MappingCompilerPipeline`, `MappingValidationRule` row-set refs, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, observation-type validation matrix refs, lifecycle transition evidence refs for every activation-controlled mapping artifact, package-set manifest refs when any mapping artifact is package-supplied, and `OCSFProfileUpgradeReport` refs when the active external schema profile differs from the prior production profile. |
-| Identity output | resolver profile row set, identifier evidence class row set, identifier scope row set, candidate generation profile, asset generation boundary row set, target selector safety policy, resolver decision matrix row set, identity confidence band row set, identity review routing policy, identity split policy, resolver explanation policy, evidence item refs/checksums, identity decision refs, review case refs when applicable, resolver explanation refs/checksums, graph correction handoff refs when applicable, activation report refs when activation or promotion is in scope, and shadow/canary refs when promotion uses them. |
+| Identity output | resolver profile row set, identifier evidence class row set, identifier scope row set, candidate generation profile, identity hard blocker row set, asset generation boundary row set, target selector safety policy, resolver decision matrix row set, identity confidence band row set, identity review routing policy, identity split policy, resolver explanation policy, evidence item refs/checksums, identity decision refs, review case refs when applicable, resolver explanation refs/checksums, graph correction handoff refs when applicable, activation report refs when activation or promotion is in scope, and shadow/canary refs when promotion uses them. |
 | Temporal resolution output | `TemporalSemanticsPolicy` row ref, `KnowledgeTimeImportPolicy` row ref, source evidence refs, selected input path/value checksum, `TemporalObservationTimeResolution` ref, and resolution checksum. |
 | Gold fact output | temporal resolution ref and checksum, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, `060.AbsenceDerivationResult` ref when `absence_outcome != null` or when the candidate consumed negative, stale, delete, cleanup, no-change, fixed-state, DNS, DHCP/IPAM, flow non-observation, cloud disappearance, or CDC tombstone evidence, source refs, derivation refs, and validation refs. |
 | Gold correction output | `GoldFactChangeSet` ref, correction policy ref, assertion transition row ref, old `LakehouseSnapshotRef`, new `LakehouseSnapshotRef`, table-set checksum ref, retention-protection ref, temporal resolution refs, authority refs, absence refs when applicable, and graph handoff effect refs. |
@@ -854,7 +854,6 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-SCHEMA-PATCH-AC-001` | Every production output class owned by `040` is schema-validated before commit. |
 | `030-SCHEMA-PATCH-AC-002` | `VersionManifest` records the active core schema registry checksum for every output-affecting run. |
 | `030-SCHEMA-PATCH-AC-003` | A forbidden or malformed core record fails before downstream domain algorithms execute. |
-
 | `030-DAG-ORDER-AC-001` | Duplicate stage IDs fail with `DAG_STAGE_ID_DUPLICATE`, cycles fail with `DAG_CYCLE_DETECTED`, and ready-stage ties sort lexically by `stage_id`. |
 | `030-RUNLOCK-AC-001` | Run lock acquisition is all-or-nothing and partial acquisition failure releases acquired locks before returning `RUN_LOCK_ACQUISITION_FAILED`. |
 | `030-VERSION-MANIFEST-AC-001` | Same included refs and manifest kind produce the same `version_manifest_id`; checksum includes `created_at` but ID does not. |
@@ -869,7 +868,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-IDENTITY-MANIFEST-AC-002` | Resolver artifact checksum mismatch, inactive artifact, or out-of-scope activation ref fails before identity output or replay promotion. |
 | `030-IDENTITY-MANIFEST-AC-003` | Resolver explanation checksum refs and split graph correction handoff refs are included for identity replay when applicable. |
 | `030-IDENTITY-MANIFEST-AC-004` | `ResolverActivationReport` and `ResolverShadowRun` refs are manifest-included when activation, shadow, canary, or promotion uses them. |
-
+| `030-IDENTITY-HARD-BLOCKER-MANIFEST-AC-001` | Identity output fails with `VERSION_MANIFEST_INCOMPLETE` when the active `identity_hard_blocker_row_set` ref or checksum is absent. |
 | `030-OCSF-MAP-ARTIFACT-AC-001` | Silver output fails with `VERSION_MANIFEST_INCOMPLETE` when any output-affecting OCSF mapping row set, `MappingProjectManifest`, `MappingCompilerPipeline`, `MappingValidationRule` row set, external schema profile, external schema artifact ref, profile-resolution manifest, enum rule set, base-event field policy set, source-extension rule set, canonical validation output, observation-type validation matrix, lifecycle transition evidence, package-set ref when package-supplied, or applicable `OCSFProfileUpgradeReport` ref is missing from `VersionManifest`. |
 | `030-SOURCE-CLOSURE-MANIFEST-AC-001` | Absence-sensitive output fails with `VERSION_MANIFEST_INCOMPLETE` when the closure row-set ref, closure validation ref, or any underlying consulted `060` row-set ref is omitted from `VersionManifest.included_refs`. |
 | `030-SOURCE-CLOSURE-MANIFEST-AC-002` | A `SourceAuthorityClosureMatrix` validation result cannot satisfy manifest completeness unless all underlying activation-controlled row refs and checksums are also present. |
@@ -879,7 +878,6 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-LIFECYCLE-AC-004` | Idempotent replay is byte-identical or fails with a deterministic idempotency conflict. |
 | `030-LIFECYCLE-AC-005` | Canary and shadow outputs never advance current production, last-known-good, or watermark state. |
 | `030-LIFECYCLE-AC-006` | Lifecycle transition evidence appears in `VersionManifest` whenever lifecycle behavior is output-affecting. |
-
 | `030-TEMPORAL-MANIFEST-AC-001` | Missing temporal resolution ref, temporal policy ref, or temporal resolution checksum fails before gold output. |
 | `030-CORRECTION-MANIFEST-AC-001` | Missing old snapshot ref, new snapshot ref, table-set checksum, or retention-protection ref fails before correction output. |
 | `030-REPLAY-MANIFEST-AC-001` | Missing replay equivalence row ref or replay sufficiency check ref fails before replay output. |

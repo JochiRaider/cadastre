@@ -685,6 +685,11 @@ The generated error registry must include the following mapping, source-extensio
 | `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | `070` | blocked | yes after profile bounds or input partition changes | blocking key value redacted; block kind visible | code, severity, retryability, owner, redaction state, correlation ID | block kind, member count, cap, profile ref |
 | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | `070` | blocked | yes after profile bounds or input partition changes | source asset IDs redacted unless authorized | code, severity, retryability, owner, redaction state, correlation ID | partition checksum, candidate cap, profile ref |
 | `RESOLVER_DECISION_ROW_MISSING` | `070` | error | no, until decision matrix changes | candidate refs redacted | code, severity, retryability, owner, correlation ID | decision matrix ref, blocker result refs, candidate checksum |
+| `RESOLVER_DECISION_ROW_AMBIGUOUS` | `070` | error | no, until row set changes | candidate refs and row refs redacted unless authorized | code, severity, retryability, owner, affected record type, redaction state, correlation ID | decision matrix ref, matching row refs, candidate checksum, version manifest ref |
+| `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `070` | blocked | no, until row activates | blocker family visible; private scope values redacted | code, blocker family, severity, owner, correlation ID | blocker row-set ref, profile ref, validation ref |
+| `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` | `070` | error | no, until row set changes | blocker family visible; matching row refs redacted unless authorized | code, blocker family, severity, owner, redaction state, correlation ID | matching blocker row refs, row-set checksum, profile ref |
+| `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `070` | blocked | no, until validation evidence changes | missing scenario class visible; private refs redacted | code, missing scenario class, owner, correlation ID | activation report ref, validation refs |
+| `RESOLVER_ACTIVATION_REPORT_FAILED` | `070` | blocked | yes after candidate changes | failed scenario class visible; private refs redacted | code, failed scenario class, owner, correlation ID | activation report ref, failed row refs |
 | `RESOLVER_CONFIDENCE_BAND_MISSING` | `070` | error | no, until band row changes | score visible, evidence redacted | code, severity, retryability, owner, correlation ID | confidence band ref, decision row ref, explanation ref |
 | `RESOLVER_REVIEW_ROUTING_MISSING` | `070` | error | no, until routing policy changes | candidate refs redacted | code, severity, retryability, owner, correlation ID | routing policy ref, candidate checksum |
 | `RESOLVER_SPLIT_POLICY_MISSING` | `070` | error | no, until split policy activates | split refs redacted | code, severity, retryability, owner, correlation ID | split decision ref, resolver explanation ref, version manifest ref |
@@ -692,6 +697,8 @@ The generated error registry must include the following mapping, source-extensio
 | `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | `070` | error | yes after reviewer reloads current evidence | evidence values redacted | code, severity, retryability, owner, redaction state, correlation ID | review case ref, expected checksum, supplied checksum |
 | `IDENTITY_REVIEW_AUTHORITY_MISSING` | `070` | security error | no, until authorization changes | reviewer identity redacted from caller | code, severity, retryability, owner, redaction state, correlation ID | reviewer auth context checksum, case ref, event |
 | `TARGET_SELECTOR_UNSAFE` | `070` | security error | no, until selector policy changes | selector value redacted; mechanism visible | code, severity, retryability, owner, redaction state, correlation ID | selector policy ref, unresolved target ref, mechanism |
+
+Source-native identity values, private scope values, blocking key values, candidate IDs, and resolver row refs must be redacted in caller-visible output unless the caller is authorized for the exact data class. Audit output may include refs and checksums only after `RedactionPolicy` permits the class; raw source values remain forbidden.
 
 ### Lifecycle error registry rows
 
@@ -1093,6 +1100,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-EVIDENCE-ARTIFACT-ERROR-AC-001` | `EvidenceRef.artifact_class`/`artifact_id.kind` mismatch renders as `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH`, not a generic validation error. |
 | `110-CORE-SPECIFIC-ERROR-AC-001` | Generic codes are rejected when `CORE_ONE_OF_INVALID`, `CORE_NULL_FORBIDDEN`, `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`, `GRAPH_BACKEND_ID_FORBIDDEN`, or `PRIVATE_BINDING_LEAK` specifically covers the failure. |
 | `110-TEMPORAL-ERROR-REGISTRY-AC-001` | Every `080` temporal, correction, late-arrival, snapshot, no-op, and replay error code appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible fields, and validation fixture. |
+| `110-IDENTITY-ERROR-MAPPING-AC-001` | Generated error registry includes every `070` resolver error and rejects generic fallbacks when a specific resolver code applies. |
 | `110-TEMPORAL-LABEL-AC-001` | Temporal errors render as `error`, unauthorized negatives do not render as authorized absence, replay errors do not mutate output, duplicate no-ops render as no output change with audit evidence, and stale known states render as `source_stale`. |
 | `110-ACTIVATION-ERROR-AC-001` | Activation artifact errors expose owner, artifact class, retryability, and redaction state. |
 | `110-ACTIVATION-ERROR-AC-002` | Activation artifact errors never collapse into `unknown`, `not_checked`, pass, or fail. |

@@ -691,6 +691,8 @@ Lifecycle runtime behavior is owner-routed. `domain.md` names machine IDs and do
 
 Stable IDs must not be inferred from labels, display text, backend-generated IDs, storage keys, route names, file names, package names, external-system identifiers, or source-native IDs unless an owner spec explicitly permits the exact use.
 
+Resolver artifact identity is activation-artifact identity. It is not canonical entity identity, source-native identity, graph identity, package identity, storage identity, or display identity.
+
 | Name or identifier class | Domain target | Stable use | Not this | Owner | Status |
 | --- | --- | --- | --- | --- | --- |
 | Canonical domain identity | Product-owned canonical entity or fact identity. | Stable reference inside Cadastre outputs and evidence chains. | Source-native ID, graph backend ID, display label. | `040`, `070`, `080` | Resolved. |
@@ -1079,6 +1081,7 @@ Closed `domain_behavior_until_closed` values are `owner governs`, `validation fa
 | `DOM-TODO-016` | `140.TelemetryNonAuthorityRule` and `110.TelemetryHealthMappingPolicy` | `blocked_validation` | observability context-map rows and telemetry non-authority negative cases | validation fails | `120-DOMAIN-CMAP-*`; `120-OBSERVABILITY-*` |
 | `DOM-TODO-017` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | provider-neutral backend-selection wording confirmed in Section 5, Section 7, Section 20, and Section 25, with selected backend activation remaining owner-routed | validation fails | `120-DOMAIN-CMAP-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
 | `DOM-TODO-018` | `040.CoreOneOfRegistry` and `040.EvidenceArtifactClassRegistry` | `blocked_validation` | `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` rows must pass | validation fails | `120-DOMAIN-SECTION25-*`; `120-CORE-ONEOF-CLOSURE-*`; `120-CORE-EVIDENCE-ARTIFACT-*` |
+| `DOM-TODO-019` | `070.ResolverProfileRowSet` and resolver activation artifacts | `blocked_validation` | active resolver row sets, evidence class row sets, identifier scope row sets, hard blocker row sets, candidate generation profile, decision matrix, confidence bands, review routing, split policy, explanation policy, selector safety policy, activation report, fixture checksums, and expected output checksums | validation fails | `120-IDENTITY-CLOSURE-*`; `120-IDENTITY-REPLAY-*`; `120-IDENTITY-REVIEW-*`; `120-IDENTITY-SPLIT-*`; `120-IDENTITY-EXPLANATION-*` |
 
 Stable source-authority behavior is owned by `060.SourceAuthorityClosureMatrix`. Production promotion remains blocked until every active absence-sensitive feed category has exact closure rows or deterministic block rows validated by `120-SOURCE-CLOSURE-*`.
 

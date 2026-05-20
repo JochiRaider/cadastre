@@ -121,11 +121,13 @@ Private artifacts may bind concrete upstream source systems and private source s
 
 Public identity resolver row catalogs may contain only vendor-neutral source categories, source datasets, row IDs, redacted artifact refs, canonical scope selectors, lifecycle status, validation refs, and checksummed policy refs.
 
-`ResolverProfileRow`, `IdentifierScope`, `IdentifierEvidenceClass`, `AssetGenerationBoundary`, `CandidateGenerationProfile`, `TargetSelectorSafetyPolicy`, `IdentityReviewRoutingPolicy`, `SplitPolicy`, `IdentityConfidenceBand`, `ResolverDecisionMatrix`, and `ResolverExplanationPolicy` public instances must not contain concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventory, zone inventory, account lists, or environment-specific source target lists.
+`ResolverProfileRow`, `IdentifierScope`, `IdentifierEvidenceClass`, `IdentityHardBlockerRow`, `IdentityHardBlockerRowSet`, `AssetGenerationBoundary`, `CandidateGenerationProfile`, `TargetSelectorSafetyPolicy`, `IdentityReviewRoutingPolicy`, `SplitPolicy`, `IdentityConfidenceBand`, `ResolverDecisionMatrix`, `ResolverExplanationPolicy`, `ResolverActivationReport`, `ResolverShadowRun`, and resolver activation catalog closure validation artifacts public instances must not contain concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventory, zone inventory, account lists, environment-specific source target lists, source-native identity values in public validation reports, or private scanner site names.
 
 A public resolver row, package activation report, validation report, export, API response, or persisted public artifact that contains a concrete product name, tenant ID, private route, credential, host list, scanner site name, directory tenant inventory, zone inventory, account list, or environment-specific source target list must fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, package report materialization, or validation-report materialization.
 
 Private source binding artifacts may map concrete upstream systems to public resolver scopes. Private mappings must not alter the public `070` resolver row-selection algorithm, evidence authority defaults, blocker precedence, decision semantics, review totality, split policy semantics, selector safety, or explanation checksum policy.
+
+Forbidden identity-specific leak examples include private scanner site names, directory tenant inventories, cloud account lists, environment-specific source target lists, private routes, credentials, host lists, and source-native identity values in public resolver activation reports, validation reports, package reports, API responses, export outputs, or resolver row catalogs.
 
 ## Cross-Domain Invariants
 
@@ -176,6 +178,7 @@ Public artifacts must be scanned before publication, API response emission, expo
 | Public API response | Inaccessible asset identifier, private source route, raw credential, unredacted raw payload | `AUTHORIZATION_ERROR` before `PRIVATE_BINDING_LEAK` when caller access is the root cause | Return redacted or fail closed as `110` defines. |
 | Export artifact | Private source binding, environment-specific host list, private golden corpus sample | `PRIVATE_BINDING_LEAK` | Reject export before write. |
 | Validation report | Private fixture bytes or unreduced corpus contents | `PRIVATE_BINDING_LEAK` | Store only redacted fixture refs and checksums. |
+| Public resolver artifact, activation report, package report, API response, or export | Concrete scanner site, directory tenant inventory, cloud account list, route, credential, host list, environment-specific target list, or source-native identity value | `PRIVATE_BINDING_LEAK` | Reject before public artifact, report, response, or export materialization. |
 
 ### SourceOfRecordRule
 
@@ -270,6 +273,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-001` | A public source-authority row containing a private route or concrete tenant inventory fails before persistence, publication, export, or validation-report materialization. |
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-002` | A public source-closure row, deterministic block row, closure validation result, or closure acceptance report containing a private route, concrete product name, tenant inventory, scanner site, zone inventory, account list, host list, or credential fails with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, or validation-report materialization. |
 | `010-IDENTITY-PRIVATE-BINDING-AC-001` | Public resolver profile rows, identifier scope rows, and package-supplied resolver artifacts containing concrete tenant inventories, private routes, credentials, scanner site names, or account lists fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response, package report, or validation-report materialization. |
+| `010-IDENTITY-PRIVATE-BINDING-AC-002` | A public `ResolverActivationReport` containing a concrete scanner site, directory tenant inventory, cloud account list, route, credential, host list, environment-specific source target list, or source-native identity value fails with `PRIVATE_BINDING_LEAK`; no public artifact, package report, validation report, API response, or export output is materialized. |
 | `010-TELEMETRY-AUTHORITY-AC-001` | Runtime telemetry cannot mutate authoritative records, replace audit events, satisfy replay equivalence, activate packages, advance watermarks, or prove source, identity, fact, or graph correctness. |
 | `010-TELEMETRY-PRIVATE-BINDING-AC-001` | Telemetry private-binding leaks fail before export or publication. |
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry`, uses `110.StandardErrorCallerFields` and `110.StandardErrorAuditFields`, has no `TODO` values, and appears in `120.Required negative tests by owner`. |

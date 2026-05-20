@@ -188,11 +188,20 @@ Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` mu
 
 `ApplyGoldCorrection` must validate, in order, core schema, temporal resolution, source authority, absence derivation when the candidate is negative or cleanup-derived, correction policy, assertion-state transition row, snapshot-ref policy, replay input sufficiency when replaying, and graph handoff metadata. Schema validation fails before temporal resolution is consumed. Temporal resolution fails before gold ID computation. Source authority fails before fact creation. Missing snapshot refs fail before correction output. Graph handoff is emitted as metadata only and never mutates graph state.
 
-When the graph handoff effect is `identity_split_handoff`, `ApplyGoldCorrection` must validate the `070.GraphCorrectionHandoff` ref, split decision ref, split policy ref, affected canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and `VersionManifest` ref. Missing or checksum-mismatched split handoff metadata must emit `REPLAY_INPUT_INSUFFICIENT` or the more specific owner code, must emit no correction output, and must emit no graph handoff effect other than `none`. `080` must not recompute resolver split partitions.
+When the graph handoff effect is `identity_split_handoff`, `ApplyGoldCorrection` must validate the `070.GraphCorrectionHandoff` ref, `split_identity_decision_ref`, `split_policy_ref`, `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, `resolver_explanation_checksum`, and `version_manifest_ref`. Missing or checksum-mismatched split handoff metadata must emit `REPLAY_INPUT_INSUFFICIENT` or the more specific owner code, must emit no correction output, and must emit no graph handoff effect other than `none`. `080` must not recompute resolver split partitions.
 
 `fact_retraction`, `interval_split`, and cleanup-derived corrections require `AbsenceDerivationResult.absence_authorized = true` and `allowed_effects` containing the requested correction effect. Missing or unsafe source-authority closure produces no correction and must emit the most specific `060` blocking reason.
 
 A correction consuming negative or cleanup-derived evidence must record the selected `060.SourceAuthorityClosureMatrixRow` ref or deterministic block row ref in the correction replay inputs through `VersionManifest`.
+
+Identity split handoff failure precedence is:
+
+| Failure | Required behavior |
+| --- | --- |
+| missing handoff ref | Emit `REPLAY_INPUT_INSUFFICIENT` or the more specific `070` owner error; emit no correction output. |
+| checksum mismatch | Emit `REPLAY_INPUT_INSUFFICIENT` or the more specific owner error; emit no correction output. |
+| split partition omitted | Emit no graph handoff effect except `none`. |
+| resolver explanation checksum omitted | Emit no correction output and no projection handoff. |
 
 ## Assertion-State Transition Matrix
 
@@ -566,6 +575,8 @@ Global replay failure precedence:
 
 `080` owns emitted graph handoff metadata only. `080` never mutates graph state. `090` owns graph delta projection, apply, and serving behavior.
 
+When `identity_split_handoff` is emitted, `080` must validate the `070.GraphCorrectionHandoff` checksum before emitting the handoff effect. Checksum drift blocks correction and graph projection before output.
+
 | Graph handoff effect | Emitted by `080` when | Required `090` handling |
 | --- | --- | --- |
 | `none` | no-op, blocked error, unsafe negative, or correction with no graph-visible impact | emit no graph delta |
@@ -666,7 +677,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-SOURCE-CLOSURE-CORRECTION-AC-001` | Source deletion evidence without exact `060` closure emits no retraction. |
 | `080-SOURCE-CLOSURE-REPLAY-AC-001` | Replay rejects gold output when any consulted `060` row checksum differs. |
 | `080-SOURCE-CLOSURE-MATRIX-AC-001` | Every row in `AbsenceSensitiveGoldCandidateMatrix` has event-sequence fixtures for success, missing refs, deterministic block, manifest omission, and checksum drift. |
-| `080-IDENTITY-SPLIT-HANDOFF-AC-001` | A valid identity split handoff contains split decision ref, split policy ref, partition refs, affected fact refs or selection checksum, resolver explanation checksum, and version manifest ref. |
+| `080-IDENTITY-SPLIT-HANDOFF-AC-001` | A valid identity split handoff contains `split_identity_decision_ref`, `split_policy_ref`, `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, `resolver_explanation_checksum`, and `version_manifest_ref`. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-002` | Missing identity split handoff metadata fails before correction or projection and emits no graph handoff effect except `none`. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-003` | Checksum drift in `070.GraphCorrectionHandoff` or resolver explanation rejects replay before output. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-004` | `080` treats identity split handoff as immutable metadata and never mutates graph state. |
