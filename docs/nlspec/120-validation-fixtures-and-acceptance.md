@@ -111,7 +111,6 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | `SPECSET-AC-005` | Every domain spec has binary acceptance criteria and at least one negative validation case for each forbidden authority boundary it declares. |
 | `SPECSET-AC-006` | The deferred reachability document is inactive and no active MVP graph or gold spec can emit theoretical reachability output. |
 | `SPECSET-AC-007` | The recreatability test passes using only active NLSpecs, deferred NLSpecs where explicitly referenced, and accepted standards. |
-
 | `SPECSET-AC-008` | Domain unresolved/resolved status and owner-local closure states are consistent. |
 | `SPECSET-AC-009` | ADR statuses are members of `000.SpecStatus` and accepted ADRs use `accepted_rationale`. |
 | `SPECSET-AC-010` | Every manifest path has exactly one registry row or explicit non-registry reason. |
@@ -493,7 +492,7 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 | Fixture family | Required cases |
 | --- | --- |
 | `source-authority-row-resolution-*` | exact match success, missing row, ambiguous row, dataset-default allowed, dataset-default forbidden, source-instance override exact match, source-instance mismatch |
-| `lakehouse-feed-completeness-totality-*` | all six `020` receipt states crossed with all eight upstream evidence states for at least one absence-sensitive category |
+| `lakehouse-feed-completeness-totality-*` | all six `020` receipt states crossed with all eight upstream evidence states for every active absence-sensitive feed category, `source_dataset`, requested effect, scope selector, read target kind, and upstream evidence class tuple |
 | `coverage-dimension-*` | missing source-specific coverage row, missing required dimension, permission-limited dimension, partial known gap, stale coverage, covered success |
 | `staleness-policy-*` | declared time precedence, missing time input, malformed time input, TTL expiry, DHCP lease expiry, source-history outside-window, no current-time fallback |
 | `control-result-mapping-*` | pass, fail, unknown, error, not evaluated, not checked, not applicable, unmapped external state |
@@ -503,7 +502,33 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 | `manifest-closure-*` | omitted authority row set ref, omitted staleness ref, omitted coverage ref, omitted progress policy, omitted control mapping, omitted source-history retention, checksum mismatch |
 | `graph-expiry-*` | expiry authorized success, expiry missing `060` effect ref rejected, derived-view stale does not expire graph object |
 
+| `feed-category-closure-catalog-*` | one active row per known category, duplicate row rejection, missing known category row, future category block row, source_dataset allowlist missing, source_dataset allowlist ambiguous |
+| `source-authority-closure-matrix-rowset-*` | closure row exact match, deterministic block row, missing row, ambiguous row, inactive row, checksum mismatch, out-of-scope row, stale validation ref, TODO row |
+| `source-history-coverage-*` | retention present but coverage missing, coverage present but retention missing, outside-window no-proof, inside-window no-change proof success |
+| `external-schema-authority-signal-*` | exact signal row success, missing signal row, ambiguous signal row, field-presence non-authority, endpoint-order non-authority |
+| `deterministic-block-row-*` | blocked category, blocked dataset, blocked predicate, blocked effect, mutation-prohibition proof |
+| `version-manifest-source-closure-*` | omitted closure row-set ref, omitted underlying authority ref, omitted coverage ref, omitted staleness ref, omitted validation ref, closure summary present without underlying refs |
+| `source-closure-private-binding-*` | product name, tenant ID, private route, scanner site, host list, zone inventory, account list, and credential leak rejected |
 A validation row in this matrix must include fixture checksum, expected `AbsenceDerivationResult` checksum when applicable, expected `VersionManifest` checksum or expected manifest error, expected output checksum when output is allowed, expected no-op when output is blocked, expected error code when rejected, and mutation-prohibition proof for raw, silver, identity, gold, graph, watermark, compliance export, and API label mutation classes affected by the case.
+
+### SourceClosureCategoryEffectValidationMatrix
+
+This matrix imports the MVP category set from `020.LakehouseFeedCategoryClosureRequirementTable`. Every category must have closure-positive fixtures for its active effects or deterministic-block fixtures for blocked effects.
+
+| Feed category | Required validation posture |
+| --- | --- |
+| `endpoint_inventory` | Positive closure or deterministic block for each active effect. |
+| `configuration_inventory` | Positive closure or deterministic block for each active effect. |
+| `vulnerability_scan` | Positive closure or deterministic block for fixed-state, absence, and watermark cases. |
+| `control_evaluation` | Control-result mapping and non-pass/fail defaults. |
+| `directory_inventory` | Visibility and permission-limited absence cases. |
+| `directory_membership` | Hidden membership, direct/transitive mode, and AD primary-group cases. |
+| `dns_record_set` | TTL stale/unknown and authorized narrow effect cases. |
+| `dhcp_ipam_assignment` | Lease expiry without host absence and authorized narrow effect cases. |
+| `network_flow` | Positive observed-flow, missing-flow unknown, and blocked absence cases. |
+| `cloud_asset_inventory` | Visibility, disappearance, history, cleanup, and graph-expiry cases. |
+| `source_history` | Retention plus coverage success, retention-only failure, coverage-only failure, and outside-window no-proof. |
+| `future_reachability` | Deterministic block only; no MVP runtime effect. |
 
 ### PackageActivationValidationMatrix
 
@@ -950,7 +975,7 @@ graph-provider-portability-equivalence
 | Validation family | Required patch content |
 | --- | --- |
 | `120-OCSF-MAP-*` | One positive, missing-row, ambiguous-row, enum, forbidden-field, source-extension, `cadastre_only`, and endpoint-order fixture per active MVP row family. |
-| `120-SOURCE-CLOSURE-*` | One closure-positive, closure-missing, closure-ambiguous, deterministic-block, weak-signal, stale-source, coverage-missing, and watermark-block fixture per active absence-sensitive feed category. |
+| `120-SOURCE-CLOSURE-*` | One closure-positive, closure-missing, closure-ambiguous, deterministic-block, weak-signal, stale-source, coverage-missing, source-history coverage, external-schema authority signal, manifest omission, private-binding leak, and watermark-block fixture per active absence-sensitive feed category, source dataset, requested effect, scope selector, read target kind, and upstream evidence class tuple. |
 | `120-GRAPH-PROFILE-CLOSURE-*` | Edge set exactly `observed_connection`, theoretical reachability prohibited, all other edge types inactive or rejected, missing flow role no edge, and ambiguous flow role no edge. |
 | `120-GRAPH-JANUSGRAPH-*` | Backend selection, unresolved default, storage/index declaration, Gremlin translation, schema/index apply, stale mixed index, raw-write bypass, backend ID leak, package gate, partial apply, and rebuild equivalence. |
 | `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, unknown token rejection, missing policy, ambiguous policy, and exact policy success. |
@@ -1014,7 +1039,6 @@ graph-provider-portability-equivalence
 | `120-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance. |
 | `120-GRAPH-HANDOFF-AC-001` | Every graph handoff effect has success, error, or no-op validation. |
 | `120-NOOP-ERROR-AC-001` | No-op and deterministic error cases prove no forbidden fact, graph, export, replay, or watermark mutation. |
-
 | `120-STATUS-CONSISTENCY-AC-001` | Owner/domain status contradiction, domain runtime restatement, owner-spec contradiction, ADR status, and manifest path mismatch validation rows exist and fail with exact codes. |
 | `120-MUTATION-PROHIBITION-AC-001` | Every negative validation row has a mutation-prohibition proof for each affected mutation class. |
 | `120-ACCEPTANCE-PRECEDENCE-AC-001` | Aggregate `AcceptanceReport` cannot pass while any non-deferred required row is `fail`, `blocked`, or `not_run`, or while any required fixture checksum or expected output checksum is `TODO`. |
@@ -1028,7 +1052,11 @@ graph-provider-portability-equivalence
 | `120-SOURCE-CLOSURE-AC-002` | Every missing, ambiguous, inactive, or checksum-mismatched source-authority closure component produces the expected owner error or no-op and no forbidden mutation. |
 | `120-SOURCE-CLOSURE-AC-003` | Two independent implementations produce byte-identical `AbsenceDerivationResult`, `VersionManifest`, and expected output checksums for the same closure fixtures. |
 | `120-SOURCE-CLOSURE-AC-004` | `ValidateSpecSet` fails promotion when `domain.md`, `000`, `020`, `030`, `040`, `060`, `080`, `090`, or `110` disagree on source-authority closure state. |
-
+| `120-SOURCE-CLOSURE-AC-005` | Every known feed category has a closure-positive fixture or deterministic-block fixture. |
+| `120-SOURCE-CLOSURE-AC-006` | Every active category/effect/evidence-class tuple covers all six feed receipt states and all eight upstream evidence states. |
+| `120-SOURCE-CLOSURE-AC-007` | `source_history` no-change proof fails unless both retention and coverage rows validate. |
+| `120-SOURCE-CLOSURE-AC-008` | A `SourceAuthorityClosureMatrix` validation result without all underlying row refs fails manifest validation. |
+| `120-SOURCE-CLOSURE-AC-009` | A deterministic block row proves no mutation across raw, silver, identity, gold, graph, watermark, compliance export, API state label, and audit mutation classes. |
 | `120-LIFECYCLE-AC-001` | Every production-affecting lifecycle machine has executable event-sequence fixtures. |
 | `120-LIFECYCLE-AC-002` | Aggregate `AcceptanceReport` cannot pass while any required lifecycle fixture is blocked, not run, failed, missing checksum, or missing expected output. |
 | `120-LIFECYCLE-AC-003` | Validation acceptance lifecycle matrix is total and idempotent. |

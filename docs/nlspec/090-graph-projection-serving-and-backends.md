@@ -107,6 +107,17 @@ Provider-native telemetry attributes must be translated through `140.TelemetryAt
 
 Missing flow evidence must not emit an observed-connection absence edge or graph expiry. It maps to `unknown` and produces no graph mutation.
 
+### SourceAuthorityClosureGraphEffectGate
+
+Graph expiry and cleanup deltas require all of the following:
+
+1. `060.AbsenceDerivationResult.requested_effect` equals the graph handoff effect.
+2. `060.AbsenceDerivationResult.allowed_effects` contains the requested effect.
+3. The producing `VersionManifest` includes the selected `SourceAuthorityClosureMatrixRowSet` ref or deterministic block validation ref and all underlying `060` row refs.
+4. `closure_outcome = closed`.
+
+`closure_outcome = deterministically_blocked` and `closure_outcome = blocked_validation` must emit no graph delta. A deterministic block row may be recorded as a graph no-op diagnostic only; it must not become graph expiry, cleanup, retraction, absence, or watermark permission.
+
 ### GoldFactChangeSet graph handoff matrix
 
 `090.ProjectGraphDeltas` consumes `080` graph handoff effects. `080` emits metadata only; graph projection remains a deterministic derived view.
@@ -117,6 +128,7 @@ Missing flow evidence must not emit an observed-connection absence edge or graph
 | `reproject_fact_key` | Recompute projected graph objects for the affected fact key using the active `GraphProjectionProfile`. | `GoldFactChangeSet` ref, temporal refs, projection profile ref. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED`. |
 | `expire_projected_object` | Emit expiry delta only when `060.AbsenceDerivationResult.allowed_effects` contains `graph_expiry`. | `GoldFactChangeSet` ref and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
 | `cleanup_projected_object` | Emit cleanup delta only when `060.AbsenceDerivationResult.allowed_effects` contains `cleanup`. | `GoldFactChangeSet` ref and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
+| `source_authority_blocked` | Emit no graph delta and record graph no-op diagnostic. | deterministic block row ref | no-op; no backend mutation |
 | `conflict_visibility_update` | Update graph visibility only when `GraphEdgeSemantics` and `GraphObjectOutputEligibilityRow` permit conflicted or stale assertions. | `GoldFactChangeSet` ref, graph semantics row ref, eligibility row ref. | no pathfinding-visible delta. |
 | `identity_split_handoff` | Consume `070.GraphCorrectionHandoff`, validate retained and new canonical partition refs, sort affected fact refs lexically, and route affected facts through the active `GraphProjectionProfile` only. | `GraphCorrectionHandoff` ref/checksum, affected fact refs or affected fact-selection checksum, split partition refs, retained and new canonical refs, projection profile ref, resolver explanation checksum. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` when the active projection profile does not support the handoff; missing metadata rejects before delta persistence. |
 
@@ -426,8 +438,8 @@ ProjectGraphDeltas(change_set, projection_profile):
 1. Validate `GoldFactChangeSet`, graph handoff effect, projection profile, graph semantics rows, and output eligibility rows.
 2. If handoff effect is `none`, emit no `GraphDeltaSet` and record a no-op projection diagnostic.
 3. If handoff effect is `reproject_fact_key`, recompute projected objects for the affected fact key from authoritative gold inputs and active projection rows.
-4. If handoff effect is `expire_projected_object`, require `060.AbsenceDerivationResult.allowed_effects` containing `graph_expiry` before emitting expiry delta.
-5. If handoff effect is `cleanup_projected_object`, require `060.AbsenceDerivationResult.allowed_effects` containing `cleanup` before emitting cleanup delta.
+4. If handoff effect is `expire_projected_object`, require `060.AbsenceDerivationResult.allowed_effects` containing `graph_expiry`, requested effect equality, manifest-complete closure refs, and `closure_outcome = closed` before emitting expiry delta; deterministic block and blocked-validation outcomes emit no graph delta.
+5. If handoff effect is `cleanup_projected_object`, require `060.AbsenceDerivationResult.allowed_effects` containing `cleanup`, requested effect equality, manifest-complete closure refs, and `closure_outcome = closed` before emitting cleanup delta; deterministic block and blocked-validation outcomes emit no graph delta.
 6. If handoff effect is `conflict_visibility_update`, emit only visibility deltas permitted by `GraphEdgeSemantics` and `GraphObjectOutputEligibilityRow`.
 7. If handoff effect is `identity_split_handoff`, validate `070.GraphCorrectionHandoff` ref/checksum, split partition refs, retained and new canonical refs, resolver explanation checksum, affected fact refs or selection checksum, and projection profile ref; sort affected fact refs lexically; expire or update stale projected graph objects only through active projection rows and source-authorized correction/handoff refs; emit no delta when the projection profile declares the handoff unsupported.
 8. Reject unsupported or metadata-incomplete handoff effects with `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` or the more specific manifest/lineage code before delta persistence.
@@ -932,6 +944,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-SOURCE-CLOSURE-GRAPH-AC-001` | Graph expiry delta without `060` requested-effect authorization fails before apply. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-002` | Graph derived-view lag never maps to source staleness or source absence. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-003` | Missing flow evidence emits no absence edge and no expiry. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-004` | Deterministic source-authority block rows emit no graph delta and no backend mutation. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-005` | A graph expiry or cleanup delta missing closure row-set refs, closure validation refs, or underlying `060` row refs fails before graph apply. |
 | `090-GRAPH-HANDOFF-AC-001` | `none` handoff emits no graph delta. |
 | `090-GRAPH-HANDOFF-AC-002` | `reproject_fact_key` recomputes affected projected graph objects and includes source `GoldFactChangeSet` refs. |
 | `090-GRAPH-HANDOFF-AC-003` | `expire_projected_object` emits expiry only when `060` authorizes `graph_expiry`. |

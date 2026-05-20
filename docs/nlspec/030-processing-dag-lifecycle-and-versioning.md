@@ -432,6 +432,8 @@ source_extension_field_rule_set
 observation_type_external_mapping_validation_matrix
 source_authority_profile
 source_authority_row_set
+source_authority_closure_matrix_row_set
+external_schema_authority_signal_mapping_row_set
 source_staleness_policy
 coverage_dimension_profile
 lakehouse_feed_completeness_profile
@@ -524,6 +526,16 @@ validation_matrix
 lakehouse_feed_fixture
 golden_corpus
 ```
+
+### Source-authority closure artifact class mapping
+
+| Owner contract | Canonical artifact class | Notes |
+| --- | --- | --- |
+| `060.SourceAuthorityProfileRowSet` | `source_authority_row_set` | Existing token retained. |
+| `060.SourceAuthorityClosureMatrixRowSet` | `source_authority_closure_matrix_row_set` | Validation view only; not source authority by itself. |
+| `060.ExternalSchemaAuthoritySignalMappingRowSet` | `external_schema_authority_signal_mapping_row_set` | Required only when external schema signals are consulted. |
+
+A `SourceAuthorityClosureMatrix` validation result cannot satisfy `VersionManifest` completeness unless all underlying activation-controlled row refs and checksums are also present. A deterministic block validation ref may satisfy the closure-row-set position only for the exact blocked category, dataset, fact, predicate, scope, and requested effect.
 
 ### ValidateActivationControlledArtifactRef
 
@@ -642,14 +654,14 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, and observation-type validation matrix refs. |
 | Identity output | resolver profile row set, identifier evidence class row set, identifier scope row set, candidate generation profile, asset generation boundary row set, target selector safety policy, resolver decision matrix row set, identity confidence band row set, identity review routing policy, identity split policy, resolver explanation policy, evidence item refs/checksums, identity decision refs, review case refs when applicable, resolver explanation refs/checksums, graph correction handoff refs when applicable, activation report refs when activation or promotion is in scope, and shadow/canary refs when promotion uses them. |
 | Temporal resolution output | `TemporalSemanticsPolicy` row ref, `KnowledgeTimeImportPolicy` row ref, source evidence refs, selected input path/value checksum, `TemporalObservationTimeResolution` ref, and resolution checksum. |
-| Gold fact output | temporal resolution ref and checksum, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, source refs, derivation refs, and validation refs. |
+| Gold fact output | temporal resolution ref and checksum, exact source authority row refs, lakehouse feed completeness row refs, coverage dimension/profile refs, coverage assertion refs, staleness policy refs, progress-signal policy refs when consulted, control-result mapping refs for control facts, source-history retention refs for history/no-change facts, supplier visibility refs for permission-sensitive absence, absence derivation policy refs, `060.AbsenceDerivationResult` ref when `absence_outcome != null` or when the candidate consumed negative, stale, delete, cleanup, no-change, fixed-state, DNS, DHCP/IPAM, flow non-observation, cloud disappearance, or CDC tombstone evidence, source refs, derivation refs, and validation refs. |
 | Gold correction output | `GoldFactChangeSet` ref, correction policy ref, assertion transition row ref, old `LakehouseSnapshotRef`, new `LakehouseSnapshotRef`, table-set checksum ref, retention-protection ref, temporal resolution refs, authority refs, absence refs when applicable, and graph handoff effect refs. |
 | Late-arrival output | late-arrival policy row ref, late-arrival route state, temporal resolution ref, authority/completeness/coverage/staleness refs, absence refs when applicable, quarantine refs when selected, and watermark refs when consulted. |
 | Replay output | `ReplayEquivalencePolicy` output-class row ref, `ReplayInputSufficiencyCheck` ref, replay equivalence checksum, required owner-specific included-field refs, excluded volatile-field list, and failure-precedence result. |
 | CDC-shaped feed replay output | CDC raw subtype refs, schema-history refs, offset refs, tombstone refs, heartbeat refs, replay sufficiency check, and non-authority diagnostics proving CDC metadata was not used as fact time or absence authority. |
 | Graph handoff output | `GoldFactChangeSet` ref, graph handoff effect ref, projection profile ref when known, `070.GraphCorrectionHandoff` refs when identity split projection occurs, resolver explanation checksum when split-driven, `060.AbsenceDerivationResult` refs for expiry or cleanup, and validation refs. |
-| Absence, cleanup, retraction, or graph expiry output | requested effect token, `060.AbsenceDerivationResult`, `SourceAuthorityClosureMatrix` validation result ref or validation row ref, and all row-set refs consulted by `DeriveAbsenceOrUnknown`. |
-| Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, completeness decision refs, source-authority closure refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
+| Absence, cleanup, retraction, or graph expiry output | requested effect token, `060.AbsenceDerivationResult`, `source_authority_closure_matrix_row_set` ref/checksum or deterministic block validation ref, closure validation ref, and every consulted underlying `060` row-set ref consulted by `DeriveAbsenceOrUnknown`. |
+| Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, closure row-set ref/checksum or deterministic block validation ref, completeness decision refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
 | Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, derived-view state refs, graph backend selection policy ref when the backend profile was omitted and defaulted, provider id, provider version ref, provider adapter version ref, driver version ref, TinkerPop version ref when provider is JanusGraph, storage backend kind/version/config checksum, index backend kind/version/config checksum, provider runtime config checksum, schema initialization config checksum, provider capability matrix ref, package release refs for provider runtime, driver, storage adapter, and index adapter, package-set manifest checksum, raw-write bypass evidence ref, transaction semantics evidence refs, read-after-write proof ref, and index freshness refs. |
 | Graph backend selection/defaulting | selected profile ref, selection policy ref, provider id, defaulting decision ref, explicit-or-omitted input checksum, provider capability matrix ref, backend package gate refs, and validation refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
@@ -859,8 +871,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-IDENTITY-MANIFEST-AC-004` | `ResolverActivationReport` and `ResolverShadowRun` refs are manifest-included when activation, shadow, canary, or promotion uses them. |
 
 | `030-OCSF-MAP-ARTIFACT-AC-001` | Silver output fails with `VERSION_MANIFEST_INCOMPLETE` when any output-affecting OCSF mapping row set, enum rule set, base-event field policy set, profile-resolution manifest, source-extension rule set, or observation-type validation matrix ref is missing from `VersionManifest`. |
-| `030-SOURCE-CLOSURE-MANIFEST-AC-001` | Absence-sensitive output fails with `VERSION_MANIFEST_INCOMPLETE` when any consulted `060` row-set ref is omitted. |
-| `030-SOURCE-CLOSURE-MANIFEST-AC-002` | Same refs and same row bytes produce the same `version_manifest_id`; changing one closure row checksum changes the manifest checksum or blocks output. |
+| `030-SOURCE-CLOSURE-MANIFEST-AC-001` | Absence-sensitive output fails with `VERSION_MANIFEST_INCOMPLETE` when the closure row-set ref, closure validation ref, or any underlying consulted `060` row-set ref is omitted from `VersionManifest.included_refs`. |
+| `030-SOURCE-CLOSURE-MANIFEST-AC-002` | A `SourceAuthorityClosureMatrix` validation result cannot satisfy manifest completeness unless all underlying activation-controlled row refs and checksums are also present. |
 | `030-LIFECYCLE-AC-001` | All required lifecycle machines have closed states and closed events. |
 | `030-LIFECYCLE-AC-002` | Every state/event pair selects exactly one transition row. |
 | `030-LIFECYCLE-AC-003` | Illegal transitions emit evidence, mutate no state, and write no production output. |

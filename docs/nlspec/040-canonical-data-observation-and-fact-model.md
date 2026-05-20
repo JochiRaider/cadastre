@@ -109,6 +109,14 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 
 `FactAbsenceOutcome` must not be inferred from `OmissionState`. Parser, normalizer, resolver, graph projection, API, and analysis stages must not set `GoldFact.absence_outcome`. `GoldFact.absence_outcome = null` means no fact-level absence outcome was produced; it must not mean `unknown`.
 
+### FactAbsenceOutcomeClosureHandoff
+
+A non-null `GoldFact.absence_outcome` is schema-valid only when the producing run's `VersionManifest` contains the `060.AbsenceDerivationResult` ref and every consulted source-authority closure ref required by `030.VersionManifestCompletenessMatrix`.
+
+`040` does not evaluate source authority. `040` validates only that `absence_outcome` is null or one closed `FactAbsenceOutcome` token and that producer ownership is `060` for non-null values.
+
+`authorized_absent` and `authorized_not_observed` must not be rendered, projected, exported, or audited as authorized negative output unless `060.AbsenceDerivationResult.absence_authorized = true` and the requested effect, predicate, and scope permit the output.
+
 ### CoreStateApiHandoff
 
 `040` owns core state tokens and record fields. `110` owns caller-visible labels. API handoff must preserve assertion state and absence outcome as separate owner contexts.
@@ -872,6 +880,8 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-FACT-ABSENCE-AC-001` | Every `GoldFact.absence_outcome` token is either null or one closed `FactAbsenceOutcome` value. |
 | `040-FACT-ABSENCE-AC-002` | Parser-generated or mapping-generated absence outcomes fail before persistence. |
 | `040-FACT-ABSENCE-AC-003` | Null absence outcome is not rendered as `unknown` without `110` owner mapping. |
+| `040-FACT-ABSENCE-CLOSURE-AC-001` | A `GoldFact` with non-null `absence_outcome` fails validation or export-readiness when the producing `VersionManifest` lacks the matching `060.AbsenceDerivationResult` ref. |
+| `040-FACT-ABSENCE-CLOSURE-AC-002` | `authorized_absent` and `authorized_not_observed` are not treated as authorized negative output unless the referenced `060.AbsenceDerivationResult` authorizes the exact predicate, scope, and requested effect. |
 | `040-CONFIDENCE-CANONICAL-AC-001` | Confidence-only correction fixtures compare canonical six-fractional-digit confidence bytes and reject non-canonical persisted spellings. |
 | `040-NOOP-ASSERTION-AC-001` | A `no_op` assertion state or `080.no_op_duplicate` changeset is not rendered as active presence, authorized absence, graph eligibility, compliance pass/fail, or source completeness. |
 | `040-SOURCE-EXT-SHAPE-AC-001` | A minimal valid `SourceExtensionFieldRuleShape` fixture validates with byte-stable canonical ordering and checksum. |

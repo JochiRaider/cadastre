@@ -342,6 +342,21 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 | `not_applicable` | `not_applicable` | No | not applicable | no absence edge, no expiry | diagnostic | applicability refs |
 | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `unknown` with owner context | No | not pass and not fail | no absence edge, no expiry | diagnostic | signal refs and requested effect |
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | health diagnostic only | No | no export effect | no graph effect | blocked | watermark target, blocking reason, refs |
+| `deterministically_blocked` | `unknown` with owner diagnostic | No | not pass and not fail | no graph delta, no expiry | diagnostic | block row ref, block scope, deterministic block code |
+| `blocked_validation` | `error` | No | error | no graph delta, no expiry | blocked | validation refs and blocking reason |
+| `not_authoritative_for_absence` | `unknown` | No | not pass and not fail | no absence edge, no expiry | diagnostic | completeness refs and requested effect |
+| `LAKEHOUSE_FEED_COMPLETENESS_PROFILE_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | feed category, source dataset, requested effect |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_INSUFFICIENT` | `unknown` | No | not pass and not fail | no graph effect | blocked | upstream evidence class and requested effect |
+| `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `unknown` | No | not pass and not fail | no graph effect | blocked | closure selector and omitted refs |
+| `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `ambiguous` | No | not pass and not fail | no graph effect | error | matching closure rows when authorized |
+| `SOURCE_AUTHORITY_CLOSURE_BLOCKED` | `unknown` with owner diagnostic | No | not pass and not fail | no graph effect | blocked | block scope, block code, validation refs |
+| `SOURCE_DATASET_CATALOG_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | source dataset token |
+| `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` | `ambiguous` | No | not pass and not fail | no graph effect | error | matching dataset rows when authorized |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `error` for attempted authority effect | No | error | no graph effect | error | external profile ref, field path, requested effect |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` | `error` | No | error | no graph effect | error | matching signal rows when authorized |
+| `SOURCE_HISTORY_OUTSIDE_WINDOW_NO_PROOF` | `unknown` | No | not pass and not fail | no graph effect | diagnostic | retention window, query scope |
+| `SOURCE_HISTORY_COVERAGE_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | source-history coverage domain |
+| `DETERMINISTIC_BLOCK_ROW_SELECTED` | `unknown` with owner diagnostic | No | no export effect | no graph effect | diagnostic | block row ref and mutation-prohibition proof |
 
 ## Error Model
 
@@ -731,6 +746,14 @@ The generated `ErrorCodeRegistry` must include every `060` source-authority clos
 | `SOURCE_STATE_MAPPING_ROW_MISSING` | `060` | blocked | no, until mapping row activates | source state visible; refs redacted | `source-authority-state-mapping-missing` |
 | `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE` | `060` | blocked | no, until closure rows and validation refs exist | closure refs redacted | `manifest-closure-omitted-authority-row-set-ref` |
 | `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `060` | error | no, until closure rows change | matching rows redacted | `source-authority-row-resolution-ambiguous` |
+| `SOURCE_AUTHORITY_CLOSURE_BLOCKED` | `060` | blocked | no, until closure rows change | closure refs redacted | `deterministic-block-row-blocked-effect` |
+| `SOURCE_DATASET_CATALOG_ROW_MISSING` | `060` | blocked | no, until catalog row activates | dataset token visible; private refs redacted | `feed-category-closure-catalog-source-dataset-missing` |
+| `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` | `060` | error | no, until catalog rows change | matching rows redacted | `feed-category-closure-catalog-source-dataset-ambiguous` |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `060` | error | no, until signal row activates | external field path visible; private refs redacted | `external-schema-authority-signal-missing` |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` | `060` | error | no, until signal rows change | matching rows redacted | `external-schema-authority-signal-ambiguous` |
+| `SOURCE_HISTORY_OUTSIDE_WINDOW_NO_PROOF` | `060` | diagnostic | no | source-history scope redacted | `source-history-coverage-outside-window-no-proof` |
+| `SOURCE_HISTORY_COVERAGE_ROW_MISSING` | `060` | blocked | no, until coverage row activates | coverage selector redacted | `source-history-coverage-missing` |
+| `DETERMINISTIC_BLOCK_ROW_SELECTED` | `060` | diagnostic | no | block refs redacted | `deterministic-block-row-selected` |
 
 ### TemporalCorrectionReplayErrorRegistryRows
 
@@ -957,7 +980,6 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | replay policy missing | `blocked` | no, until output-class row activates | blocks replay output only | replay_health | artifact refs redacted |
 | late discard forbidden | `error` | no, until route policy changes | preserves evidence; blocks discard | temporal_health | evidence refs redacted |
 | snapshot-ref failure | `blocked` | no, until immutable old/new refs exist | blocks correction and replay output | replay_health | snapshot refs redacted |
-
 | package type policy missing | `blocked` | no, until policy row activates | activation blocked; current active package set preserved | package_health | policy refs redacted |
 | unsupported repository form | `error` | no, until release materializes into supported form | activation blocked; current active package set preserved | package_health | repository refs redacted |
 | repository freshness blocked | `blocked` | yes after metadata refresh unless rollback detected | activation blocked; current active package set preserved | package_health | metadata refs redacted |
@@ -1055,7 +1077,6 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-SCHEMA-PATCH-AC-001` | Every 040 error code appears in the generated error registry with owner, severity, retryability, and redaction behavior. |
 | `110-SCHEMA-PATCH-AC-002` | Raw payload leakage through `EvidenceRef` or graph properties fails closed and produces a redacted audit event. |
 | `110-SCHEMA-PATCH-AC-003` | Backend-native IDs are never returned as Cadastre identity, evidence identity, pagination identity, or drillback identity. |
-
 | `110-ERROR-RECORD-AC-001` | `ErrorRecord` has no duplicate field definitions, has `error_correlation_id` and `owner_error_context`, and separates caller-visible from audit-visible fields. |
 | `110-PAGE-TOKEN-AC-001` | Page tokens reject backend cursors, authorization-context mismatches, expired tokens, and stale derived-view state when the query class requires current state. |
 | `110-CORE-ONEOF-ERROR-AC-001` | `CORE_ONE_OF_INVALID` renders deterministic caller-visible fields for subject, object, evidence artifact, graph node, and graph edge one-of failures. |
@@ -1072,9 +1093,10 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-SOURCE-CLOSURE-STATE-AC-001` | Every `060` closure outcome maps to exactly one caller-visible label and never to authorized negative unless `060` authorized it. |
 | `110-SOURCE-CLOSURE-ERROR-AC-001` | Every new `060` error code appears in `ErrorCodeRegistry`. |
 | `110-SOURCE-CLOSURE-COMPLIANCE-AC-001` | `unknown`, `error`, `not_checked`, and `not_applicable` never render as pass or fail by default. |
+| `110-SOURCE-CLOSURE-STATE-AC-002` | `deterministically_blocked`, `blocked_validation`, `not_authoritative_for_absence`, source-history outside-window no-proof, and external-schema authority blocks render deterministically and never as authorized negative output. |
+| `110-SOURCE-CLOSURE-ERROR-AC-002` | New source-closure error rows have no `TODO` values in severity, retryability, redaction, caller fields, audit fields, or fixture refs. |
 | `110-FEED-CLOSURE-AC-003` | Every new `020`, `030`, and `060` feed-closure error code appears in the generated registry with severity, retryability, redaction, owner, and fixture ID. |
 | `110-FEED-CLOSURE-AC-004` | Feed activation, category closure, upstream completeness, effect-blocked, and watermark-blocked health rows are diagnostics only and do not mutate source authority, facts, graph state, or watermarks. |
-
 | `110-LIFECYCLE-ERROR-AC-001` | Lifecycle errors appear in `ErrorCodeRegistry` with owner, severity, retryability, redaction, and fixture ID. |
 | `110-LIFECYCLE-ERROR-AC-002` | Lifecycle errors never collapse to `unknown`, `not_checked`, pass, or fail. |
 | `110-LIFECYCLE-HEALTH-AC-001` | Lifecycle health rows are diagnostic and do not mutate facts, graph state, package state, completeness, or watermarks. |

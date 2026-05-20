@@ -112,6 +112,18 @@ mapping_toolchain_package
 external_schema_profile
 lakehouse_read_policy
 lakehouse_feed_completeness_profile
+lakehouse_feed_category_closure_row_set
+source_authority_row_set
+source_authority_closure_matrix_row_set
+coverage_dimension_profile_row_set
+source_staleness_policy_row_set
+progress_signal_policy_row_set
+supplier_collection_visibility_profile_row_set
+control_result_mapping_row_set
+source_history_retention_profile_row_set
+absence_derivation_policy_row_set
+projection_watermark_policy_row_set
+external_schema_authority_signal_mapping_row_set
 declared_dag_subset_profile
 resolver_profile
 analysis_rule_bundle
@@ -231,6 +243,27 @@ Observability package types must not write raw, silver, identity, gold, graph, s
 
 An observability package fails activation when any policy bundle permits raw payloads, private binding leakage, unbounded metric labels, backend internal ID export, domain authority effects, audit substitution, graph repair, source absence, identity evidence, package activation authority, watermark advancement, or replay checksum inclusion of forbidden telemetry fields.
 
+### Source-authority closure package type policy rows
+
+These rows are package type policies for declarative source-closure row-catalog packages. They may instantiate active row catalogs only through owner specs, `030.ActivationControlledArtifactRef`, immutable package-set membership, exact checksums, trust gates, compatibility gates, and passing validation refs. They must not redefine source-authority behavior.
+
+| Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required policy fields |
+| --- | --- | --- | --- | --- | --- |
+| `lakehouse_feed_category_closure_row_set` | `020.LakehouseFeedCategoryClosureRow` | `none` | `[]` | `[]` | trust required; attestation required unless declarative-only exception; SBOM `not_applicable_declarative_only` only for pure declarative rows; `120-SOURCE-CLOSURE-*` and private-binding leak fixtures required. |
+| `source_authority_row_set` | `060.SourceAuthorityProfileRow` | `none` | `[]` | `[]` | trust, validation, checksum replay, mutation-prohibition, and owner schema compatibility required. |
+| `source_authority_closure_matrix_row_set` | `060.SourceAuthorityClosureMatrix` | `none` | `[]` | `[]` | validation view only; underlying row-set refs remain required. |
+| `coverage_dimension_profile_row_set` | `060.CoverageDimensionProfile` | `none` | `[]` | `[]` | required for coverage-sensitive output. |
+| `source_staleness_policy_row_set` | `060.SourceStalenessPolicy` | `none` | `[]` | `[]` | required when stale state can affect output. |
+| `progress_signal_policy_row_set` | `060.ProgressSignalInterpretationPolicy` | `none` | `[]` | `[]` | weak-signal and telemetry non-authority fixtures required. |
+| `supplier_collection_visibility_profile_row_set` | `060.SupplierCollectionVisibilityProfile` | `none` | `[]` | `[]` | private-binding leak and permission-limited fixtures required. |
+| `control_result_mapping_row_set` | `060.ControlResultMappingRow` | `none` | `[]` | `[]` | control-state mapping and non-pass/fail default fixtures required. |
+| `source_history_retention_profile_row_set` | `060.SourceHistoryRetentionProfile` | `none` | `[]` | `[]` | retention plus source-history coverage fixtures required. |
+| `absence_derivation_policy_row_set` | `060.AbsenceDerivationPolicy` | `none` | `[]` | `[]` | absence-sensitive output fixtures required. |
+| `projection_watermark_policy_row_set` | `060.ProjectionWatermarkPolicy` | `none` | `[]` | `[]` | watermark no-op and blocked-advancement fixtures required. |
+| `external_schema_authority_signal_mapping_row_set` | `060.ExternalSchemaAuthoritySignalMappingRow` | `none` | `[]` | `[]` | external-schema non-authority and exact signal-row fixtures required. |
+
+For every row in this table, `trust_policy_requirement = required`, `validation_matrix_requirements` must include `120-SOURCE-CLOSURE-*`, owner-specific private-binding leak tests, checksum replay tests, and mutation-prohibition tests, `schema_compatibility_inputs` must include the owner row schema version and artifact-class registry checksum, and `graph_compatibility_inputs` is required only for graph-expiry or cleanup effects.
+
 ### Analysis, enrichment, lineage, and registry package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. They make package-supplied `130` artifacts eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, and `030.VersionManifest` inclusion.
@@ -274,6 +307,8 @@ A `GraphBackendProfile` that references a package release or package set whose t
 Package-supplied resolver artifacts must not redefine stable `070` identity semantics, hard-blocker precedence, decision states, confidence-band semantics, review terminality, split-policy semantics, selector safety, explanation checksum policy, or weak-evidence defaults. A package may instantiate active resolver row sets only through artifact classes permitted by `030.ActivationControlledArtifactRef`, owner spec `070`, exact checksums, active lifecycle status, activation scope, and passing identity validation refs.
 
 Package-supplied analysis, enrichment, lineage, registry, and derived-edge artifacts must not redefine stable `130` non-authority rules, `080` gold derivation behavior, `090` graph projection behavior, `110` API/error/redaction behavior, or `120` validation shapes. A package may instantiate active `130` row sets only through the package type policy rows in this spec, immutable `ProductionPackageSetManifest` membership, `030.ActivationControlledArtifactRef`, exact checksums, active lifecycle status, activation scope, package compatibility rows, and passing `120` validation refs. Missing policy, missing package-set ref, unknown package type, ambiguous policy, compatibility failure, or manifest omission fails before production output.
+
+Package-supplied source-authority closure row catalogs must use the explicit package types in `Source-authority closure package type policy rows`. A broad `policy_bundle` must not substitute for a source-closure row-catalog package type.
 
 ### PackageEvidenceArtifactHandoff
 
@@ -880,6 +915,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `approval_refs` | Yes | Product approval refs; approval does not bypass trust. |
 | `package_set_checksum` | Yes | SHA-256 over canonical manifest bytes excluding this field. |
 
+Source-closure row catalogs included in a production package set must appear in `package_release_refs`, `package_type_policy_refs`, `supply_chain_policy_refs`, `compatibility_refs`, and `validation_refs`, and their package-supplied `activation_artifact_refs` must appear in `030.VersionManifest` whenever they can affect output.
+
 ### PackageActivationFailureEvent schema
 
 | Field | Required | Rule |
@@ -970,6 +1007,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `100-VERSION-MANIFEST-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, lifecycle, or validation ref is omitted from `030.VersionManifest.included_refs`. |
 | `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
 | `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
+| `100-SOURCE-CLOSURE-PACKAGE-AC-001` | Source-closure row catalog packages fail before production output when package type policy, trust, compatibility, validation, package-set membership, or `VersionManifest` refs are missing. |
+| `100-SOURCE-CLOSURE-PACKAGE-AC-002` | `policy_bundle` cannot substitute for an explicit source-closure row-catalog package type. |
 | `100-PACKAGE-EVIDENCE-ARTIFACT-AC-001` | Package release and package-set evidence refs succeed only with an allowed `EvidenceRef.artifact_id.kind` and checksum. |
 | `100-PACKAGE-EVIDENCE-ARTIFACT-AC-002` | Package payload bytes, SBOM bytes, provenance bytes, registry metadata bytes, and signature bundles are rejected when inlined into evidence refs. |
 | `100-PACKAGE-EVIDENCE-ARTIFACT-AC-003` | Scalar signature status, evidence ref existence, SBOM existence, or provenance existence cannot activate or authorize a package set. |
@@ -1001,5 +1040,5 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
 | `100-RESOLVED-PACKAGE-TYPE-ENUM` | Canonical `PackageType` enum tokens are confirmed by this spec. | Package type token parsing and unknown-token rejection. | `100.PackageType`; validation by `120-PACKAGE-TYPE-*`. | Unknown or legacy broad labels fail with `PACKAGE_TYPE_UNKNOWN`. |
-| `100-TODO-PACKAGE-TYPE-POLICY-ROWS` | TODO: Every confirmed package type must have exactly one active `PackageTypePolicyRow` per target environment before package-set activation can affect production output. | Package type policy, deprecation rows, compatibility rows, validation fixtures, and manifest inclusion. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Package activation remains blocked with `PACKAGE_TYPE_POLICY_MISSING` or `PACKAGE_TYPE_POLICY_AMBIGUOUS` until policy rows validate. |
+| `100-TODO-PACKAGE-TYPE-POLICY-ROWS` | TODO: Every confirmed package type, including source-authority closure row-catalog package types, must have exactly one active `PackageTypePolicyRow` per target environment before package-set activation can affect production output. | Package type policy, deprecation rows, compatibility rows, validation fixtures, source-closure row-catalog package rows, and manifest inclusion. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Package activation remains blocked with `PACKAGE_TYPE_POLICY_MISSING` or `PACKAGE_TYPE_POLICY_AMBIGUOUS` until policy rows validate. |
 | `100-TODO-DEPRECATION-ROWS` | TODO: Provide active `PackageDeprecationWindowPolicyRow` instances for every confirmed package type. | Deprecation expiry, emergency extension, rollback eligibility, and migration windows. | `100` package governance and `120` package deprecation fixtures. | Missing row fails with `PACKAGE_DEPRECATION_WINDOW_EXPIRED` or policy-missing package validation, and promotion remains blocked. |

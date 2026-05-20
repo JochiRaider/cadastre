@@ -118,6 +118,25 @@ Implicit current-time fallback is forbidden.
 
 When a candidate gold fact depends on missing evidence, stale evidence, source-declared deletion, cleanup, retraction, source-history no-change, control result absence, vulnerability fixed state, DNS absence, DHCP/IPAM lease expiry, flow non-observation, cloud-resource disappearance, or CDC tombstone evidence, `DeriveFacts` must call `060.DeriveAbsenceOrUnknown` and must include the resulting `AbsenceDerivationResult` ref before emitting any absence, retraction, cleanup-derived correction, graph handoff, or watermark-affecting output.
 
+### AbsenceSensitiveGoldCandidateMatrix
+
+| Evidence class | Requested effect | Required `060` refs | Default when refs missing |
+| --- | --- | --- | --- |
+| Missing expected row/object | `absence` | `AbsenceDerivationResult` with exact closure row chain | emit no fact; owner `060` blocking reason |
+| Source-declared delete | `retraction` or `cleanup` as requested by derivation row | `AbsenceDerivationResult` permitting requested effect | no correction |
+| Cleanup candidate | `cleanup` | `AbsenceDerivationResult.allowed_effects` contains `cleanup` | no cleanup-derived correction |
+| Graph expiry candidate | `graph_expiry` | `AbsenceDerivationResult.allowed_effects` contains `graph_expiry` | handoff effect `none` |
+| Vulnerability fixed state | `absence` or `retraction` as predicate row permits | vulnerability coverage, authority, staleness, completeness, absence policy | unknown/no-op |
+| Control result absence or not checked | `absence` or control-state output | control result mapping, coverage, authority, staleness, completeness | no pass/fail default |
+| DNS TTL expiry | requested predicate effect only | DNS coverage, staleness, authority, completeness | stale/unknown, not deletion |
+| DHCP/IPAM lease expiry | requested predicate effect only | DHCP/IPAM coverage, staleness, authority, completeness | expired assignment or unknown, not host absence |
+| Flow non-observation | blocked by default | flow coverage and exact authority if future row permits | unknown/no edge |
+| Cloud disappearance | `absence`, `cleanup`, or `graph_expiry` as row permits | cloud coverage, visibility, source history when consulted | unknown/no cleanup |
+| Source-history no-change | no-change proof | source-history retention plus source-history coverage | unknown/no proof |
+| CDC tombstone | `retraction` or `cleanup` only when row permits | CDC replay state plus `060` closure | no retraction/cleanup |
+
+Every row in this matrix must route through `060.DeriveAbsenceOrUnknown` before fact creation, correction, graph handoff, or watermark-affecting output. Missing or blocked refs select the default behavior and must not be reinterpreted by `080`.
+
 ### DerivationRuleBundle handoff from 130
 
 `130` derivation artifacts may supply derivation rules and candidates only. `080` remains the sole gold derivation path. A package, analysis rule, registry artifact, enrichment profile, or derived-edge rule must not persist `GoldFact` bytes directly.
@@ -170,6 +189,8 @@ Gold corrections are append-only knowledge transitions. `ApplyGoldCorrection` mu
 When the graph handoff effect is `identity_split_handoff`, `ApplyGoldCorrection` must validate the `070.GraphCorrectionHandoff` ref, split decision ref, split policy ref, affected canonical entity refs, split partition refs, affected fact refs or affected fact-selection checksum, resolver explanation checksum, and `VersionManifest` ref. Missing or checksum-mismatched split handoff metadata must emit `REPLAY_INPUT_INSUFFICIENT` or the more specific owner code, must emit no correction output, and must emit no graph handoff effect other than `none`. `080` must not recompute resolver split partitions.
 
 `fact_retraction`, `interval_split`, and cleanup-derived corrections require `AbsenceDerivationResult.absence_authorized = true` and `allowed_effects` containing the requested correction effect. Missing or unsafe source-authority closure produces no correction and must emit the most specific `060` blocking reason.
+
+A correction consuming negative or cleanup-derived evidence must record the selected `060.SourceAuthorityClosureMatrixRow` ref or deterministic block row ref in the correction replay inputs through `VersionManifest`.
 
 ## Assertion-State Transition Matrix
 
@@ -642,6 +663,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |
 | `080-SOURCE-CLOSURE-CORRECTION-AC-001` | Source deletion evidence without exact `060` closure emits no retraction. |
 | `080-SOURCE-CLOSURE-REPLAY-AC-001` | Replay rejects gold output when any consulted `060` row checksum differs. |
+| `080-SOURCE-CLOSURE-MATRIX-AC-001` | Every row in `AbsenceSensitiveGoldCandidateMatrix` has event-sequence fixtures for success, missing refs, deterministic block, manifest omission, and checksum drift. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-001` | A valid identity split handoff contains split decision ref, split policy ref, partition refs, affected fact refs or selection checksum, resolver explanation checksum, and version manifest ref. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-002` | Missing identity split handoff metadata fails before correction or projection and emits no graph handoff effect except `none`. |
 | `080-IDENTITY-SPLIT-HANDOFF-AC-003` | Checksum drift in `070.GraphCorrectionHandoff` or resolver explanation rejects replay before output. |

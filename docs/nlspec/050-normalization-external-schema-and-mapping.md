@@ -104,9 +104,11 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 
 `ObservationToOCSFMappingRow` must not grant source authority, coverage, staleness, control-result, absence, cleanup, retraction, graph expiry, or watermark permission.
 
-If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060` external-schema signal mapping row must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
+If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060.ExternalSchemaAuthoritySignalMappingRow` must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
 
-Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must route the failure to imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
+`060.ExternalSchemaAuthoritySignalMappingRow` must also reference the selected `SourceAuthorityClosureMatrixRow` or deterministic block row, `SourceAuthorityProfileRow`, `CoverageDimensionProfile` when coverage-sensitive, `SourceStalenessPolicy`, `ControlResultMappingRow` when control-state output is requested, `AbsenceDerivationPolicy` when absence-sensitive output is requested, and `ProjectionWatermarkPolicy` when watermark is requested.
+
+Missing `060.ExternalSchemaAuthoritySignalMappingRow` means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must route the failure to imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
 
 ### GoldFactObjectBoundaryHandoff
 
@@ -538,7 +540,6 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-SCHEMA-PATCH-AC-003` | `cadastre_only` observations are the only silver observations allowed to have null `external_schema_profile_id`. |
 | `050-SCHEMA-PATCH-AC-004` | OCSF fields cannot create identity, gold, graph, authority, or omission semantics outside the owning specs. |
 | `050-CLEANUP-AC-004` | Mapping validation remains deterministic and byte-stable through `CanonicalValidationOutput`. |
-
 | `050-OCSF-BASELINE-AC-001` | MVP OCSF production activation is blocked until exact `OCSF 1.8.0` artifact identity, compiled artifact checksum, class allowlist, profile set, extension set, enum rules, and validation fixtures are recorded. |
 | `050-SOURCE-EXTENSION-AC-001` | Undeclared, namespace-invalid, unbounded, secret-scan-failing, or OCSF-reserved-colliding source extension fields fail before production output. |
 | `050-VOLATILITY-AC-001` | Every production mapping-related artifact validates through `030.ActivationControlledArtifactRef` before silver output. |
@@ -550,8 +551,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-OCSF-MAP-AC-004` | Unknown enum and source-action values do not invent OCSF enum IDs. |
 | `050-OCSF-MAP-AC-005` | Authentication has no default activity. |
 | `050-OCSF-MAP-AC-006` | IPAM-only assignment rows do not map to OCSF DHCP Activity. |
-| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-001` | An OCSF status or field absence attempt to authorize absence fails unless an active `060` row grants the exact effect. |
-| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-002` | Normalized fields remain persisted as observation metadata even when authority use is rejected, subject to existing mapping validity. |
+| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-001` | A mapping bundle that attempts to use OCSF class, status, severity, confidence, observables, enrichments, endpoint order, field presence, or field absence as authority without an active `060.ExternalSchemaAuthoritySignalMappingRow` fails before authority, absence, cleanup, graph expiry, retraction, control-state, or watermark effect. |
+| `050-EXTERNAL-SCHEMA-AUTHORITY-HANDOFF-AC-002` | Valid normalized metadata remains persistable when the authority effect is blocked, provided the mapping itself is valid and emits no forbidden authority output. |
 | `050-SOURCE-EXT-AC-002` | The default `SourceExtensionFieldRuleSet` is empty. |
 | `050-SOURCE-EXT-AC-003` | Wildcard source-extension paths are rejected. |
 | `050-BASE-FIELD-AC-001` | `raw_data`, `raw_data_hash`, and `unmapped` remain absent unless an explicit bounded policy permits them. |

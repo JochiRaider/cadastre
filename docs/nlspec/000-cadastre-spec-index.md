@@ -87,6 +87,8 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `candidate` | `authoritative` | Passing owner `AcceptanceReport`; no unresolved owner `TODO:` rows; registry row marks the file active. | Failed, blocked, missing, or stale validation evidence; unresolved owner `TODO:` rows; duplicate owner for a runtime contract. |
 | `authoritative` | `superseded` | New accepted `SpecSetVersion` names the replacement. | Missing replacement checksum or missing registry row. |
 
+Promotion must fail when any active absence-sensitive feed category or category row with non-empty `allowed_effects` can affect output and the spec set lacks registered, classified, validated, and manifest-included source-authority closure row-catalog refs or deterministic block catalog refs for every out-of-scope family.
+
 ## SpecSetVersion Record
 
 | Field | Type | Required | Default | Rule |
@@ -100,7 +102,7 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `effective_from` | timestamp or null | Yes for authoritative handoff | null | RFC3339 UTC timestamp assigned when the spec-set version becomes authoritative. |
 | `open_exclusions` | array | Yes | empty | Explicit deferred or unresolved issues implementation must not infer. |
 | `volatility_registry_checksum` | sha256 string | Yes for authoritative handoff | none | SHA-256 over canonical volatility classification rows in path and artifact order. |
-| `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. |
+| `activation_artifact_registry_refs` | array | Yes | empty | Refs to activation-controlled artifact registries included in the spec-set version. When any active feed profile has non-empty `absence_sensitive_domains` or any active category row has non-empty `allowed_effects`, this array must include the active source-closure catalog refs named in `Required source-authority closure row-catalog classifications`, or one deterministic block catalog ref for each out-of-scope family. |
 | `open_volatility_exclusions` | array | Yes | empty | Explicit volatility classification exclusions that implementation must not infer. |
 | `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including `120-DOMAIN-SECTION25-*`, `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` before authoritative handoff for core one-of closure and domain closure-ledger status consistency, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, reachability-prohibition rows, `120-GRAPH-BACKEND-SELECTION-*`, `120-GRAPH-BACKEND-PREFLIGHT-*`, `120-GRAPH-PROVIDER-CAPABILITY-*`, `120-GRAPH-JANUSGRAPH-*`, `120-GRAPH-PROVIDER-PORTABILITY-*`, `120-GRAPH-INDEX-FRESHNESS-*`, `120-GRAPH-PARTIAL-APPLY-*`, and `120-GRAPH-BACKEND-PACKAGE-GATE-*` rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, graph-serving output, backend defaulting, or provider activation is in implementation scope. Package activation handoff must include `120-PACKAGE-TYPE-*`, `120-PACKAGE-REPOSITORY-*`, `120-PACKAGE-TRUST-*`, `120-PACKAGE-ATTESTATION-SBOM-*`, `120-PACKAGE-COMPATIBILITY-*`, `120-PACKAGE-DEPRECATION-*`, `120-PACKAGE-LKG-*`, `120-PACKAGE-ROLLBACK-*`, `120-PACKAGE-QUARANTINE-*`, `120-PACKAGE-EMERGENCY-*`, and `120-PACKAGE-VERSION-MANIFEST-*` rows before authoritative handoff when `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope. API and observable-state handoff must include `120-API-SCHEMA-TOTAL-*`, `120-STATE-LABEL-TOTAL-*`, `120-ENDPOINT-OUTCOME-*`, `120-ERROR-REGISTRY-*`, `120-AUTH-REDACTION-*`, and `120-PAGE-TOKEN-*` rows before authoritative handoff when API, export, health, audit, compliance, or graph-query response output is in implementation scope. Observability handoff must include `120-OBSERVABILITY-SIGNAL-*`, `120-OBSERVABILITY-ATTRIBUTE-*`, `120-OBSERVABILITY-REDACTION-*`, `120-OBSERVABILITY-CARDINALITY-*`, `120-OBSERVABILITY-EXPORTER-*`, `120-OBSERVABILITY-HEALTH-*`, `120-OBSERVABILITY-REPLAY-*`, `120-OBSERVABILITY-NONAUTH-*`, and `120-OBSERVABILITY-VERSION-MANIFEST-*` rows before authoritative handoff when telemetry, observability health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state visibility is in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
@@ -197,6 +199,28 @@ The following source-authority closure artifacts must have exactly one volatilit
 | `TemporalObservationTimeResolution` | `runtime_state_record` | `080` | `080` | yes | required for gold, correction, graph handoff, audit, and replay when source observation time affects output |
 | `GoldFactChangeSet` | `runtime_state_record` | `080` | `080` | yes | required for correction output and graph handoff |
 | `ReplayInputSufficiencyCheck` | `runtime_state_record` | `080` | `080` | yes | required before replay output |
+
+### Required source-authority closure row-catalog classifications
+
+These row-catalog families are activation-controlled artifacts. They instantiate stable behavior owned by `020` or `060`; they must not define new authority classes, effect tokens, omission states, validation behavior, or manifest fields.
+
+| Artifact or contract | Volatility class | Owner spec | Stable core owner | VersionManifest requirement |
+| --- | --- | --- | --- | --- |
+| `SourceAuthorityClosureMatrixRowSet` | `activation_controlled_artifact` | `060` | `060.SourceAuthorityClosureMatrix` | Required for absence-sensitive promotion and for any run that executes an absence-sensitive effect. |
+| `LakehouseFeedCategoryClosureRowSet` | `activation_controlled_artifact` | `020` | `020.LakehouseFeedCategoryClosureRow` | Required before active feed read/import for any known feed category. |
+| `LakehouseFeedCompletenessProfileRowSet` | `activation_controlled_artifact` | `060` | `060.LakehouseFeedCompletenessProfile` | Required for absence, cleanup, retraction, graph expiry, or watermark effects. |
+| `SourceAuthorityProfileRowSet` | `activation_controlled_artifact` | `060` | `060.SourceAuthorityProfileRow` | Required before source authority or absence-sensitive effects. |
+| `CoverageDimensionProfileRowSet` | `activation_controlled_artifact` | `060` | `060.CoverageDimensionProfile` | Required for coverage-sensitive outputs. |
+| `SourceStalenessPolicyRowSet` | `activation_controlled_artifact` | `060` | `060.SourceStalenessPolicy` | Required whenever stale state can affect output. |
+| `ProgressSignalInterpretationPolicyRowSet` | `activation_controlled_artifact` | `060` | `060.ProgressSignalInterpretationPolicy` | Required when progress signals are consulted. |
+| `SupplierCollectionVisibilityProfileRowSet` | `activation_controlled_artifact` | `060` | `060.SupplierCollectionVisibilityProfile` | Required for permission-sensitive absence. |
+| `ControlResultMappingRowSet` | `activation_controlled_artifact` | `060` | `060.ControlResultMappingRow` | Required for control-state output. |
+| `SourceHistoryRetentionProfileRowSet` | `activation_controlled_artifact` | `060` | `060.SourceHistoryRetentionProfile` | Required for source-history no-change interpretation. |
+| `AbsenceDerivationPolicyRowSet` | `activation_controlled_artifact` | `060` | `060.AbsenceDerivationPolicy` | Required for absence-sensitive output. |
+| `ProjectionWatermarkPolicyRowSet` | `activation_controlled_artifact` | `060` | `060.ProjectionWatermarkPolicy` | Required for watermark attempts. |
+| `ExternalSchemaAuthoritySignalMappingRowSet` | `activation_controlled_artifact` | `060` | `060.ExternalSchemaAuthoritySignalMappingRow` | Required only when external schema signals are consulted by authority logic. |
+
+`ValidateSpecSet` must reject a spec set when `000`, `domain.md`, `020`, `030`, `060`, or `120` use different names for the same source-closure row-catalog family.
 
 ### Required graph projection volatility classifications
 
@@ -501,6 +525,9 @@ Archived documents are historical reference only and never implementation author
 | `000-OCSF-MAP-AC-001` | `ValidateSpecSet` fails when a new mapping row set lacks a volatility classification, an artifact class exists in `030` but not in `000`, a validation row exists in `120` but is missing from required promotion refs, or a research report is referenced as runtime authority. |
 | `000-OCSF-MAP-AC-002` | Every new OCSF mapping row set and policy set is classified as activation-controlled and tied to required `120` validation refs before authoritative handoff. |
 | `000-SOURCE-CLOSURE-AC-001` | Promotion fails when an active absence-sensitive feed category lacks `120` validation refs for `SourceAuthorityClosureMatrix`. |
+| `000-SOURCE-CLOSURE-AC-002` | Promotion fails when an active absence-sensitive feed category has no active `SourceAuthorityClosureMatrixRowSet` ref or deterministic block row ref. |
+| `000-SOURCE-CLOSURE-AC-003` | Promotion fails when any source-closure row catalog is active but lacks a volatility classification, validation refs, activation scope, lifecycle status, or `VersionManifest` inclusion rule. |
+| `000-SOURCE-CLOSURE-AC-004` | Promotion fails when `000`, `domain.md`, `020`, `030`, `060`, or `120` use different names for the same source-closure row catalog family. |
 | `000-IDENTITY-CLOSURE-AC-001` | Promotion fails when identity output is in implementation scope and `SpecSetVersion.validation_matrix_refs` lacks required identity closure, replay, review, split, explanation, and package weakening validation rows. |
 | `000-IDENTITY-CLOSURE-AC-002` | Promotion fails when unresolved `070` identity TODOs exist or when `domain.md`, `040`, `070`, `110`, and `120` disagree on identity decision enum closure or review-state-machine closure. |
 | `000-IDENTITY-VOLATILITY-AC-001` | Every identity resolver row-set artifact is classified as activation-controlled and every identity runtime decision/explanation/handoff record is classified as runtime state in exactly one place. |
@@ -513,14 +540,12 @@ Archived documents are historical reference only and never implementation author
 | `000-PAGE-TOKEN-CLOSURE-AC-001` | Page-token default, minimum, and maximum expiration bounds are closed in `110`; promotion still requires passing page-token validation refs. |
 | `000-RESEARCH-RUNTIME-AUTHORITY-AC-001` | Research reports, ADRs, reference, and archive documents fail validation when referenced as runtime authority. |
 | `000-DOMAIN-GRAPH-STATUS-AC-001` | `domain.md` graph edge-family status agrees with `090` owner closure and `120` graph validation status. |
-
 | `000-STATUS-CONSISTENCY-AC-001` | `ValidateSpecSet` fails domain/owner closure-state contradictions with `DOMAIN_OWNER_STATUS_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-002` | Every row in `domain.md` Section 25 has exactly one matching owner-local closure state and one matching `120` validation row family. |
 | `000-STATUS-CONSISTENCY-AC-003` | `ValidateSpecSet` fails runtime restatement in `domain.md` with `DOMAIN_RUNTIME_RESTATEMENT`. |
 | `000-STATUS-CONSISTENCY-AC-004` | `ValidateSpecSet` fails owner-spec runtime contradictions with `OWNER_SPEC_CONTRADICTION`. |
 | `000-STATUS-CONSISTENCY-AC-005` | ADR status values in files and registry rows are members of `SpecStatus` and use `accepted_rationale` for accepted non-runtime rationale. |
 | `000-STATUS-CONSISTENCY-AC-006` | Every manifest path has exactly one registry row or explicit non-registry reason. |
-
 | `000-PACKAGE-CLOSURE-AC-001` | Promotion fails when any required package activation validation group is absent, blocked, not run, failed, or contains `TODO` checksums. |
 | `000-PACKAGE-VOLATILITY-AC-001` | Every package activation contract, row set, policy, runtime state record, and release evidence class has exactly one volatility class. |
 | `000-CORE-ONEOF-CLOSURE-AC-001` | Promotion fails when `040.CoreOneOfRegistry` contains unresolved rows or when any `120` core one-of closure validation row is absent, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |

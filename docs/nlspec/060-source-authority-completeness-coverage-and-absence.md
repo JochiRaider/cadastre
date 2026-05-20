@@ -60,6 +60,9 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `EvaluateLakehouseFeedCompleteness`
 - `SourceAuthorityArtifactLifecycleGuardRows`
 - `SourceAuthorityClosureMatrix`
+- `SourceAuthorityClosureMatrixRowSet`
+- `ExternalSchemaAuthoritySignalMappingRow`
+- `ExternalSchemaAuthoritySignalMappingRowSet`
 
 ## Source Authority Contract
 
@@ -259,9 +262,31 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `CoverageAssertion` | `runtime_state_record` | Evidence record consumed only through active profiles. |
 | `LakehouseFeedCompletenessProfile` and `LakehouseFeedCompletenessProfileRow` row sets | `activation_controlled_artifact` | Must evaluate feed-read and upstream evidence before absence effects and must declare allowed effects explicitly. |
 | `ProgressSignalInterpretationPolicy` | `activation_controlled_artifact` | Weak signals remain non-authoritative unless an active row grants the exact effect. |
+| `SourceAuthorityClosureMatrixRowSet` | `activation_controlled_artifact` | Must be active and exact before an absence-sensitive effect can execute or be deterministically blocked. |
+| `ExternalSchemaAuthoritySignalMappingRowSet` | `activation_controlled_artifact` | Required only when external schema signals are consulted by authority logic. |
 | `ProjectionWatermarkPolicy` | `activation_controlled_artifact` | Must be active before watermark advancement. |
 | `WatermarkCommitRecord` | `runtime_state_record` | Records attempted watermark outcome; does not grant authority. |
 | `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` | `stable_core_contract` | Algorithms validate activation refs before output. |
+
+### SourceAuthorityRowCatalogClosure
+
+For any requested absence-sensitive effect, production evaluation must resolve this row chain in order:
+
+1. `020.LakehouseFeedCategoryClosureRow`.
+2. `060.SourceAuthorityClosureMatrixRow`.
+3. `060.SourceAuthorityProfileRow`.
+4. `060.LakehouseFeedCompletenessProfileRow`.
+5. `060.CoverageDimensionProfile` when coverage-sensitive.
+6. `060.SourceStalenessPolicy`.
+7. `060.ProgressSignalInterpretationPolicy` when progress signals are consulted.
+8. `060.SupplierCollectionVisibilityProfile` when visibility can affect the result.
+9. `060.ControlResultMappingRow` when control-state output is requested.
+10. `060.SourceHistoryRetentionProfile` when source-history no-change is requested.
+11. `060.ExternalSchemaAuthoritySignalMappingRow` when external schema signals are consulted.
+12. `060.AbsenceDerivationPolicy`.
+13. `060.ProjectionWatermarkPolicy` when watermark output is requested.
+
+The chain must resolve exactly one active row at each required step or exactly one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, out-of-scope, stale, unvalidated, or `TODO` rows block the requested effect and must emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof.
 
 ### SourceAuthorityClosureMatrix
 
@@ -279,8 +304,12 @@ The matrix output must include the requested effect token, feed category, source
 
 | Field | Required behavior |
 | --- | --- |
+| `row_set_id` | Stable row-set ID. |
+| `row_version` | Immutable owner version. |
+| `row_checksum` | SHA-256 over canonical row bytes after defaults materialize. |
 | `row_id` | Stable row ID. |
 | `feed_category` | Must match `020.LakehouseFeedCategoryClosureRow.feed_category`. |
+| `required_lakehouse_feed_category_closure_row_ref` | Exact active `020.LakehouseFeedCategoryClosureRow` ref. |
 | `source_dataset` | Vendor-neutral dataset token. |
 | `requested_effect` | One of `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark`. |
 | `fact_type` | Exact fact type. Wildcards are forbidden. |
@@ -295,12 +324,16 @@ The matrix output must include the requested effect token, feed category, source
 | `required_progress_signal_policy_refs` | Required when progress signals are consulted. |
 | `required_control_result_mapping_refs` | Required for control-result output. |
 | `required_source_history_retention_refs` | Required for source-history no-change claims. |
+| `required_external_schema_authority_signal_mapping_refs` | Required when external schema signals are consulted. |
 | `required_absence_derivation_policy_refs` | Required for absence-sensitive outputs. |
 | `required_watermark_policy_refs` | Required for watermark effects. |
 | `closure_outcome` | One of `closed`, `deterministically_blocked`, or `blocked_validation`. |
 | `deterministic_block_code` | Required when blocked. |
+| `block_scope` | Required when `closure_outcome = deterministically_blocked`; closed values are `category`, `source_dataset`, `fact_predicate`, `scope`, and `requested_effect`. |
 | `validation_refs` | Non-empty `120-SOURCE-CLOSURE-*` refs. |
 | `lifecycle_status` | Production use requires `active`. |
+
+When `closure_outcome = deterministically_blocked`, the row must include `deterministic_block_code`, `block_scope`, mutation-prohibition validation refs, and empty allowed effects for the blocked scope. Deterministic block rows emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof.
 
 #### ResolveSourceAuthorityClosureMatrixRow
 
@@ -531,6 +564,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-watermark-advancement-completeness-blocked` |
 | `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `060` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-cdc-tombstone-retraction-unauthorized` |
 | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `060` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `060.SourceAuthorityErrorContext` | `error-registry-060-external-schema-authority-forbidden` |
+| `SOURCE_AUTHORITY_CLOSURE_BLOCKED` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-authority-closure-blocked` |
+| `SOURCE_DATASET_CATALOG_ROW_MISSING` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-dataset-catalog-row-missing` |
+| `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-dataset-catalog-row-ambiguous` |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-external-schema-authority-signal-row-missing` |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-external-schema-authority-signal-row-ambiguous` |
+| `SOURCE_HISTORY_OUTSIDE_WINDOW_NO_PROOF` | `060` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-history-outside-window-no-proof` |
+| `SOURCE_HISTORY_COVERAGE_ROW_MISSING` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-history-coverage-row-missing` |
+| `DETERMINISTIC_BLOCK_ROW_SELECTED` | `060` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-deterministic-block-row-selected` |
 | `GOLD_FACT_COVERAGE_REQUIRED` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-gold-fact-coverage-required` |
 | `GOLD_FACT_AUTHORITY_ROW_MISSING` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-gold-fact-authority-row-missing` |
 
@@ -577,6 +618,32 @@ A source-authority row that references a predicate contract must not authorize a
 ### External schema non-authority boundary
 
 OCSF class, category, activity, type, object paths, observables, enrichments, status, severity, confidence, endpoint order, field presence, and field absence are normalized observation metadata only. They must not satisfy `SourceAuthorityProfileRow`, `CoverageAssertion`, `SourceStalenessPolicy`, `LakehouseFeedCompletenessProfileRow`, `AbsenceDerivationPolicy`, or `ControlResultMappingRow` requirements unless an active `060`-owned row explicitly maps the exact signal to the exact effect.
+
+### ExternalSchemaAuthoritySignalMappingRow schema
+
+`ExternalSchemaAuthoritySignalMappingRow` is the only `060` row that can make a normalized external-schema field visible to source-authority logic. Wildcards are forbidden.
+
+| Field | Required rule |
+| --- | --- |
+| `row_id` | Stable row ID. |
+| `external_schema_profile_ref` | Exact active `050.ExternalSchemaProfile`. |
+| `field_path` | Exact normalized field path. Wildcards are forbidden. |
+| `source_dataset` | Exact vendor-neutral dataset token. |
+| `fact_type` | Exact fact type. |
+| `predicate` | Exact predicate. |
+| `requested_effect` | Exact effect token. |
+| `source_authority_closure_matrix_row_ref` | Exact active closure row or deterministic block row. |
+| `source_authority_row_ref` | Exact active authority row. |
+| `coverage_dimension_profile_ref` | Required when coverage-sensitive. |
+| `source_staleness_policy_ref` | Exact active staleness policy. |
+| `control_result_mapping_ref` | Required for control-state output. |
+| `absence_derivation_policy_ref` | Required for absence-sensitive output. |
+| `projection_watermark_policy_ref` | Required for watermark output. |
+| `validation_refs` | Non-empty. |
+| `activation_scope` | Vendor-neutral scope. |
+| `lifecycle_status` | Production use requires `active`. |
+
+Missing, ambiguous, inactive, checksum-mismatched, out-of-scope, or unvalidated external-schema authority signal rows leave the external schema signal non-authoritative and block the attempted authority effect.
 
 A `060` row that maps an external-schema signal must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, source authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status. Omission of any required ref means the external-schema signal remains non-authoritative.
 
@@ -763,6 +830,8 @@ Missing time input must never fall back to current platform time. A stale result
 
 ### SourceHistoryRetentionProfile
 
+Source-history no-change proof requires both `SourceHistoryRetentionProfile` and `CoverageDimensionProfile` for source-history coverage unless an accepted owner patch removes source history from the coverage domain list. Outside-window no-result maps to `unknown` or deterministic no-op, never no-change proof.
+
 | History condition | Required behavior |
 | --- | --- |
 | Inside supported source-native history window | May be evidence only when source authority row permits. |
@@ -797,7 +866,6 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-SCHEMA-PATCH-AC-001` | Coverage-sensitive `GoldFact` outputs fail when `coverage_assertion_refs = []`. |
 | `060-SCHEMA-PATCH-AC-002` | `absence_outcome` can be materialized only by `DeriveAbsenceOrUnknown`. |
 | `060-SCHEMA-PATCH-AC-003` | `060` does not restate `GoldFact` field definitions; it references `040.GoldFactSchema` by exact name. |
-
 | `060-COVERAGE-CLOSURE-AC-001` | Every coverage catalog row has a `CoverageDimensionProfileRowId` and `CoverageClosureStatus`. |
 | `060-ABSENCE-OUTPUT-AC-001` | `DeriveAbsenceOrUnknown` emits an `AbsenceDerivationResult` with authority, completeness, coverage, staleness, requested effect, allowed effects, result checksum, and manifest refs or a specific blocking reason. |
 | `060-CORRECTION-HANDOFF-AC-001` | `080` correction candidates based on missing, stale, delete, cleanup, no-change, fixed-state, DNS, DHCP/IPAM, flow non-observation, cloud disappearance, or CDC tombstone evidence carry an `AbsenceDerivationResult` ref before correction output. |
@@ -834,6 +902,11 @@ Missing time input must never fall back to current platform time. A stale result
 | `060-GRAPH-EFFECT-AUTH-AC-003` | Missing or ambiguous flow-role evidence maps to unknown, ambiguous, or deterministic no-op and emits no graph mutation. |
 | `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
 | `060-SOURCE-CLOSURE-AC-014` | Every active absence-sensitive effect resolves one `SourceAuthorityClosureMatrixRow` with complete refs and passing validation, or resolves one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, or `TODO` rows fail before any absence-sensitive effect. |
+| `060-SOURCE-CLOSURE-AC-015` | Every active absence-sensitive effect resolves exactly one active closure row chain or one deterministic block row before `DeriveAbsenceOrUnknown` can emit output. |
+| `060-SOURCE-CLOSURE-AC-016` | Deterministic block rows emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof. |
+| `060-SOURCE-CLOSURE-AC-017` | Source-history no-change proof fails without both retention and coverage rows. |
+| `060-EXTERNAL-SCHEMA-AUTHORITY-AC-001` | External schema signals remain non-authoritative without an exact active `ExternalSchemaAuthoritySignalMappingRow`. |
+| `060-ERROR-REGISTRY-CLOSURE-AC-001` | All `060` source-closure owner errors generate complete `110.ErrorCodeRegistryRow` rows with no `TODO` values. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-001` | A source-authority row cannot widen `080.allowed_subject_ref_kinds` or `080.allowed_object_value_kinds`; widening attempts fail before authority selection. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-002` | A source-authority row cannot permit `null_value` when the selected predicate contract forbids it. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-003` | External schema field presence or absence remains non-authoritative without exact `050`, `060`, and `080` handoff rows. |
@@ -858,6 +931,4 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `060-TODO-ERROR-FRAGMENT-COMPLETION` | TODO: Complete all `060` owner error fragments using `110.ErrorCodeRegistryRow` fields with non-`TODO` severity, retry class, caller-visible fields, audit fields, redaction rule, and validation fixture refs. | Error registry generation and API/export visibility. | `060` plus `110.GenerateErrorCodeRegistry` validation. | `110.GenerateErrorCodeRegistry` fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
-
-TODO: Concrete active source-specific row instances for vendor-neutral `source_dataset` values remain outside this stable contract. Missing row instances are deterministic activation or validation blockers and must not be inferred from source category, vendor product, research report, or private inventory.
+| `060-TODO-SOURCE-DATASET-ROW-CATALOG` | TODO: Provide active vendor-neutral `source_dataset` row catalogs or deterministic block rows for every `source_dataset` referenced by active feed profiles. | Source-authority closure and absence-sensitive effects. | Product governance plus `020`, `060`, and `120`. | Requested effects remain blocked. |
