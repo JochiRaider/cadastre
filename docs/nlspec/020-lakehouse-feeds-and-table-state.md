@@ -543,19 +543,42 @@ ComputeRawFeedManifestId(manifest):
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
 
-| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `LAKEHOUSE_ACTIVATION_ARTIFACT_MISSING` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-missing` |
-| `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-inactive` |
-| `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-activation-artifact-checksum-mismatch` |
-| `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-feed-profile-schema-incomplete` |
-| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-feed-category-row-missing` |
-| `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-profile-branch-unresolved` |
-| `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-declared-subset-required` |
-| `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-upstream-completeness-evidence-required` |
-| `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-lakehouse-empty-scope-not-authoritative` |
-| `RAW_FEED_MANIFEST_INVALID` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-raw-feed-manifest-invalid` |
-| `RAW_FEED_MANIFEST_ID_COLLISION` | `020` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `020.LakehouseErrorContext` | `lakehouse-error-raw-feed-manifest-id-collision` |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_MISSING` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-activation-artifact-missing` |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-activation-artifact-inactive` |
+| `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | `020` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-activation-artifact-checksum-mismatch` |
+| `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | `020` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-feed-profile-schema-incomplete` |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-feed-category-row-missing` |
+| `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-profile-branch-unresolved` |
+| `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-declared-subset-required` |
+| `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | `020` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-upstream-completeness-evidence-required` |
+| `LAKEHOUSE_EMPTY_SCOPE_NOT_AUTHORITATIVE` | `020` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-empty-scope-not-authoritative` |
+| `RAW_FEED_MANIFEST_INVALID` | `020` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-raw-feed-manifest-invalid` |
+| `RAW_FEED_MANIFEST_ID_COLLISION` | `020` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-raw-feed-manifest-id-collision` |
+
+### LakehouseErrorContext
+
+`LakehouseErrorContext` is the owner context schema for `020` feed, manifest, table-state, and upstream-completeness error rows.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `020` context schema version. |
+| `owner_spec` | Yes | Must be `020`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `feed_profile`, `category_closure`, `manifest`, `declared_subset`, `upstream_completeness`, `empty_scope`, or `activation_artifact`. |
+| `operation` | Yes | Feed read, manifest validation, raw import, declared-subset validation, or table-state operation. |
+| `affected_record_type` | Yes | Feed profile, manifest, table-state ref, raw import run, or completeness receipt type. |
+| `field_path` | Yes | Exact field path when applicable; null only for artifact-wide failures. |
+| `feed_profile_ref` | No | Redacted feed profile ref when consulted. |
+| `read_target_kind` | No | Closed read target token when known. |
+| `source_dataset` | No | Vendor-neutral dataset token only. |
+| `scope_selector_checksum` | No | Checksum of the scope selector; raw selector values are forbidden when private. |
+| `manifest_refs` | No | Canonically sorted manifest, snapshot, dataset, or object refs. |
+| `required_upstream_evidence_classes` | No | Closed evidence-class tokens required by the category row. |
+| `blocking_reason` | Yes | Bounded reason that explains blocked or diagnostic output. |
+| `validation_refs` | Yes | Exact `120` fixture refs. |
+| `redaction_classes` | Yes | Private routes, credentials, host lists, raw payload bytes, and source-native IDs must map to `always_forbidden`. |
 
 ### LakehouseApiStateLabelGuidance
 

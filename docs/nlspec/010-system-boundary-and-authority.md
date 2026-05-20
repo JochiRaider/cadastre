@@ -212,17 +212,35 @@ Public artifacts must be scanned before publication, API response emission, expo
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
 
-| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-direct-source-call-forbidden` |
-| `PROJECTION_AUTHORITY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-projection-authority-violation` |
-| `PRIVATE_BINDING_LEAK` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-private-binding-leak` |
-| `TELEMETRY_AUTHORITY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-telemetry-authority-violation` |
-| `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-telemetry-private-binding-leak` |
-| `UNDECLARED_AUTHORITY_CLASS` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-undeclared-authority-class` |
-| `VOLATILITY_BOUNDARY_VIOLATION` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-volatility-boundary-violation` |
-| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-activation-artifact-core-conflict` |
-| `VOLATILE_ROW_IN_CORE_SPEC` | `010` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `010.BoundaryErrorContext` | `boundary-error-volatile-row-in-core-spec` |
+| `DIRECT_SOURCE_CALL_FORBIDDEN` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-direct-source-call-forbidden` |
+| `PROJECTION_AUTHORITY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-projection-authority-violation` |
+| `PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `010.BoundaryErrorContext` | `error-registry-010-private-binding-leak` |
+| `TELEMETRY_AUTHORITY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-telemetry-authority-violation` |
+| `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-telemetry-private-binding-leak` |
+| `UNDECLARED_AUTHORITY_CLASS` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `010.BoundaryErrorContext` | `error-registry-010-undeclared-authority-class` |
+| `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-volatility-boundary-violation` |
+| `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-activation-artifact-core-conflict` |
+| `VOLATILE_ROW_IN_CORE_SPEC` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `010.BoundaryErrorContext` | `error-registry-010-volatile-row-in-core-spec` |
+
+### BoundaryErrorContext
+
+`BoundaryErrorContext` is the owner context schema for every `010.BoundaryErrorRegistryFragment` row.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `010` context schema version. |
+| `owner_spec` | Yes | Must be `010`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `direct_source_call`, `projection_authority`, `private_binding`, `telemetry_authority`, `undeclared_authority`, `volatility_boundary`, or `activation_artifact_conflict`. |
+| `operation` | Yes | Operation that attempted publication, persistence, projection, telemetry export, or activation. |
+| `affected_record_type` | Yes | Public artifact or record type; null only when no record exists. |
+| `field_path` | Yes | Exact public field path when known; null only when the violation is artifact-wide. |
+| `artifact_refs` | Yes | Redacted refs for public artifact, activation artifact, telemetry artifact, or projection profile. |
+| `blocking_reason` | Yes | Bounded reason explaining why the output is forbidden or blocked. |
+| `validation_refs` | Yes | Exact `120` validation refs proving the boundary behavior. |
+| `redaction_classes` | Yes | Must map private binding values, credentials, routes, tenant inventories, source-native identity values, and raw payload bytes to `always_forbidden`. |
 
 ### Acceptance Criteria
 
@@ -243,7 +261,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-TELEMETRY-AUTHORITY-AC-001` | Runtime telemetry cannot mutate authoritative records, replace audit events, satisfy replay equivalence, activate packages, advance watermarks, or prove source, identity, fact, or graph correctness. |
 | `010-TELEMETRY-PRIVATE-BINDING-AC-001` | Telemetry private-binding leaks fail before export or publication. |
 
-| `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry` and in `120.Required negative tests by owner`. |
+| `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry`, uses `110.StandardErrorCallerFields` and `110.StandardErrorAuditFields`, has no `TODO` values, and appears in `120.Required negative tests by owner`. |
 
 ## Definition of Done
 

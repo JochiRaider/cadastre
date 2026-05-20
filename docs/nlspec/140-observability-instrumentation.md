@@ -368,22 +368,43 @@ Telemetry errors feed `110.ErrorCodeRegistry`. `140` owns telemetry-specific cau
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-visible severity, retry class, final redaction, and generic-code precedence.
 
-| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `TELEMETRY_PROFILE_MISSING` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-profile-missing-*` |
-| `TELEMETRY_PROFILE_INACTIVE` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-profile-missing-*` |
-| `TELEMETRY_SIGNAL_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-signal-forbidden-*` |
-| `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-attribute-forbidden-*` |
-| `TELEMETRY_CARDINALITY_VIOLATION` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-cardinality-unbounded-*` |
-| `TELEMETRY_RAW_PAYLOAD_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-attribute-forbidden-*` |
-| `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-attribute-forbidden-*` |
-| `TELEMETRY_BACKEND_ID_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-attribute-forbidden-*` |
-| `TELEMETRY_EXPORTER_UNAVAILABLE` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-exporter-outage-*` |
-| `TELEMETRY_EXPORTER_QUEUE_OVERFLOW` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-exporter-outage-*` |
-| `TELEMETRY_REPLAY_FIELD_FORBIDDEN` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-replay-different-trace-id-*` |
-| `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` | `140` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | `110.RedactionPolicy` | `140.TelemetryErrorContext` | `observability-version-manifest-missing-*` |
+| `TELEMETRY_PROFILE_MISSING` | `140` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-profile-missing` |
+| `TELEMETRY_PROFILE_INACTIVE` | `140` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-profile-inactive` |
+| `TELEMETRY_SIGNAL_FORBIDDEN` | `140` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-signal-forbidden` |
+| `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `140` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-attribute-forbidden` |
+| `TELEMETRY_CARDINALITY_VIOLATION` | `140` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-cardinality-violation` |
+| `TELEMETRY_RAW_PAYLOAD_FORBIDDEN` | `140` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-raw-payload-forbidden` |
+| `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` | `140` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-private-binding-forbidden` |
+| `TELEMETRY_BACKEND_ID_FORBIDDEN` | `140` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-backend-id-forbidden` |
+| `TELEMETRY_EXPORTER_UNAVAILABLE` | `140` | `error` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-exporter-unavailable` |
+| `TELEMETRY_EXPORTER_QUEUE_OVERFLOW` | `140` | `error` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-exporter-queue-overflow` |
+| `TELEMETRY_REPLAY_FIELD_FORBIDDEN` | `140` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-replay-field-forbidden` |
+| `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` | `140` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `140.TelemetryErrorContext` | `error-registry-140-telemetry-version-manifest-incomplete` |
 
-Rows with `TODO:` cells block authoritative promotion until `110-ERROR-REGISTRY-TOTAL-AC-001` and `120-OBSERVABILITY-*` validation rows pass.
+### TelemetryErrorContext
+
+`TelemetryErrorContext` is the owner context schema for `140` telemetry profile, signal, attribute, cardinality, exporter, replay-exclusion, and telemetry-manifest registry rows.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `140` context schema version. |
+| `owner_spec` | Yes | Must be `140`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `telemetry_profile`, `signal_policy`, `attribute_policy`, `cardinality`, `forbidden_data_class`, `exporter`, `queue`, `replay_exclusion`, or `version_manifest`. |
+| `operation` | Yes | Telemetry profile validation, telemetry emission, attribute validation, metric emission, export, health mapping, replay validation, or manifest validation. |
+| `affected_record_type` | Yes | Telemetry profile, signal policy, attribute policy, metric row, exporter profile, runtime state, replay exclusion policy, or version manifest type. |
+| `field_path` | Yes | Exact telemetry attribute path, profile field, replay field, or null for artifact-wide failures. |
+| `telemetry_profile_ref` | No | Required when profile resolution is involved. |
+| `signal_token` | No | Required for signal-policy failures. |
+| `attribute_path` | No | Required for attribute failures. |
+| `exporter_ref` | No | Required for exporter failures. |
+| `queue_state_class` | No | Required for queue overflow. |
+| `forbidden_data_class` | No | Required for raw payload, private binding, backend ID, or replay-field failures. |
+| `runtime_state_ref` | No | Required when telemetry runtime state affects health/API/audit/validation diagnostics. |
+| `validation_refs` | Yes | Exact `120` observability fixture refs. |
+| `redaction_classes` | Yes | Raw payload bytes, private bindings, credentials, backend IDs, source-native identity values, canonical IDs, hostnames, IPs, usernames, provider-native query text, exporter credentials, and raw queue payloads must map to `always_forbidden`. |
 
 ## Acceptance Criteria
 

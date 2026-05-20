@@ -653,7 +653,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, derived-view state refs, graph backend selection policy ref when the backend profile was omitted and defaulted, provider id, provider version ref, provider adapter version ref, driver version ref, TinkerPop version ref when provider is JanusGraph, storage backend kind/version/config checksum, index backend kind/version/config checksum, provider runtime config checksum, schema initialization config checksum, provider capability matrix ref, package release refs for provider runtime, driver, storage adapter, and index adapter, package-set manifest checksum, raw-write bypass evidence ref, transaction semantics evidence refs, read-after-write proof ref, and index freshness refs. |
 | Graph backend selection/defaulting | selected profile ref, selection policy ref, provider id, defaulting decision ref, explicit-or-omitted input checksum, provider capability matrix ref, backend package gate refs, and validation refs. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
-| API/export output | `110.CommonApiResponseEnvelope` ref, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, and API/export validation refs. |
+| API, export, health, compliance, audit, or validation-visible output | `110.CommonApiResponseEnvelope` ref when applicable, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, health or validation output checksums, and API/export/health/audit/validation refs. Visibility must fail with `VERSION_MANIFEST_INCOMPLETE` before rendering when `generated_error_registry_checksum` is absent. |
 | Observability-visible health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state output | observability instrumentation profile ref, signal policy ref, trace context policy ref when tracing is enabled, telemetry correlation policy ref when correlation refs are emitted, metric instrument catalog ref when metrics are enabled, telemetry attribute policy ref, telemetry redaction policy ref, telemetry exporter profile ref when export is enabled, telemetry health mapping policy ref when health may be affected, telemetry replay exclusion policy ref, telemetry runtime state refs when health/API/audit/validation output depends on telemetry state, package-set refs when telemetry artifacts are package-supplied, and validation refs. |
 | Analysis output | `AnalysisRuleBundle`, `AnalysisRule` row refs, `RuleGraphCompatibilityMatrix`, query target refs, graph derived-view refs when graph-backed, authorization/redaction refs, output checksum, replay policy output-class row, and validation refs. |
 | Threat-intel enrichment output | `ThreatIntelEnrichmentProfile`, `ThreatIntelArtifactRef`, distribution mapping policy, object-template/taxonomy/galaxy refs when used, redaction refs, artifact checksum, output checksum, and validation refs. |
@@ -769,6 +769,57 @@ A subset profile that omits watermark behavior must not advance a watermark. A s
 | `LIFECYCLE_TRANSITION_EVIDENCE_INCOMPLETE` | Required transition evidence field, checksum, or manifest ref is missing. |
 | `LIFECYCLE_PARENT_CHILD_STATE_INVALID` | Parent transition depends on invalid, missing, or in-memory child state. |
 | `LIFECYCLE_GUARD_REFUSED` | A declared guard refuses the transition and no owner-specific refusal code exists. |
+
+### ProcessingErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry shape, redaction, duplicate-code policy, generic-code precedence, and final checksum. `030` owns processing, stage, run-lock, lifecycle, declared-subset, activation-artifact fallback, and version-manifest causes.
+
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `FORBIDDEN_STAGE_OUTPUT` | `030` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `030.ProcessingErrorContext` | `error-registry-030-forbidden-stage-output` |
+| `DAG_STAGE_ID_DUPLICATE` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-dag-stage-id-duplicate` |
+| `DAG_CYCLE_DETECTED` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-dag-cycle-detected` |
+| `RUN_LOCK_COLLISION` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-collision` |
+| `RUN_LOCK_ACQUISITION_FAILED` | `030` | `blocked` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-acquisition-failed` |
+| `RUN_LOCK_LOST` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-lost` |
+| `ACTIVATION_ARTIFACT_INCOMPLETE` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-activation-artifact-incomplete` |
+| `ACTIVATION_ARTIFACT_OWNER_MISMATCH` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-activation-artifact-owner-mismatch` |
+| `DECLARED_DAG_SUBSET_PROFILE_MISSING` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-declared-dag-subset-profile-missing` |
+| `DECLARED_DAG_SUBSET_SCOPE_MISMATCH` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-declared-dag-subset-scope-mismatch` |
+| `DECLARED_DAG_SUBSET_OUTPUT_FORBIDDEN` | `030` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `030.ProcessingErrorContext` | `error-registry-030-declared-dag-subset-output-forbidden` |
+| `LIFECYCLE_MACHINE_MISSING` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-machine-missing` |
+| `LIFECYCLE_MACHINE_INACTIVE` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-machine-inactive` |
+| `LIFECYCLE_MACHINE_CHECKSUM_MISMATCH` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-machine-checksum-mismatch` |
+| `LIFECYCLE_EVENT_INVALID` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-event-invalid` |
+| `LIFECYCLE_STATE_DERIVATION_FAILED` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-state-derivation-failed` |
+| `LIFECYCLE_ILLEGAL_TRANSITION` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-illegal-transition` |
+| `LIFECYCLE_IDEMPOTENCY_CONFLICT` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-idempotency-conflict` |
+| `LIFECYCLE_TRANSITION_EVIDENCE_INCOMPLETE` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-transition-evidence-incomplete` |
+| `LIFECYCLE_PARENT_CHILD_STATE_INVALID` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-parent-child-state-invalid` |
+| `LIFECYCLE_GUARD_REFUSED` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-lifecycle-guard-refused` |
+| `VERSION_MANIFEST_INCOMPLETE` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-version-manifest-incomplete` |
+
+### ProcessingErrorContext
+
+`ProcessingErrorContext` is the owner context schema for `030` registry rows.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `030` context schema version. |
+| `owner_spec` | Yes | Must be `030`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `dag`, `stage_output`, `run_lock`, `activation_artifact`, `declared_subset`, `lifecycle`, or `version_manifest`. |
+| `operation` | Yes | DAG validation, stage execution, lock acquisition, artifact validation, lifecycle transition, subset validation, or manifest validation. |
+| `affected_record_type` | Yes | Stage, DAG, lock set, artifact ref, lifecycle evidence, subset profile, or version manifest type. |
+| `field_path` | Yes | Exact field path when known; null for artifact-wide failures. |
+| `stage_id` | No | Required when the failure is stage-specific. |
+| `stage_class` | No | Required when output permission or lifecycle stage behavior is involved. |
+| `run_lock_key_ref` | No | Required for run-lock failures; raw lock inputs remain redacted. |
+| `activation_artifact_ref` | No | Required for activation-artifact failures. |
+| `lifecycle_machine_ref` | No | Required for lifecycle machine failures. |
+| `version_manifest_ref` | No | Required when manifest validation was attempted. |
+| `validation_refs` | Yes | Exact `120` validation refs proving the failure. |
+| `redaction_classes` | Yes | Raw payloads, private bindings, credentials, backend IDs, provider-native query text, package payload bytes, and signer secrets must map to `always_forbidden`. |
 
 ### Acceptance Criteria
 

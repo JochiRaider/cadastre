@@ -434,7 +434,7 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | resolver profile missing | `error` | Emit `RESOLVER_PROFILE_MISSING`; no identity mutation. |
 | resolver row ambiguous | `ambiguous` | Emit `RESOLVER_PROFILE_ROW_AMBIGUOUS`; no implementation-order selection. |
 | selector-only unresolved target | diagnostic or no output | No identity, no graph endpoint, no canonical entity creation. |
-| graph endpoint unresolved | graph owner error consumed by `110` | Emit `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; no dependent graph edge. |
+| graph endpoint unresolved | imported graph owner error consumed by `110` | `090` emits `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; `070` emits no identity mutation and owns no generated registry row for this code. |
 | review required | non-mutating review state | Preserve state until terminal `IdentityDecision`; no hidden identity mutation. |
 | private source scope selector | redacted diagnostic | Caller-visible responses must not expose tenant inventories, scanner sites, directory inventories, zone inventories, account lists, raw payload values, or private bindings. |
 
@@ -466,7 +466,27 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | `TARGET_SELECTOR_UNSAFE` | Selector attempts a resolution state beyond `TargetSelectorSafetyPolicy`. |
 | `DEPRECATED_NAME_MATCHING_FORBIDDEN` | Deprecated name matching is used in production. |
 | `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` | Telemetry-only attributes or identifiers are used as durable identity evidence, candidate scoring authority, create/attach/merge authority, split authority, rejection authority, or hard-blocker authority. |
-| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | Graph projection requests endpoint identity from unresolved target hints, selector-only evidence, graph keys, or non-qualifying identity material. |
+
+### IdentityErrorContext
+
+`IdentityErrorContext` is the owner context schema for `070` resolver, target-selector, review, split, explanation, and telemetry-identity boundary registry rows.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `070` context schema version. |
+| `owner_spec` | Yes | Must be `070`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `resolver_artifact`, `resolver_profile`, `identity_evidence`, `hard_blocker`, `candidate_generation`, `decision_matrix`, `review`, `split`, `explanation`, `target_selector`, or `telemetry_identity_non_authority`. |
+| `operation` | Yes | Resolver profile selection, evidence materialization, candidate generation, blocker evaluation, review transition, split handling, explanation emission, or target selector validation. |
+| `affected_record_type` | Yes | Resolver artifact, identity evidence item, review case, target selector, or identity decision type. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `entity_type` | No | Required when resolver scope was evaluated. |
+| `source_scope_checksum` | No | Checksum only; raw tenant, directory, scanner, route, or account values are forbidden in caller context. |
+| `evidence_class` | No | Required when the failure is evidence-class-specific. |
+| `resolver_profile_ref` | No | Required when a resolver profile was consulted. |
+| `review_case_ref` | No | Required when the failure is review-specific. |
+| `validation_refs` | Yes | Exact `120` identity fixture refs. |
+| `redaction_classes` | Yes | Source-native identity values, telemetry resource values, private bindings, credentials, raw payload bytes, and graph/backend IDs must map to `always_forbidden`. |
 
 ### CandidateGenerationProfile bounds
 
@@ -540,32 +560,32 @@ Missing any required included field emits `RESOLVER_EXPLANATION_INCOMPLETE` befo
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
 
-| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `RESOLVER_ARTIFACT_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-artifact-missing` |
-| `RESOLVER_ARTIFACT_INACTIVE` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-artifact-inactive` |
-| `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-artifact-checksum-mismatch` |
-| `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-artifact-scope-mismatch` |
-| `RESOLVER_PROFILE_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-profile-missing` |
-| `RESOLVER_PROFILE_ROW_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-profile-row-missing` |
-| `RESOLVER_PROFILE_ROW_AMBIGUOUS` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-profile-row-ambiguous` |
-| `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-entity-type-unsupported` |
-| `IDENTITY_EVIDENCE_UNDER_SCOPED` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-evidence-under-scoped` |
-| `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-evidence-class-unsupported` |
-| `IDENTITY_HARD_BLOCKER_TRIGGERED` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-hard-blocker-triggered` |
-| `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-candidate-block-overflow` |
-| `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-candidate-partition-overflow` |
-| `RESOLVER_DECISION_ROW_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-decision-row-missing` |
-| `RESOLVER_CONFIDENCE_BAND_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-confidence-band-missing` |
-| `RESOLVER_REVIEW_ROUTING_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-review-routing-missing` |
-| `RESOLVER_SPLIT_POLICY_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-split-policy-missing` |
-| `RESOLVER_EXPLANATION_INCOMPLETE` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-resolver-explanation-incomplete` |
-| `IDENTITY_REVIEW_TRANSITION_INVALID` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-review-transition-invalid` |
-| `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-review-evidence-snapshot-mismatch` |
-| `IDENTITY_REVIEW_AUTHORITY_MISSING` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-identity-review-authority-missing` |
-| `TARGET_SELECTOR_UNSAFE` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-target-selector-unsafe` |
-| `DEPRECATED_NAME_MATCHING_FORBIDDEN` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-deprecated-name-matching-forbidden` |
-| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `070` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `070.IdentityErrorContext` | `identity-error-graph-endpoint-identity-unresolved` |
+| `RESOLVER_ARTIFACT_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-artifact-missing` |
+| `RESOLVER_ARTIFACT_INACTIVE` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-artifact-inactive` |
+| `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `070` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-artifact-checksum-mismatch` |
+| `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-artifact-scope-mismatch` |
+| `RESOLVER_PROFILE_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-missing` |
+| `RESOLVER_PROFILE_ROW_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-row-missing` |
+| `RESOLVER_PROFILE_ROW_AMBIGUOUS` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-row-ambiguous` |
+| `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-entity-type-unsupported` |
+| `IDENTITY_EVIDENCE_UNDER_SCOPED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-evidence-under-scoped` |
+| `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-evidence-class-unsupported` |
+| `IDENTITY_HARD_BLOCKER_TRIGGERED` | `070` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-hard-blocker-triggered` |
+| `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-candidate-block-overflow` |
+| `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-candidate-partition-overflow` |
+| `RESOLVER_DECISION_ROW_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-decision-row-missing` |
+| `RESOLVER_CONFIDENCE_BAND_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-confidence-band-missing` |
+| `RESOLVER_REVIEW_ROUTING_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-review-routing-missing` |
+| `RESOLVER_SPLIT_POLICY_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-split-policy-missing` |
+| `RESOLVER_EXPLANATION_INCOMPLETE` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-explanation-incomplete` |
+| `IDENTITY_REVIEW_TRANSITION_INVALID` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-review-transition-invalid` |
+| `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | `070` | `error` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-review-evidence-snapshot-mismatch` |
+| `IDENTITY_REVIEW_AUTHORITY_MISSING` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-identity-review-authority-missing` |
+| `TARGET_SELECTOR_UNSAFE` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-target-selector-unsafe` |
+| `DEPRECATED_NAME_MATCHING_FORBIDDEN` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-deprecated-name-matching-forbidden` |
+| `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `070.IdentityErrorContext` | `error-registry-070-telemetry-identity-evidence-forbidden` |
 
 ### Acceptance Criteria
 

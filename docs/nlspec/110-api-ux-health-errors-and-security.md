@@ -345,11 +345,71 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 
 ## Error Model
 
-`ErrorRecord` must contain stable error code, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Identity resolver error codes are owned by `070`; this spec defines only observable handling, redaction, severity, retryability, caller-visible fields, and audit-visible refs. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
+`ErrorRecord` must contain stable `error_code`, message, severity, retryability, owner spec, affected record type, field path when applicable, record ID when available, source artifact refs, error correlation ID, owner error context, redaction state, and caller-visible field set. Domain-specific codes must be owned by the domain spec; this spec owns the shared shape and generated registry. Identity resolver error codes are owned by `070`; this spec defines only observable handling, redaction, severity, retryability, caller-visible fields, and audit-visible refs. Every 040 error must include owner spec, affected record type, field path when applicable, record ID when available, retryability, severity, redaction state, and source artifact refs.
 
-`message` must be at most 1024 Unicode scalar values after normalization. Caller-visible `ErrorRecord` fields are code, message, severity, retryability, owner spec, affected record type, field path, redaction state, and error correlation ID. Audit-visible fields may additionally include record ID, source artifact refs, owner error context, input checksum, and secure diagnostic refs.
+`message` must be at most 1024 Unicode scalar values after normalization. Caller-visible `ErrorRecord` fields are defined by `StandardErrorCallerFields`; audit-visible fields are defined by `StandardErrorAuditFields`. Owner-specific values must be nested in `owner_error_context` and must not be added as top-level caller-visible fields.
 
 Generic error codes must not be used when a more specific domain code exists.
+
+### StandardErrorFieldSets
+
+`StandardErrorCallerFields` and `StandardErrorAuditFields` are deterministic macros expanded by `GenerateErrorCodeRegistry` before canonical row serialization and checksum computation. Owner fragments may reference the macro names, but generated registry rows must contain the expanded field names.
+
+| Field set | Expanded fields | Required use |
+| --- | --- | --- |
+| `110.StandardErrorCallerFields` | `error_code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id` | Every caller-visible owner error row. |
+| `110.StandardErrorAuditFields` | `error_code`, `message`, `severity`, `retryability`, `owner_spec`, `affected_record_type`, `field_path`, `redaction_state`, `error_correlation_id`, `record_id`, `source_artifact_refs`, `owner_error_context`, `input_checksum`, `secure_diagnostic_refs`, `validation_fixture_ref`, `version_manifest_ref` | Every audit-visible owner error row. |
+
+A generated row whose caller-visible field list contains `code`, omits `error_code`, omits one standard caller field, adds owner-specific top-level fields, or places owner-specific detail outside `owner_error_context` must fail with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` before API, export, health, compliance, audit, or validation output.
+
+### ErrorRedactionClassMatrix
+
+`ErrorRedactionClassMatrix` is the closed redaction class set for generated error registry rows. Owner fragments must use these classes either directly or through a `110.StandardErrorRedactionRule` row.
+
+| Redaction class | Caller-visible behavior | Audit-visible behavior | Required mapping |
+| --- | --- | --- | --- |
+| `public_token` | May be shown to any caller who may see the error record. | Visible. | `error_code`, `severity`, `retryability`, `owner_spec`, and non-sensitive enum tokens. |
+| `bounded_context` | May be shown after endpoint authorization and output-class redaction. | Visible with checksum context. | `message`, `affected_record_type`, `field_path`, `redaction_state`, and bounded owner context summaries. |
+| `authorized_ref` | May be shown only when the caller can access the referenced object class. | Visible as ref and checksum. | Record refs, source artifact refs, validation refs, version manifest refs, package refs, policy refs, and owner artifact refs. |
+| `secure_audit_only` | Hidden from caller-visible output. | Visible only in secure audit contexts. | Secure diagnostic refs, redacted raw-value refs, backend diagnostics, and private implementation diagnostics. |
+| `always_forbidden` | Never caller-visible. | Never stored as raw value in normal audit output; secure audit may store only hash, byte count, and approved sealed ref. | Raw payload bytes, credentials, private bindings, source-native identity values, backend IDs, provider-native query text, raw SBOM bytes, signer secrets, and unredacted package or registry payload bytes. |
+
+### StandardErrorRedactionRule
+
+| Rule ref | Required class mapping |
+| --- | --- |
+| `110.StandardErrorRedactionRule.owner_context` | Standard caller fields map to `public_token` or `bounded_context`; standard audit refs map to `authorized_ref`; `owner_error_context` maps to `bounded_context` unless a nested field declares a stricter class; `secure_diagnostic_refs` map to `secure_audit_only`; all `always_forbidden` data classes remain forbidden. |
+| `110.StandardErrorRedactionRule.security_boundary` | Same as `owner_context`, except attempted sensitive values, private bindings, credentials, backend IDs, provider-native query text, raw payload bytes, raw SBOM bytes, and signer secrets must map to `always_forbidden` even when audit-visible context exists. |
+| `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | Same as `security_boundary`; additionally, the owner context may include only data class names, redacted refs, checksums, field paths, and blocking reasons. |
+
+### ErrorRegistryDuplicateOwnershipPolicy
+
+`GenerateErrorCodeRegistry` must reject duplicate `error_code` values unless this table declares a shared alias and the duplicate rows are byte-identical after macro expansion. The current shared-alias set is empty.
+
+| Error code | Final owner | Required owner behavior | Rejected duplicate owner |
+| --- | --- | --- | --- |
+| `PRIVATE_BINDING_LEAK` | `010` | Boundary and public/private binding violations detected by any owner must emit imported `010.PRIVATE_BINDING_LEAK` with `010.BoundaryErrorContext`. | `040` |
+| `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `060` | External-schema signal authority attempts must emit imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` with `060.SourceAuthorityErrorContext`. | `050` |
+| `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `060` | Tombstone-driven retraction attempts must call `060.DeriveAbsenceOrUnknown` and emit `060.CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` when authorization fails. | `080` |
+| `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090` | Graph projection endpoint blockers must emit `090.GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; identity resolver code must not own this registry row. | `070` |
+
+### OwnerErrorContextMinimumSchema
+
+Every owner context schema referenced by an error fragment must include the following minimum fields. Owner specs may add owner-specific fields only inside `owner_error_context`; added fields must declare one `ErrorRedactionClassMatrix` class.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable owner context schema version. |
+| `owner_spec` | Yes | Must equal the generated row owner. |
+| `error_code` | Yes | Must equal the generated row error code. |
+| `failure_class` | Yes | Owner-defined bounded token describing the failure family. |
+| `operation` | Yes | Owner-defined bounded token for the operation that emitted the error. |
+| `affected_record_type` | Yes | Null only when no record type exists. |
+| `field_path` | Yes | Null only when the failure is not field-specific. |
+| `artifact_refs` | Yes | Canonically sorted refs; empty array when no artifact was consulted. |
+| `validation_refs` | Yes | Canonically sorted refs proving the row; empty only for runtime-only shared errors explicitly exempted by `120`. |
+| `redaction_classes` | Yes | Map from owner-context field path to one redaction class. |
+| `blocking_reason` | No | Required when `severity = blocked`. |
 
 ### ErrorCodeRegistryRow schema
 
@@ -382,13 +442,13 @@ policy_change_required
 | --- | ---: | --- | --- |
 | `error_code` | Yes | None. | Stable uppercase token. Duplicate codes across owners reject registry generation. |
 | `owner_spec` | Yes | None. | Exact owning spec ID. |
-| `severity` | Yes | None. | Must be one closed enum value. |
-| `retry_class` | Yes | None. | Must be one closed enum value. |
+| `severity` | Yes | None. | Must be one closed enum value. Owner input field `default_severity` is accepted only as a transition alias and must normalize to `severity` before checksum computation. |
+| `retry_class` | Yes | None. | Must be one closed enum value. Owner input field `default_retry_class` is accepted only as a transition alias and must normalize to `retry_class` before checksum computation. |
 | `redaction_rule` | Yes | None. | Must map every caller-visible and audit-visible field to a data class. |
-| `caller_visible_fields` | Yes | None. | Closed field list for caller-visible `ErrorRecord`. |
-| `audit_visible_fields` | Yes | None. | Closed field list for audit-only `ErrorRecord`. |
+| `caller_visible_fields` | Yes | None. | Must expand to `110.StandardErrorCallerFields`. The legacy field name `code` is forbidden. |
+| `audit_visible_fields` | Yes | None. | Must expand to `110.StandardErrorAuditFields`. Owner-specific details must be nested under `owner_error_context`. |
 | `owner_context_schema_ref` | Yes | None. | Ref to owner context shape; `TODO:` blocks promotion. |
-| `fixture_ref` | Yes | None. | `120` validation fixture family proving the row. |
+| `fixture_ref` | Yes | None. | Exact `120` validation fixture ref proving the row. Legacy `fixture_family` input is accepted only as a transition alias and must normalize to exact `fixture_ref` rows before promotion. Wildcard-only fixture refs are forbidden. |
 | `shared_110_override_ref` | No | null. | May narrow presentation only; must not change owner cause semantics. |
 
 ### GenerateErrorCodeRegistry(owner_fragments, shared_110_rows)
@@ -396,13 +456,14 @@ policy_change_required
 ```text
 GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 1. Canonically sort owner fragments by owner spec, then error_code.
-2. Reject any fragment row with a missing required field, unknown severity, unknown retry_class, missing redaction_rule, missing fixture_ref, or `TODO:` value.
+2. Normalize transition aliases `default_severity` to `severity`, `default_retry_class` to `retry_class`, and `fixture_family` to `fixture_ref` only when the normalized value is exact and non-wildcard. Reject any fragment row with a missing required field, unknown severity, unknown retry_class, missing redaction_rule, missing exact fixture_ref, wildcard-only fixture ref, `code` in `caller_visible_fields`, owner-specific top-level caller fields, or `TODO:` value.
 3. Reject duplicate `error_code` values unless the duplicates are byte-identical shared aliases explicitly declared by `110`.
 4. Merge each owner row with at most one shared `110` observable override selected by exact error_code.
 5. Reject a shared override that changes owner_spec, owner_context_schema_ref, or fixture_ref.
 6. Reject a generic shared code for a failure when an owner-specific generated row covers the same failure class and owner context.
-7. Compute `generated_error_registry_checksum` over canonical row bytes sorted by `error_code`.
-8. Emit `ErrorCodeRegistry` and require its checksum in `030.VersionManifest` for API, export, health, compliance, audit, and validation output.
+7. Expand `StandardErrorCallerFields`, `StandardErrorAuditFields`, and `StandardErrorRedactionRule` refs before serialization.
+8. Compute `generated_error_registry_checksum` over canonical row bytes sorted by `error_code`.
+9. Emit `ErrorCodeRegistry` and require its checksum in `030.VersionManifest` for API, export, health, compliance, audit, validation, and telemetry-visible diagnostic output.
 ```
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
@@ -413,6 +474,7 @@ Owner fragments are incomplete unless every exported owner error code can genera
 
 | owner_spec | fragment_required | required_fields | TODO_behavior | failure_code |
 | --- | --- | --- | --- | --- |
+| `010` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `020` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `030` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `040` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
@@ -423,9 +485,10 @@ Owner fragments are incomplete unless every exported owner error code can genera
 | `090` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `100` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `120` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
-| `130` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `130` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `140` | true when owner exports telemetry-visible error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 
-Generated-registry validation for `130` must include fixture families for `error-registry-130-lineage-facet-policy-missing`, `error-registry-130-lineage-facet-namespace-collision`, `error-registry-130-threat-intel-profile-missing`, `error-registry-130-threat-intel-distribution-unmapped`, `error-registry-130-threat-intel-artifact-checksum-mismatch`, `error-registry-130-registry-custom-property-schema-invalid`, `error-registry-130-registry-classification-authority-forbidden`, `error-registry-130-derived-graph-edge-supporting-facts-required`, `error-registry-130-derived-graph-edge-projection-forbidden`, and `error-registry-130-derived-graph-edge-replay-mismatch`. Missing, duplicate, unredacted, unfixtured, unknown-severity, unknown-retry, or owner-context-incomplete `130` rows must fail registry generation before API, export, health, compliance, audit, or validation output.
+Generated-registry validation for `010`, `030`, `120`, and `140` is required when those owners export visible errors. Generated-registry validation for `130` must include fixture families for `error-registry-130-lineage-facet-policy-missing`, `error-registry-130-lineage-facet-namespace-collision`, `error-registry-130-threat-intel-profile-missing`, `error-registry-130-threat-intel-distribution-unmapped`, `error-registry-130-threat-intel-artifact-checksum-mismatch`, `error-registry-130-registry-custom-property-schema-invalid`, `error-registry-130-registry-classification-authority-forbidden`, `error-registry-130-derived-graph-edge-supporting-facts-required`, `error-registry-130-derived-graph-edge-projection-forbidden`, and `error-registry-130-derived-graph-edge-replay-mismatch`. Missing, duplicate, unredacted, unfixtured, unknown-severity, unknown-retry, or owner-context-incomplete `130` rows must fail registry generation before API, export, health, compliance, audit, or validation output.
 
 ## Evidence Drillback
 
@@ -974,7 +1037,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-OBSERVABILITY-REDACTION-AC-001` | Raw trace/span IDs, telemetry attributes, exporter endpoints, Collector routes, private bindings, backend IDs, provider-native query text, and raw payload values are redacted or rejected according to `140` and `110`. |
 | `110-DIAGNOSTIC-CORRELATION-AC-001` | `diagnostic_correlation_ref` is opaque, optional, audit-linked when emitted, excluded from domain replay by default, and not accepted as evidence, identity, graph, completeness, package, or audit authority. |
 | `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
-| `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, or unfixtured owner error rows. |
+| `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, wildcard-fixtured, legacy `code` caller-field, generic-substitute, or unfixtured owner error rows. |
 | `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
 | `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
 | `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |

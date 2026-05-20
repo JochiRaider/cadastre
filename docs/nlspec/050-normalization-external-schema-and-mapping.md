@@ -106,7 +106,7 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 
 If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060` external-schema signal mapping row must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
 
-Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must fail with `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
+Missing `060` mapping means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must route the failure to imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
 
 ### GoldFactObjectBoundaryHandoff
 
@@ -469,31 +469,30 @@ Source-extension field values remain redacted unless a redaction policy explicit
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
 
-| error_code | owner_spec | default_severity | default_retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_family |
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `MAPPING_ARTIFACT_INACTIVE` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-mapping-artifact-inactive` |
-| `MAPPING_ARTIFACT_SCOPE_MISMATCH` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-mapping-artifact-scope-mismatch` |
-| `MAPPING_ARTIFACT_CHECKSUM_MISMATCH` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-mapping-artifact-checksum-mismatch` |
-| `MAPPING_CORE_CONTRACT_OVERRIDE_FORBIDDEN` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-mapping-core-contract-override-forbidden` |
-| `OCSF_ARTIFACT_MISMATCH` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-ocsf-artifact-mismatch` |
-| `OCSF_CLASS_NOT_ALLOWED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-ocsf-class-not-allowed` |
-| `MAP_OCSF_ROW_MISSING` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-map-ocsf-row-missing` |
-| `MAP_OCSF_ROW_AMBIGUOUS` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-map-ocsf-row-ambiguous` |
-| `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-ocsf-activity-discriminator-missing` |
-| `OCSF_REQUIRED_OBJECT_PATH_MISSING` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-ocsf-required-object-path-missing` |
-| `OCSF_FORBIDDEN_FIELD_EMITTED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-ocsf-forbidden-field-emitted` |
-| `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-mapping-observation-type-split-required` |
-| `SOURCE_EXTENSION_RULESET_MISSING` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-ruleset-missing` |
-| `SOURCE_EXTENSION_NAMESPACE_INVALID` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-namespace-invalid` |
-| `SOURCE_EXTENSION_REDACTION_POLICY_MISSING` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-redaction-policy-missing` |
-| `SOURCE_EXTENSION_SECRET_SCAN_FAILED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-secret-scan-failed` |
-| `SOURCE_EXTENSION_OCSF_RESERVED_COLLISION` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-ocsf-reserved-collision` |
-| `EXTERNAL_ENUM_UNKNOWN` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-external-enum-unknown` |
-| `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-external-enum-other-not-permitted` |
-| `EXTERNAL_ENUM_DEPRECATED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-external-enum-deprecated` |
-| `EXTERNAL_ENUM_SIBLING_MISMATCH` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-external-enum-sibling-mismatch` |
-| `SOURCE_EXTENSION_FIELD_UNDECLARED` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-source-extension-field-undeclared` |
-| `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `050` | TODO: owner-confirm severity | TODO: owner-confirm retry class | TODO: caller field set | TODO: audit field set | TODO: redaction rule | `050.MappingErrorContext` | `mapping-error-external-schema-authority-forbidden` |
+| `MAPPING_ARTIFACT_INACTIVE` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-mapping-artifact-inactive` |
+| `MAPPING_ARTIFACT_SCOPE_MISMATCH` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-mapping-artifact-scope-mismatch` |
+| `MAPPING_ARTIFACT_CHECKSUM_MISMATCH` | `050` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-mapping-artifact-checksum-mismatch` |
+| `MAPPING_CORE_CONTRACT_OVERRIDE_FORBIDDEN` | `050` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `050.MappingErrorContext` | `error-registry-050-mapping-core-contract-override-forbidden` |
+| `OCSF_ARTIFACT_MISMATCH` | `050` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-ocsf-artifact-mismatch` |
+| `OCSF_CLASS_NOT_ALLOWED` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-ocsf-class-not-allowed` |
+| `MAP_OCSF_ROW_MISSING` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-map-ocsf-row-missing` |
+| `MAP_OCSF_ROW_AMBIGUOUS` | `050` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-map-ocsf-row-ambiguous` |
+| `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-ocsf-activity-discriminator-missing` |
+| `OCSF_REQUIRED_OBJECT_PATH_MISSING` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-ocsf-required-object-path-missing` |
+| `OCSF_FORBIDDEN_FIELD_EMITTED` | `050` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `050.MappingErrorContext` | `error-registry-050-ocsf-forbidden-field-emitted` |
+| `MAPPING_OBSERVATION_TYPE_SPLIT_REQUIRED` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-mapping-observation-type-split-required` |
+| `SOURCE_EXTENSION_RULESET_MISSING` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-source-extension-ruleset-missing` |
+| `SOURCE_EXTENSION_NAMESPACE_INVALID` | `050` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `050.MappingErrorContext` | `error-registry-050-source-extension-namespace-invalid` |
+| `SOURCE_EXTENSION_REDACTION_POLICY_MISSING` | `050` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `050.MappingErrorContext` | `error-registry-050-source-extension-redaction-policy-missing` |
+| `SOURCE_EXTENSION_SECRET_SCAN_FAILED` | `050` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `050.MappingErrorContext` | `error-registry-050-source-extension-secret-scan-failed` |
+| `SOURCE_EXTENSION_OCSF_RESERVED_COLLISION` | `050` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `050.MappingErrorContext` | `error-registry-050-source-extension-ocsf-reserved-collision` |
+| `EXTERNAL_ENUM_UNKNOWN` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-external-enum-unknown` |
+| `EXTERNAL_ENUM_OTHER_NOT_PERMITTED` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-external-enum-other-not-permitted` |
+| `EXTERNAL_ENUM_DEPRECATED` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-external-enum-deprecated` |
+| `EXTERNAL_ENUM_SIBLING_MISMATCH` | `050` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-external-enum-sibling-mismatch` |
+| `SOURCE_EXTENSION_FIELD_UNDECLARED` | `050` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `050.MappingErrorContext` | `error-registry-050-source-extension-field-undeclared` |
 
 ### OCSFProfileUpgradeReport evidence requirements
 
@@ -506,6 +505,26 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | deprecated field review | List deprecated fields and waiver decisions. |
 | class allowlist change | Record added/removed classes and affected observation types. |
 | extension set change | Record added/removed extensions, namespace collisions, and reserved-name effects. |
+
+### MappingErrorContext
+
+`MappingErrorContext` is the owner context schema for `050` parser, mapping, OCSF, external enum, and source-extension registry rows.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `050` context schema version. |
+| `owner_spec` | Yes | Must be `050`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `mapping_artifact`, `external_schema`, `ocsf_mapping`, `external_enum`, `source_extension`, or `core_override`. |
+| `operation` | Yes | Parser, normalization, mapping resolution, source-extension validation, enum mapping, or mapping-bundle validation operation. |
+| `affected_record_type` | Yes | Mapping artifact, observation, mapping row, source-extension rule, enum rule, or validation output type. |
+| `field_path` | Yes | Exact normalized field, source-extension path, OCSF path, enum path, or null for artifact-wide failures. |
+| `mapping_artifact_ref` | No | Required when a mapping artifact was consulted. |
+| `external_schema_profile_ref` | No | Required for OCSF or external schema failures. |
+| `source_extension_rule_ref` | No | Required for source-extension failures. |
+| `raw_value_ref` | No | Redacted ref or checksum only; raw source values must not be stored in caller context. |
+| `validation_refs` | Yes | Exact `120` mapping fixture refs. |
+| `redaction_classes` | Yes | Raw payload bytes, raw source values, credentials, private bindings, source-native identity values, and raw OCSF payload bytes must map to `always_forbidden`. |
 
 ### Acceptance Criteria
 
