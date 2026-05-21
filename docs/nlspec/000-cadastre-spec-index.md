@@ -38,6 +38,7 @@ Define the self-contained Cadastre documentation set, source-of-truth ownership,
 - `VolatilityClass`
 - `VolatilityClassificationRow`
 - `VolatilityRegistryConsistencyRule`
+- `DefineOnceClosureInventory`
 
 ## Document Status Vocabulary
 
@@ -532,6 +533,45 @@ Every target file in the NLSpec set must have exactly one registry row. Duplicat
 
 No non-040 file may define a field schema for a core record exported by `040`. A downstream spec may import an exact schema name and define behavior for its own stage, but it must not restate field paths, defaults, nullability, ID inputs, checksum inputs, or extension policy for the 040-owned record.
 
+### DefineOnceClosureInventory
+
+`DefineOnceClosureInventory` is a non-runtime governance record. It is produced by `ValidateSpecSet` before promotion and must not be used as product runtime behavior.
+
+| Field | Required behavior |
+| --- | --- |
+| `contract_name` | Exact runtime contract, validation contract, or owner-routed contract name being checked. |
+| `owner_spec` | Exact owner spec ID expected to export the contract. |
+| `owner_file_path` | Normalized repository-relative path of the owner file. |
+| `owner_export_present` | Boolean result after checking the owner `Exports` list and declared owner-export alias tables. |
+| `imported_by` | Canonically sorted list of files that import or route to the contract. Empty array means owner-only. |
+| `non_owner_reference_locations` | Canonically sorted file/heading locations where the contract is referenced outside its owner. |
+| `permitted_reference_form` | Exact imported contract name plus at most one owner-routing sentence, unless the owner spec explicitly grants a wider validation form. |
+| `duplicate_or_contradiction_class` | One closed class from the table below. |
+| `required_action` | One of `none`, `add_owner_export`, `remove_restatement`, `merge_domain_rows`, `split_domain_scope`, `resolve_owner_conflict`, or `mark_unresolved_todo`. |
+| `validation_row_id` | Exact `120` row that proves the inventory result. |
+
+Closed `duplicate_or_contradiction_class` values are:
+
+```text
+none
+non_owner_runtime_restatement
+duplicate_domain_ledger_row
+duplicate_owner_export
+owner_runtime_contradiction
+unexported_owner_contract_reference
+reference_or_rationale_runtime_authority
+```
+
+`ValidateSpecSet` must build the inventory deterministically by path order, then heading order, then lexical contract name. The same spec bytes must produce byte-identical inventory rows.
+
+Every runtime contract name used in `Imports`, `domain.md` Section 25, `120` validation rows, or `SpecSetVersion.validation_matrix_refs` must appear in exactly one owner `Exports` list or in one declared owner-export alias table. A missing owner export fails with `OWNER_CONTRACT_REF_UNEXPORTED`. More than one owner export for the same runtime contract fails with `DUPLICATE_OWNER_EXPORT` unless one row is an explicit alias owned by the same file.
+
+A non-owner document may contain only the exact imported contract name plus one owner-routing sentence. It must not copy row schemas, algorithms, defaults, failure precedence, activation behavior, validation harness behavior, field tables, or acceptance-owner decisions.
+
+Two Section 25 rows may point to the same owner contract only when they name different `owner_contract_scope` values and different validation row families. Otherwise validation fails with `DOMAIN_LEDGER_OWNER_DUPLICATE`.
+
+Supporting duplicate inventories, runtime-restatement workbooks, concrete fixture bytes, expected-output checksums, and private source bindings belong in supporting material. Their path is `TODO:` until registered in `MANIFEST.md`.
+
 ### OwnerLocalStatusConsistencyRule
 
 `ValidateSpecSet` must evaluate owner-local closure state independently from document authority status. The following failure codes are closed for this rule.
@@ -541,6 +581,9 @@ No non-040 file may define a field schema for a core record exported by `040`. A
 | `DOMAIN_OWNER_STATUS_CONTRADICTION` | `domain.md` marks a ledger row unresolved while the owner is `closed_local` and required validation rows pass, or marks a row resolved while any named owner has an unresolved owner TODO or required validation row is `blocked`, `not_run`, or `fail`. |
 | `DOMAIN_RUNTIME_RESTATEMENT` | `domain.md` copies row schemas, algorithms, defaults, failure precedence, validation harness behavior, or activation behavior from owners instead of routing by exact owner contract name. |
 | `OWNER_SPEC_CONTRADICTION` | Two owner specs define incompatible runtime behavior for the same named contract. |
+| `DOMAIN_LEDGER_OWNER_DUPLICATE` | `domain.md` Section 25 has two rows for the same owner contract without distinct owner contract scope and distinct validation row family. |
+| `OWNER_CONTRACT_REF_UNEXPORTED` | A contract name used by an import, Section 25 row, validation row, or `SpecSetVersion.validation_matrix_refs` is not exported by exactly one owner or declared owner-export alias. |
+| `DUPLICATE_OWNER_EXPORT` | More than one owner exports the same runtime contract name without a same-owner alias declaration. |
 | `ADR_STATUS_UNREGISTERED` | An ADR file or registry row uses a status outside `SpecStatus`. |
 | `REGISTRY_MANIFEST_PATH_MISMATCH` | A manifest path lacks exactly one registry row or explicit non-registry reason. |
 | `VOLATILITY_CLASS_MISSING` | An implementation-relevant artifact or contract lacks exactly one volatility class. |
@@ -559,6 +602,9 @@ Required consistency checks:
 | Domain Section 25 unresolved with owner closed | Fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when owner state is `closed_local` and matching validation rows pass. |
 | Domain Section 25 resolved with owner blocked | Fail with `DOMAIN_OWNER_STATUS_CONTRADICTION` when any named owner TODO remains or required validation rows are `blocked`, `not_run`, or `fail`. |
 | Owner runtime contradiction | Fail with `OWNER_SPEC_CONTRADICTION`; `domain.md` must not pick a side. |
+| Domain ledger duplicate owner row | Fail with `DOMAIN_LEDGER_OWNER_DUPLICATE` unless the duplicate rows have distinct `owner_contract_scope` values and distinct validation row families. |
+| Owner contract ref unexported | Fail with `OWNER_CONTRACT_REF_UNEXPORTED` when a referenced runtime contract does not resolve to exactly one owner export or owner-export alias. |
+| Duplicate owner export | Fail with `DUPLICATE_OWNER_EXPORT` when two owners export the same runtime contract name. |
 | ADR status mismatch | Fail with `ADR_STATUS_UNREGISTERED` unless both file and registry row use `accepted_rationale`. |
 | Manifest path mismatch | Fail with `REGISTRY_MANIFEST_PATH_MISMATCH`; every manifest path must have one registry row or explicit non-registry reason. |
 
@@ -571,6 +617,8 @@ Promotion to `authoritative` must include the `120.CoreRecordSchemaValidationMat
 Promotion to `authoritative` must include `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` row families. `ValidateSpecSet` must fail when `040.CoreOneOfRegistry` contains unresolved rows or when any required core one-of closure validation row is absent, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing.
 
 Promotion to `authoritative` must fail when `040.EvidenceArtifactClassRegistry` pairings for declared artifact classes are missing, ambiguous, inactive, checksum-mismatched, out of scope, or lack validation refs.
+
+`ValidateSpecSet` must run `DefineOnceClosureInventory` before owner acceptance aggregation. Promotion to `authoritative` must fail when any non-deferred inventory row has `duplicate_or_contradiction_class` other than `none`, when a referenced owner contract is unexported, when a runtime contract has duplicate owners, or when a non-owner restates runtime behavior instead of routing by exact contract name.
 
 `SpecSetVersion.validation_matrix_refs` must include `020-FEED-CLOSURE-AC-*`, `030-FEED-CLOSURE-AC-*`, `060-FEED-CLOSURE-AC-*`, `110-FEED-CLOSURE-AC-*`, and `120-FEED-CLOSURE-AC-*` rows before authoritative handoff when any production feed category is active.
 
@@ -609,6 +657,9 @@ Archived documents are historical reference only and never implementation author
 | `000-AC-001` | Every implementation-relevant behavior has exactly one owning spec. |
 | `000-AC-002` | Every active spec declares imports, exports, dependencies, non-scope, and Definition of Done. |
 | `000-AC-003` | Archived and reference documents are not cited as implementation authority. |
+| `000-DEFINE-ONCE-AC-001` | `ValidateSpecSet` emits a deterministic `DefineOnceClosureInventory` and fails when any runtime contract reference is unexported, duplicate-owned, contradicted, or restated by a non-owner. |
+| `000-DEFINE-ONCE-AC-002` | `domain.md` Section 25 contains no duplicate owner-contract rows unless each duplicate has a distinct owner-contract scope and distinct validation row family. |
+| `000-DEFINE-ONCE-AC-003` | Every runtime contract in `Imports`, Section 25, `120` validation rows, and `SpecSetVersion.validation_matrix_refs` resolves to exactly one owner export or owner-export alias. |
 | `000-AC-004` | Research reports, ADRs, navigation files, and manifest files are marked non-authoritative for runtime behavior. |
 | `000-CLEANUP-AC-001` | The file contains no banned reference class. |
 | `000-CLEANUP-AC-002` | `SpecStatus` is total for `draft`, `candidate`, `authoritative`, `superseded`, `archived`, `accepted_rationale`, `inactive_deferred`, and `active_standard`. |

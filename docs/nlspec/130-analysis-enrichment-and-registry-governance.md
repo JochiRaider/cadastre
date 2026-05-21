@@ -31,6 +31,17 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `ActivationControlledArtifactRef`
 - `EvidenceRef`
 - `EvidenceArtifactClassRegistry`
+- `090.GraphEdgeSemantics`
+- `090.GraphTraversalClass`
+- `090.GraphObjectOutputEligibilityRow`
+- `090.GraphQueryTranslationProfile`
+- `090.DerivedViewLagPolicy`
+- `090.DerivedViewState`
+- `090.GraphPropertyEvidencePolicy`
+- `080.DeriveFacts`
+- `080.ReplayEquivalencePolicy`
+- `060.SourceAuthorityProfileRow`
+- `060.AbsenceDerivationResult`
 
 ## Exports
 
@@ -122,6 +133,8 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 | `graph_delta_via_090` | `090.DerivedGraphEdgeRule graph handoff`. | Direct graph backend write or graph-serving mutation. | Missing supporting fact refs or projection refs fails before delta persistence. |
 | `gold_fact_via_080` | `080.DerivationRuleBundle handoff from 130`. | Package-emitted or analysis-emitted raw `GoldFact` bytes. | Missing temporal, authority, completeness, replay, or validation refs fails before fact ID computation. |
 | `no_output` | Explicit no-op record or no visible output as declared by validation row. | Any fact, graph, identity, completeness, package, or watermark mutation. | Unsupported behavior defaults to `explicit_no_op`. |
+
+`130` owns derived-edge rule activation and effect routing only; `080` owns gold fact derivation and `090` owns graph delta projection, graph delta identity, graph apply, query, rebuild, and backend behavior.
 
 ## Threat-Intel Enrichment
 

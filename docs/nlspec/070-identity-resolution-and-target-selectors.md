@@ -67,6 +67,38 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `ResolveIdentity`
 - `ResolverArtifactLifecycleGuardRows`
 - `IdentityReviewCaseStateMachineBinding`
+- `ResolverProfileRowSet`
+- `IdentifierEvidenceClassRowSet`
+- `IdentifierScopeRowSet`
+- `IdentityHardBlockerRowSet`
+- `AssetGenerationBoundaryRowSet`
+- `ResolverDecisionMatrixRowSet`
+- `IdentityConfidenceBandRowSet`
+- `IdentitySplitPolicy`
+- `ResolverExplanationPolicy`
+- `ResolverActivationReportPolicy`
+- `TargetSelectorSafetyPolicyRowSet`
+
+### Exported resolver artifact aliases
+
+The row-set artifact exports below are exact contract names for activation-controlled resolver artifacts. They map to stable row schemas and artifact classes already owned by this file. They do not define second schemas.
+
+| Exported artifact name | Stable row schema or policy | Activation-controlled artifact class |
+| --- | --- | --- |
+| `ResolverProfileRowSet` | `ResolverProfileRow` | `resolver_profile` |
+| `IdentifierEvidenceClassRowSet` | `IdentifierEvidenceClass` | `identifier_evidence_class_row_set` |
+| `IdentifierScopeRowSet` | `IdentifierScope` | `identifier_scope_row_set` |
+| `IdentityHardBlockerRowSet` | `IdentityHardBlockerRow` | `identity_hard_blocker_row_set` |
+| `AssetGenerationBoundaryRowSet` | `AssetGenerationBoundary` | `asset_generation_boundary_row_set` |
+| `ResolverDecisionMatrixRowSet` | `ResolverDecisionMatrix` | `resolver_decision_matrix_row_set` |
+| `IdentityConfidenceBandRowSet` | `IdentityConfidenceBand` | `identity_confidence_band_row_set` |
+| `IdentityReviewRoutingPolicy` | `IdentityReviewRoutingPolicy` | `identity_review_routing_policy` |
+| `IdentitySplitPolicy` | `SplitPolicy` | `identity_split_policy` |
+| `ResolverExplanationPolicy` | `ResolverExplanation` output policy | `resolver_explanation_policy` |
+| `ResolverActivationReportPolicy` | `ResolverActivationReport` activation policy | `resolver_activation_report_policy` |
+| `TargetSelectorSafetyPolicyRowSet` | `TargetSelectorSafetyPolicy` | `target_selector_safety_policy` |
+
+A downstream spec may import these artifact names by exact name. It must not infer row-set names from package type labels, implementation module names, or owner prose.
 
 ## Resolver Authority
 
@@ -824,3 +856,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+| ID | Question | Blocking scope | Required owner decision | Default until resolved |
+| --- | --- | --- | --- | --- |
+| `070-TODO-RESOLVER-ACTIVE-ROW-SETS` | TODO: Provide active resolver profile row sets, evidence class row sets, identifier scope row sets, candidate generation profiles, hard blocker row sets, generation boundary row sets, decision matrix row sets, confidence band row sets, review routing policy, split policy, explanation policy, selector safety policy, activation report policy, fixture checksums, and expected output checksums. | Production `IdentityDecision`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `IdentityReviewCase`, `ResolverExplanation`, and `GraphCorrectionHandoff` output. | `070` resolver governance plus `100` package-set activation and `120` identity closure fixtures. | Identity output remains blocked with the most specific resolver artifact error. |

@@ -317,6 +317,8 @@ not_checked
 error
 conflicted
 ambiguous
+blocked
+diagnostic
 ```
 
 These labels must not be rendered as authorized negative facts or compliance pass/fail states unless the owning domain spec has emitted the corresponding authoritative output.
@@ -489,6 +491,8 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 `GenerateErrorCodeRegistry` must generate exact rows for every `030` run-lock error. A generic registry row must not substitute for run-lock timing, conflict, heartbeat, stale recovery, fencing, idempotency, commit guard, assertion, or lock-loss failures.
 
+`GenerateErrorCodeRegistry` must generate exact rows for `DOMAIN_LEDGER_OWNER_DUPLICATE`, `OWNER_CONTRACT_REF_UNEXPORTED`, and `DUPLICATE_OWNER_EXPORT`. A generic validation or registry error must not substitute for define-once closure failures.
+
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
 
 ### OwnerErrorFragmentCompletionRequirement
@@ -656,6 +660,16 @@ The generated error registry must include every code exported by `040.CoreRecord
 | `EVIDENCE_REF_ID_COLLISION` | `040` | error | no, until input changes | record IDs visible; colliding inputs redacted |
 | `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN` | `040` | security error | no | payload redacted |
 | `GRAPH_BACKEND_ID_FORBIDDEN` | `040`/`090` | security error | no | backend ID redacted unless admin audit permits |
+
+### DefineOnceClosureErrorRows
+
+Define-once closure failures are caller-visible validation and promotion failures. They must not be rendered as domain facts, source absence, compliance pass/fail, cleanup, graph expiry, retraction, watermark advancement, or risk reduction.
+
+| Error code | Owner | Severity | Retry class | Caller-visible context | Audit-visible context |
+| --- | --- | --- | --- | --- | --- |
+| `DOMAIN_LEDGER_OWNER_DUPLICATE` | `000`, validated by `120` | blocked | `policy_change_required` | owner spec, contract name, Section 25 row IDs, redaction state | owner contract scope, validation row family, inventory checksum, version manifest ref |
+| `OWNER_CONTRACT_REF_UNEXPORTED` | `000`, validated by `120` | blocked | `policy_change_required` | owner spec, referenced contract name, referring file class, redaction state | referring path, heading, expected owner, export inventory checksum |
+| `DUPLICATE_OWNER_EXPORT` | `000`, validated by `120` | blocked | `policy_change_required` | duplicate contract name, owner specs, redaction state | owner file paths, export rows, alias status, inventory checksum |
 
 ### Core one-of and evidence artifact error rows
 
@@ -990,6 +1004,8 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `error` | `error` | `error` | `error` | `error` | No. | Emit generated `ErrorRecord`; do not collapse into unknown. |
 | `conflicted` | `conflicted` | `conflicted` | `conflicted` | visible only when owner graph eligibility permits | No. | Preserve conflicting assertion state; no pass/fail or cleanup by default. |
 | `ambiguous` | `ambiguous` | `ambiguous` | `ambiguous` | no mutation and no path expansion by default | No. | Preserve ambiguity; require owner disambiguation or explicit error. |
+| `blocked` | `blocked` | `blocked` | `blocked` | no graph mutation by default | No. | Display owner-controlled blocked validation, activation, lock, or closure state without implying negative evidence. |
+| `diagnostic` | `diagnostic` | reject by default | `diagnostic` | diagnostic only | No. | Display only when endpoint context permits operational diagnostics. |
 
 ### Conflicted and ambiguous label distinction
 
@@ -1016,6 +1032,12 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `run_lock_stale_recovered` | `diagnostic` or `blocked` for old holder | prior and new owner refs redacted, plus fencing token proof | forbidden |
 | `run_lock_idempotency_conflict` | `error` | idempotency key checksum and input checksum refs | forbidden |
 | `run_lock_fencing_token_stale` | `blocked` | fencing token proof refs | forbidden |
+| `blocked_validation` | `blocked` | owner spec, validation family, blocking row, and redacted artifact refs when diagnostic access permits | forbidden |
+| `deterministically_blocked` | `blocked` or no visible output according to owner context | deterministic block code, block scope, owner spec, and validation refs when permitted | forbidden |
+| `blocked_owner_todo` | `blocked` | owner TODO row, owner spec, and validation family when permitted | forbidden |
+| `inactive_deferred` | no visible output | deferred owner spec and activation rule only when diagnostic access permits | forbidden |
+
+None of the owner states in this table may authorize pass, fail, absence, cleanup, graph expiry, retraction, watermark advancement, or risk reduction. Caller-visible output must include owner context only when authorization and redaction permit it.
 
 ### PrivateBindingLeakResponse
 

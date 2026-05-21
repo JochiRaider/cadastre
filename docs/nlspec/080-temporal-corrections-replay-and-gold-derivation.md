@@ -711,6 +711,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
 | `080-OCSF-STRUCTURED-OBJECT-AC-001` | OCSF-derived structured object output fails before `gold_fact_key_id` computation unless `050.ProfileResolutionManifest`, `080.GoldFactPredicateContractRow.structured_value_schema_refs`, and required `060` authority refs validate and appear in `VersionManifest`. |
 | `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
+| `080-DOMAIN-RESOLVED-ROUTING-AC-001` | Domain rows for `CorrectionSnapshotRefPolicy` and `ReplayEquivalencePolicy` remain resolved only while this file has no owner-local `TODO:` for those stable contracts and the required `120` temporal, correction, and replay validation row families pass. |
 
 ### Structured input temporal and replay acceptance criteria
 
@@ -732,4 +733,4 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 ## Open Questions
 
-No owner-local temporal, correction, late-arrival, replay, correction-snapshot, no-op/error, or graph-handoff question remains open in this document. Concrete production fact catalogs, source datasets, predicates, private source bindings, and source-specific active row instances remain activation-controlled artifacts and validation-blocked when selected for production scope.
+No owner-local temporal, correction, late-arrival, replay, correction-snapshot, no-op/error, or graph-handoff question remains open in this document. Concrete production fact catalogs, source datasets, predicates, private source bindings, and source-specific active row instances remain activation-controlled artifacts and validation-blocked when selected for production scope. Concrete production fact-type and predicate row catalogs are activation-controlled artifacts. Their absence blocks only the selected production scope and must not re-open the stable `080.CorrectionSnapshotRefPolicy` or `080.ReplayEquivalencePolicy` owner-local closure state.

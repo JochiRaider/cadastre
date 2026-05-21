@@ -323,6 +323,10 @@ If the row chain is absent, ambiguous, inactive, checksum-mismatched, out of sco
 
 The matrix output must include the requested effect token, feed category, source dataset, selected row refs, row checksums, validation refs, blocking reason when blocked, and a `VersionManifest` ref. A closure validation result may be referenced by `030.VersionManifest`, but the underlying activation-controlled artifact refs and checksums remain required.
 
+### RowCatalogPlacementRule
+
+Stable source-authority behavior remains in this file. Concrete active source-specific row instances must be activation-controlled artifacts or deterministic block rows. This file must not embed production-active private source rows, tenant inventories, scanner site names, host lists, account lists, credentials, private routes, raw private fixture bytes, or private source binding values.
+
 #### SourceAuthorityClosureMatrixRow schema
 
 `SourceAuthorityClosureMatrixRow` is the executable row interface for proving that one active absence-sensitive effect has a complete authority chain or a deterministic block. Wildcards are forbidden for `fact_type` and `predicate`.
@@ -951,6 +955,7 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `060-GRAPH-EFFECT-AUTH-AC-003` | Missing or ambiguous flow-role evidence maps to unknown, ambiguous, or deterministic no-op and emits no graph mutation. |
 | `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
 | `060-SOURCE-CLOSURE-AC-014` | Every active absence-sensitive effect resolves one `SourceAuthorityClosureMatrixRow` with complete refs and passing validation, or resolves one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, or `TODO` rows fail before any absence-sensitive effect. |
+| `060-SOURCE-CLOSURE-AC-015` | Missing active row catalogs or deterministic block rows for the full source-closure row chain emit no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, or compliance negative output. |
 | `060-SOURCE-CLOSURE-AC-015` | Every active absence-sensitive effect resolves exactly one active closure row chain or one deterministic block row before `DeriveAbsenceOrUnknown` can emit output. |
 | `060-SOURCE-CLOSURE-AC-016` | Deterministic block rows emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof. |
 | `060-SOURCE-CLOSURE-AC-017` | Source-history no-change proof fails without both retention and coverage rows. |
@@ -991,3 +996,4 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
 | `060-TODO-SOURCE-DATASET-ROW-CATALOG` | TODO: Provide active vendor-neutral `source_dataset` row catalogs or deterministic block rows for every `source_dataset` referenced by active feed profiles. | Source-authority closure and absence-sensitive effects. | Product governance plus `020`, `060`, and `120`. | Requested effects remain blocked. |
+| `060-TODO-SOURCE-CLOSURE-ROW-SETS` | TODO: Provide active row sets or deterministic block rows for `SourceAuthorityClosureMatrixRowSet`, `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfileRowSet`, `SourceStalenessPolicyRowSet`, `ProgressSignalInterpretationPolicyRowSet`, `SupplierCollectionVisibilityProfileRowSet`, `ControlResultMappingRowSet`, `SourceHistoryRetentionProfileRowSet`, `AbsenceDerivationPolicyRowSet`, `ProjectionWatermarkPolicyRowSet`, and `ExternalSchemaAuthoritySignalMappingRowSet` when external schema signals are consulted. | Absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, and compliance negative output. | Product governance plus `020`, `060`, `100`, and `120` validation refs. | Requested effects resolve to deterministic block, unknown, not_applicable, source_stale, no_op, or the most specific owner error; no forbidden mutation. |

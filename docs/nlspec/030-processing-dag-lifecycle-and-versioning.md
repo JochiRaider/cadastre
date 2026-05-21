@@ -77,6 +77,11 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `StructuredInputChangeProposalLifecycleMachine`
 - `ResolveStructuredInputRepositorySnapshot`
 - `ValidateStructuredInputRepositorySnapshot`
+- `RequiredLifecycleMachineBindings`
+- `VersionManifestCompletenessMatrix`
+- `RunLockKeyDerivation`
+- `RunLockClosureValidationHandoff`
+- `LifecycleClosureValidationHandoff`
 
 ## Stage Graph Contract
 
@@ -1132,6 +1137,18 @@ When identity review output, identity mutation, review expiration, or review ter
 
 If an owner spec defines a production-affecting lifecycle machine and transition matrix, domain-level lifecycle status must be `blocked_validation` until the matching `120.LifecycleValidationMatrix` rows pass. It must not remain `blocked_owner_todo` unless the owner spec lacks the machine, states, events, transition matrix, or illegal-transition rule.
 
+### LifecycleClosureValidationHandoff
+
+This table maps each production-affecting lifecycle machine to its owner, transition-table location, required validation row family, and domain Section 25 row when applicable. It defines no owner-specific transition behavior beyond the already declared lifecycle machine contracts.
+
+| Closure target | Owner contract | Required validation family | Domain Section 25 row |
+| --- | --- | --- | --- |
+| activation-controlled artifact lifecycle | `030.ActivationControlledArtifactLifecycleMachine` plus owner guard rows | `120-LIFECYCLE-*` | `DOM-TODO-010` |
+| identity review case | `070.IdentityReviewCaseStateMachine.v1` | `120-LIFECYCLE-*`; `120-IDENTITY-REVIEW-*` | `DOM-TODO-010` |
+| graph apply | `090.GraphApplyLifecycleMachine.v1` | `120-LIFECYCLE-*`; `120-GRAPH-*` | `DOM-TODO-010` |
+| package-set activation | `100.PackageSetActivationLifecycleMachine.v1` | `120-LIFECYCLE-*`; `120-PACKAGE-ACTIVATION-*` | `DOM-TODO-010` |
+| validation acceptance | `120.ValidationAcceptanceLifecycleMachine.v1` | `120-LIFECYCLE-*`; `120-VALIDATION-*` | `DOM-TODO-010` |
+
 ### RunLockKeyDerivation
 
 ```text
@@ -1141,6 +1158,19 @@ RunLockKeyDerivation(scope):
 3. Hash with SHA-256 and prefix with `runlock_`.
 4. If two non-identical tuples produce the same lock key, fail with `RUN_LOCK_COLLISION`.
 ```
+
+### RunLockClosureValidationHandoff
+
+Run-lock behavior is owned by `030`. Domain Section 25 row `DOM-TODO-020` remains `blocked_validation` until `120-RUNLOCK-CLOSE-*` rows pass with fixture checksums, expected outputs, mutation-prohibition proofs, and `VersionManifest` refs.
+
+| Closure target | Required validation evidence | Default while blocked |
+| --- | --- | --- |
+| lease defaults and timing bounds | fixture checksum, expected lock evidence checksum, expected owner error when invalid | no production output write |
+| all-or-nothing acquisition and active conflict | fixture checksum, conflict evidence checksum, mutation-prohibition proof | no partial lock set |
+| heartbeat refresh and heartbeat timeout | fixture checksum, expected recovery or loss evidence | no watermark or commit after uncertainty |
+| stale recovery and fencing | recovery evidence checksum, stale-holder rejection proof | old holder writes rejected |
+| commit guards and lock loss before commit | commit guard ref, lock-loss evidence ref, expected error | no production commit |
+| package activation, graph apply, and maintenance lock loss | owner validation refs plus `RunLockOperationEvidence` refs | owner mutation forbidden |
 
 ### RunLockSet acquisition semantics
 

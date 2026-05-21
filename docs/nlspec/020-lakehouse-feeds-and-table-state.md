@@ -180,6 +180,10 @@ A feed category with non-empty `absence_sensitive_domains` must not enter active
 
 Missing source-authority closure rows must block absence, cleanup, retraction, graph expiry, and watermark advancement. Missing rows must not be interpreted as permission to use broad source-category authority, default lakehouse read completeness, provider freshness, destination cleanup, graph derived-view state, or implementation-local policy.
 
+### SourceAuthorityClosureImportBoundary
+
+`020` owns feed-category closure and read/import eligibility. It imports `060.SourceAuthorityClosureMatrix` by exact name and defines no source-authority row schema, absence algorithm, staleness algorithm, coverage algorithm, control-result mapping, graph-expiry authorization, or watermark authorization.
+
 ### MVPFeedCategoryClosureCatalogCompleteness
 
 The active `LakehouseFeedCategoryClosureRowSet` must contain exactly one row for every category in `LakehouseFeedCategoryClosureRequirementTable`.
@@ -713,3 +717,4 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
 | `020-TODO-SOURCE-DATASET-CATALOG` | TODO: Provide the vendor-neutral `source_dataset` catalog or deterministic block rows for every `source_dataset` referenced by active feed profiles and source-authority closure rows. | Feed activation, source-authority closure, and validation. | Product governance plus `020`, `060`, and `120`. | Active absence-sensitive effects remain blocked. |
+| `020-TODO-FEED-CATEGORY-CLOSURE-ROW-SET` | TODO: Provide an active `LakehouseFeedCategoryClosureRowSet` or deterministic block row for every category in `LakehouseFeedCategoryClosureRequirementTable`, with validation refs and `VersionManifest` inclusion. | Production feed activation and absence-sensitive effects. | Product governance plus `020`, `060`, `100`, and `120` validation refs. | Production feed categories without active rows fail with `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` or deterministic block behavior. |

@@ -78,6 +78,12 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `RunGraphReadModelDriftCheck`
 - `RebuildGraph`
 - `GraphApplyLifecycleMachine`
+- `GraphEdgeSemanticsRegistry`
+- `GraphObjectOutputEligibilityRow`
+- `GraphObjectOutputEligibilityRowSet`
+- `GraphActiveProfileClosure`
+- `GraphBackendSelectionDefaultDecision`
+- `GraphBackendActivationBlockerSet`
 
 ## Projection Authority
 
@@ -205,6 +211,18 @@ Graph backend selection is active only when graph serving, graph apply, graph qu
 | selected profile checksum mismatch | Fail with `GRAPH_ARTIFACT_CHECKSUM_MISMATCH` before backend mutation or query. |
 | required profile field omitted | Fail with `GRAPH_BACKEND_CONFIG_INCOMPLETE`; do not inherit provider runtime defaults. |
 | selected default profile contains unresolved production fields | Fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED` before backend mutation, query, rebuild promotion, or drift check. |
+
+### GraphBackendSelectionClosureStatus
+
+`GraphBackendSelectionPolicy` owns default backend selection. `mvp-janusgraph.v1` is a default selection token only. Production mutation, query, rebuild promotion, drift check, and graph-serving output remain blocked until `GraphBackendProfile`, `GraphProviderCapabilityMatrix`, `GraphReadModelSchemaProfile`, `GraphQueryTranslationProfile`, backend taxonomy mapping, package refs, storage backend refs, index backend refs, schema/index fixtures, and `120` graph backend validation rows pass.
+
+| Selection state | Required behavior |
+| --- | --- |
+| graph serving disabled | No backend selection output and no backend activation blocker. |
+| default token materialized | Emit `GraphBackendSelectionDefaultDecision`; do not mutate, query, rebuild, or promote graph serving by selection alone. |
+| selected backend profile unresolved | Fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED` or the most specific owner error before backend interaction. |
+| selected backend profile validated but activation gates blocked | Preserve selection evidence and block production backend effects. |
+| all backend, package, schema, capability, and validation gates pass | Backend profile may be used only through `GraphApplyProfile`, `GraphQueryTranslationProfile`, `GraphReadModelSchemaProfile`, and derived-view gates. |
 
 ### GraphBackendProfile schema
 
@@ -1064,6 +1082,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
 
 ### Production activation blockers
+
+All JanusGraph TODO rows are production activation blockers for the selected default profile. They do not create a domain-level backend product decision and do not expand the MVP edge set.
 
 | ID | Blocker | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |

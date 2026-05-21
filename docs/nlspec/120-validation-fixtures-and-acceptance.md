@@ -106,6 +106,22 @@ Validation must prove that volatile material cannot redefine stable behavior and
 
 `RunValidationMatrix` must produce a deterministic `AcceptanceReport` containing row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref.
 
+`AcceptanceReport.result = pass` is forbidden when any non-deferred define-once, Section 25, owner-export, duplicate-owner, runtime-restatement, or owner-contradiction validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or contains a required `TODO` fixture checksum, expected output checksum, expected error, mutation-prohibition proof, activation ref, or manifest ref.
+
+### DefineOnceClosureValidationMatrix
+
+This matrix verifies `000.DefineOnceClosureInventory`. A row may pass only when the inventory row has deterministic bytes, exact owner references, non-`TODO` fixture and expected-output checksums, and no forbidden mutation.
+
+| validation_row_id | owner_spec | scenario | expected_failure_code | mutation_prohibition | blocking_status |
+| --- | --- | --- | --- | --- | --- |
+| `define-once-owner-export-present` | `000` | Every runtime contract reference resolves to one owner export or declared owner-export alias. | none on success; `OWNER_CONTRACT_REF_UNEXPORTED` on failure | no promotion | blocked |
+| `define-once-import-ref-exact` | `000` | Import and route references use exact exported names and no inferred aliases. | `OWNER_CONTRACT_REF_UNEXPORTED` | no promotion | blocked |
+| `define-once-non-owner-runtime-restatement` | `000` | Non-owner document restates schema, default, algorithm, failure precedence, activation behavior, or validation harness behavior. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output | blocked |
+| `define-once-duplicate-domain-ledger-row` | `000`, `domain` | Section 25 duplicates an owner contract without distinct scope and validation family. | `DOMAIN_LEDGER_OWNER_DUPLICATE` | no promotion | blocked |
+| `define-once-duplicate-owner-export` | `000` | More than one owner exports the same runtime contract name. | `DUPLICATE_OWNER_EXPORT` | no production output | blocked |
+| `define-once-owner-spec-contradiction` | `000` | Two owners define incompatible behavior for one runtime contract. | `OWNER_SPEC_CONTRADICTION` | no production output | blocked |
+| `define-once-reference-runtime-authority` | `000` | Research, ADR, reference, archive, or rationale text is cited as runtime authority. | `DOMAIN_RUNTIME_RESTATEMENT` or `OWNER_SPEC_CONTRADICTION` by context | no production output | blocked |
+
 ### IdentityResolverClosureValidationMatrix
 
 This matrix is the executable validation interface for identity resolver closure. A row may pass only when `fixture_checksum` and `expected_output_checksum` are non-`TODO` SHA-256 values, every input artifact ref is present, and the observed output matches the expected output bytes. Rows with `TODO` checksums must remain `blocked` and must block authoritative promotion when identity output is in scope.
@@ -296,20 +312,37 @@ This matrix is the executable validation interface for identity resolver closure
 | `owner-spec-contradiction-same-runtime-contract` | Two owner specs define incompatible runtime behavior for one named contract. | `OWNER_SPEC_CONTRADICTION` | no production output |
 | `adr-status-unregistered` | ADR status is not in `000.SpecStatus`. | `ADR_STATUS_UNREGISTERED` | no promotion |
 | `registry-manifest-path-mismatch` | Manifest path lacks exactly one registry row or explicit non-registry reason. | `REGISTRY_MANIFEST_PATH_MISMATCH` | no promotion |
+| `domain-ledger-owner-duplicate` | Section 25 has duplicate owner-contract rows without distinct `owner_contract_scope` and validation families. | `DOMAIN_LEDGER_OWNER_DUPLICATE` | no promotion |
+| `owner-contract-ref-unexported` | An import, ledger row, validation row, or spec-set validation ref names a contract that is not an owner export or alias. | `OWNER_CONTRACT_REF_UNEXPORTED` | no promotion |
+| `duplicate-owner-export` | Two owners export the same runtime contract name without a same-owner alias declaration. | `DUPLICATE_OWNER_EXPORT` | no production output |
+| `non-owner-runtime-restatement-schema` | Non-owner document copies an owner schema or field table. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `non-owner-runtime-restatement-default` | Non-owner document copies or changes an owner default or bound. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `non-owner-runtime-restatement-algorithm` | Non-owner document copies an owner algorithm or step order. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `non-owner-runtime-restatement-failure-precedence` | Non-owner document copies failure precedence or owner error ordering. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `non-owner-runtime-restatement-activation` | Non-owner document defines activation behavior owned elsewhere. | `DOMAIN_RUNTIME_RESTATEMENT` | no production output |
+| `non-owner-runtime-restatement-validation-harness` | Non-owner document defines validation harness behavior owned by `120`. | `DOMAIN_RUNTIME_RESTATEMENT` | no promotion |
 
 ### DomainSection25StatusValidationMatrix
 
 | Row ID | Scenario | Expected result |
 | --- | --- | --- |
+| `domain-section25-structured-input-repository-blocked-validation` | Structured-input repository row is `blocked_validation` while repository profile, snapshot, materialization, package-set, redaction, audit, telemetry, or manifest refs are missing. | Acceptance blocked. |
 | `domain-section25-source-closure-blocked-validation` | Domain row for source-specific closure is `blocked_validation`; `060` closure row instances or `120-SOURCE-CLOSURE-*` rows are missing. | Acceptance blocked, no production output. |
 | `domain-section25-correction-snapshot-resolved` | Domain row is resolved; `080.CorrectionSnapshotRefPolicy` has no owner TODO and required validation rows exist. | Pass only when `080` rows are not blocked. |
 | `domain-section25-replay-equivalence-resolved` | Domain row is resolved; `080.ReplayEquivalencePolicy` routes output class field selection to owners. | Pass. |
 | `domain-section25-ocsf-blocked-validation` | Domain row for MVP OCSF mapping is `blocked_validation` while row instances/checksums are missing. | Acceptance blocked. |
 | `domain-section25-graph-profile-blocked-validation` | MVP edge semantics are closed but graph fixture checksums are missing. | Acceptance blocked. |
 | `domain-section25-lifecycle-blocked-validation` | Lifecycle owners have machine definitions but validation rows are missing or blocked. | Acceptance blocked. |
+| `domain-section25-runlock-blocked-validation` | Run-lock owner behavior exists in `030` but closure rows or checksums are missing. | Acceptance blocked. |
 | `domain-section25-domain-exports-none` | `domain.md` declares no runtime exports and no runtime row, schema, or algorithm is found. | Pass. |
 | `domain-section25-package-type-enum-resolved` | `100.PackageType` confirmed enum has no duplicates and no generic `deployment_profile`. | Pass only when the active `100.PackageType` enum validation rows pass. |
-| `domain-section25-janusgraph-default-blocked-activation` | `090` backend default selection is resolved, but production activation fails closed until backend/package validation rows pass. | Pass when activation fail-closed rows pass. |
+| `domain-section25-graph-backend-selection-blocked-validation` | `090.GraphBackendSelectionPolicy` owns default backend selection and production activation remains blocked until graph backend validation rows pass. | Acceptance blocked until `120-GRAPH-BACKEND-*` rows pass. |
+| `domain-section25-context-map-relationship-blocked-validation` | Context-map relationship type vocabulary validation rows are missing or blocked. | Acceptance blocked. |
+| `domain-section25-context-map-edge-blocked-validation` | Context-map edge matrix validation rows are missing or blocked. | Acceptance blocked. |
+| `domain-section25-observability-blocked-validation` | Telemetry non-authority and telemetry health mapping rows are missing or blocked. | Acceptance blocked. |
+| `domain-section25-core-oneof-blocked-validation` | Core one-of and evidence artifact closure rows are missing, blocked, or `TODO`-bearing. | Acceptance blocked. |
+| `domain-section25-identity-blocked-validation` | Resolver row-set and resolver activation artifact validation rows are missing, blocked, or `TODO`-bearing. | Acceptance blocked. |
+| `domain-section25-graph-backend-duplicate-owner-route` | Section 25 contains duplicate rows for `090.GraphBackendSelectionPolicy` without distinct scope and validation family. | Fail with `DOMAIN_LEDGER_OWNER_DUPLICATE`. |
 
 ### ValidationCoverageMatrix
 
@@ -1260,6 +1293,9 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | --- | --- |
 | `120-API-SCHEMA-TOTAL-AC-001` | `ApiSurfaceClosureValidationMatrix` has coverage for every exported `110` request and response schema and fails while any required checksum or expected error is missing. |
 | `120-STATE-LABEL-TOTAL-AC-001` | `SourceStateLabelTotalityValidationMatrix` has one row per declared `110.SourceStateLabel` and proves `conflicted` and `ambiguous` do not collapse. |
+| `120-DEFINE-ONCE-CLOSURE-AC-001` | `DefineOnceClosureValidationMatrix` fails non-owner runtime restatement, unexported owner refs, duplicate owner exports, duplicate ledger rows, owner contradictions, and reference-as-runtime-authority violations. |
+| `120-DEFINE-ONCE-CLOSURE-AC-002` | Every Section 25 ledger row has exactly one matching `DomainSection25StatusValidationMatrix` row and one owner-local closure state. |
+| `120-DEFINE-ONCE-CLOSURE-AC-003` | Every imported contract, Section 25 owner contract, validation-row contract, and `SpecSetVersion.validation_matrix_refs` entry resolves to exactly one owner export or declared owner-export alias. |
 | `120-IDENTITY-ACTIVATION-CATALOG-AC-001` | Aggregate acceptance fails unless every active identity resolver artifact row set has passing validation refs and non-`TODO` fixture and output checksums. |
 | `120-IDENTITY-HARD-BLOCKER-AC-001` | Every hard blocker family has fired and not-fired fixtures proving precedence before confidence and review. |
 | `120-IDENTITY-DECISION-MATRIX-AC-001` | Missing and ambiguous decision rows fail before mutation. |

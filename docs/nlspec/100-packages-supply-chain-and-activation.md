@@ -83,6 +83,11 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `PackageDeprecationWindowPolicy`
 - `PackageDeprecationWindowPolicyRow`
 - `StructuredInputMaterializationResult`
+- `PackageTypeEnumClosure`
+- `PackageTypePolicyRowCoverageMatrix`
+- `PackageActivationValidationMatrix`
+- `PackageErrorRegistryFragment`
+- `PackageTypePolicyResolutionResult`
 
 ## Activation Unit
 
@@ -204,6 +209,14 @@ Package type resolution error codes are:
 | `PACKAGE_TYPE_UNKNOWN` | `PackageReleaseManifest.package_type` is not one confirmed `PackageType` token. |
 | `PACKAGE_TYPE_POLICY_MISSING` | The package type is known but no active `PackageTypePolicyRow` covers it for the target environment. |
 | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | More than one equally specific active policy row covers the package type and target environment. |
+
+### PackageTypeDomainClosureHandoff
+
+`100.PackageType` enum identity is closed. Missing active `PackageTypePolicyRow` instances, missing deprecation rows, missing compatibility rows, missing validation refs, missing package-set refs, or missing `VersionManifest` refs block package activation only. They must not re-open the `PackageType` enum closure row in `domain.md`.
+
+| Domain row | Closed scope | Owner-local blockers that remain outside the domain row |
+| --- | --- | --- |
+| `DOM-RESOLVED-012` | `PackageType` token identity, exact unknown-token rejection, and rejection of broad legacy labels. | `PackageTypePolicyRow`, `PackageDeprecationWindowPolicyRow`, compatibility rows, validation refs, package-set refs, trust refs, and manifest refs. |
 
 ### PackageTypePolicyRow schema
 

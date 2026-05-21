@@ -53,6 +53,35 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 - `ComputeRawRecordId`
 - `ComputeGoldFactKeyId`
 - `ComputeGoldFactId`
+- `RawRecordSchema`
+- `CadastreSilverObservationSchema`
+- `CanonicalEntitySchema`
+- `SourceAssetSchema`
+- `IdentifierSchema`
+- `GoldFactSchema`
+- `EvidenceRefSchema`
+- `CoreOneOfRegistry`
+- `GoldFactSubjectRefKindRegistry`
+- `GoldFactObjectValueKindRegistry`
+- `EvidenceArtifactIdKindRegistry`
+- `EvidenceArtifactClassRegistry`
+- `ComputeEvidenceRefId`
+
+### Exported schema aliases
+
+The exported `*Schema` names are exact aliases to the corresponding row family in `CoreRecordSchema`. They do not define second schemas, field defaults, nullability, ID inputs, checksum inputs, or extension behavior.
+
+| Exported schema name | Exact owner table or registry |
+| --- | --- |
+| `RawRecordSchema` | `CoreRecordSchema` rows for `RawRecord`. |
+| `CadastreSilverObservationSchema` | `CoreRecordSchema` rows for `CadastreSilverObservation`. |
+| `CanonicalEntitySchema` | `CoreRecordSchema` rows for `CanonicalEntity`. |
+| `SourceAssetSchema` | `CoreRecordSchema` rows for `SourceAsset`. |
+| `IdentifierSchema` | `CoreRecordSchema` rows for `Identifier`. |
+| `GoldFactSchema` | `CoreRecordSchema` rows for `GoldFact`, including `CoreOneOfRegistry` constraints. |
+| `EvidenceRefSchema` | `CoreRecordSchema` rows for `EvidenceRef`, including `EvidenceArtifactIdKindRegistry` and `EvidenceArtifactClassRegistry` constraints. |
+
+A downstream spec may import a schema alias by exact name and route to it. A downstream spec must not restate the field schema, default, null behavior, ID input, checksum input, or extension behavior owned by this file.
 
 ## Canonical Serialization
 
@@ -905,6 +934,9 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-CORE-ONEOF-ID-CHECKSUM-AC-001` | Complete canonical `one_of` objects, including `kind` and matching value member, are included in ID and checksum inputs; hashing only value members or owner-local strings fails validation. |
 | `040-CORE-ONEOF-MIGRATION-AC-001` | Pre-closure records using inferred kinds, inferred members, inferred null behavior, or inferred artifact-class pairing are not promotion-eligible and must be replayed and rekeyed under the closed schema version. |
 | `040-ERROR-FRAGMENT-CORE-AC-001` | `040.CoreRecordErrorRegistryFragment` has no `TODO:` cells and generates deterministic `110.ErrorCodeRegistryRow` values for every `040.CoreRecordErrorCodeSet` code. |
+| `040-EXPORT-ALIAS-AC-001` | Every downstream import of a `040.*Schema`, one-of registry, evidence artifact registry, or `ComputeEvidenceRefId` resolves to exactly one exported name in this file. |
+| `040-EXPORT-ALIAS-AC-002` | Schema aliases validate as aliases to `CoreRecordSchema` row families and do not create duplicate field definitions. |
+| `040-COMPUTE-EVIDENCE-REF-ID-AC-001` | `ComputeEvidenceRefId` is callable by exact contract name and rejects raw payload bytes before ID computation. |
 
 ### Structured input evidence acceptance criteria
 

@@ -305,6 +305,12 @@ TODO: Product operations governance must select production default exporter nume
 
 System health aggregation remains owned by `110.EndpointOutcomeMatrix`.
 
+### TelemetryDomainClosureHandoff
+
+`140.TelemetryNonAuthorityRule` and `140.TelemetryHealthMappingPolicy` are the owner contracts for telemetry non-authority and observability health mapping. `domain.md` may route to these contracts by exact name only. Domain context-map validation remains blocked until `120-OBSERVABILITY-*` and `120-DOMAIN-CMAP-*` rows pass.
+
+This handoff defines no source authority, identity authority, graph authority, package activation authority, API response schema, audit persistence rule, replay checksum algorithm, or validation harness behavior outside the telemetry contracts owned by this file.
+
 ## Telemetry Replay Exclusion Policy
 
 `TelemetryReplayExclusionPolicy` defines telemetry fields excluded from authoritative domain replay equivalence by default.
