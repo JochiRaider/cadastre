@@ -216,6 +216,20 @@ Artifact substitution failures must use owner-specific errors when available and
 
 `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, and `RegistryClassificationPolicy` manage owners, domains, classifications, glossary labels, policies, approval, lifecycle, custom properties, and checksums. Registry metadata must not define Cadastre fact authority, source authority, graph edge semantics, evidence refs, source completeness, or production approval by itself.
 
+### StructuredInputRepositoryRegistryHandoff
+
+Repository-authored registry, analysis, lineage, threat-intel, governance, custom-property, classification, and derived-edge artifacts are inert until active owner refs, exact-snapshot validation refs, materialization refs when packaged, package-set refs when package-supplied, and `030.VersionManifest` refs exist.
+
+Repository approval metadata is governance metadata only. It must not become production approval, fact authority, source authority, graph authority, source completeness, evidence refs, validation acceptance, package activation authority, or rollback eligibility.
+
+`ArtifactClassPolicy` must reject a repository snapshot, validation report, governance approval, branch name, tag, hook result, pull request approval, or merge event as a substitute for package release, source evidence, validation acceptance, source completeness, graph rebuild evidence, owner row set, or production approval.
+
+| Error code | Required use |
+| --- | --- |
+| `REGISTRY_REPOSITORY_ARTIFACT_INACTIVE` | Repository-authored registry or analysis artifact lacks active materialized owner refs, validation refs, package-set refs when package-supplied, or manifest refs. |
+| `REGISTRY_REPOSITORY_AUTHORITY_FORBIDDEN` | Repository approval metadata, branch state, validation report, or governance label attempts to become fact, source, graph, completeness, evidence, package, or production approval authority. |
+| `REGISTRY_REPOSITORY_SUBSTITUTION_FORBIDDEN` | Repository artifact attempts to substitute for package artifact, validation acceptance, source evidence, owner row set, graph rebuild evidence, or production approval. |
+
 ### RegistryArtifactGovernance schema
 
 | Field | Required | Default or omission behavior | Rule |
@@ -391,6 +405,7 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 | table snapshot artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source time, graph rebuild correctness by itself |
 | table commit artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | fact time, source authority, source completeness by itself |
 | graph rebuild artifact | `activation_controlled_artifact` or `runtime_state_record` as owner declares | `130` unless imported owner is named | source truth, identity truth, completeness, validation by itself |
+| structured input repository artifact | `runtime_state_record`, `activation_controlled_artifact`, or `validation_artifact` as owner declares | `030`, `100`, `110`, or `120` by contract | package artifact, validation acceptance, source evidence, owner row set, graph rebuild evidence, or production approval |
 | evidence artifact class row set | `activation_controlled_artifact` | `040` for stable class/kind pairing; owner spec for class-specific rows | new `artifact_id.kind` values, source evidence authority, production evidence by itself |
 
 ### RegistryActivationPolicy
@@ -561,6 +576,13 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 | `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-001` | Lineage facets cannot substitute for table snapshot evidence or source evidence without an exact owner artifact-class row. |
 | `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-002` | Registry labels, validation reports, analysis findings, and metrics cannot substitute for fact authority, source evidence, production evidence, graph truth, or package activation. |
 | `130-EVIDENCE-ARTIFACT-SUBSTITUTION-AC-003` | Evidence refs to analysis, lineage, registry, validation, or freshness artifacts validate both `130.ArtifactClassPolicy` and `040.EvidenceArtifactClassRegistry` before visibility. |
+
+### Structured input registry acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `130-STRUCTURED-INPUT-REGISTRY-AC-001` | Repository-authored registry label, approval metadata, or governance artifact cannot create fact authority, source authority, graph authority, source completeness, evidence authority, package activation, or production approval. |
+| `130-STRUCTURED-INPUT-REGISTRY-AC-002` | Repository-authored analysis rule or registry artifact cannot run or activate unless active bundle refs, compatibility rows, validation refs, materialization refs when packaged, package-set refs when package-supplied, and manifest refs pass. |
 
 ## Definition of Done
 

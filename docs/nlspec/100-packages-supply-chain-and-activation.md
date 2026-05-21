@@ -82,6 +82,7 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `PackageSetActivationLifecycleMachine`
 - `PackageDeprecationWindowPolicy`
 - `PackageDeprecationWindowPolicyRow`
+- `StructuredInputMaterializationResult`
 
 ## Activation Unit
 
@@ -196,6 +197,10 @@ Package type resolution error codes are:
 
 | Error code | Required use |
 | --- | --- |
+| `STRUCTURED_INPUT_MATERIALIZATION_REQUIRED` | Repository-authored package release lacks required `source_materialization_refs` or materialization validation refs. |
+| `STRUCTURED_INPUT_MATERIALIZATION_MISMATCH` | Materialization snapshot checksum, artifact digest, release input checksum, validation refs, or redaction refs do not match the package release. |
+| `STRUCTURED_INPUT_PACKAGE_TYPE_MISMATCH` | Materialization result package type differs from `PackageReleaseManifest.package_type` or selected package type policy. |
+| `STRUCTURED_INPUT_PACKAGESET_REF_MISSING` | Repository-authored package-supplied artifact lacks required package-set ref or `VersionManifest` inclusion. |
 | `PACKAGE_TYPE_UNKNOWN` | `PackageReleaseManifest.package_type` is not one confirmed `PackageType` token. |
 | `PACKAGE_TYPE_POLICY_MISSING` | The package type is known but no active `PackageTypePolicyRow` covers it for the target environment. |
 | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | More than one equally specific active policy row covers the package type and target environment. |
@@ -408,12 +413,38 @@ The `PackageType` enum is closed. Activation remains blocked only when the activ
 | `package_developer_contract_ref` | Required for executable or authoring packages | none | Missing owner contract blocks stage binding and activation. |
 | `stage_binding_refs` | Required when the package can execute in a stage | `[]` only for non-executable declarative artifacts | Missing required stage binding rejects before package execution. |
 | `activation_artifact_refs` | Required when the package supplies activation-controlled artifacts | `[]` only when package supplies none | Each ref must validate through `030.ActivationControlledArtifactRef`. |
+| `source_materialization_refs` | Required when package artifact bytes are produced from `030.StructuredInputRepositorySnapshot` | `[]` only when not repository-authored | Refs to `StructuredInputMaterializationResult`; every ref must appear in `030.VersionManifest.included_refs`. |
+
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows for the release and its package type. |
 | `release_checksum` | Yes | none | SHA-256 over canonical release manifest bytes excluding `release_checksum`. |
 | `activation_scope` | Yes | none | Scope in which the release may be selected; out-of-scope releases fail before activation. |
 | `lifecycle_status` | Yes | none | Production selection requires lifecycle status permitted by the selected policy and activation mode. |
 
 Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required release fields reject before compatibility checks, package-set activation, rollback, quarantine, health gating, or candidate production output. A release manifest field does not substitute for `030.VersionManifest.included_refs`.
+
+## Structured Input Materialization
+
+`StructuredInputMaterializationResult` links one exact validated `030.StructuredInputRepositorySnapshot` to immutable package artifact bytes or activation artifact bytes. It preserves repository provenance without making Git state a production activation target.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `materialization_result_id` | Yes | none | Stable ID over snapshot ref, validation refs, artifact outputs, package type, artifact digest, media type, repository form, release input checksum, redaction refs, and materialization checksum. |
+| `repository_snapshot_ref` | Yes | none | Exact `030.StructuredInputRepositorySnapshot` ref. Mutable refs are forbidden. |
+| `validation_run_refs` | Yes | none | Non-empty refs for exact snapshot, selected paths, artifact classes, negative tests, private-binding redaction, and materialization validation. |
+| `artifact_class_outputs` | Yes | none | Closed artifact classes produced by materialization. |
+| `package_type` | Yes | none | One confirmed `PackageType` token for the materialized release when packaged. |
+| `package_artifact_ref` | Required when package bytes are produced | null only for non-packaged activation artifact materialization | Immutable artifact ref in an allowed repository form. |
+| `artifact_digest` | Required when package bytes are produced | null only when no package bytes are produced | Digest of materialized artifact bytes; it must match `PackageReleaseManifest.artifact_digest` when a release is created. |
+| `artifact_size_bytes` | Required when package bytes are produced | null only when no package bytes are produced | Unsigned byte size of artifact bytes. |
+| `media_type` | Required when package bytes are produced | null only when no package bytes are produced | Must match the package repository model. |
+| `repository_form` | Yes | none | Production activation form must be `oci_digest`, `tuf_compatible_metadata`, or `local_bundle`. `git_tree_snapshot` may be provenance only. |
+| `release_manifest_input_checksum` | Required when a release is created | null only when no release is created | SHA-256 over canonical release-manifest inputs derived from materialized bytes. |
+| `redaction_validation_refs` | Yes | none | Non-empty refs proving private repository values are rejected or redacted. |
+| `package_set_required` | Yes | `true` when materialized output can affect validation, production output, rollback, replay, graph apply, visibility, or health gating | `false` only for validation-only or non-production materialization. |
+| `materialization_checksum` | Yes | none | SHA-256 over canonical materialization result bytes excluding this field. |
+| `lifecycle_status` | Yes | none | Production handoff requires status permitted by package activation policy. |
+
+A valid materialization result does not activate production behavior. Production behavior still requires `PackageReleaseManifest`, `ProductionPackageSetManifest` when package-supplied, owner validation refs, compatibility refs, and `030.VersionManifest` inclusion.
 
 ## Package Set Manifest
 
@@ -549,23 +580,24 @@ ActivatePackageSet(candidate_set, current_active_set):
 1c. Include lock policy, lock set, operation evidence, commit guard, and lifecycle transition evidence in `VersionManifest`.
 2. Verify package cohesion groups are complete.
 3. For each release, resolve exactly one PackageTypePolicyRow through ResolvePackageTypePolicyRow.
-4. Verify repository_form is one form allowed by the selected PackageTypePolicyRow.
-5. Reject production git_tree_snapshot releases with PACKAGE_REPOSITORY_FORM_UNSUPPORTED.
-6. Verify repository metadata, freshness proof, anti-rollback state, descriptor, artifact digest, size, media type, and subject digest.
-7. Verify PackageTrustPolicyRow, signatures, signer authorization, active trust roots, threshold rules, and transparency evidence.
-8. Verify required attestations, build provenance, SBOM, license, vulnerability, dependency lock, and dependency graph gates.
-9. Verify PackageCompatibilityMatrixRow coverage for every axis required by the selected PackageTypePolicyRow.
-10. Verify PackageDeveloperContract and PackageStageBinding refs.
-11. Verify every package-supplied activation-controlled artifact ref through 030.ActivationControlledArtifactRef.
-12. Verify each artifact owner spec and artifact class is permitted by the selected PackageTypePolicyRow.
-13. Verify artifact checksums, lifecycle status, validation refs, activation scope, and package-set membership.
-14. When package-supplied artifacts have owner spec 070, verify identity artifact compatibility: permitted artifact class, stable weak-evidence defaults unchanged, no graph-key-only or weak-only merge authority, no hard-blocker weakening, no decision-state redefinition, no review terminality weakening, no split or explanation checksum policy redefinition, and required identity validation refs present.
-15. Verify validation matrix and required negative fixtures.
-16. Verify VersionManifest includes every package-set, release, repository, trust, transparency, attestation, provenance, SBOM, dependency lock, compatibility, validation, stage binding, rollback, quarantine, emergency, health, lifecycle, and approval ref that can affect output.
-17. Persist PackagePromotionRecord with artifact refs.
-18. If any check fails, or if the activation lock is lost, stale, fenced, or idempotency-conflicted, keep `current_active_set` active, write no candidate production output, and emit `PackageActivationFailureEvent` with the most specific package failure code or imported `030` run-lock error as the owner cause.
-19. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
-20. Do not mark LastKnownGoodPackageSet until every required LastKnownGoodHealthGate passes.
+4. When `source_materialization_refs` is non-empty, validate each `StructuredInputMaterializationResult` against the exact repository snapshot checksum, validation refs, artifact digest, package type, repository form, redaction refs, release input checksum, and package-set target.
+5. Verify repository_form is one form allowed by the selected PackageTypePolicyRow.
+6. Reject production git_tree_snapshot releases with PACKAGE_REPOSITORY_FORM_UNSUPPORTED.
+7. Verify repository metadata, freshness proof, anti-rollback state, descriptor, artifact digest, size, media type, and subject digest.
+8. Verify PackageTrustPolicyRow, signatures, signer authorization, active trust roots, threshold rules, and transparency evidence.
+9. Verify required attestations, build provenance, SBOM, license, vulnerability, dependency lock, and dependency graph gates.
+10. Verify PackageCompatibilityMatrixRow coverage for every axis required by the selected PackageTypePolicyRow.
+11. Verify PackageDeveloperContract and PackageStageBinding refs.
+12. Verify every package-supplied activation-controlled artifact ref through 030.ActivationControlledArtifactRef.
+13. Verify each artifact owner spec and artifact class is permitted by the selected PackageTypePolicyRow.
+14. Verify artifact checksums, lifecycle status, validation refs, activation scope, and package-set membership.
+15. When package-supplied artifacts have owner spec 070, verify identity artifact compatibility: permitted artifact class, stable weak-evidence defaults unchanged, no graph-key-only or weak-only merge authority, no hard-blocker weakening, no decision-state redefinition, no review terminality weakening, no split or explanation checksum policy redefinition, and required identity validation refs present.
+16. Verify validation matrix and required negative fixtures.
+17. Verify VersionManifest includes every package-set, release, repository, materialization, trust, transparency, attestation, provenance, SBOM, dependency lock, compatibility, validation, stage binding, rollback, quarantine, emergency, health, lifecycle, and approval ref that can affect output.
+18. Persist PackagePromotionRecord with artifact refs.
+19. If any check fails, or if the activation lock is lost, stale, fenced, or idempotency-conflicted, keep `current_active_set` active, write no candidate production output, and emit `PackageActivationFailureEvent` with the most specific package failure code or imported `030` run-lock error as the owner cause.
+20. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
+21. Do not mark LastKnownGoodPackageSet until every required LastKnownGoodHealthGate passes.
 ```
 
 Telemetry packages are activation-controlled release units. `ActivatePackageSet` must verify that observability policy bundles, telemetry runtime distributions, and telemetry Collector deployment profiles cannot emit domain production records, cannot bypass `140.TelemetryNonAuthorityRule`, cannot weaken telemetry redaction, cannot permit unbounded metric attributes, cannot alter replay exclusion, and cannot affect health outside `140.TelemetryRuntimeState` and `110.OperationalHealthStatus`.
@@ -778,6 +810,8 @@ Emergency override must not bypass package signature, trust policy, repository m
 | `tuf_compatible_metadata` | resolve through trusted metadata roles | timestamp, snapshot, targets, delegation evidence required | target metadata required | target hash and length verified | trust evidence persists | candidate |
 | `local_bundle` | resolve by local immutable checksum | local repository metadata required | bundle descriptor required | bundle checksum verified | evidence bundled and checksummed | candidate |
 | `git_tree_snapshot` | validation-only or provenance-only in MVP | no production metadata authority | no production descriptor authority | no production digest authority | evidence may be retained for audit but not activation | `inactive_for_mvp`; reject production activation with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` |
+
+`git_tree_snapshot` may be provenance for `StructuredInputMaterializationResult`, but an activated `PackageReleaseManifest.repository_form` must still be `oci_digest`, `tuf_compatible_metadata`, or `local_bundle`. Rollback targets remain immutable verified `ProductionPackageSetManifest` checksums; repository branches, tags, rebuilt tips, and default branch names are forbidden rollback targets.
 
 A package acquired from Git must be materialized into `oci_digest`, `tuf_compatible_metadata`, or `local_bundle` before production activation. A `PackageReleaseManifest` that directly references `repository_form = git_tree_snapshot` for production activation fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`.
 
@@ -1179,6 +1213,14 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-LIFECYCLE-AC-004` | Rollback target must be an immutable verified manifest. |
 | `100-LIFECYCLE-AC-005` | Quarantine blocks dependent activation and cannot clear directly to active. |
 | `100-RUNLOCK-ACTIVATION-AC-001` | `val-100-runlock-package-activation-loss` proves the current active package set remains unchanged when activation lock is lost, stale, fenced, recovered by another run, or idempotency-conflicted. |
+
+### Structured input materialization acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `100-STRUCTURED-INPUT-MATERIALIZATION-AC-001` | A valid exact repository snapshot materializes into an allowed repository form and matching `PackageReleaseManifest.source_materialization_refs`. |
+| `100-STRUCTURED-INPUT-GIT-AUTHORITY-AC-001` | Direct production activation from `repository_form = git_tree_snapshot`, branch, tag, repository URL, or rebuilt tip still fails and preserves the current active package set. |
+| `100-STRUCTURED-INPUT-ROLLBACK-AC-001` | Branch, tag, repository URL, default branch, or rebuilt tip rollback target fails before active state changes. |
 
 ## Definition of Done
 

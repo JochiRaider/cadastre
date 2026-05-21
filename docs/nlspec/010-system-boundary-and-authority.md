@@ -44,6 +44,7 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 | Declared dataset version | Allowed | Must be named by `DatasetVersionRef` imported from `020`. |
 | Object-store raw batch | Allowed | Must be named by `RawFeedManifest` imported from `020`. |
 | Supplier-provided metadata | Allowed | Must be interpreted only through active authority, completeness, temporal, and mapping policies. |
+| Structured input authoring repository snapshot | Allowed for authoring, validation, and provenance only | Must be named by `030.StructuredInputRepositorySnapshot`; must not satisfy raw evidence, source completeness, source authority, package activation, graph authority, production approval, or rollback eligibility. |
 | Enterprise source API call | Forbidden | Must fail with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | Source scanner poll, source syslog receive, source CDC connector operation | Forbidden | Must be performed by an external supplier, not by Cadastre production. |
 | Validation-only source exploration | Allowed only when explicitly declared | Must emit only `SourceExplorationResult` or `ProbeDiagnosticRecord`; it must not satisfy production evidence. |
@@ -57,6 +58,8 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 | `supporting_evidence` | Source or supplier data that can support a decision only through an active profile. | Raw records, upstream completeness evidence, lineage, diagnostics. |
 | `non_authoritative_analysis` | Findings, metrics, enrichment, and registry metadata with no mutation authority. | Analysis and governance records. |
 | `inactive_future_domain` | Preserved candidate material with no MVP effect. | Future reachability. |
+
+Structured-input repository snapshots default to `supporting_evidence` or `runtime_state_record` as routed by the owner spec. They must never be classified as `system_of_record` and must not become source, identity, graph, package, or production approval authority by existence.
 
 ## Projection Authority Rule
 
@@ -80,6 +83,8 @@ Telemetry loss, exporter failure, or Collector failure must not invalidate alrea
 
 `activation_controlled_artifact` may instantiate exported behavior through versioned rows, profiles, package refs, registry records, fixtures, and mapping tables. It must not define new authority classes, omission states, canonical fields, ID algorithms, temporal axes, identity semantics, graph authority, API state labels, or package trust semantics.
 
+Git-authored activation-controlled artifacts may instantiate owner-exported behavior only after exact snapshot validation, immutable materialization, package-set membership when required, and `030.VersionManifest` inclusion. A mutable Git ref, branch, tag, pull request, repository URL, hook result, or commit timestamp must not satisfy production activation.
+
 If an activation-controlled artifact conflicts with a stable core contract, the artifact fails activation before any production output. If two stable core contracts conflict, the spec set fails validation. If a stable core spec embeds concrete volatile rows, the rows must be non-normative examples or `TODO:` blockers unless represented as an activation-controlled artifact.
 
 ## Public and Private Source Binding
@@ -96,6 +101,14 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 | `PrivateFeedSchemaInventory` | Private only. |
 | `PrivateCompletenessEvidenceInventory` | Private only. |
 | `PrivateGoldenCorpus` | Private only unless redacted into `LakehouseFeedFixture`. |
+
+Public structured-input repositories must not contain concrete private routes, credentials, tenant IDs, private inventories, source-native secrets, unredacted private schema payloads, or raw private fixture bytes. Private structured-input repositories may bind concrete private systems to public rows, but those bindings must not alter public row-selection order, defaults, error precedence, authority semantics, or activation gates.
+
+| Structured input repository field class | Public canonical status | Required behavior |
+| --- | --- | --- |
+| repository profile ID, snapshot ID, validation status, materialization status | Public only as redacted refs or checksums | May appear in public validation or API output when `110` redaction permits. |
+| branch name, file path, repository URL, commit SHA | Diagnostic only | Must be redacted, hashed, or bounded before public output according to `110` and `140`. |
+| private route, credential, tenant inventory, host list, account list, private sample bytes | Private only | Must fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` before public persistence, publication, export, API response, audit response, telemetry export, or validation-report materialization. |
 
 ### SourceAuthorityRowPublicBindingRule
 
@@ -141,6 +154,7 @@ Forbidden identity-specific leak examples include private scanner site names, di
 - Analysis findings must not mutate facts, graph state, watermarks, or completeness.
 - A missing source-authority closure row must not imply source absence, cleanup permission, graph expiry, retraction, pass/fail state, source-history no-change, or watermark advancement.
 - Runtime telemetry must not imply source authority, source completeness, identity, fact correctness, graph correctness, audit persistence, replay equivalence, package activation, or watermark eligibility.
+- A Git commit, branch, tag, pull request, merge, repository URL, hook result, or commit timestamp must not imply source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, or rollback eligibility.
 
 ## Required Errors
 
@@ -151,6 +165,9 @@ Forbidden identity-specific leak examples include private scanner site names, di
 | `PRIVATE_BINDING_LEAK` | A public artifact, including identity resolver rows and package-supplied resolver artifacts, contains a concrete private vendor/source binding. |
 | `TELEMETRY_AUTHORITY_VIOLATION` | Runtime telemetry attempts to create, modify, authorize, validate, replay, or persist a non-telemetry authoritative Cadastre record. |
 | `TELEMETRY_PRIVATE_BINDING_LEAK` | Telemetry contains a private source binding, private route, credential, tenant inventory, or environment-specific private value before redaction/export. |
+| `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | A structured-input repository value attempts to satisfy source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, rollback eligibility, or system-of-record state. |
+| `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | A public structured-input repository artifact, API response, validation output, telemetry event, audit output, package report, or manifest leaks private repository routes, credentials, tenant inventories, private source bindings, source-native secrets, raw fixture bytes, or raw structured input bytes. |
+| `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | A branch, tag, pull request ref, repository URL, mutable default branch, or rebuilt repository tip is used as a production activation, rollback, manifest, or authority target. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | An activation-controlled artifact attempts to define product authority or stable core semantics. |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | An activation-controlled artifact conflicts with the owner stable core contract. |
@@ -202,6 +219,9 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `PRIVATE_BINDING_LEAK` | `neg-010-private-binding-leak-public-artifact` | Reject or redact according to artifact class and `110` response rules. |
 | `PROJECTION_AUTHORITY_VIOLATION` | `neg-010-projection-authority-violation` | No authoritative mutation and no projection commit. |
 | `TELEMETRY_AUTHORITY_VIOLATION` | `120-OBSERVABILITY-NONAUTH-*` | Telemetry authority attempt fails before forbidden mutation. |
+| `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | `010-STRUCTURED-INPUT-BOUNDARY-AC-001` | Git-as-authority attempt fails before output or mutation. |
+| `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | `010-STRUCTURED-INPUT-BOUNDARY-AC-002` | Private structured-input values are rejected or redacted before public output. |
+| `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | `010-STRUCTURED-INPUT-BOUNDARY-AC-003` | Mutable Git refs fail before activation, rollback, or manifest satisfaction. |
 | `UNDECLARED_AUTHORITY_CLASS` | `neg-010-undeclared-authority-class` | Reject record write before persistence. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `neg-010-activation-artifact-core-override` | Reject artifact activation before production output. |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `neg-010-activation-artifact-core-conflict` | Reject artifact activation before production output. |
@@ -216,6 +236,10 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `PRIVATE_BINDING_LEAK` | `010` | `110` |
 | `TELEMETRY_AUTHORITY_VIOLATION` | `010` | `110` |
 | `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | `110` |
+| `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | `010` | `110` |
+| `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | `010` | `110` |
+| `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | `010` | `110` |
+
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `110` |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `110` |
@@ -232,6 +256,9 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `010.BoundaryErrorContext` | `error-registry-010-private-binding-leak` |
 | `TELEMETRY_AUTHORITY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-telemetry-authority-violation` |
 | `TELEMETRY_PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-telemetry-private-binding-leak` |
+| `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-authority-violation` |
+| `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-private-binding-leak` |
+| `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-mutable-ref-forbidden` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `010.BoundaryErrorContext` | `error-registry-010-undeclared-authority-class` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-volatility-boundary-violation` |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-activation-artifact-core-conflict` |
@@ -277,6 +304,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-TELEMETRY-AUTHORITY-AC-001` | Runtime telemetry cannot mutate authoritative records, replace audit events, satisfy replay equivalence, activate packages, advance watermarks, or prove source, identity, fact, or graph correctness. |
 | `010-TELEMETRY-PRIVATE-BINDING-AC-001` | Telemetry private-binding leaks fail before export or publication. |
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry`, uses `110.StandardErrorCallerFields` and `110.StandardErrorAuditFields`, has no `TODO` values, and appears in `120.Required negative tests by owner`. |
+
+### Structured input repository acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-001` | Git commit, branch, tag, pull request, merge, repository URL, hook result, or commit timestamp cannot satisfy source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, or rollback eligibility. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-002` | Public structured-input repository artifacts reject or redact private routes, credentials, tenant inventories, source-native secrets, raw fixture bytes, and raw structured input bytes before persistence or output. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-003` | Mutable Git refs fail with `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` before activation, rollback, or `VersionManifest` satisfaction. |
 
 ## Definition of Done
 

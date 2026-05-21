@@ -162,6 +162,11 @@ Default metric rows:
 | `cadastre.telemetry.exporter.queue_depth` | gauge | `{item}` | `telemetry_profile_ref`, `exporter_profile_ref` | `bounded_low` | last value | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.dropped_spans` | counter | `{span}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.dropped_metrics` | counter | `{metric}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
+| `cadastre.structured_input.snapshot.validated` | counter | `{snapshot}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
+| `cadastre.structured_input.validation.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
+| `cadastre.structured_input.materialization.completed` | counter | `{materialization}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
+| `cadastre.structured_input.materialization.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
+| `cadastre.structured_input.private_binding.rejected` | counter | `{rejection}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `owner_error_code` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
 | `cadastre.run_lock.acquired` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
 | `cadastre.run_lock.heartbeat` | counter | `{heartbeat}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
 | `cadastre.run_lock.recovery_attempt` | counter | `{attempt}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
@@ -199,6 +204,11 @@ Default allowed attribute keys:
 
 | Attribute key | Allowed value class | Maximum distinct values per run | Rule |
 | --- | --- | ---: | --- |
+| `repository_profile_ref` | Structured input repository profile ref | 64 | Ref and checksum only; no repository URL or private route. |
+| `structured_input_operation` | Closed operation token | 64 | One of `snapshot`, `validate`, `materialize`, `promote`, `rollback`, `private_binding_reject`; raw branch names are forbidden. |
+| `artifact_class` | Closed `030.ActivationControlledArtifactRef.artifact_class` token | 256 | Token only; no file path or package filename. |
+| `owner_spec` | Owner spec token | 32 | One of registered owner spec IDs. |
+| `validation_status` | Closed validation status token | 16 | One of `pass`, `fail`, `blocked`, `not_run`, `stale`; must not include diagnostic text. |
 | `stage_id` | Cadastre stage ID | 1024 | Must not encode private route or source-native ID. |
 | `stage_class` | Closed `030` stage class | 64 | Must match `030` stage class vocabulary. |
 | `run_id` | Opaque run ref | 1024 | Runtime ref only; excluded from domain replay when volatile. |
@@ -217,6 +227,8 @@ Default allowed attribute keys:
 Forbidden values include raw payload bytes, raw payload hashes when not authorized by `110`, private source bindings, private routes, credentials, secrets, tokens, tenant inventories, environment-specific source target lists, backend internal IDs, source-native IDs, canonical entity IDs, raw hostnames, IP addresses, user names, provider-native query text, raw graph property values, package payload bytes, and unredacted source identifiers.
 
 A forbidden key or value must fail before export with the most specific telemetry error code.
+
+Structured-input telemetry must not contain raw branch names unless redacted to a bounded class, raw file paths unless hashed or redacted, raw schema bytes, private routes, credentials, source-native identifiers, tenant inventories, raw fixture bytes, raw structured input bytes, or commit messages containing private data. Commit SHA may be emitted only as a checksum-like diagnostic when `110.StructuredInputRepositoryRedactionPolicy` and `TelemetryAttributePolicy` permit it; it must not become replay evidence, audit persistence evidence, activation authority, rollback authority, or source-authority evidence.
 
 ## Telemetry Redaction Policy
 
@@ -355,6 +367,8 @@ ValidateTelemetryProfile(profile, artifact_refs, package_set_ref, metric_catalog
 15. Return pass only when every required `120-OBSERVABILITY-*` validation ref is present and non-blocking.
 ```
 
+When structured-input repository workflow telemetry is enabled, `ValidateTelemetryProfile` must validate every structured-input metric row, allowed attribute key, forbidden attribute pattern, commit-SHA diagnostic rule, branch-name redaction rule, file-path redaction rule, private-route rejection rule, and package/report/audit telemetry handoff before export.
+
 ## Error Codes
 
 Telemetry errors feed `110.ErrorCodeRegistry`. `140` owns telemetry-specific causes and owner context except where the row imports the authority error from `010`.
@@ -434,6 +448,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 | `140-PACKAGE-AC-001` | Package-supplied telemetry profiles, metric catalogs, redaction policies, exporter profiles, health policies, and replay exclusion policies fail closed unless `100.ProductionPackageSetManifest`, package type policy, validation refs, and artifact checksums pass. |
 | `140-RUNLOCK-TELEMETRY-AC-001` | Run-lock acquisition, heartbeat, recovery, loss, and lease-remaining metrics use only bounded low-cardinality attributes and validation refs from `120-RUNLOCK-OBSERVABILITY-*`. |
 | `140-RUNLOCK-NONAUTH-AC-001` | Dropping all run-lock telemetry does not change lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, or watermark state. |
+
+### Structured input telemetry acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `140-STRUCTURED-INPUT-TELEMETRY-AC-001` | Structured-input telemetry cannot affect validation, package activation, audit persistence, replay equivalence, source authority, graph output, or domain output. |
+| `140-STRUCTURED-INPUT-REDACTION-AC-001` | Private repository values, raw file paths, raw schema bytes, raw fixture bytes, raw structured input bytes, credentials, private routes, and tenant inventories are rejected or redacted before telemetry export. |
+| `140-STRUCTURED-INPUT-CARDINALITY-AC-001` | File path, branch-name, commit-message, repository URL, source-native identifier, and private-route cardinality cannot become metric labels. |
 
 ## Definition of Done
 

@@ -23,6 +23,14 @@ Future graph or fact effects must require active `GraphProjectionProfile`, `Sour
 
 This document must not define production activation behavior while deferred.
 
+### Structured Input Repository Rule While Deferred
+
+Future reachability structured inputs may be authored in a repository only as inactive future-domain material.
+
+Repository merge, validation, materialization, package release creation, or package-set inclusion must not activate reachability while this document remains `inactive_deferred`.
+
+Future activation must update `docs/nlspec/000-cadastre-spec-index.md`, assign active owner specs, classify volatility, add active owner contracts, add package and manifest gates when package-supplied, and add passing `120` fixtures before any reachability fact, graph edge, graph property, API output, package activation effect, or user-facing reachability claim can execute.
+
 ## Explicit Non-Scope While Deferred
 
 - MVP graph projection.
@@ -129,6 +137,12 @@ This document must not define production solver behavior, source authority, grap
 | `200-VOLATILITY-AC-001` | Deferred reachability candidates remain inactive and cannot become production behavior without volatility classification, owner assignment, and validation rows. |
 
 | `200-DEFERRED-CONSISTENCY-AC-001` | `ValidateSpecSet` fails when `000` status and this document's activation rule disagree, or when any active spec emits prohibited reachability output. |
+
+### Structured input deferred reachability acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `200-STRUCTURED-INPUT-DEFERRED-AC-001` | Repository-authored reachability artifacts produce no MVP fact, graph edge, graph property, package activation effect, solver selection, or unqualified reachability claim while this document remains `inactive_deferred`. |
 
 ## Definition of Done for Future Activation
 

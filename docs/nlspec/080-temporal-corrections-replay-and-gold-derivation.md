@@ -91,6 +91,20 @@ Temporal, gold, correction, late-arrival, and replay algorithms are stable core 
 
 Production promotion must fail when any `TemporalSemanticsPolicy`, `GoldFactCorrectionPolicy`, `LateArrivalPolicy`, `ReplayEquivalencePolicy`, `CorrectionSnapshotRefPolicy`, or assertion-state transition behavior contains a blocking placeholder row.
 
+### StructuredInputRepositoryTemporalPolicyHandoff
+
+Repository-authored temporal semantics policies, correction policies, late-arrival policies, replay output-class rows, predicate contract rows, event-sequence corpora, assertion transition rows, and gold derivation row catalogs are inert until materialized, exact-snapshot validated, package-set activated when package-supplied, and included in `030.VersionManifest`.
+
+Repository snapshots may appear in replay provenance and validation diagnostics, but they must not satisfy replay equivalence, correction authorization, temporal policy selection, predicate contract selection, assertion transition authority, or gold derivation authority by themselves.
+
+`ReplayInputSufficiencyCheck` must require structured-input snapshot refs, file manifest checksums, validation refs, materialization refs when packaged, package-set refs when package-supplied, and owner artifact refs whenever output-affecting temporal, correction, late-arrival, replay, predicate, assertion, or event-sequence rows were repository-authored.
+
+| Error code | Required use |
+| --- | --- |
+| `TEMPORAL_REPOSITORY_POLICY_INACTIVE` | Repository-authored temporal, correction, replay, predicate, assertion, or event-sequence policy row exists only in Git or lacks active materialized refs. |
+| `REPLAY_REPOSITORY_REF_MISSING` | Replay input sufficiency requires structured-input refs but snapshot, validation, materialization, package, or manifest refs are omitted. |
+| `REPLAY_REPOSITORY_VALIDATION_STALE` | Replay, correction, temporal, or event-sequence validation was not run against the exact repository snapshot and policy checksum used for output. |
+
 ## ResolveFactTime Algorithm
 
 ```text
@@ -447,8 +461,8 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `export_projection` | imported `050` projection included fields, projection profile, input refs, mapping refs, redaction refs, loss manifest checksum, output checksum | export job ID, request correlation ID, execution duration, display timestamp | `sha256` | export projection ID | compare only | active default |
 | `analysis_output` | imported `130` analysis included fields, analysis rule bundle, graph derived-view refs, authorization/redaction refs, output checksum | request correlation ID, UI display label, runtime duration | `sha256` | analysis output ID | compare only | active default |
 | `validation_acceptance` | validation matrix refs, fixture checksums, expected/actual checksums, validation lifecycle evidence, acceptance report bytes | validation execution duration, display timestamp | `sha256` | validation row ID then fixture ID | compare only | active default |
-| `telemetry_health_diagnostic` | `140.TelemetryRuntimeState` refs when health/API/audit/validation output depends on telemetry state, telemetry policy refs, health mapping policy ref, redaction refs, output checksum | trace ID, span ID, sampled flag, exporter queue state unless health-visible, runtime duration, backend telemetry IDs, display timestamp | `sha256` | telemetry runtime state ref then policy ref | compare only | active default after `140` patch |
-| `run_lock_operation` | operation kind, idempotency key, input checksum, lock keys, prior and new lock record checksums, fencing token set, lock-store time at decision, result, error code, and version manifest ID | runner-local timestamp, diagnostic display timestamp, runtime duration, trace/span IDs | `sha256` | operation evidence ID then lock key | compare only | active default after `030` run-lock closure |
+| `telemetry_health_diagnostic` | `140.TelemetryRuntimeState` refs when health/API/audit/validation output depends on telemetry state, telemetry policy refs, health mapping policy ref, redaction refs, output checksum | trace ID, span ID, sampled flag, exporter queue state unless health-visible, runtime duration, backend telemetry IDs, display timestamp | `sha256` | telemetry runtime state ref then policy ref | compare only | active default when `140` telemetry refs are active and validation rows pass |
+| `run_lock_operation` | operation kind, idempotency key, input checksum, lock keys, prior and new lock record checksums, fencing token set, lock-store time at decision, result, error code, and version manifest ID | runner-local timestamp, diagnostic display timestamp, runtime duration, trace/span IDs | `sha256` | operation evidence ID then lock key | compare only | active default when `030` run-lock refs are active and validation rows pass |
 
 Global replay failure precedence:
 
@@ -697,6 +711,13 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
 | `080-OCSF-STRUCTURED-OBJECT-AC-001` | OCSF-derived structured object output fails before `gold_fact_key_id` computation unless `050.ProfileResolutionManifest`, `080.GoldFactPredicateContractRow.structured_value_schema_refs`, and required `060` authority refs validate and appear in `VersionManifest`. |
 | `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
+
+### Structured input temporal and replay acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `080-STRUCTURED-INPUT-TEMPORAL-AC-001` | Git-authored temporal, correction, late-arrival, replay, predicate, assertion, or event-sequence rows do not affect fact time, known time, correction, replay, graph handoff, or gold derivation until active materialized refs and manifest refs exist. |
+| `080-STRUCTURED-INPUT-REPLAY-AC-001` | Replay fails before output when structured-input-derived policy refs are omitted from `VersionManifest` or when validation is stale for the exact snapshot. |
 
 ## Definition of Done
 

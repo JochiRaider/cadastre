@@ -104,6 +104,35 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 
 Profile validation must materialize defaults before checksum computation. Unknown fields fail before activation unless the owning profile schema version declares an extension map.
 
+### StructuredInputRepositoryFeedProfileHandoff
+
+Repository-authored `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, and feed category closure row catalogs are inert until materialized into activation-controlled artifact refs and, when package-supplied, included in an active `100.ProductionPackageSetManifest`.
+
+`StructuredInputRepositorySnapshot` must not be a `read_target_kind`. The closed `read_target_kind` set remains `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, and `manifest_list`.
+
+Repository-authored feed profile validation order is:
+
+```text
+ValidateRepositoryAuthoredFeedProfile(candidate_profile, repository_snapshot, version_manifest):
+1. Validate `030.StructuredInputRepositorySnapshot` and selected path refs.
+2. Validate `030.StructuredInputValidationRun` for the exact snapshot and selected paths.
+3. Validate private-binding redaction through `010` and `110` before materialization.
+4. Validate `LakehouseFeedProfileSchema`.
+5. Resolve feed category closure rows and lakehouse read policy refs.
+6. Run `LakehouseFeedAvailabilityCheck` only after steps 1 through 5 pass.
+7. Require materialized activation refs and `030.VersionManifest` inclusion before production feed read or raw import.
+```
+
+Repository-authored feed profiles must still use vendor-neutral `source_category` and `source_dataset`. They must not encode concrete private routes, credentials, tenant IDs, private inventories, scanner site names, directory tenant inventories, cloud account lists, host lists, private source names, or raw private fixture bytes.
+
+A repository merge, pull request approval, branch update, validation run, or hook success must not authorize feed read, raw import, absence evaluation, cleanup, graph expiry, retraction, watermark advancement, or source-authority closure. Those effects require active `020`, `060`, and `030` refs and the relevant owner validation refs.
+
+| Error code | Required use |
+| --- | --- |
+| `FEED_PROFILE_REPOSITORY_SNAPSHOT_MISSING` | Repository-authored feed profile validation lacks an exact `030.StructuredInputRepositorySnapshot` ref or selected path manifest checksum. |
+| `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored feed profile or validation output exposes a private binding or raw private fixture value. |
+| `FEED_PROFILE_REPOSITORY_ACTIVATION_MISSING` | Repository-authored feed profile exists only in Git or validation output and lacks materialized activation refs, package-set refs when package-supplied, or `VersionManifest` refs. |
+
 ### LakehouseFeedCategoryClosureRow
 
 `LakehouseFeedCategoryClosureRowSet` is an activation-controlled artifact represented by `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_feed_category_closure_row_set`. The row set instantiates the stable category-closure contract; it must not define new read target kinds, receipt states, authority classes, omission states, or effect tokens.
@@ -656,6 +685,14 @@ Profile, category, manifest, table-state, and activation errors render through `
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
 | `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |
 | `020-RUNLOCK-MAINTENANCE-AC-001` | Destructive maintenance fails before mutation when the required `030.RunLockCommitGuard` is missing, stale, or fenced; successful maintenance includes the guard ref in `VersionManifest`. |
+
+### Structured input feed acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `020-STRUCTURED-INPUT-FEED-AC-001` | Repository-authored feed profile changes produce no feed read, raw import, absence evaluation, cleanup, graph expiry, retraction, or watermark advancement until the profile is materialized, activated, and manifest-included. |
+| `020-STRUCTURED-INPUT-FEED-AC-002` | `StructuredInputRepositorySnapshot` cannot satisfy `read_target_kind`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `RawFeedManifest`, feed category closure, or lakehouse read policy refs. |
+| `020-STRUCTURED-INPUT-FEED-AC-003` | Repository-authored feed profiles that leak private bindings fail with `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK` or imported `PRIVATE_BINDING_LEAK` before publication or validation-report materialization. |
 
 ## Definition of Done
 

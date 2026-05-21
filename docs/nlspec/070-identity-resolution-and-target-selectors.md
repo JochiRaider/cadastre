@@ -90,6 +90,22 @@ Each production resolver run must resolve exactly one active `ResolverProfileRow
 
 A production resolver must not use implementation-local defaults for evidence class authority, blocking keys, candidate caps, hard blocker row sets, generation boundary row sets, confidence bands, review routing, split partitioning, explanation checksum inputs, or learned artifacts. Omitted values must use the defaults in this spec or must emit the most specific resolver error before identity mutation.
 
+### StructuredInputRepositoryResolverHandoff
+
+Repository-authored resolver profiles, evidence class row sets, hard blockers, decision matrices, generation boundaries, review routing policies, split policies, target-selector policies, confidence bands, and resolver activation policies are inert until materialized, validated for the exact repository snapshot, package-set activated when package-supplied, and included in `030.VersionManifest`.
+
+Repository snapshot refs may appear in `ResolverActivationReport` as provenance only. A change proposal, branch update, pull request approval, merge, validation run, or hook success must not create, attach, merge, split, reject, score, or review identity.
+
+Resolver activation for repository-authored artifacts must include exact repository snapshot refs, file manifest checksums, materialization refs, package release refs when created, package-set refs when package-supplied, scenario-gated validation refs, hard-blocker precedence fixtures, weak-evidence rejection fixtures, and manifest refs.
+
+Private source bindings in resolver row catalogs fail under `010` and `110` redaction rules before activation, API output, audit output, package reports, telemetry export, or validation-report materialization.
+
+| Error code | Required use |
+| --- | --- |
+| `RESOLVER_REPOSITORY_ARTIFACT_INACTIVE` | Repository-authored resolver artifact lacks active materialized artifact refs, package-set refs when package-supplied, or manifest refs. |
+| `RESOLVER_REPOSITORY_VALIDATION_STALE` | Resolver validation run does not match exact repository snapshot, file manifest checksum, resolver artifact checksum, hard-blocker row set, or scenario output checksum. |
+| `RESOLVER_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored resolver artifact or validation output leaks private source binding values or raw private fixture bytes. |
+
 ### ResolverProfileRow schema
 
 `ResolverProfileRow` is the row-level executable interface inside `ResolverProfile`. Concrete row sets are activation-controlled artifacts; stable decision semantics remain owned by this spec.
@@ -784,6 +800,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `070-SELECTOR-SAFETY-TOTALITY-AC-001` | `opengraph_node_id_equality`, `opengraph_property_matching`, `deprecated_name_matching`, `mapped_target`, `graph_key`, and weak endpoint selectors have total maximum-resolution behavior and cannot create identity by themselves. |
 | `070-ACTIVATION-REPORT-GATE-AC-001` | Resolver promotion is forbidden unless `ResolverActivationReport` contains passing scenario gates, fixture checksums, expected output checksums, manifest refs, and no `TODO` values. |
 | `070-PACKAGE-ROWSET-WEAKENING-AC-001` | Package-supplied resolver row sets that weaken stable weak-evidence defaults fail activation and preserve the current active resolver artifact set. |
+
+### Structured input resolver acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `070-STRUCTURED-INPUT-RESOLVER-AC-001` | Repository-authored resolver profile missing activation refs, materialization refs, package-set refs when package-supplied, scenario validation refs, or manifest refs fails before identity output. |
+| `070-STRUCTURED-INPUT-RESOLVER-AC-002` | Repository-authored resolver profile that weakens hard-blocker precedence, weak-evidence defaults, review terminality, split policy, or selector safety fails before activation and before identity mutation. |
+| `070-STRUCTURED-INPUT-RESOLVER-AC-003` | Change proposal, merge, branch update, PR approval, validation run, and hook success produce no identity mutation by themselves. |
 
 ## Definition of Done
 

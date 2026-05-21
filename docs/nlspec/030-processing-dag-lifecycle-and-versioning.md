@@ -71,6 +71,12 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `ExecuteProcessingStageDAG`
 - `ValidateLifecycleStateMachine`
 - `ActivationControlledArtifactRef`
+- `StructuredInputRepositoryProfile`
+- `StructuredInputRepositorySnapshot`
+- `StructuredInputChangeProposal`
+- `StructuredInputChangeProposalLifecycleMachine`
+- `ResolveStructuredInputRepositorySnapshot`
+- `ValidateStructuredInputRepositorySnapshot`
 
 ## Stage Graph Contract
 
@@ -686,6 +692,10 @@ A `SourceAuthorityClosureMatrix` validation result may be referenced in `Version
 Closed `artifact_class` values are:
 
 ```text
+structured_input_repository_profile
+structured_input_repository_access_policy
+structured_input_repository_redaction_policy
+structured_input_validation_matrix
 lakehouse_feed_profile
 lakehouse_feed_category_closure_row_set
 raw_supplier_profile
@@ -830,6 +840,116 @@ ValidateActivationControlledArtifactRef(ref, execution_scope, required_owner_spe
 
 Failure precedence is missing ref, owner mismatch, invalid artifact class, checksum mismatch, lifecycle invalid, activation scope mismatch, validation refs missing, package set mismatch, then superseded artifact selected.
 
+## Structured Input Repository Contract
+
+`StructuredInputRepositoryProfile` defines the stable interface for Git-backed authoring repositories that maintain schema, mapping, profile, row-set, validation, policy, resolver, graph, analysis, registry, telemetry, and other activation-controlled structured inputs. Concrete repository profile rows are activation-controlled artifacts. A repository profile grants authoring scope only; it does not grant source authority, graph authority, package activation, production approval, rollback eligibility, or system-of-record status.
+
+### StructuredInputRepositoryProfile schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `repository_profile_id` | Yes | none | Stable ID scoped to `030`; must not encode a private route or credential. |
+| `repository_role` | Yes | none | Closed enum: `authoring_origin`, `registered_remote`, `mirror`. |
+| `allowed_artifact_classes` | Yes | none | Non-empty set of closed `030.ActivationControlledArtifactRef.artifact_class` tokens that may be authored from the repository. |
+| `allowed_path_roots` | Yes | none | Non-empty normalized repo-relative path prefixes. Empty, absolute, backslash, NUL, `.`, `..`, and duplicate roots are rejected. |
+| `protected_ref_policy` | Yes | none | Names refs that may be selected for review. It must not make any ref an activation target. |
+| `merge_policy_ref` | Yes | none | Ref to review/merge policy owned by `110` or governance owner. |
+| `review_requirement_ref` | Yes | none | Required before proposal merge. Omission blocks merge and materialization. |
+| `public_private_classification` | Yes | none | Closed enum: `public_authoring`, `private_authoring`, `mixed_requires_redaction`. |
+| `snapshot_selection_policy` | Yes | none | Defines selected refs and path filters; output must resolve to exact commit SHA and tree hash. |
+| `force_push_policy` | Yes | `invalidate_unless_exact_commit_tree_remains_selected` | Prior validation is invalid when a ref rewrite changes selected commit or tree. |
+| `path_normalization_policy` | Yes | `strict_repo_relative_regular_files_only` | Applies the rejection list in this contract. |
+| `validation_matrix_refs` | Yes | none | Non-empty refs to `120.StructuredInputRepositoryValidationMatrix` rows. |
+| `activation_scope` | Yes | none | Vendor-neutral scope in which repository-authored content may be materialized. |
+| `lifecycle_status` | Yes | none | Production-affecting use requires `active`. |
+
+### StructuredInputRepositorySnapshot schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `repository_snapshot_id` | Yes | none | Deterministic ID over repository profile ref, resolved commit SHA, tree hash, selected paths, file manifest checksum, and snapshot content checksum. |
+| `repository_profile_ref` | Yes | none | Active `StructuredInputRepositoryProfile` ref. |
+| `repository_identity_ref` | Yes | none | Redacted repository identity or checksum; raw URL exposure is governed by `110`. |
+| `resolved_commit_sha` | Yes | none | Exact commit SHA. Branches, tags, PR refs, repository URLs, and default branch names are forbidden substitutes. |
+| `tree_hash` | Yes | none | Exact tree hash for the resolved commit. |
+| `parent_commit_shas` | Yes | `[]` only for root commit | Canonically sorted by commit graph parent order when available. |
+| `selected_ref_name` | No | null | Diagnostic only; excluded from activation authority. |
+| `selected_paths` | Yes | none | Canonically sorted normalized repo-relative paths or path roots. |
+| `file_manifest` | Yes | none | Non-empty unless the selected artifact class explicitly permits an empty row set. |
+| `file_manifest_checksum` | Yes | none | SHA-256 over canonical file manifest bytes. |
+| `snapshot_content_checksum` | Yes | none | SHA-256 over normalized path, file mode, file size, SHA-256, text/binary class, and artifact-class owner for every selected file. |
+| `public_private_classification` | Yes | none | Must be compatible with profile and `010` public/private rules. |
+| `validation_run_refs` | Yes | none | Non-empty refs to exact-snapshot validation runs before materialization. |
+| `created_from_change_proposal_ref` | No | null | Review provenance only. |
+| `force_push_observation_ref` | No | null | Required when selected ref was rewritten after validation. |
+| `lifecycle_status` | Yes | none | `validated` permits validation and materialization; it does not activate production behavior. |
+
+File manifest entries must include normalized repo-relative path, file mode, byte size, SHA-256, canonical text/binary classification, and declared artifact-class owner. File mode is restricted to regular file unless a future accepted owner row explicitly permits another file type.
+
+Path normalization must reject absolute paths, backslashes, NUL, empty segments, `.`, `..`, duplicate normalized paths, symlinks, non-regular files, and path collisions after any flat-share decoding. Rejection must occur before checksum computation, validation output, materialization, package release creation, API response materialization, audit output, or telemetry export.
+
+### StructuredInputChangeProposal lifecycle
+
+`StructuredInputChangeProposal` is review state only. It must not activate production behavior.
+
+| State | Meaning | Production effect |
+| --- | --- | --- |
+| `draft` | Change is authoring-local or pre-review. | none |
+| `proposed` | Change is submitted for review. | none |
+| `validated` | Exact proposed snapshot passed validation. | none |
+| `merged` | Change reached an allowed repository ref. | none |
+| `revalidated` | Exact merge commit and tree passed validation. | none |
+| `materialized` | Exact revalidated snapshot produced immutable materialization output. | none until `100` activation gates pass |
+| `rejected` | Review or validation rejected the change. | none |
+| `abandoned` | Authoring stopped without merge. | none |
+
+A transition to `merged` must not activate production behavior. A transition to `materialized` requires exact merge-commit revalidation and a `100.StructuredInputMaterializationResult`.
+
+### ResolveStructuredInputRepositorySnapshot
+
+```text
+ResolveStructuredInputRepositorySnapshot(profile, selected_ref, selected_paths):
+1. Validate `StructuredInputRepositoryProfile` lifecycle, activation scope, allowed artifact classes, path roots, public/private classification, and validation matrix refs.
+2. Reject repository URL, branch name, tag name, pull request ref, default branch name, hook result, or commit timestamp as an activation target.
+3. Resolve the allowed selected ref to exact `resolved_commit_sha` and `tree_hash`.
+4. Normalize selected paths and reject invalid paths according to this contract.
+5. Enumerate selected regular files in ascending lexical normalized path order.
+6. Compute each file SHA-256 over exact bytes and record file mode, byte size, text/binary classification, and declared artifact-class owner.
+7. Compute `file_manifest_checksum` and `snapshot_content_checksum` using `040.CanonicalJSON` over materialized manifest rows.
+8. Emit `StructuredInputRepositorySnapshot` with diagnostic `selected_ref_name` only when redaction permits.
+```
+
+Same repository profile ref, exact commit, tree hash, selected paths, file bytes, and file metadata must produce byte-identical `repository_snapshot_id`, `file_manifest_checksum`, and `snapshot_content_checksum`.
+
+### ValidateStructuredInputRepositorySnapshot
+
+```text
+ValidateStructuredInputRepositorySnapshot(snapshot, profile, validation_runs, execution_scope):
+1. Validate profile ref, checksum, lifecycle status, and activation scope.
+2. Validate path rules, file manifest ordering, regular-file restriction, duplicate path rejection, and artifact-class owner coverage.
+3. Validate public/private classification and redaction policy refs before caller-visible or audit-visible output.
+4. Validate every required `120.StructuredInputRepositoryValidationMatrix` row for the exact `repository_snapshot_id`, tree hash, selected paths, and file manifest checksum.
+5. Reject stale validation when validation refs were computed for a different commit SHA, tree hash, selected path set, file manifest checksum, or profile checksum.
+6. On force-push or ref rewrite, invalidate validation unless the exact validated commit SHA and tree hash remain selected.
+7. Require materialization refs before package release handoff and package-set refs before production activation when package-supplied artifacts affect output.
+```
+
+### Structured input repository manifest completeness
+
+`VersionManifestCompletenessMatrix` requires these refs whenever repository-authored structured inputs affect output: repository profile ref, snapshot ref, file manifest checksum, validation run ref, materialization result ref when packaged, package release ref when created, package-set ref when activated, access policy ref when API-visible, redaction policy ref when any repository value is exposed, and validation matrix refs.
+
+`VersionManifest.structured_input_refs` is required when structured-input snapshots affect output. Entries must also appear in `included_refs`; the field is not a parallel manifest mechanism.
+
+| Error code | Required use |
+| --- | --- |
+| `STRUCTURED_INPUT_REPOSITORY_PROFILE_MISSING` | Required repository profile ref is absent, inactive, checksum-mismatched, out-of-scope, or not validated. |
+| `STRUCTURED_INPUT_SNAPSHOT_UNRESOLVED` | A selected repository ref cannot resolve to one exact commit SHA and tree hash. |
+| `STRUCTURED_INPUT_PATH_INVALID` | Selected path fails normalization or regular-file validation. |
+| `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | Mutable branch, tag, PR ref, repository URL, or rebuilt tip is used as activation, rollback, or manifest target. |
+| `STRUCTURED_INPUT_SNAPSHOT_MISMATCH` | Validation, materialization, or manifest refs do not match exact commit, tree, file manifest, or snapshot checksum. |
+| `STRUCTURED_INPUT_VALIDATION_STALE` | Validation run is not for the exact current snapshot or was invalidated by ref rewrite. |
+| `STRUCTURED_INPUT_REVALIDATION_REQUIRED` | Merge commit, force-push, or ref rewrite requires exact snapshot revalidation before materialization or activation. |
+
 ## Declared Subset Contract
 
 A production stage subset may execute only with an active `DeclaredDAGSubsetProfile` referenced by `030.ActivationControlledArtifactRef` with `artifact_class = declared_dag_subset_profile`. The subset profile must make every absence, cleanup, retraction, graph-expiry, projection, and watermark effect explicit. Omission of an effect field is not permission.
@@ -953,6 +1073,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Lineage output | `RunDatasetIOContract`, `LineageFacetMappingPolicy` row refs, schema URL, schema bytes checksum, facet bytes checksum, collision decision, redaction refs, and validation refs. |
 | Registry governance artifact activation | `RegistryArtifactGovernance`, `RegistryCustomPropertySchema`, `RegistryClassificationPolicy`, approval refs, lifecycle transition evidence, package-set ref when package-supplied, artifact checksum, activation scope, and validation refs. |
 | Derived graph edge output | `DerivedGraphEdgeRule`, supporting fact refs, authority/completeness/temporal refs where applicable, `090` projection/profile/semantics/eligibility refs, deterministic ID inputs, output checksum, and validation refs. |
+| Structured-input-derived output | repository profile ref, repository snapshot ref, selected path refs, file manifest checksum, snapshot content checksum, validation run refs, materialization result refs when packaged, package release refs when created, package-set refs when activated, access policy refs when API-visible, redaction policy refs when values are exposed, and structured-input validation matrix refs. |
 | Package activation | package-set manifest checksum, `ProductionPackageSetManifest.package_set_checksum`, `PackageReleaseManifest.release_checksum`, package release manifest refs and checksums, selected `PackageTypePolicyRowSet` checksum, selected `PackageTypePolicyRow` refs and checksums, `PackageTypePolicyRowCoverageMatrix` checksum, package repository model row refs, resolved `target_environment`, `activation_mode`, artifact digests, sizes, media types, subject digests, repository metadata refs, repository snapshot refs, repository freshness proof refs, repository anti-rollback state refs, trust policy refs, signature verification result refs, transparency evidence refs, attestation set refs, build provenance refs, SBOM refs, dependency lock refs, compatibility matrix refs, validation refs, package developer contract refs, package stage binding refs, promotion record refs, deployment revision refs, selected `PackageDeprecationWindowPolicyRow` refs and checksums, last-known-good health gate refs, last-known-good package-set refs when applicable, rollback compatibility policy refs, rollback plan/result refs, quarantine record refs, quarantine scope policy refs, emergency override refs, `PackageActivationFailureEvent` ref when candidate activation fails, lifecycle transition evidence refs, and approval refs. |
 
 Package activation refs required by `VersionManifestCompletenessMatrix` must appear in `included_refs`. `PackageReleaseManifest` and `ProductionPackageSetManifest` fields are not substitutes for `VersionManifest.included_refs`; package-specific manifest fields must not create a parallel manifest mechanism unless this spec explicitly adds a field row and defines checksum inclusion behavior.
@@ -985,6 +1106,8 @@ Package activation refs required by `VersionManifestCompletenessMatrix` must app
 | `lifecycle_state_artifact_refs` | Required when persisted lifecycle state artifacts affect output, replay, activation, graph apply, watermark eligibility, or CI gating | Subject refs, state artifact refs, and checksums. |
 | `telemetry_policy_refs` | Required when telemetry affects health, API diagnostics, audit diagnostics, validation diagnostics, or operator-visible telemetry state | Canonically sorted `140` activation artifact refs and checksums. These refs must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
 | `telemetry_runtime_state_refs` | Required when telemetry runtime state affects health, API, audit, validation, or operator-visible diagnostics | Canonically sorted `140.TelemetryRuntimeState` refs and checksums. These refs must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
+| `structured_input_refs` | Required when structured-input snapshots affect output | Canonically sorted structured input repository profile refs, snapshot refs, file manifest checksums, validation run refs, materialization result refs, package release refs, package-set refs, access policy refs, and redaction policy refs. Every ref in this field must also appear in `included_refs`; this field is not a parallel manifest mechanism. |
+
 | `created_at` | Yes | RFC3339 UTC manifest creation time; excluded from manifest ID and included in checksum. |
 | `manifest_checksum` | Yes | SHA-256 over `040.CanonicalJSON` excluding only `manifest_checksum`. |
 
@@ -1209,6 +1332,15 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-EVIDENCE-ARTIFACT-MANIFEST-AC-002` | Activation artifact evidence fails when artifact lifecycle is inactive, checksum mismatches, package-set membership is required but absent, or evidence artifact class row-set refs are omitted. |
 | `030-PACKAGE-VM-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, validation, lifecycle, or approval ref is missing from `VersionManifest.included_refs`. |
 | `030-PACKAGE-POLICY-MANIFEST-AC-001` | Package activation fails before output when the selected `PackageTypePolicyRowSet`, selected `PackageTypePolicyRow`, selected deprecation policy row, package compatibility row, package type coverage matrix checksum, or release manifest checksum is missing from `VersionManifest.included_refs` or checksum-mismatched. |
+
+### Structured input repository acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `030-STRUCTURED-INPUT-SNAPSHOT-AC-001` | Same repository profile ref, commit, tree, selected paths, file bytes, file modes, and declared artifact-class owners produce byte-identical snapshot ID and file manifest checksum. |
+| `030-STRUCTURED-INPUT-MUTABLE-REF-AC-001` | Branch, tag, pull request ref, repository URL, or default branch cannot satisfy production activation, rollback, or `VersionManifest` completeness. |
+| `030-STRUCTURED-INPUT-FORCE-PUSH-AC-001` | Ref rewrite invalidates prior validation unless exact validated commit SHA and tree hash remain selected. |
+| `030-STRUCTURED-INPUT-VM-AC-001` | Output derived from repository-authored artifacts fails with `VERSION_MANIFEST_INCOMPLETE` when snapshot, validation, materialization, package, access, redaction, or validation refs required by the matrix are omitted. |
 
 ## Definition of Done
 

@@ -204,6 +204,44 @@ ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
 
 Missing discriminator inputs fail before output. Authentication rows must emit `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` when activity cannot be resolved to one compiled activity. Source-action or enum values not present in the compiled artifact must be preserved through declared diagnostics or declared source-extension fields; they must not create OCSF enum IDs.
 
+### StructuredInputRepositoryMappingHandoff
+
+Repository-authored mapping bundles, external schema profiles, source schema imports, semantic overlays, enum rules, base-event policies, source-extension rules, mapping project manifests, and compiler pipeline configurations are inert until exact snapshot validation, materialization, package release handoff when package-supplied, package-set activation when required, and `030.VersionManifest` inclusion pass.
+
+A repository-authored mapping bundle must include `structured_input_repository_snapshot_ref`, `selected_path_refs`, and `file_manifest_checksum`. `ValidateMappingBundle` must reject the bundle when the snapshot ref is missing, stale, checksum-mismatched, mutable, outside the active repository profile, outside allowed path roots, or not covered by a current structured-input validation run.
+
+`CanonicalValidationOutput` for repository-authored mapping validation must include snapshot ref, selected path manifest checksum, mapping project checksum, compiler pipeline checksum, external schema artifact refs, validation row refs, and normalized diagnostics. Pull request approval, branch update, merge, hook success, or current working tree validation must not satisfy `CanonicalValidationOutput`.
+
+### MappingProjectManifest schema
+
+`MappingProjectManifest` is the stable mapping-authoring project interface. Concrete manifest rows are activation-controlled artifacts and may be repository-authored only through `030.StructuredInputRepositorySnapshot`.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `mapping_project_manifest_id` | Yes | none | Stable ID over canonical project bytes, snapshot refs, compiler options, dependency refs, plugin refs, and validation refs. |
+| `project_root_ref` | Yes | none | Normalized selected path ref inside the validated repository snapshot or immutable package artifact. |
+| `structured_input_repository_snapshot_ref` | Required when repository-authored | null only when the manifest is not repository-authored | Must match exact snapshot used for validation and materialization. |
+| `source_roots` | Yes | none | Non-empty normalized paths under `project_root_ref`; undeclared source roots and path escapes fail. |
+| `dependency_lock_refs` | Required when dependencies affect output or validation | `[]` only when no dependencies affect output or validation | Mutable dependency refs are forbidden. |
+| `plugin_refs` | No | `[]` | Plugins must be package-supplied or activation-controlled and validation-covered. |
+| `compiler_options` | Yes | `{}` only when compiler default set is explicitly checksummed | User-local config and undeclared workstation defaults are forbidden. |
+| `generated_output_policy` | Yes | none | Declares generated artifact classes and forbidden output classes. |
+| `artifact_class_outputs` | Yes | none | Closed artifact-class outputs expected from this project. |
+| `private_binding_policy_ref` | Yes | none | Ref to redaction/private-binding rule set. |
+| `canonical_project_checksum` | Yes | none | SHA-256 over normalized project inputs after defaults materialize. |
+| `validation_refs` | Yes | none | Non-empty refs covering exact snapshot, mappings, private-binding rejection, and no-authority behavior. |
+| `activation_scope` | Yes | none | Vendor-neutral scope. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`ValidateMappingBundle` must run repository snapshot validation before compiling. It must reject branch names, tags, uncommitted working copies, mutable refs, user-local configuration, undeclared source roots, duplicate normalized paths, path escapes, core overrides, undeclared source-extension fields, ambiguous rows, missing rows, forbidden OCSF fields, and enum ambiguity before silver output.
+
+| Error code | Required use |
+| --- | --- |
+| `MAPPING_REPOSITORY_SNAPSHOT_MISSING` | Repository-authored mapping input lacks exact snapshot ref, selected path refs, or file manifest checksum. |
+| `MAPPING_REPOSITORY_SNAPSHOT_MISMATCH` | Mapping validation, project manifest, compiler output, or materialization refs do not match the exact repository snapshot. |
+| `MAPPING_REPOSITORY_PATH_FORBIDDEN` | Mapping project path is outside selected roots, invalid after normalization, duplicate, non-regular, or a path escape. |
+| `MAPPING_VALIDATION_RUN_STALE` | Mapping validation run is not for the exact snapshot, path manifest, project checksum, compiler checksum, or schema artifact refs. |
+
 ### MVP OCSF class allowlist
 
 The active MVP OCSF class allowlist must contain exactly the class UIDs used by active OCSF mapping rows. The default MVP class targets are closed to the following class UID set until a later profile upgrade activates additional classes.
@@ -249,18 +287,19 @@ Undeclared `source_extension_fields` must fail before production output with the
 
 ```text
 ValidateMappingBundle(bundle, project_manifest, compiler_pipeline):
-1. Validate every mapping-related artifact ref through `030.ActivationControlledArtifactRef`.
-2. Verify package-set inclusion when artifacts are package-supplied.
-3. Canonicalize source roots and dependency lock refs.
-4. Reject undeclared source roots, mutable dependency refs, and user-local config.
-5. Resolve source schema import profiles and semantic overlays.
-6. Compile mappings in declared phase order.
-7. Validate external schema profile refs and compiled artifact checksums.
-8. Reject any artifact that attempts to define a core field, core omission state, identity rule, temporal rule, graph rule, or source-authority rule.
-9. Run MappingValidationRule rows with deterministic severities.
-10. Run observation-type validation matrix cases.
-11. Emit CanonicalValidationOutput with deterministic diagnostics and checksum.
-12. Include all output-affecting mapping artifact refs in `VersionManifest` before silver output.
+1. Validate repository snapshot and selected paths through `030.ValidateStructuredInputRepositorySnapshot` when any input is repository-authored.
+2. Validate every mapping-related artifact ref through `030.ActivationControlledArtifactRef`.
+3. Verify package-set inclusion when artifacts are package-supplied.
+4. Canonicalize source roots and dependency lock refs.
+5. Reject undeclared source roots, path escapes, mutable dependency refs, uncommitted working copies, and user-local config.
+6. Resolve source schema import profiles and semantic overlays.
+7. Compile mappings in declared phase order.
+8. Validate external schema profile refs and compiled artifact checksums.
+9. Reject any artifact that attempts to define a core field, core omission state, identity rule, temporal rule, graph rule, or source-authority rule.
+10. Run MappingValidationRule rows with deterministic severities.
+11. Run observation-type validation matrix cases.
+12. Emit CanonicalValidationOutput with deterministic diagnostics, snapshot refs when applicable, selected path manifest checksum, mapping project checksum, compiler pipeline checksum, and validation row refs.
+13. Include all output-affecting mapping artifact refs and structured-input refs in `VersionManifest` before silver output.
 ```
 
 ## CIM Projection Contract
@@ -676,6 +715,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `050-GOLD-OBJECT-BOUNDARY-AC-002` | OCSF `raw_data` and `unmapped` are not `EvidenceRef` artifacts and cannot set `EvidenceRef.artifact_id`. |
 | `050-GOLD-OBJECT-BOUNDARY-AC-003` | Observables, enrichments, source-extension fields, and endpoint fields are not `GoldFact.subject_ref` or `GoldFact.object_value` references by mapping-side inference. |
 | `050-GOLD-OBJECT-BOUNDARY-AC-004` | A mapping attempt to set `GoldFact.object_value`, `GoldFact.subject_ref`, `object_kind`, source authority, absence outcome, correction output, graph output, or watermark output fails before silver output or emits the most specific owner diagnostic. |
+
+### Structured input mapping acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `050-STRUCTURED-INPUT-MAPPING-AC-001` | Valid repository-authored mapping emits deterministic `CanonicalValidationOutput` containing exact snapshot refs, selected path manifest checksum, mapping project checksum, compiler pipeline checksum, external schema refs, validation refs, and output checksum. |
+| `050-STRUCTURED-INPUT-MAPPING-AC-002` | Merge, PR approval, branch update, hook success, or validation over current working tree emits no production silver output without materialized package-set activation when package-supplied. |
+| `050-STRUCTURED-INPUT-MAPPING-AC-003` | Branch, tag, current working tree, stale validation, missing snapshot ref, and path escape fail before silver output with the most specific mapping or structured-input error. |
 
 ## Definition of Done
 

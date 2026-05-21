@@ -284,9 +284,15 @@ Identity-like object values, including IP addresses, hostnames, DNS names, PTR n
 | Cadastre persisted record classes | `cadastre_record_ref` | Owner of the referenced record class | Referenced record checksum. |
 | `030.ActivationControlledArtifactRef` classes | `activation_artifact_ref` | `030` plus artifact owner | Immutable activation artifact bytes or owner-declared canonical metadata bytes. |
 | `020` lakehouse table, object, manifest, snapshot, and commit artifacts | `lakehouse_artifact_ref` | `020` | Immutable lakehouse bytes or owner-declared canonical metadata bytes. |
+| `structured_input_repository_profile` | `activation_artifact_ref` | `030` | Immutable activation artifact bytes or owner-declared canonical profile metadata bytes. |
+| `structured_input_repository_snapshot` | `cadastre_record_ref` or `external_artifact_ref` | `030` | Persisted Cadastre snapshot record checksum or immutable external repository metadata bytes. |
+| `structured_input_validation_run` | `cadastre_record_ref` or `external_artifact_ref` | `120` | Persisted validation record checksum or immutable validation output bytes for the exact snapshot. |
+| `structured_input_materialization_result` | `cadastre_record_ref` | `100` | Persisted materialization result checksum. |
 | External standards, reports, source-native artifacts, compiled schemas, package repository metadata, provenance, and SBOM artifacts | `external_artifact_ref` | Owner spec that imports the artifact | Immutable external bytes or owner-declared canonical metadata bytes. |
 
 A new artifact class may be activated through the owning spec only when it maps to one existing `artifact_id.kind`, declares checksum basis, declares redaction owner, declares `VersionManifest` requirements, and has passing validation refs. `EvidenceRef.artifact_class` and `EvidenceRef.artifact_id.kind` mismatch fails with `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` before `evidence_ref_id` computation.
+
+Branch names, tags, repository URLs, pull request numbers, hook logs, merge event labels, and commit timestamps must not be `artifact_checksum` inputs unless they are serialized as owner-declared canonical metadata bytes and are not used as production authority. Raw repository file bytes and raw structured input payload bytes must not be inlined in `EvidenceRef`.
 
 ### CommonRecordHeader
 
@@ -684,7 +690,7 @@ ComputeEvidenceRefId(evidence_ref):
 
 ### CoreRecordErrorRegistryFragment
 
-This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Every row below is complete enough for `110.GenerateErrorCodeRegistry`. A future owner patch may narrow presentation through `110` overrides, but it must not remove caller-visible code, severity, retryability, owner, affected record type, field path, redaction state, or correlation fields.
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Every row below is complete enough for `110.GenerateErrorCodeRegistry`. A future accepted owner specification update may narrow presentation through `110` overrides, but it must not remove caller-visible code, severity, retryability, owner, affected record type, field path, redaction state, or correlation fields.
 
 | error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -899,6 +905,12 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-CORE-ONEOF-ID-CHECKSUM-AC-001` | Complete canonical `one_of` objects, including `kind` and matching value member, are included in ID and checksum inputs; hashing only value members or owner-local strings fails validation. |
 | `040-CORE-ONEOF-MIGRATION-AC-001` | Pre-closure records using inferred kinds, inferred members, inferred null behavior, or inferred artifact-class pairing are not promotion-eligible and must be replayed and rekeyed under the closed schema version. |
 | `040-ERROR-FRAGMENT-CORE-AC-001` | `040.CoreRecordErrorRegistryFragment` has no `TODO:` cells and generates deterministic `110.ErrorCodeRegistryRow` values for every `040.CoreRecordErrorCodeSet` code. |
+
+### Structured input evidence acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `040-STRUCTURED-INPUT-EVIDENCE-AC-001` | Structured-input evidence uses only existing `EvidenceRef.artifact_id.kind` values, rejects raw payload bytes, rejects mutable labels as checksums, validates class/kind pairing, and requires `VersionManifest` inclusion for output-affecting evidence. |
 
 ## Definition of Done
 

@@ -171,6 +171,24 @@ ResolveSourceAuthorityProfileRow(request, active_row_set):
 8. Return the selected row and require its ref and checksum in `VersionManifest`.
 ```
 
+### StructuredInputRepositorySourceAuthorityHandoff
+
+Repository-authored source-authority, completeness, coverage, staleness, progress-signal, source-history, control-result, absence-policy, and watermark row catalogs are inert until materialized into activation-controlled row sets, validated for the exact snapshot, included in the owner `VersionManifest`, and activated through package-set membership when package-supplied.
+
+`StructuredInputRepositorySnapshot` may be cited as provenance, but it must not satisfy `SourceAuthorityClosureMatrix`, `SourceAuthorityProfileRowSet`, `LakehouseFeedCompletenessProfileRowSet`, `CoverageDimensionProfileRowSet`, `SourceStalenessPolicyRowSet`, `ProgressSignalInterpretationPolicyRowSet`, `ControlResultMappingRowSet`, `SourceHistoryRetentionProfileRowSet`, `AbsenceDerivationPolicyRowSet`, or `ProjectionWatermarkPolicyRowSet`.
+
+Closure for repository-authored row catalogs requires active row-set refs, exact row-set checksums, lifecycle status permitted for production, validation refs for the exact repository snapshot and row bytes, materialization refs when packaged, package-set refs when package-supplied, and `030.VersionManifest` inclusion.
+
+Public repository-authored row catalogs must satisfy `010` public/private rules. Concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventories, zone inventories, account lists, source-native secrets, raw private fixture bytes, and environment-specific source target lists fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` before publication, validation-report materialization, API response, export, audit output, or telemetry export.
+
+A repository merge, pull request approval, branch update, validation run, or hook success must not authorize absence, cleanup, retraction, graph expiry, or watermark advancement.
+
+| Error code | Required use |
+| --- | --- |
+| `SOURCE_AUTHORITY_REPOSITORY_ROWSET_INACTIVE` | Repository-authored row catalog exists but is not an active materialized row set with required lifecycle, validation, materialization, package, and manifest refs. |
+| `SOURCE_AUTHORITY_REPOSITORY_SNAPSHOT_ONLY_FORBIDDEN` | A `StructuredInputRepositorySnapshot` is used as source-authority closure, completeness, coverage, staleness, absence, cleanup, graph-expiry, retraction, or watermark authority. |
+| `SOURCE_AUTHORITY_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored authority catalog or validation output exposes private binding data or raw private fixture bytes. |
+
 ## Completeness Contract
 
 `LakehouseFeedCompletenessProfile` maps feed-read completeness and supplier-provided upstream evidence into source completeness decisions. A `LakehouseReadCompletenessReceipt` alone must not authorize absence, retraction, cleanup, graph expiry, or watermark advancement.
@@ -360,7 +378,7 @@ Public closure rows may use only vendor-neutral categories, datasets, redacted r
 
 ### SourceAuthorityArtifactLifecycleGuardRows
 
-`060` policy row sets use `030.ActivationControlledArtifactLifecycleMachine.v1` for activation. Runtime completeness, absence, and watermark decisions remain algorithmic unless a future owner patch defines a lifecycle subject, closed states, closed events, a total transition matrix, and validation rows.
+`060` policy row sets use `030.ActivationControlledArtifactLifecycleMachine.v1` for activation. Runtime completeness, absence, and watermark decisions remain algorithmic unless a future accepted owner specification update defines a lifecycle subject, closed states, closed events, a total transition matrix, and validation rows.
 
 | Artifact class | Lifecycle binding | Required owner guards |
 | --- | --- | --- |
@@ -374,7 +392,7 @@ Public closure rows may use only vendor-neutral categories, datasets, redacted r
 
 ### Pure algorithm lifecycle non-substitution rule
 
-`EvaluateLakehouseFeedCompleteness`, `DeriveAbsenceOrUnknown`, and watermark evaluation are pure deterministic algorithms for MVP. They must not be converted into lifecycle machines unless a future owner patch defines a lifecycle subject, closed states, closed events, total transition matrix, and validation rows.
+`EvaluateLakehouseFeedCompleteness`, `DeriveAbsenceOrUnknown`, and watermark evaluation are pure deterministic algorithms for MVP. They must not be converted into lifecycle machines unless a future accepted owner specification update defines a lifecycle subject, closed states, closed events, total transition matrix, and validation rows.
 
 ## EvaluateLakehouseFeedCompleteness Algorithm
 
@@ -860,7 +878,7 @@ Missing time input must never fall back to current platform time. A stale result
 
 ### SourceHistoryRetentionProfile
 
-Source-history no-change proof requires both `SourceHistoryRetentionProfile` and `CoverageDimensionProfile` for source-history coverage unless an accepted owner patch removes source history from the coverage domain list. Outside-window no-result maps to `unknown` or deterministic no-op, never no-change proof.
+Source-history no-change proof requires both `SourceHistoryRetentionProfile` and `CoverageDimensionProfile` for source-history coverage unless an accepted owner specification update removes source history from the coverage domain list. Outside-window no-result maps to `unknown` or deterministic no-op, never no-change proof.
 
 | History condition | Required behavior |
 | --- | --- |
@@ -945,6 +963,14 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `060-GOLD-SHAPE-AUTHORITY-AC-003` | External schema field presence or absence remains non-authoritative without exact `050`, `060`, and `080` handoff rows. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-004` | Missing, inactive, checksum-mismatched, or out-of-scope predicate contract refs block source authority before gold output. |
 | `060-GOLD-SHAPE-AUTHORITY-REPLAY-AC-001` | Authority checksum changes and predicate-contract checksum changes are replay-affecting for gold output. |
+
+### Structured input source authority acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-001` | Source-closure validation fails when a repository-authored row catalog exists only in Git and is not an active materialized row set. |
+| `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-002` | Repository snapshot provenance, exact row-set refs, closure rows, validation refs, materialization refs when packaged, package-set refs when package-supplied, and manifest refs are all required when source-authority rows are repository-authored. |
+| `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-003` | Repository-authored private binding leaks fail before absence, cleanup, retraction, graph expiry, watermark, API, export, audit, telemetry, or validation-report output. |
 
 ## Definition of Done
 

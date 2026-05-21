@@ -68,6 +68,12 @@ Define observable API behavior, user-facing states, health, shared error records
 - `AuditEvent`
 - `RedactionPolicy`
 - `AuthorizationDecision`
+- `StructuredInputRepositoryRequest`
+- `StructuredInputRepositoryResponse`
+- `StructuredInputChangeProposalRequest`
+- `StructuredInputValidationRequest`
+- `StructuredInputRepositoryAccessPolicy`
+- `StructuredInputRepositoryRedactionPolicy`
 
 ## Roles
 
@@ -551,6 +557,14 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `ComplianceExport` | `compliance.export`. | Evidence refs require `evidence.read`; raw bytes remain forbidden unless explicitly permitted. | Unauthorized scope returns `AUTHORIZATION_ERROR` without row enumeration. | Audit export checksum and non-pass/fail counts. |
 | `AuditExport` | `audit.export`. | Secure diagnostics require `audit.secure_diagnostics`. | Unauthorized scope returns `AUTHORIZATION_ERROR` without event enumeration. | Audit the audit export request and checksum. |
 | `AnalysisReadOnly` | `analysis.read` plus graph/query permissions when graph-backed. | Raw expansion requires `raw.read`. | Mutation attempts fail before authorization-dependent output. | Audit rule bundle, compatibility refs, and redaction summary. |
+| `StructuredInputRepositoryRead` | `structured_input.repository.read` | Not applicable. | Redact private repository identity and do not reveal inaccessible repository existence. | Audit repository profile ref, snapshot ref, and redaction summary. |
+| `StructuredInputRepositoryWrite` | `structured_input.repository.write` | Not applicable. | Deny without exposing private repository route or file names. | Audit write scope and proposal ref. |
+| `StructuredInputChangeReview` | `structured_input.change.review` | Not applicable. | Deny without exposing reviewer-only diagnostics. | Audit proposal ref, reviewer decision, and validation refs. |
+| `StructuredInputChangeMerge` | `structured_input.change.merge` | Not applicable. | Deny without exposing private branch names or protected ref details. | Audit merge decision and revalidation requirement. |
+| `StructuredInputValidationRun` | `structured_input.validation.run` | Not applicable. | Redact raw file bytes and private diagnostics. | Audit snapshot ref, matrix refs, and diagnostic redaction summary. |
+| `StructuredInputMaterialization` | `structured_input.materialize` | Not applicable. | Deny without exposing artifact payload paths. | Audit materialization result refs and package release refs. |
+| `StructuredInputPromotion` | `package.promote` plus owner-specific structured-input permission | Not applicable. | Use package no-existence-leak and redaction rules. | Audit package-set candidate and source materialization refs. |
+| `StructuredInputRollback` | existing package rollback permission only | Not applicable. | Mutable Git rollback target fails before existence leak. | Audit immutable package-set target or mutable-ref rejection. |
 
 ### AuthorizationDecision schema
 
@@ -586,8 +600,36 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `telemetry_attribute` | Hidden unless allowlisted. | `140.TelemetryAttributePolicy` and endpoint permission. | Attribute key, redaction class, checksum. | Reject or redact raw payloads, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, usernames, and provider-native query text by default. |
 | `telemetry_runtime_state` | Summary only. | `health.read` plus operator/admin diagnostics for detail. | Runtime state refs, checksums, counts, and policy refs. | Do not expose private endpoints, exporter credentials, Collector routes, or raw queue payloads. |
 | `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
+| `structured_input_repository_url` | Hidden. | Operator/admin diagnostic policy only. | Redacted ref/checksum. | Must not expose private routes or credentials. |
+| `structured_input_branch_name` | Hidden or bounded class only. | Repository admin diagnostic policy. | Redacted value class and checksum. | Raw branch names must not become metric labels or public output. |
+| `structured_input_commit_sha` | Redacted or checksum-like diagnostic when policy permits. | Repository admin diagnostic policy. | Ref/checksum only. | Must not become replay, audit, activation, rollback, or source-authority evidence. |
+| `structured_input_file_path` | Hidden or hashed. | Repository admin diagnostic policy. | Hashed path and artifact class. | Raw paths must not leak private route, tenant, host, account, or source-native ID values. |
+| `structured_input_file_checksum` | Visible only when artifact evidence visibility permits. | Validation/package/admin permission. | Visible as checksum. | Checksum does not imply raw file-byte access. |
+| `structured_input_validation_diagnostic` | Redacted summary by default. | Operator/admin diagnostic policy. | Diagnostic class, row ref, and redaction counts. | Must not include raw bytes, secrets, private routes, or raw schema payloads. |
+| `private_repository_route` | Forbidden in public output. | No public display permission. | Redacted ref/checksum only. | Fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` if unredacted. |
+| `private_repository_secret` | Forbidden. | No display permission. | Redacted secret class only. | Fail before response, audit export, telemetry export, package report, or validation report. |
+| `private_structured_input_payload` | Forbidden. | Secure private validation context only outside public artifacts. | Hash and byte count only when permitted. | Raw structured input bytes must not be exposed in public API, audit, telemetry, errors, or package reports. |
 
 `RedactionPolicy` must apply this matrix after owner result materialization and before checksum-visible response output. Redaction must not change owner state labels, error codes, or version-manifest refs; it may only remove or replace fields whose data class requires hiding.
+
+### StructuredInputRepositoryApiSecurity
+
+Structured-input repository operations must use `CommonApiResponseEnvelope`. Public responses may show redacted repository profile ID, snapshot ID, file manifest checksum, validation status, materialization status, package release refs, package-set refs, and owner error codes. Public responses must not show raw file bytes, credentials, private routes, private source bindings, raw private fixture bytes, raw private schema payloads, unredacted repository URLs, raw branch names, raw file paths, or commit messages containing private data.
+
+`StructuredInputRepositoryAccessPolicy` defines clone, push, review, merge, validation, materialization, promotion, rollback, audit, and secure diagnostic permissions. Deny is the default. A policy row must not grant production activation; package activation remains owned by `100`.
+
+`StructuredInputRepositoryRedactionPolicy` defines forbidden and redacted fields for repository content, validation output, audit output, API output, telemetry, package reports, and `VersionManifest` rendering. Redaction must occur before response checksums, audit export, validation report materialization, package report materialization, and telemetry export.
+
+Endpoint outcomes for structured-input operations must include success, empty, unauthorized, redaction-only, stale validation, private leak, mutable ref, materialization failure, package activation failure, and audit-only diagnostic outcomes.
+
+| Request or response | Required fields | Forbidden fields |
+| --- | --- | --- |
+| `StructuredInputRepositoryRequest` | operation token, repository profile ref, optional snapshot ref, selected artifact class, request checksum, authorization scope | raw credentials, raw private route, raw file bytes |
+| `StructuredInputRepositoryResponse` | envelope, redacted profile ref, snapshot ref, file manifest checksum, validation status, materialization status, package release refs, redaction summary | raw file bytes, raw private paths, raw secrets, unredacted private schema payloads |
+| `StructuredInputChangeProposalRequest` | proposal ref, expected prior snapshot ref, selected paths, review action, idempotency key | production activation target, mutable rollback target |
+| `StructuredInputValidationRequest` | exact snapshot ref, validation matrix refs, selected path refs, redaction policy ref | branch tip, tag, PR ref, repository URL as validation target |
+
+`AuditEvent.operation` must include `structured_input.repository.read`, `structured_input.repository.write`, `structured_input.change.review`, `structured_input.change.merge`, `structured_input.validation.run`, `structured_input.materialize`, `structured_input.promote`, and `structured_input.rollback`. Audit records must include authorization decision ref, redaction context ref, repository profile ref, snapshot ref when present, validation refs when present, materialization refs when present, package-set refs when present, and no raw repository content.
 
 ## API, UX, Health, Error, and Security Contract Details
 
@@ -1160,6 +1202,15 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
 | `110-RUNLOCK-STATE-AC-001` | A graph query, health response, API response, export, or audit output affected by `RUN_LOCK_LOST`, `RUN_LOCK_CONFLICT`, `RUN_LOCK_HEARTBEAT_UNCERTAIN`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_IDEMPOTENCY_CONFLICT` renders a blocked, degraded, or error operational state with owner context and no authorized negative interpretation. |
 | `110-RUNLOCK-ERROR-REGISTRY-AC-001` | Every new `030` run-lock error appears in the generated error registry with exact fixture refs, redaction behavior, owner context, and no generic substitute. |
+
+### Structured input API and security acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `110-STRUCTURED-INPUT-AUTH-AC-001` | Structured-input repository operations deny by default, apply no-existence-leak behavior, and require the permission named in `AuthorizationPermissionMatrix`. |
+| `110-STRUCTURED-INPUT-REDACTION-AC-001` | Structured-input API, audit, telemetry, package report, and validation output reject or redact raw file bytes, private routes, credentials, raw paths, private schema payloads, and private fixture bytes. |
+| `110-STRUCTURED-INPUT-AUDIT-AC-001` | Structured-input repository read, write, review, merge, validation, materialization, promotion, and rollback operations emit audit events with authorization refs, redaction refs, snapshot refs where present, and no raw repository content. |
+| `110-STRUCTURED-INPUT-ERROR-AC-001` | Every structured-input error from `010`, `030`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140` is rendered through generated error registry rows with owner context and redaction. |
 
 ## Definition of Done
 

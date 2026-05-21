@@ -99,6 +99,12 @@ Additional promotion gates:
 | package activation registry closure | When `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope, promotion fails if any required package activation registry ref, policy row set, compatibility row, deprecation row, validation row, fixture checksum, expected output checksum, error parity row, manifest ref, or package type coverage row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
 | run-lock closure | When run-lock governed output is in implementation scope, promotion fails if run-lock lease policy, stale recovery behavior, fencing-token semantics, commit guard semantics, operation evidence, recovery evidence, error registry rows, or validation refs are missing, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
 
+### Structured input repository promotion gate
+
+| Gate | Blocking condition |
+| --- | --- |
+| structured input repository closure | When structured-input repository workflow is in implementation scope, promotion fails if any repository profile ref, snapshot ref, exact tree or file checksum, validation run ref, redaction validation ref, materialization result ref, package release ref, package-set ref, access policy ref, error registry row, audit fixture, `VersionManifest` ref, fixture checksum, expected output checksum, or expected error is missing, failed, stale, checksum-mismatched, `TODO`, `blocked`, or `not_run`. |
+
 ## SpecSetVersion Record
 
 | Field | Type | Required | Default | Rule |
@@ -117,6 +123,8 @@ Additional promotion gates:
 | `validation_matrix_refs` | array | Yes | empty | Required owner validation rows from `120`, including `120-DOMAIN-SECTION25-*`, `120-CORE-ONEOF-CLOSURE-*`, `120-CORE-EVIDENCE-ARTIFACT-*`, `120-CORE-NULL-OMISSION-*`, `120-CORE-ID-REPLAY-ONEOF-*`, and `120-CORE-ERROR-REGISTRY-*` before authoritative handoff for core one-of closure and domain closure-ledger status consistency, including feed-closure rows before authoritative handoff when feed profiles are active. Source-authority closure handoff must include `120-SOURCE-CLOSURE-*` and `SourceAuthorityClosureMatrix` validation refs before authoritative handoff when any absence-sensitive feed profile is active. OCSF/external-schema mapping handoff must include `120-OCSF-MAP-*`, `120-SOURCE-EXT-*`, `120-OCSF-NONAUTH-*`, and `120-OCSF-DIRECTION-*` rows when any MVP mapping row set is active. Lifecycle-affecting handoff must include `val-030-lifecycle-*`, `val-090-lifecycle-*`, `val-100-lifecycle-*`, `val-120-lifecycle-*`, and `val-domain-lifecycle-todo-resolved`. Run-lock closure handoff must include `120-RUNLOCK-CLOSE-*`, `val-030-runlock-*`, `val-020-runlock-*`, `val-060-runlock-*`, `val-080-runlock-*`, `val-090-runlock-*`, `val-100-runlock-*`, `val-110-runlock-*`, and `val-140-runlock-*` rows before authoritative handoff when run-lock governed output is in scope. Temporal/correction/replay handoff must include `120-TEMPORAL-CORRECTION-*`, `120-ASSERTION-TRANSITION-*`, `120-REPLAY-OUTPUT-CLASS-*`, `120-GRAPH-HANDOFF-*`, and `120-NOOP-ERROR-*` rows before authoritative handoff when `080` output is in scope. Identity output handoff must include `120-IDENTITY-CLOSURE-*`, `120-IDENTITY-REPLAY-*`, `120-IDENTITY-REVIEW-*`, `120-IDENTITY-SPLIT-*`, `120-IDENTITY-EXPLANATION-*`, and identity package resolver-artifact weakening rows before authoritative handoff when `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope. Graph profile closure handoff must include `120-GRAPH-PROFILE-CLOSURE-*`, `120-GRAPH-QUERY-TRANSLATION-*`, `120-GRAPH-OUTPUT-ELIGIBILITY-*`, `120-GRAPH-APPLY-ORDER-*`, `120-GRAPH-REBUILD-EQUIVALENCE-*`, `120-GRAPH-ENDPOINT-IDENTITY-*`, `120-GRAPH-PAGE-TOKEN-*`, `120-OCSF-DIRECTION-*`, reachability-prohibition rows, `120-GRAPH-BACKEND-SELECTION-*`, `120-GRAPH-BACKEND-PREFLIGHT-*`, `120-GRAPH-PROVIDER-CAPABILITY-*`, `120-GRAPH-JANUSGRAPH-*`, `120-GRAPH-PROVIDER-PORTABILITY-*`, `120-GRAPH-INDEX-FRESHNESS-*`, `120-GRAPH-PARTIAL-APPLY-*`, and `120-GRAPH-BACKEND-PACKAGE-GATE-*` rows before authoritative handoff when graph projection, graph apply, graph query, graph rebuild, graph-serving output, backend defaulting, or provider activation is in implementation scope. Package activation handoff must include `120-PACKAGE-TYPE-*`, `120-PACKAGE-REPOSITORY-*`, `120-PACKAGE-TRUST-*`, `120-PACKAGE-ATTESTATION-SBOM-*`, `120-PACKAGE-COMPATIBILITY-*`, `120-PACKAGE-DEPRECATION-*`, `120-PACKAGE-LKG-*`, `120-PACKAGE-ROLLBACK-*`, `120-PACKAGE-QUARANTINE-*`, `120-PACKAGE-EMERGENCY-*`, and `120-PACKAGE-VERSION-MANIFEST-*` rows before authoritative handoff when `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope. API and observable-state handoff must include `120-API-SCHEMA-TOTAL-*`, `120-STATE-LABEL-TOTAL-*`, `120-ENDPOINT-OUTCOME-*`, `120-ERROR-REGISTRY-*`, `120-AUTH-REDACTION-*`, and `120-PAGE-TOKEN-*` rows before authoritative handoff when API, export, health, audit, compliance, or graph-query response output is in implementation scope. Observability handoff must include `120-OBSERVABILITY-SIGNAL-*`, `120-OBSERVABILITY-ATTRIBUTE-*`, `120-OBSERVABILITY-REDACTION-*`, `120-OBSERVABILITY-CARDINALITY-*`, `120-OBSERVABILITY-EXPORTER-*`, `120-OBSERVABILITY-HEALTH-*`, `120-OBSERVABILITY-REPLAY-*`, `120-OBSERVABILITY-NONAUTH-*`, and `120-OBSERVABILITY-VERSION-MANIFEST-*` rows before authoritative handoff when telemetry, observability health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state visibility is in implementation scope. |
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
+
+When structured-input repositories are enabled, `activation_artifact_registry_refs` must include active structured-input repository profile row sets, repository access policy row sets, repository redaction policy row sets, materialization validation refs, and deterministic block refs for any structured-input family intentionally out of scope. These refs must also appear in owner `VersionManifest` records whenever repository-authored artifacts affect output.
 
 ### Identity resolver spec-set registry refs
 
@@ -285,6 +293,23 @@ These row-catalog families are activation-controlled artifacts. They instantiate
 | `ExternalSchemaAuthoritySignalMappingRowSet` | `activation_controlled_artifact` | `060` | `060.ExternalSchemaAuthoritySignalMappingRow` | Required only when external schema signals are consulted by authority logic. |
 
 `ValidateSpecSet` must reject a spec set when `000`, `domain.md`, `020`, `030`, `060`, or `120` use different names for the same source-closure row-catalog family.
+
+### Required structured-input repository volatility classifications
+
+Structured-input repository artifacts must have exactly one owner and one volatility classification before authoritative handoff. Concrete repository rows are activation-controlled only where this table states so; runtime state records must not become activation targets.
+
+| Contract or artifact | Owner | Volatility class | Required validation refs |
+| --- | --- | --- | --- |
+| `Structured input repository governance` | `030` | `stable_core_contract` | `120-STRUCTURED-INPUT-*` |
+| `StructuredInputRepositoryProfile` | `030` | stable row interface plus `activation_controlled_artifact` concrete rows | `120-STRUCTURED-INPUT-PROFILE-*` |
+| `StructuredInputRepositorySnapshot` | `030` | `runtime_state_record` | `120-STRUCTURED-INPUT-SNAPSHOT-*` |
+| `StructuredInputChangeProposal` | `030` | `runtime_state_record` | `120-STRUCTURED-INPUT-LIFECYCLE-*` |
+| `StructuredInputValidationRun` | `120` | `validation_artifact` | `120-STRUCTURED-INPUT-VALIDATION-*` |
+| `StructuredInputMaterializationResult` | `100` | `runtime_state_record` | `120-STRUCTURED-INPUT-MATERIALIZATION-*` |
+| `StructuredInputRepositoryAccessPolicy` | `110` | stable interface plus `activation_controlled_artifact` policy rows | `120-STRUCTURED-INPUT-AUTH-*` |
+| `StructuredInputRepositoryRedactionPolicy` | `110` | stable interface plus `activation_controlled_artifact` policy rows | `120-STRUCTURED-INPUT-REDACTION-*` |
+
+A repository branch, tag, pull request, hook result, repository URL, or commit timestamp is not a volatility class and must not satisfy any activation-controlled artifact, runtime state record, validation artifact, package release, package-set, or `VersionManifest` requirement.
 
 ### Required graph projection volatility classifications
 
@@ -462,6 +487,19 @@ The following `140` contracts must have exactly one owner and one volatility cla
 | Deferred reachability | `200` | 090,110,120 | inactive_future_domain | `inactive_future_domain` | 120 | inactive_deferred | deferred |
 
 Owner-local closure states are closed values: `closed_local`, `blocked_owner_todo`, `blocked_validation`, `inactive_deferred`, and `candidate_not_promoted`. A `closed_local` owner contract may still be prevented from promotion by candidate document status or missing validation evidence.
+
+### Structured input repository owner contract rows
+
+| Contract | Owner spec | Imported by | Runtime authority class | Volatility class | Validation owner | Owner-local closure state | Open blocker status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Structured input repository governance | `030` | `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, `140`, `domain` | runtime_orchestration | `stable_core_contract` | 120 | blocked_validation | repository profile, snapshot, validation, access, redaction, materialization, package, manifest, and fixture rows required |
+| StructuredInputRepositoryProfile | `030` | `010`, `020`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, `140`, `domain` | runtime_orchestration | stable interface plus `activation_controlled_artifact` concrete rows | 120 | blocked_validation | profile row-set fixtures and private-binding validation required |
+| StructuredInputRepositorySnapshot | `030` | `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, `140` | runtime_orchestration | `runtime_state_record` | 120 | blocked_validation | deterministic snapshot, path normalization, mutable ref, force-push, and manifest fixtures required |
+| StructuredInputChangeProposal | `030` with observable behavior in `110` | `100`, `110`, `120` | runtime_orchestration | `runtime_state_record` | 120 | blocked_validation | lifecycle and merge-revalidation fixtures required |
+| StructuredInputValidationRun | `120` | `030`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `130`, `140` | validation | `validation_artifact` | 120 | blocked_validation | exact snapshot, stale validation, private leak, redaction, negative, and materialization fixtures required |
+| StructuredInputMaterializationResult | `100` | `030`, `040`, `050`, `060`, `070`, `080`, `090`, `110`, `120`, `130`, `140` | runtime_activation | `runtime_state_record` | 120 | blocked_validation | materialization, package release handoff, direct Git rejection, rollback, and manifest fixtures required |
+| StructuredInputRepositoryAccessPolicy | `110` | `010`, `030`, `100`, `120`, `140` | runtime_api_security | stable interface plus `activation_controlled_artifact` policy rows | 120 | blocked_validation | authorization, no-existence-leak, audit, and endpoint outcome fixtures required |
+| StructuredInputRepositoryRedactionPolicy | `110` | `010`, `030`, `040`, `100`, `120`, `140` | runtime_api_security | stable interface plus `activation_controlled_artifact` policy rows | 120 | blocked_validation | validation-diagnostic, file-path, commit, payload, private-route, and telemetry redaction fixtures required |
 
 ## Dependency Rule
 

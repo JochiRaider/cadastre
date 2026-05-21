@@ -75,6 +75,7 @@ Every active domain spec must include at least one negative validation case for 
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis finding, metric, risk acceptance, threat-intel enrichment, lineage facet, registry governance, registry custom property, registry classification, or derived-edge rule attempts forbidden authority or mutation and fails before the forbidden effect. |
 | Observability | Telemetry span, metric, structured log, baggage, exporter success, exporter failure, Collector state, sampling decision, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
+| Structured input repository | Branch, tag, pull request, repository URL, or hook success used as activation target; stale branch-tip validation; exact tree mismatch; invalid path; private binding leak; unmaterialized Git snapshot activation; package release missing materialization refs; missing `VersionManifest` refs; rollback to branch or tag; and hook success as activation evidence fail before forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 
 ## Required Volatility Boundary Test Classes
@@ -93,6 +94,10 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | stable core conflict | Activation artifact attempts to redefine identity, temporal, omission, or graph authority. | Fails with volatility-boundary error before production output. |
 | runtime state substitution | `GraphRebuildManifest`, `LakehouseCommitRef`, lineage facet, or validation report is used as source truth. | Fails before authority effect. |
 | graph provider default boundary | Research report, backend package metadata, or provider runtime default attempts to define Cadastre graph behavior without active `090` profile and `100` package-set refs. | Fails before graph apply, query serving, rebuild promotion, or production output. |
+| structured input repository stable-boundary | Repository-authored artifact attempts to redefine stable core behavior, authority classes, core fields, temporal axes, identity rules, graph authority, package activation target, or API state labels. | Fails before activation, materialization, or production output. |
+| repository snapshot/package digest substitution | Repository snapshot, tree hash, branch, tag, PR ref, validation report, or hook result attempts to substitute for package artifact digest or release checksum. | Fails before package release handoff or package-set activation. |
+| repository validation/owner row substitution | Repository validation report or Git snapshot attempts to substitute for active owner row set, source evidence, source completeness, graph rebuild evidence, validation acceptance, or production approval. | Fails before authority effect or promotion. |
+
 | telemetry runtime-state substitution | `TelemetryRuntimeState`, exporter success, Collector state, or dashboard state is used as source truth, identity evidence, graph truth, audit persistence, package activation, or replay input. | Fails before authority effect. |
 | telemetry artifact activation | Missing, inactive, checksum-mismatched, out-of-scope, or package-set-mismatched telemetry profile is referenced by health/API/audit/validation output. | Fails before telemetry-visible output or emits owner health error. |
 | telemetry metric cardinality | Metric catalog uses unbounded labels such as source-native IDs, canonical IDs, hostnames, IPs, usernames, backend IDs, or private route names. | Fails before telemetry profile activation or export. |
@@ -303,7 +308,7 @@ This matrix is the executable validation interface for identity resolver closure
 | `domain-section25-graph-profile-blocked-validation` | MVP edge semantics are closed but graph fixture checksums are missing. | Acceptance blocked. |
 | `domain-section25-lifecycle-blocked-validation` | Lifecycle owners have machine definitions but validation rows are missing or blocked. | Acceptance blocked. |
 | `domain-section25-domain-exports-none` | `domain.md` declares no runtime exports and no runtime row, schema, or algorithm is found. | Pass. |
-| `domain-section25-package-type-enum-resolved` | `100.PackageType` confirmed enum has no duplicates and no generic `deployment_profile`. | Pass after `100` patch. |
+| `domain-section25-package-type-enum-resolved` | `100.PackageType` confirmed enum has no duplicates and no generic `deployment_profile`. | Pass only when the active `100.PackageType` enum validation rows pass. |
 | `domain-section25-janusgraph-default-blocked-activation` | `090` backend default selection is resolved, but production activation fails closed until backend/package validation rows pass. | Pass when activation fail-closed rows pass. |
 
 ### ValidationCoverageMatrix
@@ -451,7 +456,7 @@ TODO: Governance must provide exact fixture bytes, fixture checksums, and expect
 
 ### GraphActiveProfileClosureValidationMatrix
 
-Rows in this matrix validate behavior owned by `090` and cross-owner handoffs required by `040`, `050`, `060`, `070`, `080`, `110`, and `130`. Because the uploaded patch plan does not provide canonical fixture bytes or expected output checksums, checksum cells are explicit blockers. `AcceptanceReport` must fail while any non-deferred graph closure row has a `TODO:` checksum, status `blocked`, status `not_run`, or missing mutation-prohibition proof.
+Rows in this matrix validate behavior owned by `090` and cross-owner handoffs required by `040`, `050`, `060`, `070`, `080`, `110`, and `130`. Because fixture bytes and expected output checksums are absent, checksum cells are explicit blockers until populated by validation artifacts. `AcceptanceReport` must fail while any non-deferred graph closure row has a `TODO:` checksum, status `blocked`, status `not_run`, or missing mutation-prohibition proof.
 
 | Row ID | Owner | Fixture ID | Fixture checksum | Expected result | Expected output checksum | Mutation prohibition |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -599,7 +604,6 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 | `directory-visibility-*` | hidden membership, limited-information rows, direct-only membership query, AD primary-group gap, delta reset, page incompletion |
 | `manifest-closure-*` | omitted authority row set ref, omitted staleness ref, omitted coverage ref, omitted progress policy, omitted control mapping, omitted source-history retention, checksum mismatch |
 | `graph-expiry-*` | expiry authorized success, expiry missing `060` effect ref rejected, derived-view stale does not expire graph object |
-
 | `feed-category-closure-catalog-*` | one active row per known category, duplicate row rejection, missing known category row, future category block row, source_dataset allowlist missing, source_dataset allowlist ambiguous |
 | `source-authority-closure-matrix-rowset-*` | closure row exact match, deterministic block row, missing row, ambiguous row, inactive row, checksum mismatch, out-of-scope row, stale validation ref, TODO row |
 | `source-history-coverage-*` | retention present but coverage missing, coverage present but retention missing, outside-window no-proof, inside-window no-change proof success |
@@ -607,6 +611,7 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 | `deterministic-block-row-*` | blocked category, blocked dataset, blocked predicate, blocked effect, mutation-prohibition proof |
 | `version-manifest-source-closure-*` | omitted closure row-set ref, omitted underlying authority ref, omitted coverage ref, omitted staleness ref, omitted validation ref, closure summary present without underlying refs |
 | `source-closure-private-binding-*` | product name, tenant ID, private route, scanner site, host list, zone inventory, account list, and credential leak rejected |
+
 A validation row in this matrix must include fixture checksum, expected `AbsenceDerivationResult` checksum when applicable, expected `VersionManifest` checksum or expected manifest error, expected output checksum when output is allowed, expected no-op when output is blocked, expected error code when rejected, and mutation-prohibition proof for raw, silver, identity, gold, graph, watermark, compliance export, and API label mutation classes affected by the case.
 
 ### SourceClosureCategoryEffectValidationMatrix
@@ -627,6 +632,43 @@ This matrix imports the MVP category set from `020.LakehouseFeedCategoryClosureR
 | `cloud_asset_inventory` | Visibility, disappearance, history, cleanup, and graph-expiry cases. |
 | `source_history` | Retention plus coverage success, retention-only failure, coverage-only failure, and outside-window no-proof. |
 | `future_reachability` | Deterministic block only; no MVP runtime effect. |
+
+### StructuredInputRepositoryValidationMatrix
+
+Rows in this matrix validate behavior owned by `010`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`. Because fixture bytes and expected output checksums are absent, checksum cells are explicit blockers until populated by validation artifacts. `AcceptanceReport` must fail while any row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or `TODO`.
+
+| validation_row_id | owner_spec | fixture_id | fixture_checksum | required_refs | expected_error_or_output | expected_output_checksum | mutation_prohibition | acceptance_criterion | blocking_status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-structured-input-repository-profile` | `030`, `110` | `fixture-structured-input-profile` | TODO | repository profile, access policy, redaction policy | profile validation result | TODO | no activation | `030-STRUCTURED-INPUT-SNAPSHOT-AC-001` | blocked |
+| `val-structured-input-path-normalization` | `030` | `fixture-structured-input-invalid-paths` | TODO | repository profile | `STRUCTURED_INPUT_PATH_INVALID` | TODO | no validation output, materialization, or package release | `030-STRUCTURED-INPUT-SNAPSHOT-AC-001` | blocked |
+| `val-structured-input-snapshot-determinism` | `030` | `fixture-structured-input-snapshot-repeat` | TODO | repository profile, exact commit, tree, file manifest | byte-identical snapshot IDs | TODO | no mutable ref authority | `030-STRUCTURED-INPUT-SNAPSHOT-AC-001` | blocked |
+| `val-structured-input-mutable-ref-rejection` | `010`, `030`, `100` | `fixture-structured-input-mutable-ref` | TODO | branch, tag, PR ref, repository URL cases | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | TODO | no activation, rollback, or manifest satisfaction | `030-STRUCTURED-INPUT-MUTABLE-REF-AC-001` | blocked |
+| `val-structured-input-force-push-revalidation` | `030` | `fixture-structured-input-ref-rewrite` | TODO | prior validation run, rewritten ref observation | `STRUCTURED_INPUT_REVALIDATION_REQUIRED` | TODO | no materialization from stale validation | `030-STRUCTURED-INPUT-FORCE-PUSH-AC-001` | blocked |
+| `val-structured-input-private-binding-redaction` | `010`, `110`, `140` | `fixture-structured-input-private-leak` | TODO | redaction policy, access policy | `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or redacted response | TODO | no private leak | `110-STRUCTURED-INPUT-REDACTION-AC-001` | blocked |
+| `val-structured-input-validation-run-exact-snapshot` | `120`, `030` | `fixture-structured-input-stale-validation` | TODO | validation run, snapshot checksum | `STRUCTURED_INPUT_VALIDATION_STALE` | TODO | no activation or materialization | `120-STRUCTURED-INPUT-AC-001` | blocked |
+| `val-structured-input-materialization` | `100` | `fixture-structured-input-materialization` | TODO | snapshot, validation run, materialization result | materialization result | TODO | no production activation | `100-STRUCTURED-INPUT-MATERIALIZATION-AC-001` | blocked |
+| `val-structured-input-package-release-handoff` | `100` | `fixture-structured-input-package-release` | TODO | materialization result, release manifest | package release manifest | TODO | no direct Git activation | `100-STRUCTURED-INPUT-GIT-AUTHORITY-AC-001` | blocked |
+| `val-structured-input-package-set-activation` | `100`, `030` | `fixture-structured-input-package-set` | TODO | package release, package set, version manifest | activated package set or activation failure | TODO | current active set preserved on failure | `100-STRUCTURED-INPUT-MATERIALIZATION-AC-001` | blocked |
+| `val-structured-input-rollback-mutable-ref-rejection` | `100` | `fixture-structured-input-rollback-branch` | TODO | rollback plan | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | TODO | no active state change | `100-STRUCTURED-INPUT-ROLLBACK-AC-001` | blocked |
+| `val-structured-input-version-manifest` | `030` | `fixture-structured-input-manifest-omission` | TODO | omitted structured-input refs | `VERSION_MANIFEST_INCOMPLETE` | TODO | no output | `030-STRUCTURED-INPUT-VM-AC-001` | blocked |
+| `val-structured-input-error-registry` | `110` | `fixture-structured-input-error-registry` | TODO | owner fragments | generated error registry | TODO | no unredacted error context | `110-STRUCTURED-INPUT-ERROR-AC-001` | blocked |
+| `val-structured-input-audit` | `110` | `fixture-structured-input-audit` | TODO | access policy, audit schema | audit event | TODO | no raw repository content | `110-STRUCTURED-INPUT-AUDIT-AC-001` | blocked |
+| `val-structured-input-telemetry-redaction` | `140`, `110` | `fixture-structured-input-telemetry` | TODO | telemetry profile, attribute policy, redaction policy | redacted telemetry or rejection | TODO | no domain mutation and no private leak | `140-STRUCTURED-INPUT-REDACTION-AC-001` | blocked |
+
+### Structured input validation coverage rows
+
+| Owner spec | Required structured-input coverage |
+| --- | --- |
+| `030` | profile, snapshot determinism, path normalization, mutable ref rejection, force-push revalidation, manifest omission |
+| `050` | mapping snapshot handoff, stale validation, path escape, no activation on merge |
+| `060` | inactive source-authority row catalog, private leak, stale validation, closure success, manifest omission |
+| `070` | Git-only profile no-op, stale validation, hard-blocker weakening rejection, private leak, manifest completeness |
+| `080` | inactive temporal policy no-op, stale validation, replay manifest omission |
+| `090` | Git-only graph profile no-op, provider-native query rejection, package-gate failure, stale validation, manifest omission |
+| `100` | materialization success, direct Git activation rejection, materialization mismatch, package type mismatch, package-set ref omission, rollback mutable-ref rejection |
+| `110` | authorization denial without existence leak, redacted validation diagnostics, private path leak rejection, mutable-ref error rendering, audit completeness |
+| `130` | Git-only registry no-op, authority substitution rejection, package-set ref omission, redaction |
+| `140` | private route leak, unbounded file path labels, branch-name redaction, commit SHA allowed and forbidden cases, no domain mutation |
 
 ### PackageActivationValidationMatrix
 
@@ -1128,7 +1170,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 
 ### GraphBackendProviderValidationMatrix
 
-Rows in this matrix validate backend-default and provider behavior owned by `090` and package-gate behavior owned by `100`. Because fixture bytes and expected output checksums are not supplied in this patch plan, checksum cells are explicit blockers until populated by `120` validation artifacts.
+Rows in this matrix validate backend-default and provider behavior owned by `090` and package-gate behavior owned by `100`. Because fixture bytes and expected output checksums are absent, checksum cells are explicit blockers until populated by `120` validation artifacts.
 
 | Row ID | Owner | Fixture ID | Fixture checksum | Expected result | Expected output checksum | Mutation prohibition |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -1164,7 +1206,7 @@ graph-provider-portability-equivalence
 
 ### Required closure validation families
 
-| Validation family | Required patch content |
+| Validation family | Required structured-input closure content |
 | --- | --- |
 | `120-OCSF-MAP-*` | One positive, missing-row, ambiguous-row, enum, forbidden-field, source-extension, `cadastre_only`, and endpoint-order fixture per active MVP row family. |
 | `120-SOURCE-CLOSURE-*` | One closure-positive, closure-missing, closure-ambiguous, deterministic-block, weak-signal, stale-source, coverage-missing, source-history coverage, external-schema authority signal, manifest omission, private-binding leak, and watermark-block fixture per active absence-sensitive feed category, source dataset, requested effect, scope selector, read target kind, and upstream evidence class tuple. |
@@ -1315,6 +1357,15 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-RUNLOCK-CLOSE-AC-001` | Aggregate acceptance fails while any run-lock row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or `TODO`. |
 | `120-RUNLOCK-CLOSE-AC-002` | Every run-lock negative row has mutation prohibition for production output, watermark, graph mutation, package activation, and table maintenance where applicable. |
 | `120-RUNLOCK-CLOSE-AC-003` | Two implementations produce byte-identical evidence for idempotent retry and stale recovery success fixtures. |
+
+### Structured input validation acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `120-STRUCTURED-INPUT-AC-001` | `AcceptanceReport` cannot pass while any structured-input validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or `TODO`. |
+| `120-STRUCTURED-INPUT-AC-002` | Exact same repository snapshot inputs produce byte-identical validation output. |
+| `120-STRUCTURED-INPUT-AC-003` | Merge to repository alone produces no production mutation. |
+| `120-STRUCTURED-INPUT-AC-004` | Materialized package activation requires allowed repository form, materialization refs, package release refs, package-set refs, and `VersionManifest` refs. |
 
 ## Definition of Done
 

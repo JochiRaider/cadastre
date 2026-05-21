@@ -433,6 +433,24 @@ Only the properties in this table may be emitted by the active MVP graph profile
 | `observed_connection` | `last_seen` | Source fact valid interval or observed time selected by `080` | RFC3339 UTC or null | Required for path ordering when present; null sorts last. |
 | `observed_connection` | `evidence_ref_ids` | Evidence refs | canonically sorted array | Required non-empty. |
 
+### StructuredInputRepositoryGraphProfileHandoff
+
+Repository-authored graph projection profiles, edge semantics row sets, traversal class rows, output eligibility rows, backend profiles, provider capability matrices, schema profiles, taxonomy mappings, query translation profiles, derived-view lag policies, graph apply profiles, and graph property policies are inert until materialized, exact-snapshot validated, package-set activated when package-supplied, and included in `030.VersionManifest`.
+
+A Git merge, pull request approval, branch update, validation run, or hook success must not enable graph serving, graph apply, query translation, backend selection, schema creation, graph rebuild promotion, derived-view advancement, or graph mutation.
+
+Graph backend selection defaults must not be derived from repository filenames, branch names, package names, provider defaults, path prefixes, or repository URLs. Defaults must resolve through `GraphBackendSelectionPolicy` and the package/materialization gates named by `030` and `100`.
+
+`GraphBackendPreflightResult` must include repository snapshot refs, file manifest checksums, validation refs, materialization refs, package release refs when created, package-set refs when package-supplied, and `VersionManifest` refs when the active graph backend, query profile, schema profile, taxonomy mapping, capability matrix, edge semantics, or projection profile was repository-authored.
+
+Provider-native query text committed in Git remains validation-only unless mapped through an active `GraphQueryTranslationProfile`. A committed Gremlin, Cypher, AQL, SQL, or provider query string must not bypass query translation, authorization, redaction, deterministic ordering, page-token rules, or mutation prohibition.
+
+| Error code | Required use |
+| --- | --- |
+| `GRAPH_REPOSITORY_PROFILE_INACTIVE` | Repository-authored graph profile exists but lacks active materialized refs, package-set refs when package-supplied, or manifest refs. |
+| `GRAPH_REPOSITORY_VALIDATION_STALE` | Graph validation or preflight does not match exact repository snapshot, file manifest checksum, graph artifact checksum, backend profile checksum, or package-set ref. |
+| `GRAPH_REPOSITORY_QUERY_TEXT_FORBIDDEN` | Provider-native query text from repository content attempts to execute without active translation profile and read-only validation. |
+
 ## Graph Delta Identity
 
 Every graph node and edge must have a Cadastre-owned deterministic ID. Backend-generated node, edge, relationship, vertex, document, element, transaction, shard, or native cursor IDs are forbidden as Cadastre IDs, selectors, evidence refs, replay keys, drillback keys, response IDs, or pagination identity and must fail with `GRAPH_BACKEND_ID_FORBIDDEN` before graph apply, query response, evidence ref generation, replay, or pagination.
@@ -1018,6 +1036,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-CLOSED-FACT-CONSUMPTION-AC-002` | `string_value` endpoints, OCSF endpoint objects, graph keys, backend IDs, and source-native graph payloads do not project as endpoint identity. |
 | `090-CLOSED-FACT-CONSUMPTION-AC-003` | `identifier_ref` and `source_asset_ref` endpoint candidates require `070` resolver handoff before graph output. |
 | `090-CLOSED-FACT-CONSUMPTION-AC-004` | Invalid `GoldFact.subject_ref` or `GoldFact.object_value` kinds produce no graph mutation and emit the most specific owner error. |
+
+### Structured input graph acceptance criteria
+
+| ID | Criterion |
+| --- | --- |
+| `090-STRUCTURED-INPUT-GRAPH-AC-001` | Repository-authored graph profile omitted from materialization, package-set, validation, or manifest refs fails backend preflight before graph serving, graph apply, query, rebuild promotion, or mutation. |
+| `090-STRUCTURED-INPUT-GRAPH-AC-002` | Git-only backend profile cannot serve queries, mutate graph, advance derived view, create schema, or promote rebuild output. |
+| `090-STRUCTURED-INPUT-GRAPH-AC-003` | Provider query text committed in Git cannot bypass `GraphQueryTranslationProfile`, authorization, redaction, deterministic ordering, page-token rules, or mutation prohibition. |
 
 ## Definition of Done
 
