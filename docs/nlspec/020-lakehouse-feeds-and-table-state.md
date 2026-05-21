@@ -196,6 +196,44 @@ The active `LakehouseFeedCategoryClosureRowSet` must contain exactly one row for
 | Missing row for any known category | Must not mean positive-only, absence, cleanup, graph expiry, retraction, or watermark permission. |
 | Deterministic block row selected | Emit no raw-import side effect beyond owner-declared diagnostics and mutation-prohibition evidence for absence-sensitive effects. |
 
+### MVP Feed Category Closure Catalog Requirements
+
+The selected MVP scope must provide one active `LakehouseFeedCategoryClosureRowSet` ref or an exact deterministic block row for every category in `LakehouseFeedCategoryClosureRequirementTable`. This section does not embed private vendor rows; concrete row instances remain activation-controlled supporting material.
+
+| Required member | Requirement |
+| --- | --- |
+| `source_dataset` catalog ref | Every `LakehouseFeedProfile.source_dataset` must resolve to a vendor-neutral dataset catalog ref or an exact deterministic block proof before feed read/import. |
+| category row coverage | Exactly one `LakehouseFeedCategoryClosureRow` must resolve for every category in `LakehouseFeedCategoryClosureRequirementTable`. |
+| `future_reachability` | Must resolve to a deterministic block row in MVP. |
+| out-of-scope category or effect | Must resolve to a deterministic block row or an `active_positive_only` row with every absence-sensitive effect blocked. |
+| package-supplied row set | Must include immutable package release refs, an active package-set ref, validation refs, and `030.VersionManifest` inclusion before production use. |
+
+Every row must materialize `row_id`, `row_version`, `source_dataset_allowlist_ref`, `category_activation_state`, `feed_category`, `allowed_read_target_kinds`, `required_upstream_evidence_classes`, `effect_closure_requirements`, `validation_refs`, `activation_scope`, `lifecycle_status`, package-set ref when package-supplied, and row checksum before validation output is computed.
+
+`effect_closure_requirements` must be total over the closed effect set:
+
+| Effect token | Required closure behavior |
+| --- | --- |
+| `absence` | Requires exact `060` closure refs or a deterministic block row. |
+| `cleanup` | Requires exact `060` closure refs or a deterministic block row. |
+| `retraction` | Requires exact `060` closure refs or a deterministic block row. |
+| `graph_expiry` | Requires exact `060` closure refs and `090` graph handoff validation, or a deterministic block row. |
+| `watermark` | Requires exact `060.ProjectionWatermarkPolicy` refs or a deterministic block row. |
+
+```text
+ValidateMVPFeedCategoryClosure(row_set, source_dataset_catalog, selected_scope):
+1. Validate row-set activation ref.
+2. Validate source-dataset catalog ref or deterministic block proof.
+3. Materialize defaults and compute row checksums.
+4. For each category in LakehouseFeedCategoryClosureRequirementTable, resolve exactly one row.
+5. Reject missing or duplicate rows.
+6. Validate effect closure requirements for every allowed effect.
+7. Require 060 closure refs or deterministic block refs for absence-sensitive effects.
+8. Require package-set refs when package-supplied.
+9. Require VersionManifest inclusion.
+10. Emit closed, deterministically_blocked, or owner error.
+```
+
 ## Raw Import Contract
 
 `RawRecordImportRun` must supply every field required by `040.RawRecordSchema` and must import lakehouse raw feed rows or objects into deterministic `RawRecord` records that pass `040.ValidateCoreRecord` before commit. The import run must record feed profile ID, read policy ID, feed manifest ID, source dataset, scope keys, payload hash algorithm, import package artifact, input table or object refs, and every input required by `040.ComputeRawRecordId`.

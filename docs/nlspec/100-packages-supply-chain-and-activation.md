@@ -278,6 +278,30 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 
 `ValidateSpecSet` and `RunValidationMatrix` must fail when any confirmed token is absent from the matrix, duplicated in the matrix, assigned to more than one policy family, or lacks exactly one active `PackageTypePolicyRow` for the target environment when package activation is in implementation scope. A successful package type policy resolution must record the selected row ref and checksum in `030.VersionManifest.included_refs`.
 
+### MVP Package Activation Registry Closure Requirements
+
+Package activation registry closure is required before any package release, package-set activation, package-supplied row catalog, rollback, quarantine, emergency action, package stage binding, validation gate, graph backend gate, resolver catalog gate, OCSF mapping gate, feed closure gate, or source-authority closure gate can affect production output.
+
+| Requirement | Required behavior |
+| --- | --- |
+| package type policy row coverage | Exactly one active `PackageTypePolicyRow` per confirmed `PackageType` token per target environment where package activation is in scope. |
+| deprecation row coverage | Exactly one active `PackageDeprecationWindowPolicyRow` per package type and environment-compatible scope. |
+| default deprecation window | Forbidden; missing rows fail policy resolution. |
+| package type aliases | Forbidden for broad labels, module names, repository paths, filenames, package names, version strings, mutable refs, and developer labels. |
+| `policy_bundle` substitution | Forbidden; each source-closure, resolver, graph, OCSF, and package policy catalog must have its own explicit package type and activation refs. |
+| candidate failure | Preserve the current active package set, emit `PackageActivationFailureEvent`, and write no candidate production output. |
+
+Package-supplied row catalogs must appear in release refs, package type policy refs, supply-chain policy refs, compatibility refs, validation refs, `ProductionPackageSetManifest.activation_artifact_refs`, and `030.VersionManifest.included_refs` when output-affecting.
+
+| Owner boundary | Package policy family | Validation family |
+| --- | --- | --- |
+| `020` feed closure | `lakehouse/feed/read` | `120-FEED-CLOSURE-*`; `120-PACKAGE-*` |
+| `050` OCSF mapping closure | `mapping/external-schema/toolchain` | `120-OCSF-MAP-*`; `120-SOURCE-EXT-*`; `120-PACKAGE-*` |
+| `060` source authority closure | `source-authority closure` | `120-SOURCE-CLOSURE-*`; `120-PACKAGE-*` |
+| `070` resolver closure | `identity resolver` | `120-IDENTITY-CLOSURE-*`; `120-PACKAGE-*` |
+| `090` graph profile/backend closure | `graph/backend/projection` | `120-GRAPH-PROFILE-CLOSURE-*`; `120-GRAPH-BACKEND-*`; `120-PACKAGE-*` |
+| `100` package activation | package trust, compatibility, deprecation, release, and package-set policies | `120-PACKAGE-*`; `120-VERSION-MANIFEST-*`; `120-ERROR-REGISTRY-*` |
+
 ### Mapping and external schema package type policy rows
 
 These rows are package type policies for mapping and external-schema row-catalog packages. They make OCSF mapping catalogs package-set members without making packages runtime authority. Runtime behavior remains owned by `050`, with validation closure owned by `120` and manifest inclusion owned by `030`.

@@ -200,7 +200,7 @@ Resolver artifacts must not weaken stable weak-evidence defaults by treating tel
 | `TargetSelectorSafetyPolicy` | `activation_controlled_artifact` | Must validate before selectors influence resolver or projection behavior. |
 | `ResolveIdentity` | `stable_core_contract` | Algorithm validates artifact refs before candidate generation. |
 
-### Resolver activation catalog closure
+### MVP Resolver Catalog Closure Requirements
 
 The MVP resolver activation catalog is not a separate runtime authority. It is the concrete set of activation artifacts selected by exactly one active `ResolverProfileRow`. A production resolver run must resolve every catalog member below by exact `030.ActivationControlledArtifactRef`, include every selected ref and checksum in `030.VersionManifest`, and fail before identity mutation when a required member is missing, inactive, ambiguous, checksum-mismatched, scope-mismatched, unvalidated, or package-set mismatched.
 
@@ -219,9 +219,33 @@ The MVP resolver activation catalog is not a separate runtime authority. It is t
 | explanation policy | `resolver_explanation_policy` | `RESOLVER_EXPLANATION_INCOMPLETE` |
 | selector safety policy | `target_selector_safety_policy` | `TARGET_SELECTOR_UNSAFE` |
 | activation report | `ResolverActivationReport` | production promotion forbidden; emit `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` when promotion requires the report |
+| activation report policy | `resolver_activation_report_policy` | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` when the policy row set or validation refs are missing |
 | shadow/canary output | `ResolverShadowRun` | required only when promotion uses shadow or canary; omission blocks promotion |
 
 The catalog closure check must execute after profile row selection and before candidate generation. A catalog member must not be inferred from package type labels, owner prose, research reports, implementation defaults, or another artifact with a similar name.
+
+The total resolver artifact coverage states are closed:
+
+| Result state | Required meaning |
+| --- | --- |
+| `active_required` | The artifact must be active, checksum-valid, validation-backed, in scope, and manifest-included before identity output. |
+| `deterministically_blocked` | The exact resolver scope is intentionally blocked and validation proves no identity mutation. |
+| `validation_only` | The artifact may be used only in validation, shadow, or canary output and must not produce production identity mutations. |
+| `not_in_scope_blocked` | The artifact is outside the selected resolver scope and must not be selected as fallback. |
+
+Weak evidence defaults are total for MVP. Each row below must produce `no_decision` and no `CanonicalEntity`, `SourceAsset`, `Identifier`, `IdentityDecision` mutation, graph endpoint, gold reference, create, attach, merge, or split unless durable evidence and an active decision matrix row explicitly permit stronger behavior.
+
+| Weak evidence input | Default resolver output |
+| --- | --- |
+| IP-only | `no_decision` |
+| hostname-only | `no_decision` |
+| DNS-only | `no_decision` |
+| PTR-only | `no_decision` |
+| scanner-name-only | `no_decision` |
+| graph-key-only | `no_decision` |
+| mapped-target-only | `no_decision` |
+| learned-only | `no_decision` |
+| selector-only | `no_decision` |
 
 ### ResolverArtifactLifecycleGuardRows
 

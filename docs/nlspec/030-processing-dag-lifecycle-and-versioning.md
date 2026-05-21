@@ -665,6 +665,14 @@ A production output without a complete immutable `VersionManifest` must fail wit
 
 When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
 
+### Activation Catalog Closure Manifest Rule
+
+Activation-catalog closure is a grouped validation concern only. A grouped closure result must never substitute for individual member refs in `VersionManifest.included_refs`.
+
+For every selected production scope, `VersionManifest.included_refs` must contain every selected row-set ref, row checksum, deterministic block row ref, validation row ref, package release ref, package-set ref, runtime state ref, and closure validation ref that can affect output, replay, visibility, graph mutation, watermark advancement, package activation, or validation acceptance.
+
+Missing underlying row refs fail with `VERSION_MANIFEST_INCOMPLETE` or a more specific owner code before owner output, even when a high-level closure matrix row or acceptance summary says `closed`.
+
 ### EvidenceRefArtifactClassManifestHandoff
 
 When any output emits `EvidenceRef`, `VersionManifest` must include the active `040.EvidenceArtifactIdKindRegistry` checksum, every consulted `040.EvidenceArtifactClassRegistry` row-set ref, the referenced artifact checksum, and the owner artifact refs required by the referenced artifact class.
@@ -827,6 +835,17 @@ golden_corpus
 | `060.ExternalSchemaAuthoritySignalMappingRowSet` | `external_schema_authority_signal_mapping_row_set` | Required only when external schema signals are consulted. |
 
 A `SourceAuthorityClosureMatrix` validation result cannot satisfy `VersionManifest` completeness unless all underlying activation-controlled row refs and checksums are also present. A deterministic block validation ref may satisfy the closure-row-set position only for the exact blocked category, dataset, fact, predicate, scope, and requested effect.
+
+### Activation artifact class owner-name alignment
+
+The canonical `artifact_class` token is the value in the closed registry above. Owner contract names and package type names must not create parallel artifact-class tokens.
+
+| Owner contract or package type token | Canonical `030.artifact_class` | Required behavior |
+| --- | --- | --- |
+| `050.ExternalSchemaArtifactRef` and package type `external_schema_artifact_ref` | `external_schema_artifact` | Use the canonical artifact class in `ActivationControlledArtifactRef`; package type token remains package activation vocabulary only. |
+| `070.ResolverProfileRowSet` and package type `resolver_profile` | `resolver_profile` | Exact alias; no inferred `resolver_profile_row_set` artifact class is allowed. |
+| `090.GraphEdgeSemantics` and package type `graph_edge_semantics` | `graph_edge_semantics_row_set` | Graph semantics row sets use the canonical row-set artifact class. |
+| `100.ProductionPackageSetManifest` | `production_package_set` | Package-set manifest fields must not substitute for `VersionManifest.included_refs`. |
 
 ### ValidateActivationControlledArtifactRef
 
@@ -1054,6 +1073,13 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Output class | Required refs |
 | --- | --- |
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
+| `feed_category_closure` | active `020.LakehouseFeedCategoryClosureRowSet` ref, every selected category row ref/checksum, source-dataset catalog ref or deterministic block row ref, validation refs, package-set refs when package-supplied, and closure outcome. |
+| `ocsf_mapping_closure` | active `050.ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, `CanonicalValidationOutput`, row checksums, validation refs, and package-set refs when package-supplied. |
+| `source_authority_closure` | active `060.SourceAuthorityClosureMatrixRowSet` or exact deterministic block row ref plus all underlying source authority, completeness, coverage, staleness, progress-signal, visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row-set refs consulted by the effect. |
+| `resolver_catalog_closure` | active `070.ResolverProfileRowSet`, identifier evidence class row set, identifier scope row set, candidate generation profile, hard blocker row set, asset generation boundary row set, decision matrix, confidence band row set, review routing policy, split policy, explanation policy, activation report policy, target selector safety policy, row checksums, validation refs, and package-set refs when package-supplied. |
+| `package_activation_registry_closure` | active `100.PackageTypePolicyRowSet`, selected package type policy row refs/checksums, package deprecation window policy rows, compatibility rows, trust/provenance/SBOM policy rows, package release manifests, production package-set manifests, package activation failure refs when applicable, validation refs, and lifecycle transition evidence. |
+| `graph_active_profile_closure` | active `090.GraphActiveProfileClosure`, graph edge semantics row-set refs, graph object output eligibility row-set refs, graph profile refs, inactive or deterministic block rows for non-MVP edges, validation refs, and package-set refs when package-supplied. |
+| `graph_backend_selection_closure` | backend selection policy ref, default decision ref when used, selected backend profile refs when supplied, `GraphBackendActivationBlockerSet` refs, provider/storage/index/runtime/deployment package refs, schema/index/apply fixture refs, validation refs, and package-set refs. |
 | Any `040` core record output | core record schema registry checksum, core record schema versions, core record checksum policy version, validation result refs, rejected-record error refs. |
 | `EvidenceRef` output | core schema registry checksum, evidence artifact kind registry checksum, consulted evidence artifact class row-set refs, referenced record or artifact checksum, redaction policy refs, owner artifact refs, validation refs, and artifact lifecycle refs when the evidence cites an activation artifact. |
 | Silver output | raw refs, parser package, parser profile, mapping bundle, `MappingProjectManifest`, `MappingCompilerPipeline`, `MappingValidationRule` row-set refs, `ObservationToOCSFMappingRowSet`, `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `CanonicalValidationOutput`, observation-type validation matrix refs, lifecycle transition evidence refs for every activation-controlled mapping artifact, package-set manifest refs when any mapping artifact is package-supplied, and `OCSFProfileUpgradeReport` refs when the active external schema profile differs from the prior production profile. |

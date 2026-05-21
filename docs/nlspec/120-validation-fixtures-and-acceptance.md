@@ -108,6 +108,60 @@ Validation must prove that volatile material cannot redefine stable behavior and
 
 `AcceptanceReport.result = pass` is forbidden when any non-deferred define-once, Section 25, owner-export, duplicate-owner, runtime-restatement, or owner-contradiction validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or contains a required `TODO` fixture checksum, expected output checksum, expected error, mutation-prohibition proof, activation ref, or manifest ref.
 
+### ActivationCatalogClosureValidationMatrix
+
+This matrix aggregates closure-pack validation rows. A row may pass only when the fixture checksum, input artifact refs, expected output or expected error checksum, mutation-prohibition proof, package-set refs when package-supplied, and `030.VersionManifest` requirements are concrete and non-`TODO`.
+
+| Validation family | Required owner |
+| --- | --- |
+| `120-FEED-CLOSURE-*` | `020` |
+| `120-OCSF-MAP-*` | `050` |
+| `120-SOURCE-EXT-*` | `050` |
+| `120-OCSF-NONAUTH-*` | `050`, `060`, `090` |
+| `120-OCSF-DIRECTION-*` | `050`, `090` |
+| `120-SOURCE-CLOSURE-*` | `060` |
+| `120-IDENTITY-CLOSURE-*` | `070` |
+| `120-GRAPH-PROFILE-CLOSURE-*` | `090` |
+| `120-GRAPH-BACKEND-*` | `090`, `100` |
+| `120-PACKAGE-*` | `100` |
+| `120-VERSION-MANIFEST-*` | `030` |
+| `120-ERROR-REGISTRY-*` | `110` |
+| `120-PRIVATE-BINDING-*` | `010`, `110` |
+
+Every activation catalog closure validation row must use this interface:
+
+| Field | Required behavior |
+| --- | --- |
+| `validation_row_id` | Stable ID; the four required `000` rows are `val-000-activation-catalog-closure-pack-complete`, `val-000-activation-catalog-closure-pack-member-manifested`, `val-000-activation-catalog-closure-pack-block-row-no-mutation`, and `val-000-activation-catalog-closure-pack-todo-blocks-promotion`. |
+| `owner_spec` | Owner that defines the behavior under test. |
+| `fixture_id` | Stable fixture ID. |
+| `fixture_checksum` | Concrete SHA-256; `TODO` means `blocked`. |
+| `input_artifact_refs` | Every row-set, deterministic block row, validation row, package release, package-set, and manifest ref required for the scenario. |
+| `expected_output_class` | `closed_active`, `closed_deterministically_blocked`, owner error, no-op, or validation failure. |
+| `expected_error_or_no_op` | Required for negative and deterministic-block cases. |
+| `expected_output_checksum` | Concrete SHA-256 for outputs or expected error bytes; `TODO` means `blocked`. |
+| `mutation_prohibition` | Required for deterministic block, private-binding leak, validation-blocked, and no-op scenarios. |
+| `version_manifest_requirement` | Required for every output-affecting ref and runtime state ref. |
+| `package_set_requirement` | Required when any row or catalog is package-supplied. |
+| `acceptance_criterion` | Exact owner acceptance criterion ID. |
+| `blocking_status` | `pass`, `fail`, `blocked`, or `not_run`; `TODO` checksums force `blocked`. |
+
+#### ClosurePackAcceptanceCriteria
+
+| ID | Criterion |
+| --- | --- |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-001` | Every selected scope has active row-set refs or exact deterministic block refs. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-002` | Every output-affecting member ref appears in `030.VersionManifest.included_refs`. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-003` | Every MVP observation family has OCSF row coverage, exact `cadastre_only`, or deterministic block. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-004` | Every absence-sensitive effect has source-authority closure or exact deterministic block. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-005` | Resolver catalog completeness covers every required resolver artifact and weak-evidence default. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-006` | Package policy and deprecation rows cover every confirmed package type in scope. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-007` | Graph MVP edge set is exactly `observed_connection`; every other edge is inactive or deterministically blocked. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-008` | Graph backend blockers are resolved or produce deterministic no-op/no-mutation behavior. |
+| `120-ACTIVATION-CATALOG-CLOSURE-AC-009` | Research reports, ADRs, repository snapshots, backend defaults, validation reports, and package labels are never runtime authority. |
+
+`AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs.
+
 ### DefineOnceClosureValidationMatrix
 
 This matrix verifies `000.DefineOnceClosureInventory`. A row may pass only when the inventory row has deterministic bytes, exact owner references, non-`TODO` fixture and expected-output checksums, and no forbidden mutation.
@@ -1414,6 +1468,8 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-AC-005` | The aggregate acceptance report is sufficient to decide whether the NLSpec set can be promoted to `authoritative`. |
 | `120-AC-006` | `RunValidationMatrix` emits blocked or fail for any unresolved active feed category, unresolved profile branch, missing fixture checksum, or missing expected output checksum. |
 | `120-AC-007` | Authoritative promotion is forbidden while any non-deferred identity closure row is `fail`, `blocked`, `not_run`, missing checksum, or has a `TODO` expected output. |
+
+| `120-AC-008` | `AcceptanceReport.result = pass` requires every activation-catalog closure validation row to pass, no row to contain `TODO`, every owner row to be present, every fixture checksum to be concrete, and every expected output or expected error checksum to match observed bytes. |
 
 ## Open Questions
 

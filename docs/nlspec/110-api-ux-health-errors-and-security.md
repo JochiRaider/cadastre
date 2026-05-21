@@ -318,6 +318,7 @@ error
 conflicted
 ambiguous
 blocked
+blocked_validation
 diagnostic
 ```
 
@@ -775,6 +776,33 @@ The generated `ErrorCodeRegistry` must include lifecycle errors with owner, seve
 | `LIFECYCLE_PARENT_CHILD_STATE_INVALID` | `030` | error | owner-defined | child refs redacted | reject parent transition |
 | `LIFECYCLE_GUARD_REFUSED` | owner machine | blocked | owner-defined | guard context redacted | no mutation |
 
+### ActivationCatalogClosureErrorRegistryRows
+
+The generated `ErrorCodeRegistry` must include owner-specific closure-pack errors and must select them before generic API, validation, activation, health, or unknown-state codes.
+
+| Error code | Owner | Severity | Retryability | Redaction | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| `FEED_CATEGORY_CLOSURE_ROW_MISSING` | `020` | blocked | no, until row set changes | category visible; refs redacted | `fixture-020-category-row-missing` |
+| `FEED_CATEGORY_CLOSURE_ROW_AMBIGUOUS` | `020` | error | no, until row set changes | matching rows redacted | `fixture-020-category-row-ambiguous` |
+| `SOURCE_DATASET_CATALOG_MISSING` | `020`, `060` | blocked | no, until catalog activates | dataset token visible; refs redacted | `fixture-020-source-dataset-catalog-missing` |
+| `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` | `050` | error | no, until artifact changes | checksum policy-visible | `fixture-050-compiled-artifact-checksum-mismatch` |
+| `OCSF_MAPPING_ROW_MISSING` | `050` | blocked | no, until row set changes | observation type visible | `fixture-050-mapping-row-missing` |
+| `OCSF_MAPPING_ROW_AMBIGUOUS` | `050` | error | no, until row set changes | matching rows redacted | `fixture-050-mapping-row-ambiguous` |
+| `SOURCE_AUTHORITY_CLOSURE_BLOCKED` | `060` | blocked | owner-defined | closure refs redacted | `fixture-060-closure-blocked` |
+| `RESOLVER_CATALOG_MISSING` | `070` | blocked | no, until artifact activates | artifact class visible | `fixture-070-catalog-missing` |
+| `RESOLVER_CATALOG_AMBIGUOUS` | `070` | error | no, until artifact rows change | matching rows redacted | `fixture-070-catalog-ambiguous` |
+| `RESOLVER_CATALOG_INACTIVE` | `070` | blocked | no, until lifecycle changes | artifact refs redacted | `fixture-070-catalog-inactive` |
+| `PACKAGE_TYPE_POLICY_ROW_MISSING` | `100` | blocked | no, until policy activates | package type visible | `fixture-100-policy-row-missing` |
+| `PACKAGE_TYPE_POLICY_ROW_AMBIGUOUS` | `100` | error | no, until policy rows change | matching rows redacted | `fixture-100-policy-row-ambiguous` |
+| `PACKAGE_DEPRECATION_ROW_MISSING` | `100` | blocked | no, until row activates | package type visible | `fixture-100-deprecation-row-missing` |
+| `PACKAGE_DEPRECATION_ROW_AMBIGUOUS` | `100` | error | no, until rows change | matching rows redacted | `fixture-100-deprecation-row-ambiguous` |
+| `GRAPH_ACTIVE_PROFILE_CLOSURE_MISSING` | `090` | blocked | no, until graph profile activates | graph scope visible | `fixture-090-active-profile-closure-missing` |
+| `GRAPH_BACKEND_ACTIVATION_BLOCKER_UNRESOLVED` | `090`, `100` | blocked | no, until blocker resolves | blocker family visible | `fixture-090-backend-blocker-unresolved` |
+| `ACTIVATION_CATALOG_MANIFEST_OMISSION` | `030` | blocked | no, until manifest changes | refs redacted | `fixture-030-closure-pack-manifest-omission` |
+| `ACTIVATION_CATALOG_VALIDATION_BLOCKED` | `120` | blocked_validation | no, until validation passes | validation family visible | `fixture-120-closure-pack-validation-blocked` |
+| `DETERMINISTIC_BLOCK_ROW_MUTATION_ATTEMPTED` | owner spec | security_error | no, until implementation changes | row refs redacted | `fixture-120-block-row-mutation-attempted` |
+| `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` | `010` | security_error | none | always forbidden sensitive values | `fixture-010-activation-catalog-private-binding-leak` |
+
 ### Feed closure error registry rows
 
 The generated `ErrorCodeRegistry` must include the following owner-specific rows. Caller-visible fields are code, message, severity, retryability, owner spec, affected record type, field path when applicable, redaction state, and error correlation ID. Audit-visible fields may add artifact refs, selected branch, requested effect, validation refs, checksums, and secure diagnostic refs.
@@ -1005,6 +1033,7 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `conflicted` | `conflicted` | `conflicted` | `conflicted` | visible only when owner graph eligibility permits | No. | Preserve conflicting assertion state; no pass/fail or cleanup by default. |
 | `ambiguous` | `ambiguous` | `ambiguous` | `ambiguous` | no mutation and no path expansion by default | No. | Preserve ambiguity; require owner disambiguation or explicit error. |
 | `blocked` | `blocked` | `blocked` | `blocked` | no graph mutation by default | No. | Display owner-controlled blocked validation, activation, lock, or closure state without implying negative evidence. |
+| `blocked_validation` | `blocked_validation` | `blocked validation` | `blocked_validation` | no graph mutation by default | No. | Preserve owner validation, fixture, checksum, manifest, or closure blocker; do not collapse into generic blocked when owner context is available. |
 | `diagnostic` | `diagnostic` | reject by default | `diagnostic` | diagnostic only | No. | Display only when endpoint context permits operational diagnostics. |
 
 ### Conflicted and ambiguous label distinction
@@ -1032,7 +1061,7 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `run_lock_stale_recovered` | `diagnostic` or `blocked` for old holder | prior and new owner refs redacted, plus fencing token proof | forbidden |
 | `run_lock_idempotency_conflict` | `error` | idempotency key checksum and input checksum refs | forbidden |
 | `run_lock_fencing_token_stale` | `blocked` | fencing token proof refs | forbidden |
-| `blocked_validation` | `blocked` | owner spec, validation family, blocking row, and redacted artifact refs when diagnostic access permits | forbidden |
+| `blocked_validation` | `blocked_validation` | owner spec, validation family, blocking row, and redacted artifact refs when diagnostic access permits | forbidden |
 | `deterministically_blocked` | `blocked` or no visible output according to owner context | deterministic block code, block scope, owner spec, and validation refs when permitted | forbidden |
 | `blocked_owner_todo` | `blocked` | owner TODO row, owner spec, and validation family when permitted | forbidden |
 | `inactive_deferred` | no visible output | deferred owner spec and activation rule only when diagnostic access permits | forbidden |

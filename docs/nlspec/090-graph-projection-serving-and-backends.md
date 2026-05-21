@@ -197,6 +197,46 @@ Graph authority boundaries, deterministic graph IDs, backend-ID prohibition, que
 
 `ProjectGraphDeltas`, `ApplyGraphDelta`, `QueryGraph`, and `RebuildGraph` must validate required activation artifact refs through `030.ActivationControlledArtifactRef` and include every output-affecting ref in `VersionManifest`.
 
+### MVP Graph Active Profile Closure Requirements
+
+The MVP active graph profile must close graph semantic selection before projection, query serving, graph apply, rebuild promotion, or analysis compatibility can execute.
+
+| Closure item | Required behavior |
+| --- | --- |
+| active edge set | Exactly one active `GraphEdgeSemantics` row for `observed_connection`. |
+| all other edge types | Inactive rows or exact deterministic block rows, including `has_theoretical_reachability`. |
+| output eligibility | Exactly one active `GraphObjectOutputEligibilityRowSet` controlling search, neighbor expansion, pathfinding, analysis findings, metrics, and identity influence. |
+| missing `FlowRoleEvidence` | Emit no edge and no mutation. |
+| ambiguous `FlowRoleEvidence` | Emit no edge and no mutation. |
+| unresolved endpoint identity | Emit no edge and no node. |
+| OCSF endpoint order | Never supplies graph direction. |
+
+### MVP Graph Backend Selection Closure Requirements
+
+`mvp-janusgraph.v1` is a default selection decision only when graph serving is enabled and no backend profile is supplied. Default selection must not mutate, query, rebuild, promote, or serve graph state.
+
+`GraphBackendActivationBlockerSet` must contain one row, resolved or deterministically blocked, for each blocker below before backend mutation, query serving, rebuild promotion, or graph-serving output:
+
+| Blocker family | Required row |
+| --- | --- |
+| provider package refs | Required. |
+| adapter package refs | Required. |
+| driver package refs | Required. |
+| storage backend refs | Required or exact deterministic block. |
+| index backend refs | Required or unsupported query-class declaration. |
+| runtime distribution refs | Required. |
+| deployment profile refs | Required. |
+| storage backend selection or block | Required. |
+| index backend selection or unsupported query-class declaration | Required. |
+| schema/index/apply fixtures | Required. |
+| stale mixed-index fixture | Required when mixed indexes are enabled. |
+| raw-write bypass fixture | Required. |
+| partial-apply fixture | Required. |
+| rebuild fixture | Required. |
+| package gate | Required through `100.ProductionPackageSetManifest`. |
+
+Concrete JanusGraph rows must remain supporting material or deterministic block rows. They must not become core spec examples that imply production backend activation.
+
 ### GraphBackendSelectionPolicy
 
 Graph backend selection is active only when graph serving, graph apply, graph query, graph rebuild, graph drift check, or graph-serving promotion is in implementation scope. Backend selection is not fact authority, identity authority, source-completeness authority, or graph truth.

@@ -134,20 +134,20 @@ When a candidate gold fact depends on missing evidence, stale evidence, source-d
 
 ### AbsenceSensitiveGoldCandidateMatrix
 
-| Evidence class | Requested effect | Required `060` refs | Default when refs missing |
-| --- | --- | --- | --- |
-| Missing expected row/object | `absence` | `AbsenceDerivationResult` with exact closure row chain | emit no fact; owner `060` blocking reason |
-| Source-declared delete | `retraction` or `cleanup` as requested by derivation row | `AbsenceDerivationResult` permitting requested effect | no correction |
-| Cleanup candidate | `cleanup` | `AbsenceDerivationResult.allowed_effects` contains `cleanup` | no cleanup-derived correction |
-| Graph expiry candidate | `graph_expiry` | `AbsenceDerivationResult.allowed_effects` contains `graph_expiry` | handoff effect `none` |
-| Vulnerability fixed state | `absence` or `retraction` as predicate row permits | vulnerability coverage, authority, staleness, completeness, absence policy | unknown/no-op |
-| Control result absence or not checked | `absence` or control-state output | control result mapping, coverage, authority, staleness, completeness | no pass/fail default |
-| DNS TTL expiry | requested predicate effect only | DNS coverage, staleness, authority, completeness | stale/unknown, not deletion |
-| DHCP/IPAM lease expiry | requested predicate effect only | DHCP/IPAM coverage, staleness, authority, completeness | expired assignment or unknown, not host absence |
-| Flow non-observation | blocked by default | flow coverage and exact authority if future row permits | unknown/no edge |
-| Cloud disappearance | `absence`, `cleanup`, or `graph_expiry` as row permits | cloud coverage, visibility, source history when consulted | unknown/no cleanup |
-| Source-history no-change | no-change proof | source-history retention plus source-history coverage | unknown/no proof |
-| CDC tombstone | `retraction` or `cleanup` only when row permits | CDC replay state plus `060` closure | no retraction/cleanup |
+| Evidence class | `required_source_closure_matrix_ref` | `required_absence_derivation_result_ref` | `required_effect` | `default_when_missing` | `mutation_allowed` | `validation_family` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Missing expected row/object | Exact `060.SourceAuthorityClosureMatrixRow` or deterministic block row | Required | `absence` | owner `060` blocking reason; emit no fact | No | `120-SOURCE-CLOSURE-*`; `120-TEMPORAL-CORRECTION-*` |
+| Source-declared delete | Exact closure row for selected predicate/effect | Required | `retraction` or `cleanup` as requested by derivation row | no correction | No | `120-SOURCE-CLOSURE-*`; `120-TEMPORAL-CORRECTION-*` |
+| Cleanup candidate | Exact closure row for `cleanup` | Required | `cleanup` | no cleanup-derived correction | No | `120-SOURCE-CLOSURE-*`; `120-TEMPORAL-CORRECTION-*` |
+| Graph expiry candidate | Exact closure row for `graph_expiry` | Required | `graph_expiry` | handoff effect `none` | No | `120-GRAPH-HANDOFF-*`; `120-SOURCE-CLOSURE-*` |
+| Vulnerability fixed state | Vulnerability closure row chain | Required | `absence` or `retraction` as predicate row permits | unknown/no-op | No | `120-SOURCE-CLOSURE-*` |
+| Control result absence or not checked | Control-result closure row chain | Required | `absence` or control-state output | no pass/fail default | No | `120-SOURCE-CLOSURE-*`; `120-ERROR-REGISTRY-*` |
+| DNS TTL expiry | DNS closure row chain | Required when predicate effect is requested | requested predicate effect only | stale/unknown, not deletion | No | `120-SOURCE-CLOSURE-*` |
+| DHCP/IPAM lease expiry | DHCP/IPAM closure row chain | Required when predicate effect is requested | requested predicate effect only | expired assignment or unknown, not host absence | No | `120-SOURCE-CLOSURE-*` |
+| Flow non-observation | Flow closure row chain only if a future active row permits it | Required when future row permits | blocked by default | unknown/no edge | No | `120-SOURCE-CLOSURE-*`; `120-GRAPH-PROFILE-CLOSURE-*` |
+| Cloud disappearance | Cloud inventory/source-history closure row chain | Required | `absence`, `cleanup`, or `graph_expiry` as row permits | unknown/no cleanup | No | `120-SOURCE-CLOSURE-*`; `120-GRAPH-HANDOFF-*` |
+| Source-history no-change | Source-history retention and coverage closure row chain | Required | no-change proof | unknown/no proof | No | `120-SOURCE-CLOSURE-*` |
+| CDC tombstone | CDC replay state plus exact source closure row | Required | `retraction` or `cleanup` only when row permits | no retraction/cleanup | No | `120-TEMPORAL-CORRECTION-*`; `120-SOURCE-CLOSURE-*` |
 
 Every row in this matrix must route through `060.DeriveAbsenceOrUnknown` before fact creation, correction, graph handoff, or watermark-affecting output. Missing or blocked refs select the default behavior and must not be reinterpreted by `080`.
 
@@ -206,7 +206,7 @@ When the graph handoff effect is `identity_split_handoff`, `ApplyGoldCorrection`
 
 `fact_retraction`, `interval_split`, and cleanup-derived corrections require `AbsenceDerivationResult.absence_authorized = true` and `allowed_effects` containing the requested correction effect. Missing or unsafe source-authority closure produces no correction and must emit the most specific `060` blocking reason.
 
-A correction consuming negative or cleanup-derived evidence must record the selected `060.SourceAuthorityClosureMatrixRow` ref or deterministic block row ref in the correction replay inputs through `VersionManifest`.
+A correction consuming negative or cleanup-derived evidence must record the selected `060.SourceAuthorityClosureMatrixRow` ref or deterministic block row ref in the producing `VersionManifest`. A missing closure ref, missing `AbsenceDerivationResult`, or deterministic block row must produce no correction mutation, no graph handoff mutation, and no watermark-affecting output.
 
 Identity split handoff failure precedence is:
 

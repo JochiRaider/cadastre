@@ -244,6 +244,34 @@ A repository-authored mapping bundle must include `structured_input_repository_s
 | `MAPPING_REPOSITORY_PATH_FORBIDDEN` | Mapping project path is outside selected roots, invalid after normalization, duplicate, non-regular, or a path escape. |
 | `MAPPING_VALIDATION_RUN_STALE` | Mapping validation run is not for the exact snapshot, path manifest, project checksum, compiler checksum, or schema artifact refs. |
 
+### MVP OCSF Mapping Catalog Closure
+
+MVP OCSF-aligned silver output requires a supporting catalog closure. The closure catalog is activation-controlled material and must not be inferred from research, examples, package labels, source prose, or missing rows.
+
+| Required closure member | Requirement |
+| --- | --- |
+| `ExternalSchemaProfile` | Exactly one active OCSF `1.8.0` profile, or one deterministic block row that prevents OCSF-aligned silver output. |
+| `ExternalSchemaArtifactRef` | Exactly one active ref containing source tag, source commit, compiler ID/version/checksum, validator ID/version/checksum, compiled artifact checksum, profile set checksum, extension set checksum, and class allowlist checksum. |
+| observation mapping rows | Exactly one active `ObservationToOCSFMappingRow` or exactly one explicit `cadastre_only` row for every MVP observation family. Missing rows must not infer `cadastre_only`. |
+| policy row sets | Active enum mapping, base-event field policy, source-extension field, profile-resolution manifest, and observation-type validation row sets. |
+| validation bytes | Concrete non-`TODO` fixture checksums and expected output or expected error checksums for every active row. |
+| authority handoff | No external schema authority effect is allowed without `060.ExternalSchemaAuthoritySignalMappingRowSet`. |
+
+The required mapping closure status for each MVP observation family is exhaustive:
+
+| Observation family | Allowed closure state | Required validation and checksum behavior |
+| --- | --- | --- |
+| `inventory_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `software_inventory_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `vulnerability_finding_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `authentication_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `dns_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `dhcp_ipam_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| `network_activity_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| every other MVP observation family | `cadastre_only` or `deterministically_blocked` unless an active row set promotes it | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+
+A row with a `TODO` checksum, missing validation ref, ambiguous row match, invalid activity discriminator, unknown enum without a permitted rule, undeclared source-extension field, forbidden base-event field authority, or compiled artifact checksum mismatch remains `blocked_validation` and must not affect production silver output.
+
 ### MVP OCSF class allowlist
 
 The active MVP OCSF class allowlist must contain exactly the class UIDs used by active OCSF mapping rows. The default MVP class targets are closed to the following class UID set until a later profile upgrade activates additional classes.

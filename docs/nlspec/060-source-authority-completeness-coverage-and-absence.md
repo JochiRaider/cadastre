@@ -327,6 +327,37 @@ The matrix output must include the requested effect token, feed category, source
 
 Stable source-authority behavior remains in this file. Concrete active source-specific row instances must be activation-controlled artifacts or deterministic block rows. This file must not embed production-active private source rows, tenant inventories, scanner site names, host lists, account lists, credentials, private routes, raw private fixture bytes, or private source binding values.
 
+### MVP Source Authority Closure Catalog Requirements
+
+The selected MVP scope must provide active row sets or exact deterministic block rows for every row-set family below. Concrete row instances are activation-controlled artifacts and must not be embedded as private production rows in this core spec.
+
+| Row-set family | Required closure behavior |
+| --- | --- |
+| `SourceAuthorityProfileRowSet` | Required for positive authority and every absence-sensitive requested effect. |
+| `LakehouseFeedCompletenessProfileRowSet` | Required whenever feed completeness can affect absence, cleanup, retraction, graph expiry, or watermark. |
+| `CoverageDimensionProfileRowSet` | Required for every coverage-sensitive fact, predicate, or negative/control output. |
+| `SourceStalenessPolicyRowSet` | Required whenever stale state can affect output or block an effect. |
+| `ProgressSignalInterpretationPolicyRowSet` | Required whenever a progress, liveness, freshness, lineage, CDC, queue, ack, graph, source-history, destination-cleanup, or live-probe signal is consulted. |
+| `SupplierCollectionVisibilityProfileRowSet` | Required whenever permission or hidden-object visibility can affect output. |
+| `ControlResultMappingRowSet` | Required before control pass/fail/unknown/not-checked/not-applicable output. |
+| `SourceHistoryRetentionProfileRowSet` | Required before source-history no-change proof or outside-window handling. |
+| `AbsenceDerivationPolicyRowSet` | Required before `DeriveAbsenceOrUnknown` emits any absence-sensitive outcome. |
+| `ProjectionWatermarkPolicyRowSet` | Required before source, projection, graph, or presence-only watermark effects. |
+| `ExternalSchemaAuthoritySignalMappingRowSet` | Required only when external schema signals are consulted for authority effects. |
+| `SourceAuthorityClosureMatrixRowSet` | Required as the closure proof row set or deterministic block row set for the exact requested effect. |
+
+Requested effect coverage is total:
+
+| `requested_effect` | Required result |
+| --- | --- |
+| `absence` | Full row chain or deterministic block row. |
+| `cleanup` | Full row chain or deterministic block row. |
+| `retraction` | Full row chain or deterministic block row. |
+| `graph_expiry` | Full row chain plus graph handoff validation, or deterministic block row. |
+| `watermark` | Full row chain including `ProjectionWatermarkPolicy`, or deterministic block row. |
+
+Every `SourceAuthorityClosureMatrixRow` must either resolve the full row chain for the exact scope and effect or select one deterministic block row for the exact blocked scope and effect. Missing, duplicated, ambiguous, inactive, checksum-mismatched, out-of-scope, stale, unvalidated, or `TODO` member rows block the requested effect and emit no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, or compliance negative output.
+
 #### SourceAuthorityClosureMatrixRow schema
 
 `SourceAuthorityClosureMatrixRow` is the executable row interface for proving that one active absence-sensitive effect has a complete authority chain or a deterministic block. Wildcards are forbidden for `fact_type` and `predicate`.
@@ -956,7 +987,7 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `060-GRAPH-EFFECT-AUTH-AC-004` | Flow non-observation emits no absence edge, expiry, cleanup, retraction, or watermark without exact requested-effect authorization. |
 | `060-SOURCE-CLOSURE-AC-014` | Every active absence-sensitive effect resolves one `SourceAuthorityClosureMatrixRow` with complete refs and passing validation, or resolves one deterministic block row. Missing, ambiguous, inactive, checksum-mismatched, or `TODO` rows fail before any absence-sensitive effect. |
 | `060-SOURCE-CLOSURE-AC-015` | Missing active row catalogs or deterministic block rows for the full source-closure row chain emit no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, or compliance negative output. |
-| `060-SOURCE-CLOSURE-AC-015` | Every active absence-sensitive effect resolves exactly one active closure row chain or one deterministic block row before `DeriveAbsenceOrUnknown` can emit output. |
+| `060-SOURCE-CLOSURE-AC-018` | Every active absence-sensitive effect resolves exactly one active closure row chain or one deterministic block row before `DeriveAbsenceOrUnknown` can emit output. |
 | `060-SOURCE-CLOSURE-AC-016` | Deterministic block rows emit no fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, or no-change proof. |
 | `060-SOURCE-CLOSURE-AC-017` | Source-history no-change proof fails without both retention and coverage rows. |
 | `060-EXTERNAL-SCHEMA-AUTHORITY-AC-001` | External schema signals remain non-authoritative without an exact active `ExternalSchemaAuthoritySignalMappingRow`. |

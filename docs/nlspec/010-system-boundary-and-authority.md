@@ -142,6 +142,21 @@ Private source binding artifacts may map concrete upstream systems to public res
 
 Forbidden identity-specific leak examples include private scanner site names, directory tenant inventories, cloud account lists, environment-specific source target lists, private routes, credentials, host lists, and source-native identity values in public resolver activation reports, validation reports, package reports, API responses, export outputs, or resolver row catalogs.
 
+### ActivationCatalogPublicBindingRule
+
+This rule applies to every activation-controlled row catalog in `000.MVPActivationCatalogClosurePack`, including feed-category, OCSF mapping, source-authority, resolver, graph profile, graph backend, package policy, package deprecation, package release, package-set, and validation-output catalogs.
+
+| Public catalog field class | Public status | Required behavior |
+| --- | --- | --- |
+| vendor-neutral category or dataset token | allowed | May appear in public rows when the owning spec defines the token. |
+| redacted artifact ref, package-set ref, validation ref, lifecycle status, checksum, canonical selector | allowed | May appear only as bounded refs or checksums and must not reveal private route, tenant, account, host, credential, or raw fixture bytes. |
+| concrete vendor, product, tenant ID, account list, host list, directory tenant inventory, scanner site name, route, credential, private schema payload, backend credential, private source-native object ID, or private sample byte | forbidden | Must fail before persistence, publication, API response, export, audit output, telemetry export, package report, or validation-report materialization. |
+| Git snapshot, validation run, repository branch, repository tag, package label, backend default, research report, or ADR | non-authority | Must not satisfy activation-catalog closure, source authority, package activation, graph backend activation, production approval, or `VersionManifest` completeness. |
+
+Private implementation artifacts may bind concrete sources, private schemas, backend endpoints, deployment credentials, or package repositories to public rows. Those private bindings must not alter public row-selection order, defaults, error precedence, authority semantics, activation gates, package gates, manifest requirements, or validation requirements.
+
+If an activation-catalog publication leak is covered by `PRIVATE_BINDING_LEAK`, `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK`, `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK`, `RESOLVER_REPOSITORY_PRIVATE_BINDING_LEAK`, or another more specific owner code, the most specific existing code must be used. `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` is emitted only when no more specific private-binding error covers the closure-pack catalog family.
+
 ## Cross-Domain Invariants
 
 - Missing lakehouse rows must not imply source absence.
@@ -167,6 +182,7 @@ Forbidden identity-specific leak examples include private scanner site names, di
 | `TELEMETRY_PRIVATE_BINDING_LEAK` | Telemetry contains a private source binding, private route, credential, tenant inventory, or environment-specific private value before redaction/export. |
 | `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | A structured-input repository value attempts to satisfy source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, rollback eligibility, or system-of-record state. |
 | `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | A public structured-input repository artifact, API response, validation output, telemetry event, audit output, package report, or manifest leaks private repository routes, credentials, tenant inventories, private source bindings, source-native secrets, raw fixture bytes, or raw structured input bytes. |
+| `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` | A public activation-catalog closure-pack row, package report, validation output, API response, audit output, export, or manifest leaks a private binding and no more specific private-binding error covers the artifact. |
 | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | A branch, tag, pull request ref, repository URL, mutable default branch, or rebuilt repository tip is used as a production activation, rollback, manifest, or authority target. |
 | `UNDECLARED_AUTHORITY_CLASS` | A record is written without an owner declaring its authority class. |
 | `VOLATILITY_BOUNDARY_VIOLATION` | An activation-controlled artifact attempts to define product authority or stable core semantics. |
@@ -179,6 +195,7 @@ Error precedence:
 | --- | --- |
 | Caller is not authorized to know the object exists and the response could reveal a private binding | `AUTHORIZATION_ERROR` must precede `PRIVATE_BINDING_LEAK` in caller-visible API responses. |
 | Public docs, exports, validation reports, or persisted public artifacts contain private binding data | `PRIVATE_BINDING_LEAK` must precede generic validation errors. |
+| Public activation-catalog closure-pack rows contain private binding data and no specific owner private-binding code applies | `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` must precede generic validation, activation, package, graph, resolver, and manifest errors. |
 | Projection attempts authoritative mutation | `PROJECTION_AUTHORITY_VIOLATION` must precede generic validation errors. |
 | Activation artifact attempts stable-core override | `VOLATILITY_BOUNDARY_VIOLATION` or `ACTIVATION_ARTIFACT_CORE_CONFLICT` must precede owner-specific artifact validation errors. |
 | Production code attempts direct enterprise source access | `DIRECT_SOURCE_CALL_FORBIDDEN` must precede package-local, transport, or source-client errors. |
@@ -239,6 +256,7 @@ Public artifacts must be scanned before publication, API response emission, expo
 | `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | `010` | `110` |
 | `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | `010` | `110` |
 | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | `010` | `110` |
+| `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` | `010` | `110` |
 
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `110` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `110` |
@@ -259,6 +277,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `STRUCTURED_INPUT_AUTHORITY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-authority-violation` |
 | `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-private-binding-leak` |
 | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-structured-input-mutable-ref-forbidden` |
+| `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` | `010` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `010.BoundaryErrorContext` | `error-registry-010-activation-catalog-private-binding-leak` |
 | `UNDECLARED_AUTHORITY_CLASS` | `010` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `010.BoundaryErrorContext` | `error-registry-010-undeclared-authority-class` |
 | `VOLATILITY_BOUNDARY_VIOLATION` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-volatility-boundary-violation` |
 | `ACTIVATION_ARTIFACT_CORE_CONFLICT` | `010` | `security_error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `010.BoundaryErrorContext` | `error-registry-010-activation-artifact-core-conflict` |
@@ -273,7 +292,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `context_schema_version` | Yes | Immutable `010` context schema version. |
 | `owner_spec` | Yes | Must be `010`. |
 | `error_code` | Yes | Must match the generated registry row. |
-| `failure_class` | Yes | Closed token: `direct_source_call`, `projection_authority`, `private_binding`, `telemetry_authority`, `undeclared_authority`, `volatility_boundary`, or `activation_artifact_conflict`. |
+| `failure_class` | Yes | Closed token: `direct_source_call`, `projection_authority`, `private_binding`, `activation_catalog_private_binding`, `telemetry_authority`, `undeclared_authority`, `volatility_boundary`, or `activation_artifact_conflict`. |
 | `operation` | Yes | Operation that attempted publication, persistence, projection, telemetry export, or activation. |
 | `affected_record_type` | Yes | Public artifact or record type; null only when no record exists. |
 | `field_path` | Yes | Exact public field path when known; null only when the violation is artifact-wide. |
@@ -301,6 +320,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-002` | A public source-closure row, deterministic block row, closure validation result, or closure acceptance report containing a private route, concrete product name, tenant inventory, scanner site, zone inventory, account list, host list, or credential fails with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, or validation-report materialization. |
 | `010-IDENTITY-PRIVATE-BINDING-AC-001` | Public resolver profile rows, identifier scope rows, and package-supplied resolver artifacts containing concrete tenant inventories, private routes, credentials, scanner site names, or account lists fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response, package report, or validation-report materialization. |
 | `010-IDENTITY-PRIVATE-BINDING-AC-002` | A public `ResolverActivationReport` containing a concrete scanner site, directory tenant inventory, cloud account list, route, credential, host list, environment-specific source target list, or source-native identity value fails with `PRIVATE_BINDING_LEAK`; no public artifact, package report, validation report, API response, or export output is materialized. |
+| `010-ACTIVATION-CATALOG-PUBLIC-BINDING-AC-001` | Public activation-catalog closure-pack rows fail before materialization when they contain private routes, concrete vendors, tenant inventories, scanner site names, host lists, account lists, backend credentials, private source-native object IDs, private schema payloads, or raw private fixture bytes. |
 | `010-TELEMETRY-AUTHORITY-AC-001` | Runtime telemetry cannot mutate authoritative records, replace audit events, satisfy replay equivalence, activate packages, advance watermarks, or prove source, identity, fact, or graph correctness. |
 | `010-TELEMETRY-PRIVATE-BINDING-AC-001` | Telemetry private-binding leaks fail before export or publication. |
 | `010-AC-005` | Every error exported by `010` appears in `110.ErrorCodeRegistry`, uses `110.StandardErrorCallerFields` and `110.StandardErrorAuditFields`, has no `TODO` values, and appears in `120.Required negative tests by owner`. |
