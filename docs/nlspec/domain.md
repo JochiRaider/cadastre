@@ -496,8 +496,8 @@ Each row in this table is a `prohibited_dependency` context-map edge. Unless the
 | `replay_equivalence` | Deterministic equality rule for replay outputs and required refs. | Ad hoc checksum or current-state comparison. | `080` | `080` | `120` | canonical |
 | `graph_backend_profile` | Activation profile for a graph serving backend and its preflight requirements. | Backend selection, backend docs, benchmark result. | `090` | `090` | `120` | canonical |
 | `package_set` | Immutable coherent activation target for production packages. | Single package artifact, version string, signature scalar, dependency lock. | `100` | `100` | `120` | canonical |
-| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | `100` | `100.PackageType` | `120-PACKAGE-TYPE-*` | Resolved owner-routed; package activation remains validation-gated. |
-| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `100` | `100` | `120` | canonical |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, version string, broad package label, grouping bundle, or runtime alias. | `100` | `100.PackageType` | `120-PACKAGE-TYPE-*` | Resolved owner-routed; package activation remains validation-gated. |
+| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose, `policy_bundle`, grouping bundle, or implementation-local default. | `100` | `100` | `120` | canonical |
 | `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `100` | `100` | `120` | canonical |
 | `package_quarantine` | Immutable block record over package activation targets. | Artifact mutation, signature rewrite, or hidden denylist. | `100` | `100` | `120` | canonical |
 | `emergency_package_override` | Bounded emergency action record. | Trust bypass or unverified activation. | `100` | `100` | `120` | canonical |
@@ -555,8 +555,8 @@ A glossary term may become canonical only when `docs/nlspec/domain.md` adds or u
 | Graph edge delta | Primitive graph edge projection delta. | Cadastre-owned deterministic graph edge ID; not backend ID. | Delta set and graph apply lifecycle. | Governed by graph edge semantics and projected from facts/rules. | `040`, `090` | Resolved. |
 | Graph read-model object | Derived graph serving object after graph apply. | Cadastre graph ID translated through backend profile. | Derived view state and graph apply result. | Served by graph query; drillback to gold/silver/raw. | `090`, `110` | Resolved. |
 | Package release | Immutable package release record. | Artifact digest, subject digest, package type, release version, release checksum. | Package lifecycle and package-set activation. | Included in production package set manifest. | `100` | Resolved. |
-| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, or version string. | Confirmed `100.PackageType` token. | Selects package type policy before activation. | `100` | Resolved owner-routed; active policy rows still gate activation. |
-| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose or implementation-local default. | `PackageTypePolicyRow`, `PackageTypePolicyRowSet`. | Selects package evidence, compatibility, stage, rollback, health, quarantine, and emergency requirements. | `100` | Resolved as owner-routed behavior; active rows still gate use. |
+| `package_type` | Canonical package behavior category used for activation policy resolution. | Package name, module name, artifact filename, repository path, version string, broad package label, grouping bundle, or runtime alias. | Confirmed `100.PackageType` token. | Selects package type policy before activation. | `100` | Resolved owner-routed; active policy rows still gate activation. |
+| `package_type_policy` | Row-set-controlled activation policy selected for a package type. | Broad package category prose, `policy_bundle`, grouping bundle, or implementation-local default. | `PackageTypePolicyRow`, `PackageTypePolicyRowSet`. | Selects package evidence, compatibility, stage, rollback, health, quarantine, and emergency requirements. | `100` | Resolved as owner-routed behavior; active rows still gate use. |
 | Production package set | Coherent activation unit for package runtime behavior. | Immutable package-set checksum. | Promotion, activation, rollback, quarantine, last-known-good. | Provides package roles for DAG stages and validation. | `100`, `030` | Resolved. |
 | `last_known_good_package_set` | Verified rollback candidate after activation and health gates pass. | Recently activated package set by itself. | `LastKnownGoodPackageSet`, `LastKnownGoodHealthGate`. | Permits rollback eligibility only after health gates pass. | `100` | Resolved as owner-routed behavior. |
 | `package_quarantine` | Immutable block record over package activation targets. | Artifact mutation, signature rewrite, or hidden denylist. | `PackageQuarantineRecord`, `QuarantineScopePolicy`. | Blocks dependent activation or rollback according to target kind and scope. | `100` | Resolved as owner-routed behavior. |
@@ -1074,7 +1074,7 @@ Closed `domain_behavior_until_closed` values are `owner governs`, `validation fa
 | `DOM-TODO-009` | `090.GraphEdgeSemanticsRegistry` | `blocked_validation` | `120-GRAPH-PROFILE-CLOSURE-*` fixture and expected-output checksums for the active MVP graph profile | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-PROFILE-CLOSURE-*` |
 | `DOM-TODO-010` | `030.RequiredLifecycleMachineBindings` plus owner-specific machine bindings | `blocked_validation` | lifecycle validation rows for `030`, `070`, `090`, `100`, and `120` machines | validation fails | `120-DOMAIN-SECTION25-*`; `120-LIFECYCLE-*` |
 | `DOM-TODO-011` | `domain.md.Runtime exports` | `resolved_owner_routed` | none | not runtime | `120-DOMAIN-SECTION25-*` |
-| `DOM-TODO-012` | `100.PackageType` | `resolved_owner_routed` | none for enum closure; `100-TODO-PACKAGE-TYPE-POLICY-ROWS` remains owner-local activation scope | owner governs | `120-DOMAIN-SECTION25-*`; `120-PACKAGE-TYPE-*` |
+| `DOM-RESOLVED-012` | `100.PackageType` | `resolved_owner_routed` | no enum blocker remains; `100-TODO-PACKAGE-TYPE-POLICY-ROWS` and deprecation/policy validation remain owner-local activation blockers | owner governs | `120-DOMAIN-SECTION25-*`; `120-PACKAGE-TYPE-*` |
 | `DOM-TODO-013` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | `090`, `100`, and `120` backend/profile/package validation rows for any named backend selection and production activation | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
 | `DOM-TODO-014` | `domain.md.ContextMapRelationshipType` | `blocked_validation` | `120-DOMAIN-CMAP-RELATIONSHIP-TYPE-*` rows validating closed vocabulary, unknown-token rejection, and no runtime restatement | validation fails | `120-DOMAIN-CMAP-*` |
 | `DOM-TODO-015` | `domain.md.ContextMapEdgeMatrix` | `blocked_validation` | `120-DOMAIN-CMAP-EDGE-*` rows validating edge coverage, unique edge IDs, owner coverage, crossing-artifact exactness, no-effect defaults, and prohibited dependency rows | validation fails | `120-DOMAIN-CMAP-*` |
@@ -1098,6 +1098,8 @@ Lifecycle behavior is owner-routed to `030` lifecycle machines and owner-specifi
 `domain.md` exports no runtime records.
 
 `100.PackageType` owns the canonical package type enum.
+
+Broad package labels and grouping bundles route to `100`; they do not create runtime aliases and do not substitute for row-specific `PackageTypePolicyRow` resolution. This note is vocabulary-only and defines no package schema, activation algorithm, error mapping, or validation harness behavior.
 
 `090.GraphBackendSelectionPolicy` owns any named backend default selection. A backend selection token is not domain truth and is not production activation. Production activation remains blocked until the selected `090` backend profile, `100` package-set gates, and `120` backend/package validation rows pass.
 
@@ -1132,7 +1134,7 @@ A downstream implementation must not resolve a blocker by inference. `ValidateSp
 | `DOM-AC-019` | No external-draft evidence table remains in this document. |
 | `DOMAIN-SCHEMA-PATCH-AC-001` | Root vocabulary routes all core record field schemas to `040`. |
 | `DOMAIN-SCHEMA-PATCH-AC-002` | Root vocabulary distinguishes semantic fact key from immutable fact record ID. |
-| `DOM-PACKAGE-TERMS-AC-001` | `domain.md` routes `package_type`, `package_type_policy`, `last_known_good_package_set`, `package_quarantine`, and `emergency_package_override` to `100` and defines no runtime schema or algorithm for them. |
+| `DOM-PACKAGE-TERMS-AC-001` | `domain.md` routes `package_type`, `package_type_policy`, `last_known_good_package_set`, `package_quarantine`, and `emergency_package_override` to `100`, rejects broad labels and grouping bundles as vocabulary substitutes, and defines no runtime schema or algorithm for them. |
 | `DOMAIN-SCHEMA-PATCH-AC-003` | Root vocabulary states that `EvidenceRef` is not raw payload storage. |
 | `DOM-AC-020` | The root-domain owner map uses owner specs and exported contract names only. |
 | `DOM-LIFECYCLE-AC-001` | `domain.md` routes lifecycle machines to owner specs by exact machine ID and does not restate transition matrices. |

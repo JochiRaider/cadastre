@@ -179,7 +179,18 @@ cim_projection_profile
 projection_loss_policy
 ```
 
-Broad package labels such as `deployment_profile`, module names, artifact filenames, repository paths, and developer labels are not package types. They must fail with `PACKAGE_TYPE_UNKNOWN` unless mapped by a future owner-approved enum patch.
+### PackageTypeEnumClosure
+
+`PackageType` is closed for this spec version. The closed enum contains exactly 81 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
+
+| Supplied token class | Required behavior |
+| --- | --- |
+| confirmed token in the closed enum | Continue to package type policy resolution. |
+| unknown lower-snake-case token | Fail with `PACKAGE_TYPE_UNKNOWN` before release validation. |
+| broad legacy label such as `feed reader`, `mapping`, `projection package`, `validation package`, or `deployment_profile` | Fail with `PACKAGE_TYPE_UNKNOWN`; runtime aliasing is forbidden. |
+| package name, module name, artifact filename, repository path, version string, mutable ref, or developer label | Fail with `PACKAGE_TYPE_UNKNOWN`; these values may appear only in non-authoritative evidence fields whose owning schema permits them. |
+
+Broad package labels such as `deployment_profile`, module names, artifact filenames, repository paths, and developer labels are not package types. They must fail with `PACKAGE_TYPE_UNKNOWN`. Runtime aliases for package type tokens are forbidden.
 
 Package type resolution error codes are:
 
@@ -233,6 +244,22 @@ ResolvePackageTypePolicyRow(package_type, target_environment, active_row_set):
 
 Every confirmed `PackageType` token must have exactly one active policy row in the active row set for each target environment in which package activation is in scope. A package activation implementation must run this resolver before compatibility checks, validation checks, stage binding, rollback preflight, quarantine evaluation, or health gating.
 
+### PackageTypePolicyRowCoverageMatrix
+
+`PackageTypePolicyRowCoverageMatrix` assigns every confirmed `PackageType` token to exactly one policy family and owner boundary. The matrix is a stable coverage checklist; concrete active policy rows remain activation-controlled artifacts in `PackageTypePolicyRowSet`.
+
+| Policy family | Owner boundary | Package types covered |
+| --- | --- | --- |
+| `lakehouse/feed/read` | `020`, `030`, `100`, `120` | `lakehouse_feed_package`, `parser_package`, `lakehouse_read_policy`, `lakehouse_feed_completeness_profile`, `lakehouse_feed_category_closure_row_set`, `declared_dag_subset_profile` |
+| `mapping/external-schema/toolchain` | `050`, `100`, `120` | `mapping_bundle`, `source_schema_import_profile`, `semantic_overlay_artifact`, `mapping_validation_rule_set`, `mapping_project_manifest`, `mapping_compiler_pipeline`, `canonical_validation_output_schema`, `validation_scenario`, `toolchain_dependency_review`, `external_tool_capability_evidence`, `mapping_toolchain_package`, `external_schema_profile`, `observation_to_ocsf_mapping_row_set`, `external_schema_artifact_ref`, `profile_resolution_manifest`, `external_enum_mapping_rule_set`, `ocsf_base_event_field_policy_set`, `source_extension_field_rule_set`, `observation_type_external_mapping_validation_matrix`, `cim_projection_profile`, `projection_loss_policy` |
+| `source-authority closure` | `020`, `060`, `100`, `120` | `source_authority_row_set`, `source_authority_closure_matrix_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, `external_schema_authority_signal_mapping_row_set` |
+| `identity resolver` | `070`, `100`, `120` | `resolver_profile`, `identifier_evidence_class_row_set`, `identifier_scope_row_set`, `candidate_generation_profile`, `identity_hard_blocker_row_set`, `asset_generation_boundary_row_set`, `resolver_decision_matrix_row_set`, `identity_confidence_band_row_set`, `identity_review_routing_policy`, `identity_split_policy`, `resolver_explanation_policy`, `resolver_activation_report_policy`, `target_selector_safety_policy` |
+| `analysis/enrichment/lineage/registry` | `080`, `090`, `130`, `100`, `120` | `analysis_rule_bundle`, `analysis_rule_row_set`, `rule_graph_compatibility_matrix`, `derivation_rule_bundle`, `derived_graph_edge_rule_set`, `threat_intel_enrichment_profile`, `threat_intel_distribution_mapping_policy`, `threat_intel_artifact_package`, `lineage_facet_mapping_policy`, `artifact_class_policy_row_set`, `registry_governance_artifact`, `registry_custom_property_schema`, `registry_classification_policy`, `policy_bundle` |
+| `observability` | `140`, `110`, `100`, `120` | `observability_policy_bundle`, `telemetry_runtime_distribution`, `telemetry_collector_deployment_profile` |
+| `graph/backend/projection` | `090`, `100`, `120` | `graph_edge_semantics`, `graph_taxonomy_translation_policy`, `graph_projection_profile`, `graph_read_model_schema_profile`, `graph_apply_profile`, `graph_backend_provider_package`, `graph_provider_adapter_package`, `graph_backend_driver_package`, `graph_storage_backend_adapter_package`, `graph_index_backend_adapter_package`, `graph_backend_runtime_distribution`, `graph_backend_deployment_profile`, `structural_global_node_alias_policy` |
+
+`ValidateSpecSet` and `RunValidationMatrix` must fail when any confirmed token is absent from the matrix, duplicated in the matrix, assigned to more than one policy family, or lacks exactly one active `PackageTypePolicyRow` for the target environment when package activation is in implementation scope. A successful package type policy resolution must record the selected row ref and checksum in `030.VersionManifest.included_refs`.
+
 ### Mapping and external schema package type policy rows
 
 These rows are package type policies for mapping and external-schema row-catalog packages. They make OCSF mapping catalogs package-set members without making packages runtime authority. Runtime behavior remains owned by `050`, with validation closure owned by `120` and manifest inclusion owned by `030`.
@@ -248,7 +275,21 @@ These rows are package type policies for mapping and external-schema row-catalog
 | `source_extension_field_rule_set` | `050.SourceExtensionFieldRuleSet` | none | none | no direct production records | namespace, exact path, bounds, redaction, secret-scan, reserved-name fixtures |
 | `observation_type_external_mapping_validation_matrix` | `050` and `120` | none | validation-only | validation report only | positive, negative, non-authority, direction, mutation-prohibition fixtures |
 
-A broad `policy_bundle`, `mapping_bundle`, or `external_schema_profile` package type must not substitute for a row-catalog package type unless the `PackageTypePolicyRow` explicitly declares the catalog is bundled and the `ProductionPackageSetManifest` includes separate immutable artifact refs and checksums for each required catalog.
+A broad `mapping_bundle` or `external_schema_profile` package type must not substitute for a row-catalog package type. A `policy_bundle` package type is a grouping carrier only and must not substitute for row-specific activation authority.
+
+### Policy bundle package type row
+
+`policy_bundle` exists only to group independently governed catalogs for release ergonomics. It must not create a new runtime activation path, policy fallback, or row-catalog substitution.
+
+| Policy field | Required value |
+| --- | --- |
+| `runtime_protocol` | `none` |
+| `allowed_stage_classes` | `[]` |
+| `allowed_output_record_classes` | `[]` |
+| `public_api_boundary` | package-set grouping only |
+| `substitution_behavior` | forbidden |
+
+A `policy_bundle` may include bundled catalogs only when each bundled catalog has its own immutable `PackageReleaseManifest`, confirmed `package_type`, selected `PackageTypePolicyRow`, `030.ActivationControlledArtifactRef`, checksum, compatibility row, validation refs, deprecation policy row, and `030.VersionManifest` inclusion. A package set that attempts to use `policy_bundle` as the selected row-catalog package type fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate production output.
 
 ### Identity resolver package type policy rows
 
@@ -333,15 +374,52 @@ These rows are package type policies for confirmed `PackageType` tokens. They ma
 | `registry_custom_property_schema` | `130.RegistryCustomPropertySchema` | none | Activation metadata only | `registry_custom_property_schema` |
 | `registry_classification_policy` | `130.RegistryClassificationPolicy` | none | Activation metadata only | `registry_classification_policy` |
 
-The unresolved global `PackageType` enum blocker applies to every row in this subsection. Validation fixtures may use these candidate rows to prove fail-closed behavior, but authoritative package activation must fail until product governance confirms the canonical enum.
+The `PackageType` enum is closed. Activation remains blocked only when the active `PackageTypePolicyRow`, package-set membership, compatibility row, validation ref, trust evidence, deprecation policy row, or `030.VersionManifest` ref required by this spec is missing, inactive, ambiguous, checksum-mismatched, out of scope, failed, or TODO-bearing.
 
 ## Package Release Manifest
 
-`PackageReleaseManifest` must name one immutable package release, including package type, artifact digest, size, media type, subject digest, release version, dependency locks, public API version when applicable, package developer contract, stage bindings, validation matrix refs, supply-chain evidence refs, compatibility refs, and release checksum.
+`PackageReleaseManifest` is the stable interface for one immutable package release. A release manifest is schema-valid only when every required field below is present, non-null unless the row permits null, checksum-valid, lifecycle-eligible, activation-scope-covered, and policy-valid.
+
+### PackageReleaseManifest schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `package_release_manifest_id` | Yes | none | Stable ID over package type, artifact digest, release version, subject digest, and release checksum inputs. |
+| `package_type` | Yes | none | One confirmed `PackageType` token; unknown or legacy broad labels fail with `PACKAGE_TYPE_UNKNOWN`. |
+| `package_artifact_ref` | Yes | none | Immutable artifact ref; mutable refs, tags, branches, package names, filenames, and module names are not activation targets. |
+| `artifact_digest` | Yes | none | SHA-256 or stronger owner-approved digest of the package artifact bytes. |
+| `artifact_size_bytes` | Yes | none | Unsigned integer byte size; mismatch with repository evidence fails before activation. |
+| `media_type` | Yes | none | Bounded media type token or string declared by `PackageRepositoryModelRow`. |
+| `subject_digest` | Yes | none | Digest all signatures, attestations, provenance, and SBOM refs must bind to. |
+| `release_version` | Yes | none | Informational release version; it never authorizes compatibility by itself. |
+| `repository_form` | Yes | none | Must be allowed by the selected `PackageTypePolicyRow.repository_form_allowlist`. |
+| `repository_metadata_refs` | Yes | none | Missing, expired, inactive, checksum-mismatched, or failed refs reject before candidate production output. |
+| `repository_snapshot_refs` | Yes | none | Missing or mix-and-match-inconsistent refs reject before candidate production output. |
+| `repository_freshness_proof_refs` | Yes | none | Missing or stale freshness proof rejects before candidate production output. |
+| `repository_anti_rollback_state_refs` | Yes | none | Missing or rollback-detected state rejects before candidate production output. |
+| `signature_verification_result_refs` | Yes | none | Scalar signature summaries are insufficient; structured verification refs are required. |
+| `trust_policy_refs` | Yes | none | Must include the selected trust policy row refs and checksums. |
+| `transparency_evidence_refs` | Required when selected policy requires transparency | none | Missing required transparency evidence fails with `PACKAGE_TRANSPARENCY_EVIDENCE_MISSING`. |
+| `attestation_set_refs` | Required when selected policy requires attestation | none | Missing or subject-mismatched attestation fails before activation. |
+| `build_provenance_refs` | Required when provenance is required | none | Missing, failed, or subject-mismatched provenance fails before activation. |
+| `sbom_refs` | Required when SBOM is required | none | Missing, failed, expired, or subject-mismatched SBOM fails before activation. |
+| `dependency_lock_refs` | Required when dependencies affect output or validation | none | Missing lock or lock mismatch fails before activation. |
+| `compatibility_matrix_refs` | Yes | none | Must include all compatibility rows required by the selected package type policy. |
+| `package_developer_contract_ref` | Required for executable or authoring packages | none | Missing owner contract blocks stage binding and activation. |
+| `stage_binding_refs` | Required when the package can execute in a stage | `[]` only for non-executable declarative artifacts | Missing required stage binding rejects before package execution. |
+| `activation_artifact_refs` | Required when the package supplies activation-controlled artifacts | `[]` only when package supplies none | Each ref must validate through `030.ActivationControlledArtifactRef`. |
+| `validation_refs` | Yes | none | Non-empty refs to passing validation rows for the release and its package type. |
+| `release_checksum` | Yes | none | SHA-256 over canonical release manifest bytes excluding `release_checksum`. |
+| `activation_scope` | Yes | none | Scope in which the release may be selected; out-of-scope releases fail before activation. |
+| `lifecycle_status` | Yes | none | Production selection requires lifecycle status permitted by the selected policy and activation mode. |
+
+Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required release fields reject before compatibility checks, package-set activation, rollback, quarantine, health gating, or candidate production output. A release manifest field does not substitute for `030.VersionManifest.included_refs`.
 
 ## Package Set Manifest
 
-`ProductionPackageSetManifest` must name the full coherent set of package release manifests for a production activation. It must include cohesion groups, target environment, activation mode, validation report refs, trust policy refs, compatibility matrix refs, rollback target refs, approval refs, and package-set checksum.
+`ProductionPackageSetManifest` is the only production activation target for package runtime behavior. It must name the full coherent set of package release manifests for a production activation, including target environment, activation mode, policy row-set refs, validation report refs, trust policy refs, compatibility matrix refs, rollback target refs, quarantine and health refs, lifecycle evidence refs, approval refs, and package-set checksum.
+
+The canonical environment field is `target_environment`. A manifest containing legacy `environment` instead of `target_environment` is invalid unless a separate migration artifact rewrites it before manifest creation. Runtime aliasing between `environment` and `target_environment` is forbidden.
 
 Partial package-set activation is forbidden unless a future accepted NLSpec defines partial semantics, output boundaries, rollback rules, and acceptance criteria.
 
@@ -802,7 +880,7 @@ A package type with no active policy row fails before activation with `PACKAGE_T
 
 For every package-supplied `130` artifact, compatibility rows must include the selected package type policy row, public API boundary, allowed stage classes, allowed output record classes, required `030` artifact-class refs, package-set checksum, validation refs, and `VersionManifest` omission test. A package that supplies `130` artifacts without matching compatibility rows fails with `PACKAGE_COMPATIBILITY_FAILED` or `PACKAGE_VERSION_MANIFEST_INCOMPLETE` before output.
 
-TODO: Replace broad legacy package labels in every package fixture and active package-set manifest with confirmed `PackageType` tokens before authoritative handoff.
+`LegacyPackageLabelMigrationRule`: every package fixture, candidate package-set manifest, rollback target, active package-set manifest, and compatibility row must use confirmed `PackageType` tokens only. Legacy labels such as `feed reader`, `mapping`, `projection package`, `validation package`, and `deployment_profile` are migration input only. Runtime aliasing is forbidden. A legacy label reaching `PackageReleaseManifest.package_type` must fail with `PACKAGE_TYPE_UNKNOWN`. Migration tooling may rewrite legacy labels only before manifest creation and must emit no package activation output.
 
 ### PackageDeprecationWindowPolicy
 
@@ -822,7 +900,9 @@ TODO: Replace broad legacy package labels in every package fixture and active pa
 
 A deprecated package must not be newly selected after its deprecation window expires except as an immutable verified rollback target allowed by `PackageRollbackPlan` and `RollbackCompatibilityPolicy`.
 
-TODO: Product governance must provide one active `PackageDeprecationWindowPolicyRow` for every confirmed `PackageType` token before authoritative package activation handoff.
+`DeprecationPolicyResolutionRule`: a `PackageTypePolicyRow` is not active unless its `deprecation_policy_ref` resolves to exactly one active `PackageDeprecationWindowPolicyRow` for the same `package_type` and target environment or environment-compatible scope. If no row resolves, package type policy resolution must fail before activation with `PACKAGE_TYPE_POLICY_MISSING`. If multiple equally specific rows resolve, package type policy resolution must fail with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. `PACKAGE_DEPRECATION_WINDOW_EXPIRED` is reserved for a deprecated release selected after the resolved active window expires.
+
+`100-TODO-DEPRECATION-ROWS` remains a blocked validation row until concrete active `PackageDeprecationWindowPolicyRow` instances exist for every confirmed `PackageType` and target environment in scope. No implementation may invent default deprecation windows.
 
 ### PackageHealthApiHandoff
 
@@ -892,6 +972,8 @@ Caller-visible outputs must not leak private artifact payloads, private reposito
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
 
+`110.PackageActivationErrorObservableMapping` must either be generated from this fragment or maintain an exhaustive table whose `error_code` set exactly equals this fragment. `120.PackageErrorRegistryParityValidationMatrix` must fail when a `100` package error is absent from `110`, when a `110` package error lacks this owner fragment, or when severity, retryability, redaction, or fixture refs drift.
+
 | error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `PACKAGE_TYPE_UNKNOWN` | `100` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-type-unknown` |
@@ -942,31 +1024,40 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 ### ProductionPackageSetManifest schema
 
-| Field | Required | Rule |
-| --- | ---: | --- |
-| `package_release_refs` | Yes | Canonically sorted release manifest refs and checksums. |
-| `package_type_policy_refs` | Yes | Selected `PackageTypePolicyRow` refs and checksums for every release. |
-| `repository_model_refs` | Yes | Repository model row refs, metadata refs, snapshot refs, freshness proof refs, and anti-rollback state refs. |
-| `supply_chain_policy_refs` | Yes | Trust, transparency, provenance, SBOM, and dependency lock policy row refs. |
-| `supply_chain_evidence_refs` | Yes | Signature verification result, transparency evidence, attestation, provenance, SBOM, and dependency lock refs. |
-| `health_gate_refs` | Yes | Selected `LastKnownGoodHealthGate` refs and checksums. |
-| `quarantine_scope_policy_refs` | Yes | Selected quarantine scope policy refs and checksums. |
-| `emergency_override_refs` | Required when emergency action affects eligibility | Emergency override record refs and checksums. |
-| `cohesion_groups` | Yes | Every group complete before activation. |
-| `environment` | Yes | Target environment token. |
-| `activation_mode` | Yes | production, canary, shadow, rollback, or emergency bounded action. |
-| `activation_artifact_refs` | Yes | Immutable `030.ActivationControlledArtifactRef` rows for package-supplied artifacts. |
-| `artifact_owner_specs` | Yes | Stable core owner specs for package-supplied artifacts. |
-| `artifact_validation_refs` | Yes | Passing validation refs for package-supplied artifacts. |
-| `artifact_compatibility_refs` | Yes | Package/artifact compatibility rows. |
-| `artifact_scope` | Yes | Activation scope covered by artifact refs. |
-| `artifact_registry_snapshot_ref` | Yes | Immutable registry snapshot containing artifact rows and checksums. |
-| `trust_refs` | Yes | Trust policies and verification results. |
-| `validation_refs` | Yes | Required validation report refs. |
-| `compatibility_refs` | Yes | Compatibility matrix refs. |
-| `rollback_refs` | Yes | Immutable rollback target refs or explicit null when not applicable. |
-| `approval_refs` | Yes | Product approval refs; approval does not bypass trust. |
-| `package_set_checksum` | Yes | SHA-256 over canonical manifest bytes excluding this field. |
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `package_set_manifest_id` | Yes | none | Stable ID over target environment, activation mode, sorted release refs, policy row-set ref, and package-set checksum inputs. |
+| `package_release_refs` | Yes | none | Canonically sorted `PackageReleaseManifest` refs. Missing or mutable refs reject before activation. |
+| `release_manifest_checksums` | Yes | none | Canonically sorted checksums for every referenced release manifest. Any mismatch fails with `PACKAGE_SET_CHECKSUM_MISMATCH`. |
+| `package_type_policy_row_set_ref` | Yes | none | Active row-set ref containing exactly one active row for every release package type in the target environment. |
+| `package_type_policy_refs` | Yes | none | Selected `PackageTypePolicyRow` refs and checksums for every release. |
+| `package_type_policy_coverage_matrix_checksum` | Yes | none | Checksum of `PackageTypePolicyRowCoverageMatrix`; omission fails catalog completeness validation. |
+| `deprecation_policy_refs` | Yes | none | Selected `PackageDeprecationWindowPolicyRow` refs and checksums for every release package type. |
+| `repository_model_refs` | Yes | none | Repository model row refs, metadata refs, snapshot refs, freshness proof refs, and anti-rollback state refs. |
+| `supply_chain_policy_refs` | Yes | none | Trust, transparency, provenance, SBOM, dependency lock, and repository policy row refs. |
+| `supply_chain_evidence_refs` | Yes | none | Signature verification result, transparency evidence, attestation, provenance, SBOM, and dependency lock refs. |
+| `health_gate_refs` | Yes | none | Selected `LastKnownGoodHealthGate` refs and checksums. |
+| `quarantine_scope_policy_refs` | Yes | none | Selected quarantine scope policy refs and checksums. |
+| `emergency_override_refs` | Required when emergency action affects eligibility | explicit `[]` when no emergency action applies | Emergency override record refs and checksums; emergency trust bypass remains forbidden. |
+| `cohesion_groups` | Yes | none | Every group must be complete before activation. |
+| `target_environment` | Yes | none | Input environment token used by `ResolvePackageTypePolicyRow`. The legacy field `environment` is invalid after manifest creation. |
+| `activation_mode` | Yes | none | Closed tokens: `production`, `canary`, `shadow`, `rollback`, `emergency_quarantine`, `emergency_retirement`, `emergency_abort`, `emergency_lkg_rollback`, `emergency_deprecation_extension`. |
+| `activation_artifact_refs` | Yes | explicit `[]` only when no package supplies activation artifacts | Immutable `030.ActivationControlledArtifactRef` rows for package-supplied artifacts. |
+| `artifact_owner_specs` | Yes | none | Stable core owner specs for package-supplied artifacts. |
+| `artifact_validation_refs` | Yes | none | Passing validation refs for package-supplied artifacts. |
+| `artifact_compatibility_refs` | Yes | none | Package/artifact compatibility rows. |
+| `artifact_scope` | Yes | none | Activation scope covered by artifact refs. |
+| `artifact_registry_snapshot_ref` | Yes | none | Immutable registry snapshot containing artifact rows and checksums. |
+| `trust_refs` | Yes | none | Trust policies and verification results. |
+| `validation_refs` | Yes | none | Required validation report refs. |
+| `compatibility_refs` | Yes | none | Compatibility matrix refs. |
+| `rollback_refs` | Yes | explicit null only when activation mode is not rollback and no rollback evidence is consulted | Immutable rollback target refs or explicit null when not applicable. |
+| `quarantine_refs` | Yes | explicit `[]` when no quarantine applies | Quarantine records and scope policy refs consulted for activation. |
+| `lifecycle_transition_evidence_refs` | Yes | none | Lifecycle transition evidence refs for package set activation, rollback, quarantine, emergency action, and LKG marking. |
+| `approval_refs` | Yes | none | Product approval refs; approval does not bypass trust. |
+| `package_set_checksum` | Yes | none | SHA-256 over canonical manifest bytes excluding this field. |
+
+Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required package-set fields reject before active state changes. Candidate output visibility remains `none` until the package set validates and the resulting refs appear in `030.VersionManifest.included_refs`.
 
 Source-closure row catalogs included in a production package set must appear in `package_release_refs`, `package_type_policy_refs`, `supply_chain_policy_refs`, `compatibility_refs`, and `validation_refs`, and their package-supplied `activation_artifact_refs` must appear in `030.VersionManifest` whenever they can affect output.
 
@@ -1033,11 +1124,15 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-PACKAGE-TYPE-POLICY-AC-002` | Unknown package type fails with `PACKAGE_TYPE_UNKNOWN`. |
 | `100-PACKAGE-TYPE-POLICY-AC-003` | Known package type with no active policy row fails with `PACKAGE_TYPE_POLICY_MISSING`. |
 | `100-PACKAGE-TYPE-POLICY-AC-004` | Ambiguous package type policy resolution fails with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. |
-| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has no duplicate tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
+| `100-PACKAGE-TYPE-POLICY-AC-005` | A known token with one active in-scope policy row succeeds and records the selected row ref and checksum in `030.VersionManifest.included_refs`. |
+| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has exactly 81 unique tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
+| `100-PACKAGE-TYPE-COVERAGE-AC-001` | Every confirmed token appears exactly once in `PackageTypePolicyRowCoverageMatrix`, and absent, duplicate, or multi-family assignments fail validation. |
 | `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
+| `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for row-specific package types and fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate output. |
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
-| `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package release refs, selected package type policy refs, repository refs, supply-chain policy/evidence refs, cohesion groups, environment, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, approval refs, and checksum. |
+| `100-PACKAGE-RELEASE-MANIFEST-AC-001` | Every required `PackageReleaseManifest` field omission, null-forbidden value, checksum mismatch, inactive ref, failed ref, or out-of-scope ref fails before activation. |
+| `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package-set ID, package release refs, release checksums, selected package type policy row-set refs, selected package type policy refs, deprecation refs, repository refs, supply-chain policy/evidence refs, cohesion groups, `target_environment`, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, lifecycle evidence refs, approval refs, and checksum. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing JanusGraph provider, adapter, driver, storage adapter, index adapter, runtime distribution, SBOM, provenance, compatibility, or package-set refs fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | Storage adapter version mismatch, index adapter version mismatch, or TinkerPop/driver compatibility mismatch fails candidate activation and preserves the current active package set. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes. |
@@ -1090,12 +1185,12 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-AC-005` | Package repository model, trust root governance, transparency, SBOM/provenance, dependency lock, compatibility matrix, health gate, rollback, quarantine, emergency, and cohesion group catalogs have exact catalog rows or explicit blocking rows before authoritative status. |
 | `100-AC-006` | `AcceptanceReport` fails while any package activation fixture checksum, expected output checksum, expected error, package-specific validation ref, or package `VersionManifest` inclusion check remains `TODO`, blocked, failed, not run, absent, or checksum-mismatched. |
 
-## Open Questions
+## Closure Ledger
 
-Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+Rows marked `TODO:` block authoritative status for the affected contract. Resolved rows record closed decisions and must not be treated as open questions. A downstream implementation must not resolve a `TODO:` by inference.
 
-| ID | Question | Blocking scope | Required owner decision | Default until resolved |
+| ID | State | Scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `100-RESOLVED-PACKAGE-TYPE-ENUM` | Canonical `PackageType` enum tokens are confirmed by this spec. | Package type token parsing and unknown-token rejection. | `100.PackageType`; validation by `120-PACKAGE-TYPE-*`. | Unknown or legacy broad labels fail with `PACKAGE_TYPE_UNKNOWN`. |
-| `100-TODO-PACKAGE-TYPE-POLICY-ROWS` | TODO: Every confirmed package type, including source-authority closure row-catalog package types, must have exactly one active `PackageTypePolicyRow` per target environment before package-set activation can affect production output. | Package type policy, deprecation rows, compatibility rows, validation fixtures, source-closure row-catalog package rows, and manifest inclusion. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Package activation remains blocked with `PACKAGE_TYPE_POLICY_MISSING` or `PACKAGE_TYPE_POLICY_AMBIGUOUS` until policy rows validate. |
-| `100-TODO-DEPRECATION-ROWS` | TODO: Provide active `PackageDeprecationWindowPolicyRow` instances for every confirmed package type. | Deprecation expiry, emergency extension, rollback eligibility, and migration windows. | `100` package governance and `120` package deprecation fixtures. | Missing row fails with `PACKAGE_DEPRECATION_WINDOW_EXPIRED` or policy-missing package validation, and promotion remains blocked. |
+| `100-RESOLVED-PACKAGE-TYPE-ENUM` | closed | Package type token parsing and unknown-token rejection. | `100.PackageType`; validation by `120-PACKAGE-TYPE-*`. | Unknown or legacy broad labels fail with `PACKAGE_TYPE_UNKNOWN`. |
+| `100-TODO-PACKAGE-TYPE-POLICY-ROWS` | TODO | Every confirmed package type, including source-authority closure row-catalog package types, must have exactly one active `PackageTypePolicyRow` per target environment before package-set activation can affect production output. | Product governance plus `000`, `030`, `100`, and `120` validation refs. | Package activation remains blocked with `PACKAGE_TYPE_POLICY_MISSING` or `PACKAGE_TYPE_POLICY_AMBIGUOUS` until policy rows validate. |
+| `100-TODO-DEPRECATION-ROWS` | TODO | Active `PackageDeprecationWindowPolicyRow` instances must exist for every confirmed package type and target environment or environment-compatible scope. | `100` package governance and `120` package deprecation fixtures. | Missing row makes the package type policy row inactive and fails policy resolution with `PACKAGE_TYPE_POLICY_MISSING`; expired active windows fail with `PACKAGE_DEPRECATION_WINDOW_EXPIRED`. |

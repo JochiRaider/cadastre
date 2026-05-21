@@ -239,9 +239,13 @@ Production use of a graph backend requires every checklist row below to resolve 
 
 | Requirement | Required behavior |
 | --- | --- |
-| provider package refs | Must resolve through `100.PackageReleaseManifest` and active `ProductionPackageSetManifest`. |
-| provider adapter refs | Must resolve through `100` and `090.GraphProviderAdapterContract`. |
-| driver refs | Must resolve through package trust and compatibility gates. |
+| provider package refs | Must resolve through `100.PackageReleaseManifest`, exact package type token `graph_backend_provider_package`, and active `ProductionPackageSetManifest`. |
+| provider adapter refs | Must resolve through `100`, exact package type token `graph_provider_adapter_package`, and `090.GraphProviderAdapterContract`. |
+| driver refs | Must resolve through package trust and compatibility gates using exact package type token `graph_backend_driver_package`. |
+| storage backend adapter refs | Must resolve through exact package type token `graph_storage_backend_adapter_package`. |
+| index backend adapter refs | Must resolve through exact package type token `graph_index_backend_adapter_package`. |
+| runtime distribution refs | Must resolve through exact package type token `graph_backend_runtime_distribution`. |
+| deployment profile refs | Must resolve through exact package type token `graph_backend_deployment_profile`; broad `deployment_profile` is not a package type. |
 | storage backend | Must be explicitly declared; provider defaults are forbidden. |
 | index backend | Must be explicitly declared or unsupported-query behavior must be declared. |
 | capability matrix | Must declare supported, unsupported, partial, and fail-closed query/apply behavior. |
@@ -249,6 +253,8 @@ Production use of a graph backend requires every checklist row below to resolve 
 | raw-write bypass policy | Must be explicit and fail-closed. |
 | validation refs | Must include `120-GRAPH-JANUSGRAPH-*` and backend package gates. |
 | lifecycle status | Production use requires `active`. |
+
+Each referenced graph backend release must resolve exactly one active `100.PackageTypePolicyRow`, must be included in the active `100.ProductionPackageSetManifest`, and must appear in `030.VersionManifest.included_refs`. Graph backend preflight must reject broad labels, provider-specific package names, mutable refs, and deployment profile aliases before graph mutation, query serving, rebuild promotion, or drift check.
 
 ### MVP JanusGraph default backend profile
 
@@ -988,6 +994,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; unresolved default fields block production serving with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-GRAPH-BACKEND-DEFAULT-AC-002` | When graph serving is enabled and backend profile input is omitted, the implementation materializes `mvp-janusgraph.v1`; if any required production profile field, package ref, capability row, schema ref, storage/index declaration, or validation ref is unresolved, graph mutation, query, rebuild promotion, and drift check fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, implicit schema creation, and missing package gates before mutation or query. |
+| `090-GRAPH-BACKEND-PACKAGE-TOKEN-AC-001` | Graph backend package gates use exact tokens `graph_backend_provider_package`, `graph_provider_adapter_package`, `graph_backend_driver_package`, `graph_storage_backend_adapter_package`, `graph_index_backend_adapter_package`, `graph_backend_runtime_distribution`, and `graph_backend_deployment_profile`; broad labels and provider-specific package names fail before backend preflight succeeds. |
 | `090-GRAPH-PROVIDER-CAPABILITY-AC-001` | Every active graph provider profile satisfies `GraphProviderCapabilityMatrix` or declares deterministic unsupported behavior for each query, apply, rebuild, and serving class. |
 | `090-GRAPH-JANUSGRAPH-SCHEMA-AC-001` | JanusGraph implicit schema creation, destructive schema drop, stale fingerprint, missing schema constraints without exception, and missing index readiness fail closed. |
 | `090-GRAPH-JANUSGRAPH-QUERY-AC-001` | JanusGraph Gremlin translation fixtures produce provider-neutral `QueryGraph` outputs, reject full scans, enforce candidate limits, reject backend IDs, and sort by Cadastre ordering. |
@@ -1020,7 +1027,7 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 
 | ID | Blocker | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `090-TODO-JANUSGRAPH-RELEASE-PIN` | TODO: Pin JanusGraph provider release/package, provider adapter package, driver package, and TinkerPop version refs before active production profile. | P0 before active production profile. | Product governance plus `100` package-set evidence. | Validation-only profile may remain selected but blocked for production. |
+| `090-TODO-JANUSGRAPH-RELEASE-PIN` | TODO: Pin JanusGraph provider release/package, provider adapter package, driver package, storage adapter package, index adapter package, runtime distribution, deployment profile, and TinkerPop version refs using exact `100.PackageType` tokens before active production profile. | P0 before active production profile. | Product governance plus `100` package-set evidence. | Validation-only profile may remain selected but blocked for production. |
 | `090-TODO-JANUSGRAPH-STORAGE-BACKEND` | TODO: Select durable storage backend or require explicit deployment-supplied storage backend configuration and validation refs. | P0 unless deployment config explicitly supplies and validates it. | Product governance plus `100` package gates and `120` fixtures. | `mvp-janusgraph.v1` fails with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-TODO-JANUSGRAPH-INDEX-BACKEND` | TODO: Select index backend or declare query classes unsupported. | P0 for query classes requiring mixed or text/range index support. | Product governance plus `120-GRAPH-JANUSGRAPH-INDEX-*`. | Affected query classes are blocked. |
 | `090-TODO-JANUSGRAPH-CONFIG-PRECEDENCE` | TODO: Confirm configuration precedence for selected profile fields. | P1 for selected profile fields. | Provider source inspection and config fixtures. | Omitted or ambiguous selected config fields fail closed. |

@@ -96,6 +96,7 @@ Additional promotion gates:
 | Gate | Blocking condition |
 | --- | --- |
 | identity resolver closure | When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, promotion fails if any required resolver artifact row set, activation report, validation row, fixture checksum, expected output checksum, manifest ref, package weakening row, or decision-ambiguity closure row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
+| package activation registry closure | When `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope, promotion fails if any required package activation registry ref, policy row set, compatibility row, deprecation row, validation row, fixture checksum, expected output checksum, error parity row, manifest ref, or package type coverage row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
 
 ## SpecSetVersion Record
 
@@ -136,6 +137,31 @@ When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `Can
 | `TargetSelectorSafetyPolicy` | `070` |
 
 Missing refs block promotion before authoritative handoff. Registry refs must match the artifact names and classes used by `030`, `070`, `100`, and `120`.
+
+### Package activation spec-set registry refs
+
+When `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope, `SpecSetVersion.activation_artifact_registry_refs` must include active registry refs for the following package activation artifacts, or explicit owner `TODO:` blockers that prevent promotion:
+
+| Required registry ref | Owner |
+| --- | --- |
+| `PackageTypePolicyRowSet` | `100` |
+| `PackageTypePolicyRowCoverageMatrix` | `100` |
+| `PackageRepositoryModelRowSet` | `100` |
+| `PackageTrustPolicy` | `100` |
+| `PackageTransparencyEvidencePolicy` when consulted | `100` |
+| `PackageProvenancePolicy` when provenance is required | `100` |
+| `PackageSBOMPolicy` when SBOM is required | `100` |
+| `PackageDependencyLockPolicy` when dependencies affect output or validation | `100` |
+| `PackageCompatibilityMatrix` | `100` |
+| `PackageDeprecationWindowPolicy` | `100` |
+| `LastKnownGoodHealthGate` | `100` |
+| `RollbackCompatibilityPolicy` | `100` |
+| `QuarantineScopePolicy` | `100` |
+| `PackagePromotionGatePolicy` | `100` |
+| `PackageReleaseManifest` registry or manifest refs | `100` |
+| `ProductionPackageSetManifest` registry or manifest refs | `100` |
+
+Package activation registry refs must match the artifact names and classes used by `030`, `100`, `110`, and `120`. `PackageType` enum closure is not sufficient for package-set activation; active package type policy rows, deprecation rows, compatibility rows, package evidence, manifest completeness, error-registry parity, and validation fixtures remain promotion blockers.
 
 ## Volatility Classification Governance
 
@@ -331,6 +357,8 @@ The following package activation contracts, row sets, policies, runtime state re
 | `PackageSBOMRef` | `runtime_state_record` or immutable release evidence | `100` | `100` | required when SBOM policy requires it |
 | `PackageBuildProvenance` | `runtime_state_record` or immutable release evidence | `100` | `100` | required when provenance policy requires it |
 | `PackageActivationFailureEvent` | `runtime_state_record` | `100` | `100` | required on failure |
+
+`PackageType` enum closure is not sufficient for package-set activation. Active package type policy rows, deprecation rows, compatibility rows, package evidence, manifest completeness, and validation fixtures remain promotion blockers until the required `100`, `030`, `110`, and `120` rows pass.
 
 ### Required observability volatility classifications
 
@@ -586,6 +614,8 @@ Archived documents are historical reference only and never implementation author
 | `000-STATUS-CONSISTENCY-AC-006` | Every manifest path has exactly one registry row or explicit non-registry reason. |
 | `000-PACKAGE-CLOSURE-AC-001` | Promotion fails when any required package activation validation group is absent, blocked, not run, failed, or contains `TODO` checksums. |
 | `000-PACKAGE-VOLATILITY-AC-001` | Every package activation contract, row set, policy, runtime state record, and release evidence class has exactly one volatility class. |
+| `000-PACKAGE-REGISTRY-REFS-AC-001` | Promotion fails when package activation is in scope and `SpecSetVersion.activation_artifact_registry_refs` lacks required package activation registry refs or explicit owner TODO blockers that prevent promotion. |
+| `000-PACKAGE-ENUM-STATUS-AC-001` | `ValidateSpecSet` fails if any owner spec marks `PackageType` unresolved while `000` marks it `closed_local`, or marks package-set activation closed while required package validation rows remain blocked. |
 | `000-CORE-ONEOF-CLOSURE-AC-001` | Promotion fails when `040.CoreOneOfRegistry` contains unresolved rows or when any `120` core one-of closure validation row is absent, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
 | `000-CORE-EVIDENCE-ARTIFACT-CLOSURE-AC-001` | Promotion fails when `EvidenceRef` artifact class/kind pairing rows are missing, ambiguous, inactive, checksum-mismatched, out of scope, or lack validation refs. |
 

@@ -69,7 +69,7 @@ Every active domain spec must include at least one negative validation case for 
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
 | Graph | Backend internal ID appears in response or selector and fails; active MVP edge set is exactly `observed_connection`; missing or ambiguous `FlowRoleEvidence` emits no edge; OCSF endpoint order cannot determine direction; unresolved endpoint identity emits no edge; string endpoint identity does not project; identifier and source-asset refs require resolver handoff; invalid gold subject/object kind produces no mutation; generic external graph payload is not pathfinding; theoretical reachability and boolean reachability properties are prohibited; query candidate limits and page tokens fail closed; graph backend omitted/defaulted behavior, missing provider profile fields, unsupported provider capability, unsafe storage mode, implicit schema creation, stale schema fingerprint, stale mixed index, full-scan Gremlin translation, missing package gate, backend-generated ID leakage, raw-write bypass, and provider-specific query bypass fail closed or no-op with no forbidden mutation. |
-| Package | Missing package-type policy, ambiguous package-type policy, unknown package type, unsupported repository form, unauthorized signer, missing transparency evidence, missing attestation, missing SBOM, dependency live resolution, compatibility failure, deprecation expiry, failed post-activation health gate, mutable rollback target, rollback compatibility failure, quarantine target block, emergency trust bypass, and package `VersionManifest` omission fail or no-op with no forbidden mutation. |
+| Package | Closed enum success, duplicate token rejection, generic or legacy label rejection, unknown package type, missing package-type policy, inactive package-type policy, scope-mismatched package-type policy, ambiguous package-type policy, policy-row manifest omission, policy-bundle substitution, required release/package-set manifest field omission, unsupported repository form, unauthorized signer, missing transparency evidence, missing attestation, missing SBOM, dependency live resolution, compatibility failure, missing deprecation policy row, deprecation expiry, failed post-activation health gate, mutable rollback target, rollback compatibility failure, quarantine target block, emergency trust bypass, package error-registry parity failure, and package `VersionManifest` omission fail or no-op with no forbidden mutation. |
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis finding, metric, risk acceptance, threat-intel enrichment, lineage facet, registry governance, registry custom property, registry classification, or derived-edge rule attempts forbidden authority or mutation and fails before the forbidden effect. |
@@ -606,7 +606,7 @@ Every row in this matrix validates behavior owned by `100`, manifest inclusion o
 
 | Row class | Required coverage |
 | --- | --- |
-| `100-package-type-policy` | Unknown, missing, ambiguous, inactive, scope-mismatched, and manifest-omitted package type policy rows. |
+| `100-package-type-policy` | Confirmed enum success, duplicate token rejection, generic-label rejection, legacy-label rejection, unknown token rejection, missing policy, ambiguous policy, inactive policy, scope-mismatched policy, manifest-omitted policy rows, exact policy success, and coverage totality. |
 | `100-repository-form` | Supported repository forms and `git_tree_snapshot` rejection. |
 | `100-trust` | Unauthorized signer, inactive trust root, threshold failure, transparency evidence missing. |
 | `100-attestation-sbom` | Missing, mismatched, expired, and policy-failed attestation and SBOM refs. |
@@ -617,7 +617,10 @@ Every row in this matrix validates behavior owned by `100`, manifest inclusion o
 | `100-rollback` | Mutable target rejection, immutable target pass, incompatible state/schema/graph/trust/replay rejection. |
 | `100-quarantine` | Artifact, release, set, signer, trust root, snapshot, namespace, and package type quarantine blocking. |
 | `100-emergency` | Allowed bounded override actions and forbidden trust bypass. |
-| `100-version-manifest` | Omitted package activation refs reject output. |
+| `100-version-manifest` | Omitted package activation refs, selected policy row refs, deprecation row refs, compatibility refs, release checksums, and package-set checksums reject output. |
+| `100-policy-bundle` | `policy_bundle` grouping succeeds only as a carrier and fails when used as row-catalog substitution. |
+| `100-manifest-field-omission` | Required `PackageReleaseManifest` and `ProductionPackageSetManifest` field omissions reject before candidate output. |
+| `100-error-registry-parity` | `100.PackageErrorRegistryFragment` and `110.PackageActivationErrorObservableMapping` have identical package error code sets and compatible severity, retryability, redaction, and fixture refs. |
 
 A `PackageActivationValidationMatrix` row must include fixture checksum, expected output checksum or expected no-op, expected error when rejected, mutation prohibition, owner spec, acceptance criterion, and `VersionManifest` requirement. The row must identify the package activation ref classes required by `030.VersionManifestCompletenessMatrix` and the observable error mapping required by `110.PackageActivationErrorObservableMapping`.
 
@@ -628,6 +631,16 @@ Required `100` fixture rows:
 | `val-100-package-type-unknown` | `fixture-100-package-type-unknown` | TODO | `PACKAGE_TYPE_UNKNOWN` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-002` | blocking |
 | `val-100-package-type-policy-missing` | `fixture-100-package-type-policy-missing` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-003` | blocking |
 | `val-100-package-type-policy-ambiguous` | `fixture-100-package-type-policy-ambiguous` | TODO | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-004` | blocking |
+| `val-100-package-type-enum-closed` | `fixture-100-package-type-enum-closed` | TODO | none | TODO | no enum mutation | `100-PACKAGE-TYPE-ENUM-AC-001` | blocking |
+| `val-100-package-type-duplicate-token-rejected` | `fixture-100-package-type-duplicate-token` | TODO | `PACKAGE_TYPE_UNKNOWN` or validation owner error | TODO | no package activation | `100-PACKAGE-TYPE-COVERAGE-AC-001` | blocking |
+| `val-100-package-type-generic-label-rejected` | `fixture-100-package-type-generic-label` | TODO | `PACKAGE_TYPE_UNKNOWN` | TODO | no package activation | `100-PACKAGE-TYPE-ENUM-AC-001` | blocking |
+| `val-100-package-type-legacy-label-rejected` | `fixture-100-package-type-legacy-label` | TODO | `PACKAGE_TYPE_UNKNOWN` | TODO | no package activation | `100-PACKAGE-TYPE-ENUM-AC-001` | blocking |
+| `val-100-package-type-policy-exact-success` | `fixture-100-package-type-policy-exact-success` | TODO | none | TODO | selected row ref and checksum recorded only | `100-PACKAGE-TYPE-POLICY-AC-005` | blocking |
+| `val-100-package-type-policy-inactive` | `fixture-100-package-type-policy-inactive` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-003` | blocking |
+| `val-100-package-type-policy-scope-mismatch` | `fixture-100-package-type-policy-scope-mismatch` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-PACKAGE-TYPE-POLICY-AC-003` | blocking |
+| `val-100-package-type-policy-manifest-omitted` | `fixture-100-package-type-policy-manifest-omitted` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `030-PACKAGE-POLICY-MANIFEST-AC-001` | blocking |
+| `val-100-policy-bundle-substitution-forbidden` | `fixture-100-policy-bundle-substitution` | TODO | `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` | TODO | current active set unchanged | `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | blocking |
+| `val-100-package-type-coverage-totality` | `fixture-100-package-type-coverage-totality` | TODO | validation owner error | TODO | no package activation | `100-PACKAGE-TYPE-COVERAGE-AC-001` | blocking |
 | `val-100-git-tree-snapshot-unsupported` | `fixture-100-git-tree-snapshot-unsupported` | TODO | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | TODO | no candidate production output | `100-REPOSITORY-FORM-AC-002` | blocking |
 | `val-100-package-set-checksum-mismatch` | `fixture-100-package-set-checksum-mismatch` | TODO | `PACKAGE_SET_CHECKSUM_MISMATCH` | TODO | current active set unchanged | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
 | `val-100-unauthorized-signer` | `fixture-100-unauthorized-signer` | TODO | `PACKAGE_SIGNER_UNAUTHORIZED` | TODO | no package activation | `100-CLEANUP-AC-003` | blocking |
@@ -639,6 +652,9 @@ Required `100` fixture rows:
 | `val-100-dependency-lock-missing` | `fixture-100-dependency-lock-missing` | TODO | `PACKAGE_DEPENDENCY_LOCK_MISSING` | TODO | no package activation | `100-DEPENDENCY-LOCK-AC-001` | blocking |
 | `val-100-dependency-live-resolution-forbidden` | `fixture-100-dependency-live-resolution-forbidden` | TODO | `PACKAGE_DEPENDENCY_LIVE_RESOLUTION_FORBIDDEN` | TODO | no package activation | `100-DEPENDENCY-LOCK-AC-001` | blocking |
 | `val-100-compatibility-failed` | `fixture-100-compatibility-failed` | TODO | `PACKAGE_COMPATIBILITY_FAILED` | TODO | no package activation | `100-COMPATIBILITY-AC-001` | blocking |
+| `val-100-deprecation-policy-missing` | `fixture-100-deprecation-policy-missing` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-DEPRECATION-WINDOW-AC-001` | blocking |
+| `val-100-deprecation-policy-inactive` | `fixture-100-deprecation-policy-inactive` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-DEPRECATION-WINDOW-AC-001` | blocking |
+| `val-100-deprecation-policy-scope-mismatch` | `fixture-100-deprecation-policy-scope-mismatch` | TODO | `PACKAGE_TYPE_POLICY_MISSING` | TODO | no package activation | `100-DEPRECATION-WINDOW-AC-001` | blocking |
 | `val-100-deprecation-window-expired` | `fixture-100-deprecation-window-expired` | TODO | `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | TODO | no new activation | `100-DEPRECATION-WINDOW-AC-002` | blocking |
 | `val-100-lkg-health-gate-failed` | `fixture-100-lkg-health-gate-failed` | TODO | `PACKAGE_LKG_HEALTH_GATE_FAILED` | TODO | no last-known-good mark | `100-LKG-HEALTH-AC-002` | blocking |
 | `val-100-mutable-rollback-target` | `fixture-100-mutable-rollback-target` | TODO | `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | TODO | no package activation | `100-ROLLBACK-AC-001` | blocking |
@@ -649,8 +665,47 @@ Required `100` fixture rows:
 | `val-100-quarantine-clear-not-active` | `fixture-100-quarantine-clear-not-active` | TODO | no-op | TODO | no direct active transition | `100-QUARANTINE-AC-002` | blocking |
 | `val-100-emergency-bypass-forbidden` | `fixture-100-emergency-bypass-forbidden` | TODO | `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | TODO | no package activation | `100-EMERGENCY-AC-001` | blocking |
 | `val-100-version-manifest-package-refs-missing` | `fixture-100-version-manifest-package-refs-missing` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `100-VERSION-MANIFEST-AC-001` | blocking |
+| `val-100-version-manifest-package-policy-row-missing` | `fixture-100-version-manifest-package-policy-row-missing` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `030-PACKAGE-POLICY-MANIFEST-AC-001` | blocking |
+| `val-100-version-manifest-deprecation-row-missing` | `fixture-100-version-manifest-deprecation-row-missing` | TODO | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` | TODO | no package output visibility | `030-PACKAGE-POLICY-MANIFEST-AC-001` | blocking |
 | `val-100-canary-output-isolation` | `fixture-100-canary-output-isolation` | TODO | `PACKAGE_CANARY_OUTPUT_FORBIDDEN` | TODO | no current production output | `100-LIFECYCLE-AC-003` | blocking |
 | `val-100-shadow-output-isolation` | `fixture-100-shadow-output-isolation` | TODO | `PACKAGE_SHADOW_OUTPUT_FORBIDDEN` | TODO | no current production output | `100-LIFECYCLE-AC-003` | blocking |
+
+### PackageManifestFieldOmissionValidationMatrix
+
+`RunValidationMatrix` must materialize one blocking row for each field listed below. Each row must include fixture ID, non-`TODO` fixture checksum, expected output or expected no-op/error, non-`TODO` expected output checksum, mutation prohibition, `VersionManifest` requirement, and acceptance criterion before authoritative handoff. Until fixture bytes exist, every row remains `blocking`.
+
+| Manifest field path | Validation row ID | Expected error | Acceptance criterion | Blocking status |
+| --- | --- | --- | --- | --- |
+| `PackageReleaseManifest.package_type` | `val-100-release-manifest-package-type-omitted` | `PACKAGE_TYPE_UNKNOWN` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.artifact_digest` | `val-100-release-manifest-artifact-digest-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.artifact_size_bytes` | `val-100-release-manifest-artifact-size-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.media_type` | `val-100-release-manifest-media-type-omitted` | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.subject_digest` | `val-100-release-manifest-subject-digest-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.repository_form` | `val-100-release-manifest-repository-form-omitted` | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.signature_verification_result_refs` | `val-100-release-manifest-signature-refs-omitted` | `PACKAGE_SIGNATURE_THRESHOLD_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.trust_policy_refs` | `val-100-release-manifest-trust-refs-omitted` | `PACKAGE_TRUST_ROOT_INACTIVE` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.sbom_refs` when required | `val-100-release-manifest-sbom-refs-omitted` | `PACKAGE_SBOM_MISSING` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.build_provenance_refs` when required | `val-100-release-manifest-provenance-refs-omitted` | `PACKAGE_PROVENANCE_POLICY_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.dependency_lock_refs` when required | `val-100-release-manifest-dependency-lock-refs-omitted` | `PACKAGE_DEPENDENCY_LOCK_MISSING` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.compatibility_matrix_refs` | `val-100-release-manifest-compatibility-refs-omitted` | `PACKAGE_COMPATIBILITY_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.validation_refs` | `val-100-release-manifest-validation-refs-omitted` | `PACKAGE_VALIDATION_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.release_checksum` | `val-100-release-manifest-release-checksum-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.activation_scope` | `val-100-release-manifest-activation-scope-omitted` | `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.lifecycle_status` | `val-100-release-manifest-lifecycle-status-omitted` | `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.target_environment` | `val-100-package-set-target-environment-omitted` | `PACKAGE_TYPE_POLICY_MISSING` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.activation_mode` | `val-100-package-set-activation-mode-omitted` | `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.package_release_refs` | `val-100-package-set-release-refs-omitted` | `PACKAGE_COHESION_INCOMPLETE` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.release_manifest_checksums` | `val-100-package-set-release-checksums-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.package_type_policy_row_set_ref` | `val-100-package-set-policy-row-set-omitted` | `PACKAGE_TYPE_POLICY_MISSING` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.package_type_policy_refs` | `val-100-package-set-policy-row-refs-omitted` | `PACKAGE_TYPE_POLICY_MISSING` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.trust_refs` | `val-100-package-set-trust-refs-omitted` | `PACKAGE_TRUST_ROOT_INACTIVE` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.compatibility_refs` | `val-100-package-set-compatibility-refs-omitted` | `PACKAGE_COMPATIBILITY_FAILED` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.rollback_refs` | `val-100-package-set-rollback-refs-omitted` | `PACKAGE_ROLLBACK_TARGET_UNVERIFIED` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.quarantine_refs` | `val-100-package-set-quarantine-refs-omitted` | `PACKAGE_QUARANTINE_BLOCKED_ACTIVATION` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.health_gate_refs` | `val-100-package-set-health-refs-omitted` | `PACKAGE_LKG_HEALTH_GATE_FAILED` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.lifecycle_transition_evidence_refs` | `val-100-package-set-lifecycle-evidence-omitted` | `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.approval_refs` | `val-100-package-set-approval-refs-omitted` | `PACKAGE_VALIDATION_FAILED` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.package_set_checksum` | `val-100-package-set-checksum-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
 
 ### TwoIndependentImplementersCheck
 
@@ -1013,6 +1068,17 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 | `error-registry-cdc-tombstone-owner` | Duplicate-owner decision for `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED`. | `error-registry-060-cdc-tombstone-retraction-unauthorized`, temporal tombstone fixture. | Exactly one generated row exists, owned by `060`; `080` duplicate ownership fails. |
 | `error-registry-graph-endpoint-owner` | Duplicate-owner decision for `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`. | `error-registry-090-graph-endpoint-identity-unresolved`, unresolved endpoint fixture. | Exactly one generated row exists, owned by `090`; `070` duplicate ownership fails and no identity mutation occurs. |
 
+### PackageErrorRegistryParityValidationMatrix
+
+`PackageErrorRegistryParityValidationMatrix` validates define-once ownership for package errors. It compares `100.PackageErrorRegistryFragment` to `110.PackageActivationErrorObservableMapping` after macro expansion and before any API, health, audit, export, compliance, or validation-visible package error output.
+
+| Validation row | Scope | Required fixture refs | Required result |
+| --- | --- | --- | --- |
+| `package-error-registry-code-set-parity` | Every `100.PackageErrorRegistryFragment.error_code` and every `110` package observable row. | `fixture-120-package-error-registry-parity` | Fails if any `100` package code is absent from `110`, or if any `110` package row lacks a `100` owner fragment. |
+| `package-error-registry-severity-retry-parity` | Severity and retryability for package rows. | `fixture-120-package-error-registry-severity-retry` | Fails when `110` severity or retryability conflicts with the generated owner fragment. |
+| `package-error-registry-redaction-parity` | Package sensitive data classes. | private package payload, raw SBOM bytes, signer secret, private repository path, private source binding, unauthorized evidence fixtures | Fails if forbidden data is caller-visible or stored outside approved secure audit refs. |
+| `package-error-registry-fixture-totality` | Fixture refs for package owner rows. | one fixture ref per package error row | Fails when any package error row is unfixtured, wildcard-only, blank, duplicated, or TODO-bearing. |
+
 ### EndpointOutcomeValidationMatrix
 
 | Endpoint | Required state and outcome coverage | Fixture family | Mutation prohibition |
@@ -1076,10 +1142,10 @@ graph-provider-portability-equivalence
 | `120-SOURCE-CLOSURE-*` | One closure-positive, closure-missing, closure-ambiguous, deterministic-block, weak-signal, stale-source, coverage-missing, source-history coverage, external-schema authority signal, manifest omission, private-binding leak, and watermark-block fixture per active absence-sensitive feed category, source dataset, requested effect, scope selector, read target kind, and upstream evidence class tuple. |
 | `120-GRAPH-PROFILE-CLOSURE-*` | Edge set exactly `observed_connection`, theoretical reachability prohibited, all other edge types inactive or rejected, missing flow role no edge, and ambiguous flow role no edge. |
 | `120-GRAPH-JANUSGRAPH-*` | Backend selection, unresolved default, storage/index declaration, Gremlin translation, schema/index apply, stale mixed index, raw-write bypass, backend ID leak, package gate, partial apply, and rebuild equivalence. |
-| `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, unknown token rejection, missing policy, ambiguous policy, and exact policy success. |
+| `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, legacy-label rejection, unknown token rejection, missing policy, inactive policy, scope-mismatched policy, ambiguous policy, policy manifest omission, policy-bundle substitution, coverage totality, and exact policy success. |
 | `120-LIFECYCLE-*` | `030`, `070`, `090`, `100`, and validation acceptance lifecycle totality, idempotency, illegal transition, no mutation, and manifest inclusion. |
 | `120-IDENTITY-CLOSURE-*` | Resolver profile row selection, evidence class totality, scope coverage, durable create/attach/merge, weak rejection, selector safety, blocker precedence, decision row missing/ambiguous, review totality, review expiration, split handoff, explanation checksum, replay exactness, manifest omission, package weak-default weakening, and two-independent-implementer parity. |
-| `120-ERROR-REGISTRY-*` | No owner error fragment contains `TODO`; final owners include `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`; duplicate owner decisions are enforced; generic code is rejected when owner-specific code exists. |
+| `120-ERROR-REGISTRY-*` | No owner error fragment contains `TODO`; final owners include `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`; duplicate owner decisions are enforced; generic code is rejected when owner-specific code exists; `100` package owner rows and `110` package observable rows pass parity validation. |
 
 ### Owner-specific fixture families
 
@@ -1209,6 +1275,9 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-GRAPH-PAGE-TOKEN-AC-001` | Page-token fixtures prove TTL, expiry, mismatch, authorization context, derived-view state, and profile-ref identity behavior. |
 | `120-PACKAGE-ACTIVATION-AC-001` | Aggregate acceptance fails while any required package activation fixture is blocked, not run, failed, missing fixture checksum, missing expected-output checksum, missing expected error, or missing mutation-prohibition proof. |
 | `120-PACKAGE-MATRIX-AC-001` | Every `PackageActivationValidationMatrix` row has fixture checksum, expected output checksum, expected error or no-op, mutation prohibition, owner spec, and version manifest requirement. |
+| `120-PACKAGE-TYPE-COVERAGE-AC-001` | Package type coverage validation fails when any confirmed token is absent, duplicated, assigned to more than one family, or lacks exactly one active policy row for the target environment. |
+| `120-PACKAGE-MANIFEST-OMISSION-AC-001` | Required release and package-set manifest field omission rows remain blocking until fixture checksum and expected output checksum values are non-`TODO` SHA-256 values. |
+| `120-PACKAGE-ERROR-REGISTRY-PARITY-AC-001` | Package error-registry parity validation proves every `100` package error appears exactly once in `110` observable mapping and no `110` package row lacks a `100` owner fragment. |
 | `120-DEFINE-ONCE-CLOSURE-AC-001` | The spec set cannot pass while any domain Section 25 row, owner closure row, required validation fixture, expected output checksum, expected no-op/error assertion, or owner error fragment contains `TODO` in required promotion scope. |
 | `120-DEFINE-ONCE-CLOSURE-AC-002` | No active spec restates another active spec's runtime behavior except by exact imported contract name and one-sentence routing reference; violations fail with `DOMAIN_RUNTIME_RESTATEMENT` or `OWNER_SPEC_CONTRADICTION` as applicable. |
 | `120-CORE-ONEOF-CLOSURE-AC-001` | Every subject, object, and evidence artifact one-of fixture family listed in `CoreOneOfClosureValidationMatrix` and `CoreEvidenceArtifactValidationMatrix` passes. |
