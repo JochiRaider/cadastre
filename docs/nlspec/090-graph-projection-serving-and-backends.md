@@ -478,13 +478,18 @@ ApplyGraphDelta(delta_set, apply_profile):
 6. Verify active GraphBackendProfile, GraphReadModelSchemaProfile, and BackendSchemaFingerprint.
 7. Reject when backend schema is missing, stale, or fingerprint-mismatched.
 8. Sort deltas by apply_profile canonical order.
+8a. Resolve `030.RunLockCommitGuard` for target graph scope, graph delta set checksum, apply profile, backend profile, and requested output class.
+8b. Reject before backend execution when the guard is missing, stale, fenced, lock-lost, or outside scope.
+8c. Include the guard ref in `GraphApplyResult` and `VersionManifest`.
 9. Apply batches only at declared transaction boundaries.
-10. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, and writer identity when correctness-affecting.
+10. Persist backend evidence rows for transaction semantics, failover, read-after-write, storage mode, index freshness, writer identity, and run-lock commit guard when correctness-affecting.
 11. On failure, record committed batch IDs or prove no committed writes.
-12. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, and derived view state update eligibility.
+12. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, run-lock commit guard refs, and derived view state update eligibility.
 ```
 
 ### GraphApplyBackendEvidenceRow JanusGraph fields
+
+If lock loss occurs before any backend commit, `ApplyGraphDelta` must emit no backend mutation and no derived-view advancement. If lock loss occurs after a committed batch, it must persist committed-batch evidence, emit `failed_partial`, block derived-view advancement, and require `ResumeGraphApply` with the same graph idempotency key plus a new valid `030.RunLockCommitGuard`.
 
 `ApplyGraphDelta` must persist provider evidence before derived-view advancement when the selected backend profile uses JanusGraph. JanusGraph commit evidence is not a single cross-system distributed transaction proof; it must expose the storage, composite index, mixed index, log, rollback, and read-after-write components that can affect correctness.
 
@@ -500,6 +505,7 @@ ApplyGraphDelta(delta_set, apply_profile):
 | `committed_batch_ids` | required for partial or resumed apply |
 | `resume_boundary` | required when partial apply occurs |
 | `index_freshness_ref` | required for affected query classes |
+| `run_lock_commit_guard_ref` | required when graph apply is production-visible |
 
 ## Graph Apply Lifecycle
 
@@ -536,6 +542,9 @@ resume_unsafe
 identical_reapply
 idempotency_conflict
 complete
+run_lock_asserted
+run_lock_lost
+run_lock_guard_stale
 replay_same_event
 ```
 
@@ -543,11 +552,14 @@ replay_same_event
 | --- | --- | --- | --- |
 | `prepared` | `preflight_passed` | `preflighted` | Persist preflight evidence. |
 | `prepared` | `preflight_failed` | `failed_no_commit` | No backend writes. |
+| `preflighted` | `run_lock_asserted` | `preflighted` | Same-state evidence; apply may start. |
 | `preflighted` | `start_apply` | `applying` | Persist apply-start evidence. |
 | `applying` | `batch_committed` | `applying` or `partial_committed` | Persist committed-batch evidence. |
 | `applying` | `complete` | `applied` | Persist `GraphApplyResult`; derived-view update eligible. |
 | `applying` | `batch_failed_before_commit` | `failed_no_commit` | No derived-view advancement. |
 | `applying` | `batch_failed_after_commit` | `failed_partial` | Persist committed-batch proof; no derived-view advancement. |
+| `preflighted` or `applying` | `run_lock_guard_stale` | `failed_no_commit` or `failed_partial` | No derived-view advancement; partial only when committed-batch evidence exists. |
+| `applying` | `run_lock_lost` | `failed_partial` or `failed_no_commit` | Persist committed-batch proof or no-commit proof. |
 | `failed_partial` | `resume_requested` | `resume_pending` | Same idempotency key required. |
 | `resume_pending` | `resume_safe` | `applying` | Resume after last compatible committed batch. |
 | `resume_pending` | `resume_unsafe` | `failed_partial` | Emit `GRAPH_APPLY_RESUME_UNSAFE`; no mutation. |
@@ -779,6 +791,7 @@ The active MVP output eligibility rows are closed. Graph object existence alone 
 | prior identical success | return idempotent no-op result. |
 | prior failed before commit | reapply from first batch. |
 | prior partial with committed batch evidence | resume after last committed compatible batch. |
+| prior partial with committed batch evidence and prior lock loss | resume after last committed compatible batch only when the new run holds a valid `030.RunLockCommitGuard` and the same `GraphDeltaIdempotencyKey`. |
 | prior partial without committed-batch proof | fail with `GRAPH_APPLY_RESUME_UNSAFE`. |
 | idempotency key conflict | fail with `GRAPH_DELTA_IDEMPOTENCY_CONFLICT`. |
 
@@ -990,6 +1003,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `090-GRAPH-QUERY-CLOSURE-AC-001` | Bounded path queries with omitted traversal classes fail, and empty traversal-class arrays return no paths. |
 | `090-GRAPH-QUERY-CLOSURE-AC-002` | Candidate-limit, expired-token, and token-mismatch cases fail before backend query execution with the declared graph error codes. |
 | `090-GRAPH-APPLY-ORDER-AC-001` | Same graph delta set and apply profile produce byte-identical canonical delta ordering and batch membership. |
+| `090-RUNLOCK-GRAPH-AC-001` | `val-090-runlock-graph-apply-resume` proves that partial apply under lock loss does not advance derived view and resumes only with committed-batch proof plus a new valid `030.RunLockCommitGuard`. |
 | `090-GRAPH-REBUILD-CLOSURE-AC-001` | Rebuild equivalence includes profile, edge semantics, output eligibility, taxonomy, query translation, property policy, schema, index consistency, and canonical output checksums. |
 | `090-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; unresolved default fields block production serving with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-GRAPH-BACKEND-DEFAULT-AC-002` | When graph serving is enabled and backend profile input is omitted, the implementation materializes `mvp-janusgraph.v1`; if any required production profile field, package ref, capability row, schema ref, storage/index declaration, or validation ref is unresolved, graph mutation, query, rebuild promotion, and drift check fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |

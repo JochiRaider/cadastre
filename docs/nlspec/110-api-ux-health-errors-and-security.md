@@ -481,6 +481,8 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 9. Emit `ErrorCodeRegistry` and require its checksum in `030.VersionManifest` for API, export, health, compliance, audit, validation, and telemetry-visible diagnostic output.
 ```
 
+`GenerateErrorCodeRegistry` must generate exact rows for every `030` run-lock error. A generic registry row must not substitute for run-lock timing, conflict, heartbeat, stale recovery, fencing, idempotency, commit guard, assertion, or lock-loss failures.
+
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
 
 ### OwnerErrorFragmentCompletionRequirement
@@ -966,6 +968,12 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `scope_unavailable` | `scope_unavailable` | unavailable scope selector class | forbidden |
 | stale source output | `source_stale` | staleness policy ref and selected time basis when permitted | forbidden |
 | authorized empty or negative output with `060.AbsenceDerivationResult.absence_authorized = true` | `authorized_not_observed` | exact authority, completeness, coverage, and staleness refs | allowed only for the authorized predicate and scope |
+| `run_lock_conflict` | `blocked` | lock scope class, output class, redacted lock key ref, and retry class | forbidden |
+| `run_lock_lost` | `blocked` | run ID, run attempt ID, output class, and lock evidence refs | forbidden |
+| `run_lock_heartbeat_uncertain` | `blocked` or `degraded` by endpoint context | heartbeat evidence ref and assertion retry state | forbidden |
+| `run_lock_stale_recovered` | `diagnostic` or `blocked` for old holder | prior and new owner refs redacted, plus fencing token proof | forbidden |
+| `run_lock_idempotency_conflict` | `error` | idempotency key checksum and input checksum refs | forbidden |
+| `run_lock_fencing_token_stale` | `blocked` | fencing token proof refs | forbidden |
 
 ### PrivateBindingLeakResponse
 
@@ -1027,6 +1035,7 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 | quarantine blocked activation | `blocked` | no, until successor quarantine record permits | no artifact mutation and no activation output | package_health | quarantine target refs redacted |
 | emergency bypass forbidden | `error` | no | security error; no activation output | package_health | emergency override refs redacted |
 | VersionManifest package refs missing | `blocked` | no, until manifest changes | output rejected before visibility | package_health | missing ref classes visible; private refs redacted |
+| run lock lifecycle | `blocked` for conflict, loss, fencing, or idempotency conflict; `degraded` for heartbeat uncertainty when no output was attempted | imported `030` retry class | output blocked; no source, fact, graph, package, table maintenance, or watermark mutation | run_lock_health | raw lock inputs forbidden; redacted lock key refs and checksums only |
 
 ### Page token canonicalization
 
@@ -1149,6 +1158,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-GRAPH-PAGE-TOKEN-AC-001` | Expired and invalid graph page tokens reject before backend query execution. |
 | `110-GRAPH-WORDING-AC-001` | MVP graph output cannot render unqualified reachability, service accessibility, allowed path, lateral movement, or equivalent claims. |
 | `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
+| `110-RUNLOCK-STATE-AC-001` | A graph query, health response, API response, export, or audit output affected by `RUN_LOCK_LOST`, `RUN_LOCK_CONFLICT`, `RUN_LOCK_HEARTBEAT_UNCERTAIN`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_IDEMPOTENCY_CONFLICT` renders a blocked, degraded, or error operational state with owner context and no authorized negative interpretation. |
+| `110-RUNLOCK-ERROR-REGISTRY-AC-001` | Every new `030` run-lock error appears in the generated error registry with exact fixture refs, redaction behavior, owner context, and no generic substitute. |
 
 ## Definition of Done
 

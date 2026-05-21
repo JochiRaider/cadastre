@@ -52,7 +52,7 @@ This spec verifies behavior owned by domain specs. It must not create new behavi
 | `ValidationMatrix` | Rows mapping contract, scenario, fixture, expected output, expected error/no-op, owner spec, and pass/fail evidence. |
 | `LakehouseFeedFixture` | Redacted replayable feed rows, objects, manifests, supplier metadata, and expected read/import outcomes. |
 | `ValidationScenario` | Validation-only scenario with given records, expected outputs, expected diagnostics, no-op assertions, and mutation prohibition. |
-| `EventSequenceValidationCorpus` | Ordered event sequences for temporal, correction, replay, watermark, CDC, graph apply, rebuild, lifecycle transition, idempotency, no-op, rollback, quarantine, and validation acceptance behavior. |
+| `EventSequenceValidationCorpus` | Ordered event sequences for temporal, correction, replay, watermark, CDC, graph apply, rebuild, lifecycle transition, run-lock acquisition, run-lock heartbeat, stale recovery, idempotency, no-op, rollback, quarantine, and validation acceptance behavior. |
 | `GoldenCorpus` | Canonical set of input fixtures and expected outputs used for regression and promotion. |
 | `AcceptanceReport` | Immutable report that records criteria pass/fail status, checksums, owner, environment, and timestamp. |
 
@@ -69,6 +69,7 @@ Every active domain spec must include at least one negative validation case for 
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
 | Graph | Backend internal ID appears in response or selector and fails; active MVP edge set is exactly `observed_connection`; missing or ambiguous `FlowRoleEvidence` emits no edge; OCSF endpoint order cannot determine direction; unresolved endpoint identity emits no edge; string endpoint identity does not project; identifier and source-asset refs require resolver handoff; invalid gold subject/object kind produces no mutation; generic external graph payload is not pathfinding; theoretical reachability and boolean reachability properties are prohibited; query candidate limits and page tokens fail closed; graph backend omitted/defaulted behavior, missing provider profile fields, unsupported provider capability, unsafe storage mode, implicit schema creation, stale schema fingerprint, stale mixed index, full-scan Gremlin translation, missing package gate, backend-generated ID leakage, raw-write bypass, and provider-specific query bypass fail closed or no-op with no forbidden mutation. |
+| Run lock | Lease defaults, timing bounds, all-or-nothing acquisition, active conflict, heartbeat refresh, heartbeat timeout, lock loss before commit, stale recovery success, stale recovery race, old-holder fencing, idempotent retry, idempotency conflict, commit guard missing, manifest omission, watermark block, graph apply resume after lock loss, package activation lock loss, destructive maintenance lock loss, lock signal non-authority, and lock telemetry non-authority fixtures fail or pass with exact mutation prohibition. |
 | Package | Closed enum success, duplicate token rejection, generic or legacy label rejection, unknown package type, missing package-type policy, inactive package-type policy, scope-mismatched package-type policy, ambiguous package-type policy, policy-row manifest omission, policy-bundle substitution, required release/package-set manifest field omission, unsupported repository form, unauthorized signer, missing transparency evidence, missing attestation, missing SBOM, dependency live resolution, compatibility failure, missing deprecation policy row, deprecation expiry, failed post-activation health gate, mutable rollback target, rollback compatibility failure, quarantine target block, emergency trust bypass, package error-registry parity failure, and package `VersionManifest` omission fail or no-op with no forbidden mutation. |
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
@@ -554,6 +555,33 @@ Rows in this matrix are required when `080` behavior is in implementation scope.
 | `120-PROJECTION-REPLAY-COVERAGE` | `050`, `080` | Projection replay exact match, profile mismatch, loss-manifest mismatch, redaction mismatch, and volatile-field-only difference are validated. |
 | `120-ANALYSIS-REPLAY-COVERAGE` | `130`, `080` | Analysis replay exact match, rule mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, shadow-only result, and mutation attempt are validated. |
 | `120-API-TEMPORAL-ERROR-COVERAGE` | `110`, `080` | Every new `080` error is registered and label behavior is non-collapsing. |
+
+### RunLockLeaseRecoveryValidationMatrix
+
+This matrix is the executable validation interface for `030` run-lock stale recovery and lifecycle timing closure. A row may pass only when fixture bytes, input artifact refs, expected error or output, mutation prohibition, and version-manifest requirements are present and checksum-valid. A row with blocked, not-run, failed, stale, checksum-mismatched, or `TODO` evidence blocks aggregate acceptance.
+
+| Validation row ID | Fixture | Expected result |
+| --- | --- | --- |
+| `val-030-runlock-lease-defaults` | Omitted lease fields | Defaults materialize to `300/60/30/15/30`; checksum stable. |
+| `val-030-runlock-timing-bounds` | Invalid TTL, heartbeat, grace, timeout, or commit guard | `RUN_LOCK_TIMING_INVALID`; no lock mutation. |
+| `val-030-runlock-all-or-nothing` | One key conflicts during multi-key acquisition | Partial keys released; `RUN_LOCK_ACQUISITION_FAILED`; no output. |
+| `val-030-runlock-conflict-active` | Existing unexpired lock | `RUN_LOCK_CONFLICT`; no output. |
+| `val-030-runlock-heartbeat-refresh` | Valid heartbeat before expiry | Lease extends; sequence increments; evidence checksum stable. |
+| `val-030-runlock-heartbeat-timeout` | Heartbeat timeout | Output blocked until assertion succeeds. |
+| `val-030-runlock-lost-before-commit` | Token changed before output commit | `RUN_LOCK_LOST` or `RUN_LOCK_FENCING_TOKEN_STALE`; no output. |
+| `val-030-runlock-stale-recovery-success` | Expired prior lease plus grace and successful CAS | Higher token assigned; recovery evidence persisted. |
+| `val-030-runlock-stale-recovery-race` | Prior owner heartbeats after contender reads | `RUN_LOCK_STALE_RECOVERY_FAILED`; no output. |
+| `val-030-runlock-old-holder-fenced` | Old holder wakes after recovery | `RUN_LOCK_FENCING_TOKEN_STALE`; no downstream stage. |
+| `val-030-runlock-idempotent-retry` | Same key and same input checksum | Byte-identical evidence; no duplicate mutation. |
+| `val-030-runlock-idempotency-conflict` | Same key and different input checksum | `RUN_LOCK_IDEMPOTENCY_CONFLICT`; no side effects. |
+| `val-030-runlock-commit-guard-missing` | Output commit without guard | `RUN_LOCK_COMMIT_GUARD_MISSING`; no output. |
+| `val-030-runlock-manifest-completeness` | Lock evidence omitted from manifest | `VERSION_MANIFEST_INCOMPLETE`; no production output. |
+| `val-030-runlock-watermark-blocked` | Lock loss before watermark | No `WatermarkCommitRecord` advancement. |
+| `val-090-runlock-graph-apply-resume` | Lock loss after partial graph apply | Retry resumes only with committed-batch evidence and valid new guard. |
+| `val-100-runlock-package-activation-loss` | Lock loss during activation | Current active package set preserved; no candidate output. |
+| `val-020-runlock-maintenance-loss` | Lock loss before destructive maintenance | No destructive maintenance commit. |
+| `val-060-runlock-signal-nonauthority` | Lease expiry or heartbeat signal used for absence | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`; no absence-sensitive effect. |
+| `val-140-runlock-telemetry-nonauthority` | Lock metric used as authority | Telemetry no-op or telemetry error; no domain mutation. |
 
 ### SourceAuthorityClosureValidationMatrix
 
@@ -1144,6 +1172,7 @@ graph-provider-portability-equivalence
 | `120-GRAPH-JANUSGRAPH-*` | Backend selection, unresolved default, storage/index declaration, Gremlin translation, schema/index apply, stale mixed index, raw-write bypass, backend ID leak, package gate, partial apply, and rebuild equivalence. |
 | `120-PACKAGE-TYPE-*` | Confirmed enum success, duplicate-token rejection, generic-label rejection, legacy-label rejection, unknown token rejection, missing policy, inactive policy, scope-mismatched policy, ambiguous policy, policy manifest omission, policy-bundle substitution, coverage totality, and exact policy success. |
 | `120-LIFECYCLE-*` | `030`, `070`, `090`, `100`, and validation acceptance lifecycle totality, idempotency, illegal transition, no mutation, and manifest inclusion. |
+| `120-RUNLOCK-CLOSE-*` | Lease defaults, timing bounds, all-or-nothing acquisition, active conflict, heartbeat, stale recovery, recovery race, old-holder fencing, idempotency, commit guard, manifest inclusion, watermark block, graph apply handoff, package activation handoff, maintenance handoff, non-authority, and observability non-authority. |
 | `120-IDENTITY-CLOSURE-*` | Resolver profile row selection, evidence class totality, scope coverage, durable create/attach/merge, weak rejection, selector safety, blocker precedence, decision row missing/ambiguous, review totality, review expiration, split handoff, explanation checksum, replay exactness, manifest omission, package weak-default weakening, and two-independent-implementer parity. |
 | `120-ERROR-REGISTRY-*` | No owner error fragment contains `TODO`; final owners include `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`; duplicate owner decisions are enforced; generic code is rejected when owner-specific code exists; `100` package owner rows and `110` package observable rows pass parity validation. |
 
@@ -1152,7 +1181,7 @@ graph-provider-portability-equivalence
 | Owner | Required fixture families |
 | --- | --- |
 | `020` | feed read, feed lifecycle event derivation, manifest validation, read completeness, raw ID replay, omitted object, partial known gap, feed category closure, feasibility assessment, missing profile field, target-kind omission, declared subset, empty-scope, object/partition known gap, unknown gap, private-binding leak. |
-| `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
+| `030` | DAG ordering, lifecycle transition, lifecycle totality, lifecycle idempotency, lifecycle conflict, version manifest ID/checksum, run lock failure, runlock lease defaults, runlock heartbeat, runlock stale recovery, runlock recovery race, runlock old-holder fencing, runlock idempotency, runlock manifest omission, runlock commit guard, forbidden output, declared subset profile missing, subset scope mismatch, subset output forbidden. |
 | `050` | OCSF mapping row success, missing row, ambiguous row, activity discriminator missing, required object path missing, forbidden field, unknown enum, OCSF Other not permitted, deprecated field, source extension rule success, undeclared source extension, wildcard rejection, secret scan, cadastre-only null profile, DHCP/IPAM split required. |
 | `060` | absence, coverage, progress signal, source staleness, control result mapping, feed completeness row, effect gate, blocking precedence, source-specific coverage domains, watermark gating, OCSF status non-authority, OCSF severity non-authority, OCSF confidence non-authority, OCSF observable non-authority, OCSF field absence non-authority. |
 | `070` | identity-create, identity-attach, identity-durable-merge, identity-weak-rejection, identity-evidence-totality, identity-scope-coverage, identity-hard-blocker, identity-hard-blocker-row-missing, identity-hard-blocker-row-ambiguous, identity-candidate-overflow, identity-decision-row-missing, identity-decision-row-ambiguous, identity-confidence-band, identity-review-state-machine, identity-review-expiration, identity-selector-safety, identity-split-handoff, identity-explanation-checksum, identity-replay, identity-manifest-artifact-omission, identity-package-artifact-core-conflict, identity-package-weak-default-weakening, identity-two-implementer-parity. |
@@ -1283,6 +1312,9 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-CORE-ONEOF-CLOSURE-AC-001` | Every subject, object, and evidence artifact one-of fixture family listed in `CoreOneOfClosureValidationMatrix` and `CoreEvidenceArtifactValidationMatrix` passes. |
 | `120-CORE-ONEOF-CLOSURE-AC-002` | Expected output checksum, expected error, expected no-op, fixture checksum, activation artifact ref, and version manifest ref values cannot be `TODO`, omitted, stale, or checksum-mismatched when `pass_fail_evidence = pass`. |
 | `120-CORE-ONEOF-CLOSURE-AC-003` | Two independent implementations produce byte-identical IDs and checksums for every one-of closure fixture. |
+| `120-RUNLOCK-CLOSE-AC-001` | Aggregate acceptance fails while any run-lock row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or `TODO`. |
+| `120-RUNLOCK-CLOSE-AC-002` | Every run-lock negative row has mutation prohibition for production output, watermark, graph mutation, package activation, and table maintenance where applicable. |
+| `120-RUNLOCK-CLOSE-AC-003` | Two implementations produce byte-identical evidence for idempotent retry and stale recovery success fixtures. |
 
 ## Definition of Done
 

@@ -77,6 +77,8 @@ Telemetry must not create or modify `RawRecord`, `CadastreSilverObservation`, `C
 
 Telemetry may affect caller-visible health only through `TelemetryHealthMappingPolicy` and the `110.OperationalHealthStatus` handoff. Telemetry loss, exporter failure, Collector failure, or sampling must not invalidate already persisted authoritative Cadastre records.
 
+Run-lock telemetry is diagnostic material only. Metrics, traces, structured logs, dashboards, or alerts about lock acquisition, heartbeat, stale recovery, fencing, and lock loss must not become lock authority, source authority, source completeness, graph authority, package activation authority, audit evidence, replay evidence, or watermark authority. Persisted `030` lock evidence is the only run-lock evidence that may gate domain output.
+
 ## Default Instrumentation Profile
 
 `ObservabilityInstrumentationProfile` is an activation-controlled artifact. When telemetry is enabled and no more specific active profile covers the execution scope, the implementation must materialize the following candidate defaults before validation.
@@ -160,8 +162,15 @@ Default metric rows:
 | `cadastre.telemetry.exporter.queue_depth` | gauge | `{item}` | `telemetry_profile_ref`, `exporter_profile_ref` | `bounded_low` | last value | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.dropped_spans` | counter | `{span}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.dropped_metrics` | counter | `{metric}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
+| `cadastre.run_lock.acquired` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
+| `cadastre.run_lock.heartbeat` | counter | `{heartbeat}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
+| `cadastre.run_lock.recovery_attempt` | counter | `{attempt}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
+| `cadastre.run_lock.lost` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
+| `cadastre.run_lock.lease_remaining` | gauge | `s` | `lock_scope_class`, `output_class` | `bounded_low` | last value | `120-RUNLOCK-OBSERVABILITY-*` |
 
 The active metric catalog may add rows only through activation-controlled artifacts. A package-supplied catalog must pass `ValidateTelemetryProfile` and package activation before production use.
+
+Run-lock metric rows must not allow attributes containing raw lock keys, source-native identifiers, canonical IDs, private source bindings, raw fencing token values, raw idempotency key values, or backend IDs. Only redacted refs or checksums may be emitted when `TelemetryAttributePolicy`, `TelemetryRedactionPolicy`, and `110.RedactionPolicy` permit them.
 
 ## Metric Instrument Row Schema
 
@@ -279,6 +288,8 @@ TODO: Product operations governance must select production default exporter nume
 | Collector unreachable | `degraded` | No domain mutation. |
 | Telemetry disabled by active profile | `healthy` for observability-disabled mode | No domain mutation. |
 | Dropped telemetry counts exceed active policy bound | `degraded` | No domain mutation. |
+| Run-lock telemetry missing | `degraded` for observability only | No lock, source, graph, package, audit, replay, or watermark mutation. |
+| Run-lock metric cardinality overrun | `degraded` or `blocked` for observability only by policy | No domain mutation. |
 
 System health aggregation remains owned by `110.EndpointOutcomeMatrix`.
 
@@ -421,6 +432,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 | `140-NONAUTH-AC-001` | Telemetry cannot create, modify, authorize, validate, retract, expire, merge, split, project, replay, or persist non-telemetry authoritative Cadastre records. |
 | `140-VERSION-MANIFEST-AC-001` | Health, API, audit, validation, or operator-visible diagnostics that depend on telemetry policy or runtime state include required telemetry policy refs and runtime state refs in `030.VersionManifest` or fail with `TELEMETRY_VERSION_MANIFEST_INCOMPLETE`. |
 | `140-PACKAGE-AC-001` | Package-supplied telemetry profiles, metric catalogs, redaction policies, exporter profiles, health policies, and replay exclusion policies fail closed unless `100.ProductionPackageSetManifest`, package type policy, validation refs, and artifact checksums pass. |
+| `140-RUNLOCK-TELEMETRY-AC-001` | Run-lock acquisition, heartbeat, recovery, loss, and lease-remaining metrics use only bounded low-cardinality attributes and validation refs from `120-RUNLOCK-OBSERVABILITY-*`. |
+| `140-RUNLOCK-NONAUTH-AC-001` | Dropping all run-lock telemetry does not change lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, or watermark state. |
 
 ## Definition of Done
 

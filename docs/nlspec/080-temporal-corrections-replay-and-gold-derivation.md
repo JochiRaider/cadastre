@@ -239,6 +239,7 @@ Replay must not silently substitute lifecycle decisions. Lifecycle evidence is p
 | package activation output | package lifecycle machine checksum, package-set activation evidence, failure/rollback/quarantine transition evidence refs | wall-clock display fields |
 | graph apply output | graph apply machine checksum, graph apply transition refs, idempotency key, committed-batch evidence refs | backend physical IDs and runtime duration |
 | validation acceptance output | validation machine checksum, validation report refs, acceptance transition refs | validation execution wall-clock duration |
+| run_lock_governed_output | `RunLockLeasePolicy` checksum, `RunLockSet` checksum, lock operation evidence refs, recovery evidence refs, commit guard refs, fencing token set, idempotency key, lock lifecycle transition evidence refs | diagnostic display timestamp, runtime duration, non-output telemetry correlation fields |
 
 ## Deterministic Side Effects
 
@@ -447,6 +448,7 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `analysis_output` | imported `130` analysis included fields, analysis rule bundle, graph derived-view refs, authorization/redaction refs, output checksum | request correlation ID, UI display label, runtime duration | `sha256` | analysis output ID | compare only | active default |
 | `validation_acceptance` | validation matrix refs, fixture checksums, expected/actual checksums, validation lifecycle evidence, acceptance report bytes | validation execution duration, display timestamp | `sha256` | validation row ID then fixture ID | compare only | active default |
 | `telemetry_health_diagnostic` | `140.TelemetryRuntimeState` refs when health/API/audit/validation output depends on telemetry state, telemetry policy refs, health mapping policy ref, redaction refs, output checksum | trace ID, span ID, sampled flag, exporter queue state unless health-visible, runtime duration, backend telemetry IDs, display timestamp | `sha256` | telemetry runtime state ref then policy ref | compare only | active default after `140` patch |
+| `run_lock_operation` | operation kind, idempotency key, input checksum, lock keys, prior and new lock record checksums, fencing token set, lock-store time at decision, result, error code, and version manifest ID | runner-local timestamp, diagnostic display timestamp, runtime duration, trace/span IDs | `sha256` | operation evidence ID then lock key | compare only | active default after `030` run-lock closure |
 
 Global replay failure precedence:
 
@@ -475,6 +477,7 @@ Global replay failure precedence:
 | telemetry exporter result | operational health input only when represented by `TelemetryRuntimeState` and manifest refs |
 | telemetry Collector state | operational health input only when represented by `TelemetryRuntimeState` and manifest refs |
 | backend-discovered value | replay from recorded value only when owner permits |
+| lock-store time read | allowed only inside `030.RunLockOperationEvidence`; runner-local wall-clock time remains rejected for lock stale decisions. |
 
 ### Assertion-state transition matrix
 
@@ -550,6 +553,7 @@ Global replay failure precedence:
 | graph delta | projection profile, graph handoff effect, delta refs, schema refs, resolver explanation checksum, and graph correction handoff refs when split affects projection | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph apply | apply profile, idempotency key, backend evidence, derived-view state | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | graph rebuild | rebuild manifest, rebuild equivalence row, index consistency, schema fingerprint | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
+| run-lock governed output | lock policy, lock set, operation evidence, recovery evidence when applicable, commit guard refs, lifecycle transition evidence | `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 | api/export/analysis/validation | owner output-class row, owner refs, authorization/redaction, expected checksum | `REPLAY_POLICY_ARTIFACT_MISSING` or `REPLAY_INPUT_INSUFFICIENT` | reject | reject | reject |
 
 ### Gold correction no-op and error behavior
@@ -671,6 +675,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `080-CORRECTION-SNAPSHOT-AC-001` | Every correction class requires old snapshot ref, new snapshot ref, table-set checksum, retention protection, and mutable-ref rejection. |
 | `080-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance. |
 | `080-TELEMETRY-REPLAY-AC-001` | Trace IDs, span IDs, sampling decisions, exporter state, Collector state, backend telemetry IDs, runtime duration, and dropped telemetry counts are excluded from authoritative domain replay checksums unless explicitly included for telemetry health diagnostics by `140` and manifest refs. |
+| `080-RUNLOCK-REPLAY-AC-001` | Replay missing `030.RunLockOperationEvidence`, stale recovery evidence, or commit guard refs for a lock-governed output fails with `REPLAY_INPUT_INSUFFICIENT` before output. |
 | `080-REPLAY-PRECEDENCE-AC-001` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, temporal-mismatched, side-effect-mismatched, or checksum-mismatched inputs according to global precedence before output. |
 | `080-GRAPH-HANDOFF-AC-001` | Every correction graph handoff effect is emitted as metadata only, and `080` performs no graph mutation. |
 | `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |

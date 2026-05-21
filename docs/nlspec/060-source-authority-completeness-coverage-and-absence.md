@@ -215,11 +215,13 @@ For every active absence-sensitive feed profile, source dataset, scope selector,
 
 ## Progress Signal Interpretation
 
-Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, and live-probe signals are non-authoritative by default. They may affect output only through an active `ProgressSignalInterpretationPolicy` row.
+Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, live-probe, and run-lock signals are non-authoritative by default. They may affect output only through an active `ProgressSignalInterpretationPolicy` row.
 
 Runtime telemetry signals are progress or diagnostic signals only. Trace presence, trace absence, metric value, structured-log presence, structured-log absence, exporter success, exporter failure, Collector state, dashboard state, alert state, sampling decision, and dropped telemetry counts must not authorize source absence, source completeness, coverage, cleanup, retraction, graph expiry, watermark advancement, control pass/fail, or source-history no-change.
 
 Telemetry may be consulted only through `140.TelemetryHealthMappingPolicy` for operational health or through an active `ProgressSignalInterpretationPolicy` row whose allowed effect is `diagnostic_only`. An active row must not grant `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark` effects from telemetry signals.
+
+Run-lock signals owned by `030` must not satisfy `SourceAuthorityProfileRow`, `LakehouseFeedCompletenessProfileRow`, `CoverageAssertion`, `SourceStalenessPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy`, or `ControlResultMappingRow`. A run-lock signal used without a specific non-authoritative diagnostic policy emits `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`; it must not produce absence, cleanup, retraction, graph expiry, source watermark, projection watermark, control pass/fail, source-history no-change, or source completeness.
 
 | Signal class | Default effect |
 | --- | --- |
@@ -235,6 +237,11 @@ Telemetry may be consulted only through `140.TelemetryHealthMappingPolicy` for o
 | Telemetry metric value | Runtime diagnostic only. |
 | Telemetry structured-log presence or absence | Runtime diagnostic only. |
 | Telemetry exporter or Collector state | Operational health input only through `140` and `110`. |
+| Run-lock heartbeat | Orchestration ownership diagnostic only. |
+| Run-lock lease expiry | Orchestration stale-lock candidate only. |
+| Run-lock stale recovery | Orchestration ownership transfer evidence only. |
+| Run-lock conflict | Orchestration blocking condition only. |
+| Run-lock release | Orchestration release evidence only. |
 
 Two or more progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, or live-probe signals that individually lack authority must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
 
@@ -579,6 +586,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 Every attempted production source, projection, graph-apply, or presence-only watermark change must be evaluated through `ProjectionWatermarkPolicy` and persisted as exactly one `WatermarkCommitRecord`. Failed, partial, aborted, schema-preflight-failed, or completeness-blocked runs must not advance watermarks.
 
+Lock loss, heartbeat uncertainty, stale recovery failure, active lock conflict, or stale fencing blocks watermark advancement for the affected run. These states do not themselves decide whether the source is complete, absent, stale, or covered.
+
 ### SourceAuthorityErrorContext
 
 `SourceAuthorityErrorContext` is the owner context schema for `060` authority, completeness, coverage, absence, source-history, control-result, progress-signal, and watermark registry rows.
@@ -779,6 +788,11 @@ This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without 
 | telemetry Collector state | operational health input only through `140`/`110` | No |
 | telemetry sampling decision | runtime diagnostic only | No |
 | telemetry dropped-signal count | operational health input only through `140`/`110` | No |
+| run_lock_heartbeat | orchestration ownership diagnostic only | No |
+| run_lock_lease_expiry | orchestration stale-lock candidate only | No |
+| run_lock_stale_recovery | orchestration ownership transfer evidence only | No |
+| run_lock_conflict | orchestration blocking condition only | No |
+| run_lock_release | orchestration release evidence only | No |
 
 Two or more weak progress signals must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect.
 
@@ -899,6 +913,7 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `060-OCSF-NONAUTH-AC-002` | Vulnerability Finding status does not become Cadastre `assertion_state` without a `060` or `080` owned derivation path. |
 | `060-OCSF-NONAUTH-AC-003` | DNS or DHCP field absence does not become absence without exact completeness, coverage, staleness, and authority rows. |
 | `060-TELEMETRY-PROGRESS-NONAUTH-AC-001` | Telemetry traces, metrics, structured logs, exporter state, Collector state, sampling decisions, and dropped-signal counts cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement. |
+| `060-RUNLOCK-NONAUTH-AC-001` | Run-lock heartbeat, lease expiry, stale recovery, conflict, and release signals cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement; unauthorized use emits `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`. |
 | `060-LIFECYCLE-AC-001` | Source authority, completeness, coverage, progress, absence, and watermark artifacts can become active only through `030.LifecycleTransitionEvidence`, while `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` remain pure deterministic algorithms. |
 | `060-SOURCE-CLOSURE-AC-001` | Missing exact source-authority row blocks the requested effect and emits no absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement. |
 | `060-SOURCE-CLOSURE-AC-002` | Ambiguous equally specific source-authority row blocks the requested effect with `SOURCE_AUTHORITY_ROW_AMBIGUOUS`. |

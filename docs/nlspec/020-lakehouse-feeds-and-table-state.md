@@ -249,6 +249,19 @@ Production feed reads and table maintenance decisions must fail closed when any 
 
 `ReplayRetentionDecision` must refuse destructive maintenance when candidate deletion or rewrite would invalidate any protected production `VersionManifest`, graph rebuild, replay window, legal hold, or retention policy.
 
+### RunLock maintenance guard handoff
+
+Destructive or rewrite table maintenance is output-affecting and must consume the `030` run-lock contract without redefining it.
+
+| Condition | Required behavior |
+| --- | --- |
+| Destructive or rewrite maintenance attempt | Call `030.AssertRunLockHeldBeforeCommit` before the destructive commit. |
+| Commit scope | Include table profile, candidate maintenance set checksum, replay-retention decision ref, and requested maintenance effect. |
+| Successful maintenance commit | `LakehouseCommitRef` and `VersionManifest` must include the `030.RunLockCommitGuard` ref. |
+| Lock loss before destructive commit | Emit imported `030.RUN_LOCK_LOST` or `030.RUN_LOCK_FENCING_TOKEN_STALE`; no destructive commit may occur. |
+| Lock loss after safe no-mutation preflight | Diagnostics may be recorded only; no table mutation is implied. |
+| Maintenance failure due to lock loss | Must not advance source, projection, graph-apply, or presence-only watermarks. |
+
 ## Feed Read Algorithm
 
 ```text
@@ -521,7 +534,7 @@ ComputeRawFeedManifestId(manifest):
 | source offset, LSN, or binlog position | `RawRecord.source_event_metadata` and `StageStateRecord` | replay/progress only | positive and offset mismatch cases |
 | schema-history ref | `CDCReplayStateContract` | replay sufficiency only | missing and stale schema-history cases |
 | tombstone/delete marker | raw event subtype plus temporal/correction input | no retraction without `060` and `080` policy | tombstone non-authority case |
-| heartbeat | `StageStateRecord` diagnostic | no fact time, absence, cleanup, or watermark by itself | heartbeat no-authority case |
+| source or CDC heartbeat | `StageStateRecord` diagnostic | no fact time, absence, cleanup, or watermark by itself; distinct from `030` run-lock heartbeat | heartbeat no-authority case |
 | transaction metadata | raw metadata and replay ordering input | ordering only if policy permits | out-of-order case |
 
 ### Feed-fixture coverage matrix
@@ -642,6 +655,7 @@ Profile, category, manifest, table-state, and activation errors render through `
 | `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
 | `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |
+| `020-RUNLOCK-MAINTENANCE-AC-001` | Destructive maintenance fails before mutation when the required `030.RunLockCommitGuard` is missing, stale, or fenced; successful maintenance includes the guard ref in `VersionManifest`. |
 
 ## Definition of Done
 
@@ -653,6 +667,7 @@ Profile, category, manifest, table-state, and activation errors render through `
 | `020-AC-004` | Destructive maintenance is refused when any protected manifest, snapshot, replay window, or legal hold would be invalidated. |
 | `020-AC-005` | Feed profile activation fails while feed feasibility, raw supplier profiles, read policy catalog, raw manifest schema, or feed fixture coverage is `TODO:` for the target feed. |
 | `020-AC-006` | Every active production feed category has an active closure row set, a passing feasibility assessment, fixture refs, validation refs, and deterministic missing-row behavior. |
+| `020-AC-007` | Destructive or rewrite maintenance cannot commit without a valid `030.RunLockCommitGuard` and cannot advance watermarks after lock loss. |
 
 ## Open Questions
 

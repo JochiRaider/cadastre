@@ -54,6 +54,18 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `StageExecutionLifecycleMachine`
 - `ProcessingStageLifecycleResult`
 - `RunLockSet`
+- `RunLockLeasePolicy`
+- `RunLockRecord`
+- `RunLockOperationIdempotencyKey`
+- `RunLockOperationEvidence`
+- `RunLockRecoveryEvidence`
+- `RunLockCommitGuard`
+- `AcquireRunLockSet`
+- `HeartbeatRunLockSet`
+- `AssertRunLockHeldBeforeCommit`
+- `RecoverStaleRunLock`
+- `ReleaseRunLockSet`
+- `MarkRunLockLost`
 - `DeclaredDAGSubsetProfile`
 - `VersionManifest`
 - `ExecuteProcessingStageDAG`
@@ -258,9 +270,12 @@ States:
 ```text
 planned
 preflighted
+lock_acquiring
 locks_acquired
 running
+lock_lost
 succeeded
+released
 failed
 aborted
 ```
@@ -270,13 +285,19 @@ Events:
 ```text
 preflight_passed
 preflight_failed
-locks_acquired
-locks_failed
+run_lock_acquisition_requested
+run_lock_acquired
+run_lock_conflict
+run_lock_acquisition_failed
+run_lock_heartbeat_recorded
+run_lock_heartbeat_uncertain
+run_lock_lost
+run_lock_stale_recovered_by_other_run
+run_lock_released
 start_run
 stage_succeeded
 stage_failed_isolated
 stage_failed_nonisolated
-lock_lost
 complete
 abort
 replay_same_event
@@ -288,13 +309,19 @@ Required transition rows:
 | --- | --- | --- | --- |
 | `planned` | `preflight_passed` | `preflighted` | Persist preflight evidence. |
 | `planned` | `preflight_failed` | `failed` | No production output. |
-| `preflighted` | `locks_acquired` | `locks_acquired` | Persist complete lock set. |
-| `preflighted` | `locks_failed` | `failed` | Release acquired locks and write no production output. |
+| `preflighted` | `run_lock_acquisition_requested` | `lock_acquiring` | Persist acquisition-start evidence. |
+| `lock_acquiring` | `run_lock_acquired` | `locks_acquired` | Persist complete lock set and fencing token set. |
+| `lock_acquiring` | `run_lock_conflict` | `failed` | Write no production output and advance no watermark. |
+| `lock_acquiring` | `run_lock_acquisition_failed` | `failed` | Release partial keys if any; write no production output. |
 | `locks_acquired` | `start_run` | `running` | Persist run-start evidence. |
 | `running` | `stage_succeeded` | `running` | Continue eligible downstream stages. |
 | `running` | `stage_failed_isolated` | `running` | Continue only for declared isolated outputs. |
 | `running` | `stage_failed_nonisolated` | `failed` | Stop downstream stages. |
-| `running`, `locks_acquired`, or `preflighted` | `lock_lost` | `failed` | Stop before next output commit. |
+| `running` | `run_lock_heartbeat_recorded` | `running` | Persist same-state heartbeat evidence. |
+| `running` | `run_lock_heartbeat_uncertain` | `running` | Block output commits until assertion succeeds. |
+| `running`, `locks_acquired`, or `lock_acquiring` | `run_lock_lost` | `lock_lost` | Stop before next output commit; no downstream stage may start. |
+| `running` | `run_lock_stale_recovered_by_other_run` | `lock_lost` | Old holder is fenced; diagnostics only. |
+| `running` or `succeeded` | `run_lock_released` | `released` | Persist release evidence after commit refs, lifecycle results, and manifest refs. |
 | `running` | `complete` | `succeeded` | Persist completion evidence and final manifest refs. |
 | `planned`, `preflighted`, `locks_acquired`, or `running` | `abort` | `aborted` | Persist abort evidence and write no further output. |
 | terminal repeated identical event | `replay_same_event` | same state | Idempotent no-op. |
@@ -310,6 +337,8 @@ States:
 pending
 ready
 running
+blocked_lock_unverified
+blocked_lock_lost
 retry_wait
 succeeded
 failed_isolated
@@ -325,6 +354,8 @@ dependencies_satisfied
 start_stage
 core_schema_failed
 forbidden_output
+lock_assertion_uncertain
+lock_lost_before_commit
 retryable_error
 retry_timer_elapsed
 retry_exhausted
@@ -346,6 +377,8 @@ Required transition rows:
 | `retry_wait` | `retry_exhausted` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
 | `running` | `core_schema_failed` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
 | `running` | `forbidden_output` | `failed_nonisolated` | Emit `FORBIDDEN_STAGE_OUTPUT`; no forbidden output commit. |
+| `running` | `lock_assertion_uncertain` | `blocked_lock_unverified` | No production output until assertion succeeds or timeout routes to failure. |
+| `running` | `lock_lost_before_commit` | `blocked_lock_lost` | No production output; parent run transitions to `lock_lost`. |
 | `running` | `nonretryable_error` | `failed_nonisolated` or `failed_isolated` | `failed_isolated` is allowed only when stage isolation permits. |
 | `running` | `stage_success` | `succeeded` | Persist output refs and transition evidence. |
 | `running` | `stage_no_output` | `no_op` | Persist no-op evidence. |
@@ -361,6 +394,8 @@ Required transition rows:
 | `lifecycle_machine_id` | `030.StageExecutionLifecycleMachine.v1` unless an owner-specific machine is named. |
 | `terminal_state` | One `030.StageExecutionLifecycleMachine.v1` state. |
 | `transition_evidence_refs` | Non-empty for production stage execution. |
+| `run_lock_commit_guard_refs` | Canonically sorted refs to `RunLockCommitGuard` records required by production commits; default `[]` only for non-production or no-output stages. |
+| `lock_loss_evidence_ref` | Required when the stage terminal state is `blocked_lock_lost`; otherwise null. |
 | `output_refs` | Canonically sorted output refs; default `[]`. |
 | `blocked_effects` | Array of blocked effects such as `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark`; default `[]`. |
 | `error_refs` | Owner-specific errors; default `[]`. |
@@ -369,6 +404,247 @@ Required transition rows:
 ## Run Locks
 
 `RunLockSet` must be acquired before any production output write. Lock keys must cover source/feed scope, completeness scope, coverage scope, projection scope, graph apply target, package set, and requested output class when concurrent writes could change observable output.
+
+The lock store must provide atomic compare-and-set per lock key, authoritative lock-store time, and per-key monotonic fencing tokens. If any of these properties is unavailable, stale recovery is disabled and concurrent production writes must fail closed before mutation with the most specific run-lock error.
+
+Lock operation evidence must be persisted before any production-visible output that depends on the operation. Lock records, evidence records, commit guards, and lock-loss records must serialize through `040.CanonicalJSON` when their bytes affect IDs, checksums, replay equivalence, validation output, or audit evidence.
+
+### RunLockLeasePolicy
+
+`RunLockLeasePolicy` is the materialized timing contract for a `RunLockSet`. Defaults must materialize before the `RunLockSet` checksum. Unknown fields fail with `RUN_LOCK_TIMING_INVALID` unless the policy schema declares an extension map.
+
+| Field | Default | Bounds | Rule |
+| --- | ---: | ---: | --- |
+| `lease_ttl_seconds` | `300` | `60..3600` | A lock is stale only after expiry plus grace under lock-store time. |
+| `heartbeat_interval_seconds` | `60` | `10..300` | Must be `<= floor(lease_ttl_seconds / 3)`. |
+| `stale_recovery_grace_seconds` | `30` | `0..120` | Must be `<= heartbeat_interval_seconds`. |
+| `lock_operation_timeout_seconds` | `15` | `1..60` | Applies to acquire, heartbeat, release, assert, and recover. |
+| `commit_guard_min_remaining_lease_seconds` | `30` | `5..300` | Before output commit, refresh or fail when remaining lease is below this value. |
+| `lock_time_source` | `lock_store_time` | closed enum | Runner-local wall clock is forbidden for stale decisions. |
+| `fencing_required` | `true` | boolean | Production output requires fencing token proof. |
+
+`RUN_LOCK_TIMING_INVALID` must be emitted before lock mutation when any bound, ratio, enum, boolean, or unknown-field rule fails.
+
+### RunLockSet schema additions
+
+A `RunLockSet` that can gate production output must include the following fields in addition to the lock-key list derived by `RunLockKeyDerivation`.
+
+| Field | Required rule |
+| --- | --- |
+| `run_lock_set_id` | Deterministic ID over run, attempt, environment, requested output class, sorted lock keys, lease policy checksum, and version manifest input checksum. |
+| `run_id` | Required run identifier. |
+| `run_attempt_id` | Required attempt identifier; retry attempts must not reuse another attempt's lock owner identity. |
+| `lock_owner_id` | Stable owner identity for the attempt; raw private scheduler IDs are forbidden in public artifacts. |
+| `environment_id` | Required environment scope; stale recovery may occur only within the same environment. |
+| `lease_policy` | Materialized `RunLockLeasePolicy`. |
+| `lock_records[]` | One `RunLockRecord` per lock key, sorted lexically by `lock_key`. |
+| `fencing_token_set` | Token set keyed by `lock_key`; every token must come from the lock store and be monotonic per key. |
+| `last_heartbeat_at` | Lock-store timestamp for the most recent confirmed heartbeat across the set. |
+| `lease_expires_at` | Earliest lock-store expiry across records in the set. |
+| `heartbeat_sequence` | Starts at `0` at acquisition and increments by `1` per successful heartbeat operation. |
+| `operation_evidence_refs[]` | Canonically sorted refs to acquire, heartbeat, release, assert, and failure evidence. |
+| `recovery_evidence_refs[]` | Canonically sorted refs to stale recovery evidence; empty when no recovery occurred. |
+| `commit_guard_refs[]` | Canonically sorted refs to commit guards for every production commit. |
+| `lock_loss_evidence_ref` | Required when the set status is `lost`, `expired`, or old-holder `stale_recovered`. |
+| `status` | One closed `RunLockSet.status` token. |
+
+Closed `RunLockSet.status` values are:
+
+```text
+requested
+acquiring
+acquired
+conflict
+released
+lost
+expired
+stale_recovered
+failed
+```
+
+### RunLockRecord
+
+A `RunLockRecord` represents exactly one lock key.
+
+| Field | Required rule |
+| --- | --- |
+| `lock_key` | Exact key from `RunLockKeyDerivation`. |
+| `lock_scope_tuple_checksum` | SHA-256 over the canonical scope tuple. |
+| `requested_output_class` | Exact output class guarded by this key. |
+| `run_id` | Current owning run. |
+| `run_attempt_id` | Current owning run attempt. |
+| `lock_owner_id` | Current owner identity. |
+| `lock_record_version` | Monotonic mutation version from the lock store or canonical equivalent. |
+| `fencing_token` | Monotonic token for the key; new owner token must be greater than prior token. |
+| `heartbeat_sequence` | Last successful heartbeat sequence for this record. |
+| `acquired_at` | Lock-store acquisition timestamp. |
+| `last_heartbeat_at` | Lock-store timestamp for the latest successful heartbeat. |
+| `lease_expires_at` | Lock-store timestamp at which the lease expires before grace. |
+| `status` | Closed token: `acquired`, `released`, `lost`, `expired`, `stale_recovered`, or `failed`. |
+| `record_checksum` | SHA-256 over canonical record bytes after defaults materialize. |
+
+### RunLockOperationIdempotencyKey
+
+`RunLockOperationIdempotencyKey` is computed over the following canonical fields:
+
+```text
+operation_kind
+environment_id
+run_id
+run_attempt_id
+run_lock_set_id
+sorted lock_keys
+version_manifest_id
+version_manifest_input_checksum
+requested_output_class
+operation_sequence
+```
+
+Idempotency rules:
+
+- Same key plus same input checksum returns byte-identical `RunLockOperationEvidence`.
+- Same key plus different input checksum fails with `RUN_LOCK_IDEMPOTENCY_CONFLICT` before mutation.
+- New heartbeat sequence requires a new key.
+- Retry of the same heartbeat sequence returns byte-identical evidence and must not create a duplicate mutation.
+
+### RunLockOperationEvidence
+
+| Field | Required rule |
+| --- | --- |
+| `operation_evidence_id` | Deterministic ID over operation kind, idempotency key, input checksum, result, and new lock record checksums. |
+| `operation_kind` | Closed token: `acquire`, `heartbeat`, `assert`, `recover`, `release`, or `mark_lost`. |
+| `idempotency_key` | `RunLockOperationIdempotencyKey`. |
+| `input_checksum` | SHA-256 over canonical request bytes. |
+| `run_id` | Current run. |
+| `run_attempt_id` | Current attempt. |
+| `run_lock_set_id` | Guarded lock set. |
+| `lock_keys` | Sorted lock keys considered by the operation. |
+| `prior_lock_record_checksums` | Sorted prior record checksums read before decision. |
+| `new_lock_record_checksums` | Sorted new record checksums after successful mutation; empty on no-mutation failure. |
+| `fencing_token_set` | Token proof after successful acquire, heartbeat, assert, recover, or release. |
+| `lock_store_time_at_decision` | Lock-store timestamp used for the decision. |
+| `result` | Closed token: `succeeded`, `failed`, `conflict`, `no_op`, or `uncertain`. |
+| `error_code` | Null on success; otherwise most specific `030` run-lock code. |
+| `version_manifest_id` | Required for production output and validation-visible lock evidence. |
+| `evidence_checksum` | SHA-256 over canonical evidence bytes. |
+
+### RunLockRecoveryEvidence
+
+| Field | Required rule |
+| --- | --- |
+| `recovery_evidence_id` | Deterministic ID over recovered key, prior checksum, new token, CAS precondition checksum, and result. |
+| `recovered_lock_key` | Exact recovered lock key. |
+| `prior_run_id` | Prior owning run. |
+| `prior_run_attempt_id` | Prior owning attempt. |
+| `prior_lease_expires_at` | Prior record expiry under lock-store time. |
+| `prior_last_heartbeat_at` | Prior heartbeat time. |
+| `prior_fencing_token` | Prior fencing token. |
+| `prior_lock_record_checksum` | Prior record checksum included in recovery proof. |
+| `new_run_id` | New owning run. |
+| `new_run_attempt_id` | New owning attempt. |
+| `new_fencing_token` | Token strictly greater than prior token. |
+| `stale_predicate_inputs` | Canonical object containing every predicate input. |
+| `cas_precondition_checksum` | Checksum over the exact compare-and-set precondition. |
+| `cas_result` | Closed token: `succeeded`, `failed`, or `not_attempted`. |
+| `old_holder_effect` | One closed `old_holder_effect` token. |
+| `version_manifest_id` | Required for production output and validation-visible recovery. |
+| `evidence_checksum` | SHA-256 over canonical recovery evidence bytes. |
+
+Closed `old_holder_effect` values are:
+
+```text
+fenced
+already_released
+recovery_rejected
+```
+
+### Stale recovery predicate
+
+A lock may be recovered only when all predicate rows are true at the atomic mutation boundary:
+
+1. `lock_store_now >= prior.lease_expires_at + stale_recovery_grace_seconds`.
+2. The contender's compare-and-set precondition proves no newer heartbeat or mutation occurred after reading the prior record.
+3. Recovery is for the exact same `lock_key`.
+4. `environment_id` matches.
+5. Requested output class and scope are compatible.
+6. Prior lock record checksum is included in `RunLockRecoveryEvidence`.
+7. New fencing token is strictly greater than prior fencing token.
+8. Recovery is one atomic compare-and-set mutation.
+9. Recovery evidence is persisted before recovered output writes.
+
+Failure emits `RUN_LOCK_STALE_RECOVERY_NOT_ELIGIBLE` or `RUN_LOCK_STALE_RECOVERY_FAILED`, acquires no partial lock set, writes no production output, and advances no watermark.
+
+### RunLockCommitGuard
+
+`RunLockCommitGuard` is the required pre-commit assertion for production output governed by a run lock.
+
+| Field | Required rule |
+| --- | --- |
+| `commit_guard_id` | Deterministic ID over lock set, output commit scope, sorted lock keys, fencing token set, assertion time, and result. |
+| `run_lock_set_id` | Guarded lock set. |
+| `output_commit_scope` | Canonical commit scope for the attempted production write. |
+| `lock_keys[]` | Sorted keys asserted before commit. |
+| `fencing_token_set` | Token proof used by the output store or commit guard. |
+| `assertion_time` | Lock-store time of assertion. |
+| `lease_remaining_seconds` | Non-negative integer seconds remaining under lock-store time. |
+| `operation_evidence_ref` | Ref to the assertion evidence record. |
+| `result` | Closed token: `succeeded`, `failed`, or `blocked`. |
+| `error_code` | Null on success; otherwise `RUN_LOCK_LOST`, `RUN_LOCK_COMMIT_GUARD_MISSING`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_ASSERTION_FAILED`. |
+| `checksum` | SHA-256 over canonical guard bytes. |
+
+Every production output commit must call `AssertRunLockHeldBeforeCommit`. If ownership or token cannot be proven, the implementation must fail before commit with `RUN_LOCK_LOST`, `RUN_LOCK_COMMIT_GUARD_MISSING`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_ASSERTION_FAILED`.
+
+### Run-lock algorithms
+
+```text
+AcquireRunLockSet(request, lease_policy):
+1. Materialize `RunLockLeasePolicy` defaults and validate bounds.
+2. Compute sorted lock keys and `run_lock_set_id`.
+3. Build `RunLockOperationIdempotencyKey` with `operation_kind = acquire`.
+4. Read lock-store time; if unavailable, persist failed evidence and return `RUN_LOCK_STORE_TIME_UNAVAILABLE`.
+5. Compare-and-set every key as one all-or-nothing acquisition; when the store cannot mutate all keys atomically, release every acquired key before returning.
+6. For active unexpired conflicts, persist `RunLockOperationEvidence` with `RUN_LOCK_CONFLICT` and write no output.
+7. For eligible stale records, call `RecoverStaleRunLock` and require successful recovery evidence before acquisition succeeds.
+8. Persist complete lock records, fencing token set, and operation evidence before production output.
+9. Return acquired `RunLockSet` or a failed set with no partial ownership.
+
+HeartbeatRunLockSet(run_lock_set):
+1. Use lock-store time and the next heartbeat sequence.
+2. Use a new idempotency key for the sequence.
+3. Compare-and-set each owned lock record only when owner, attempt, token, and prior record checksum match.
+4. Extend `lease_expires_at` by `lease_ttl_seconds` from lock-store time.
+5. Persist heartbeat evidence before the next production commit.
+6. On timeout or uncertain result, emit `RUN_LOCK_HEARTBEAT_UNCERTAIN` and block output until `AssertRunLockHeldBeforeCommit` succeeds.
+7. On failed proof of ownership, call `MarkRunLockLost`.
+
+AssertRunLockHeldBeforeCommit(run_lock_set, output_commit_scope):
+1. Read lock-store time and current lock records.
+2. Verify owner, attempt, environment, sorted lock keys, record checksums, and fencing tokens.
+3. If remaining lease is below `commit_guard_min_remaining_lease_seconds`, refresh with heartbeat or fail before commit.
+4. Persist `RunLockCommitGuard` and assertion operation evidence.
+5. Return success only when the output store can verify the same fencing token set for the commit scope.
+6. Return `RUN_LOCK_COMMIT_GUARD_MISSING`, `RUN_LOCK_FENCING_TOKEN_STALE`, `RUN_LOCK_LOST`, or `RUN_LOCK_ASSERTION_FAILED` before mutation when proof fails.
+
+RecoverStaleRunLock(prior_lock, contender_lock_set):
+1. Read lock-store time and validate every stale recovery predicate.
+2. If any predicate fails, persist recovery evidence with `recovery_rejected` and return `RUN_LOCK_STALE_RECOVERY_NOT_ELIGIBLE`.
+3. Perform one compare-and-set mutation from the prior checksum to the contender record with a strictly greater fencing token.
+4. If CAS fails, persist recovery evidence and return `RUN_LOCK_STALE_RECOVERY_FAILED`.
+5. Persist recovery evidence before recovered output writes.
+6. Return the recovered record and mark old-holder effect as `fenced` or `already_released`.
+
+ReleaseRunLockSet(run_lock_set, release_reason):
+1. Use lock-store time and an idempotent release key.
+2. Release only records still owned by the same run, attempt, and fencing token set.
+3. Persist release evidence after required commit refs, lifecycle results, and manifest refs are persisted.
+4. Return byte-identical evidence for identical release retries.
+
+MarkRunLockLost(run_lock_set, loss_reason):
+1. Persist lock-loss evidence with current lock record checksums when available.
+2. Transition the run to `lock_lost` before the next output commit.
+3. Stop downstream stages.
+4. Forbid watermark, graph apply promotion, package activation, absence, cleanup, retraction, graph expiry, table maintenance, last-known-good, and derived-view advancement for the affected run.
+```
 
 ## Version Manifest Contract
 
@@ -585,16 +861,20 @@ ExecuteProcessingStageDAG(dag, requested_scope, package_set):
 1. Validate duplicate stage IDs, dag acyclicity, and active lifecycle state.
 2. Resolve active package set, stage bindings, and all stage-required activation-controlled artifact refs.
 3. Validate requested subset or full DAG mode.
-4. Acquire RunLockSet.
-5. For each stage in canonical topological order, sorting simultaneously ready stages by lexical `stage_id`:
+4. Compute `RunLockSet` and materialized `RunLockLeasePolicy`.
+5. Acquire the complete lock set before production output and start the heartbeat schedule. Validation-only implementations may omit the schedule only when they require `AssertRunLockHeldBeforeCommit` before every output-affecting validation write.
+6. For each stage in canonical topological order, sorting simultaneously ready stages by lexical `stage_id`:
    a. Validate imported profiles, activation-controlled artifact refs, and state refs before stage execution.
    b. Validate permitted outputs.
    c. Execute package role or pure product algorithm.
    d. Persist StageStateRecord for output-affecting state.
-   e. Persist ProcessingStageLifecycleResult.
-   f. Stop on non-isolated failure and emit deterministic error.
-6. Emit VersionManifest with every output-affecting activation artifact ref before any output is externally visible.
-7. Release locks only after commit refs and lifecycle results are persisted.
+   e. Before each production output commit, call `AssertRunLockHeldBeforeCommit`.
+   f. On heartbeat uncertainty, block output until assertion succeeds.
+   g. Persist ProcessingStageLifecycleResult.
+   h. Stop on non-isolated failure and emit deterministic error.
+7. On lock loss, persist `MarkRunLockLost`, stop downstream stages, and forbid watermark, graph apply promotion, package activation, absence, cleanup, retraction, graph expiry, table maintenance, last-known-good, and derived-view advancement.
+8. Emit VersionManifest with every output-affecting activation artifact ref before any output is externally visible.
+9. Release locks only after all required commit refs, lifecycle results, and manifest refs are persisted.
 ```
 
 ## DAG, Lifecycle, and Versioning Contract Details
@@ -664,6 +944,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Watermark output | `ProjectionWatermarkPolicy`, `WatermarkCommitRecord`, closure row-set ref/checksum or deterministic block validation ref, completeness decision refs, blocking/no-op refs when advancement is denied, coverage refs where applicable, staleness refs, and all consulted `060` row-set refs. |
 | Graph delta/apply | graph projection profile, graph projection row-set checksum, graph edge semantics row-set checksum, traversal class row refs where applicable, graph object output eligibility row-set checksum, graph property evidence policy refs, backend taxonomy mapping profile ref, graph query translation profile ref, graph read-model schema profile ref, graph apply profile ref, derived-view lag policy ref, graph delta set ref, idempotency key, backend profile ref, backend schema fingerprint, graph apply lifecycle transition evidence, graph apply result, graph rebuild manifest ref when rebuild is involved, graph index consistency check refs, derived-view state refs, graph backend selection policy ref when the backend profile was omitted and defaulted, provider id, provider version ref, provider adapter version ref, driver version ref, TinkerPop version ref when provider is JanusGraph, storage backend kind/version/config checksum, index backend kind/version/config checksum, provider runtime config checksum, schema initialization config checksum, provider capability matrix ref, package release refs for provider runtime, driver, storage adapter, and index adapter, package-set manifest checksum, raw-write bypass evidence ref, transaction semantics evidence refs, read-after-write proof ref, and index freshness refs. |
 | Graph backend selection/defaulting | selected profile ref, selection policy ref, provider id, defaulting decision ref, explicit-or-omitted input checksum, provider capability matrix ref, backend package gate refs, and validation refs. |
+| Run-lock governed output | `RunLockLeasePolicy` checksum, `RunLockSet` ref/checksum, lock record checksums, fencing token set, operation evidence refs, recovery evidence refs when any, commit guard refs for each production commit, lock-loss evidence ref when any, lock idempotency keys/checksums, lifecycle transition evidence refs, and generated error registry checksum. |
 | Lifecycle-affecting output | lifecycle machine ID, version, checksum, transition evidence refs, selected transition row IDs, lifecycle state artifact refs, and owner guard row refs. |
 | API, export, health, compliance, audit, or validation-visible output | `110.CommonApiResponseEnvelope` ref when applicable, `api_contract_version`, request checksum, endpoint outcome matrix checksum, state-label mapping checksum, generated `ErrorCodeRegistry` checksum, authorization policy refs, `110.AuthorizationDecision` refs, redaction policy refs, redaction context checksum, page-token policy refs, derived-view state refs when graph-derived output is served, audit event refs, owner state refs, owner error refs, compliance/export checksums, health or validation output checksums, and API/export/health/audit/validation refs. Visibility must fail with `VERSION_MANIFEST_INCOMPLETE` before rendering when `generated_error_registry_checksum` is absent. |
 | Observability-visible health, API diagnostics, audit diagnostics, validation diagnostics, or telemetry runtime state output | observability instrumentation profile ref, signal policy ref, trace context policy ref when tracing is enabled, telemetry correlation policy ref when correlation refs are emitted, metric instrument catalog ref when metrics are enabled, telemetry attribute policy ref, telemetry redaction policy ref, telemetry exporter profile ref when export is enabled, telemetry health mapping policy ref when health may be affected, telemetry replay exclusion policy ref, telemetry runtime state refs when health/API/audit/validation output depends on telemetry state, package-set refs when telemetry artifacts are package-supplied, and validation refs. |
@@ -742,11 +1023,13 @@ RunLockKeyDerivation(scope):
 
 | Condition | Required behavior |
 | --- | --- |
-| All lock keys available | Acquire the complete lock set before any production output write. |
-| One or more lock keys unavailable | Acquire no locks or release every acquired lock before returning `RUN_LOCK_ACQUISITION_FAILED`. |
+| All lock keys available | Acquire the complete lock set before any production output write and persist complete operation evidence, lock records, and fencing token set. |
+| One or more lock keys unavailable and unexpired | Acquire no locks or release every acquired lock before returning `RUN_LOCK_CONFLICT` or `RUN_LOCK_ACQUISITION_FAILED`. |
 | Partial acquisition failure | Emit `RUN_LOCK_ACQUISITION_FAILED`; write no production output and advance no watermark. |
-| Lock lost during run | Stop before next output commit and emit `RUN_LOCK_LOST`; downstream stages must not run. |
-| Stale lock | TODO: product governance must define default lease TTL, heartbeat interval, and stale-lock recovery condition before authoritative promotion. |
+| Heartbeat uncertain | Emit `RUN_LOCK_HEARTBEAT_UNCERTAIN`; block output commits until `AssertRunLockHeldBeforeCommit` succeeds. |
+| Lock lost during run | Stop before next output commit, emit `RUN_LOCK_LOST`, persist `MarkRunLockLost`, and prevent downstream stages from running. |
+| Stale lock | Recover only when the `Stale recovery predicate` in `## Run Locks` is true and the compare-and-set mutation assigns a strictly greater fencing token. Otherwise emit `RUN_LOCK_STALE_RECOVERY_NOT_ELIGIBLE` or `RUN_LOCK_STALE_RECOVERY_FAILED`, acquire no partial lock set, write no production output, and advance no watermark. |
+| Commit guard missing or stale | Emit `RUN_LOCK_COMMIT_GUARD_MISSING`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_ASSERTION_FAILED` before output commit. |
 
 ### DeclaredDAGSubsetProfile matrix
 
@@ -794,6 +1077,17 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `DAG_CYCLE_DETECTED` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-dag-cycle-detected` |
 | `RUN_LOCK_COLLISION` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-collision` |
 | `RUN_LOCK_ACQUISITION_FAILED` | `030` | `blocked` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-acquisition-failed` |
+| `RUN_LOCK_TIMING_INVALID` | `030` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-timing-invalid` |
+| `RUN_LOCK_CONFLICT` | `030` | `blocked` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-conflict` |
+| `RUN_LOCK_STORE_TIME_UNAVAILABLE` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-store-time-unavailable` |
+| `RUN_LOCK_HEARTBEAT_FAILED` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-heartbeat-failed` |
+| `RUN_LOCK_HEARTBEAT_UNCERTAIN` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-heartbeat-uncertain` |
+| `RUN_LOCK_STALE_RECOVERY_NOT_ELIGIBLE` | `030` | `blocked` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-stale-recovery-not-eligible` |
+| `RUN_LOCK_STALE_RECOVERY_FAILED` | `030` | `blocked` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-stale-recovery-failed` |
+| `RUN_LOCK_FENCING_TOKEN_STALE` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-fencing-token-stale` |
+| `RUN_LOCK_IDEMPOTENCY_CONFLICT` | `030` | `error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-idempotency-conflict` |
+| `RUN_LOCK_COMMIT_GUARD_MISSING` | `030` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-commit-guard-missing` |
+| `RUN_LOCK_ASSERTION_FAILED` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-assertion-failed` |
 | `RUN_LOCK_LOST` | `030` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-run-lock-lost` |
 | `ACTIVATION_ARTIFACT_INCOMPLETE` | `030` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-activation-artifact-incomplete` |
 | `ACTIVATION_ARTIFACT_OWNER_MISMATCH` | `030` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `030.ProcessingErrorContext` | `error-registry-030-activation-artifact-owner-mismatch` |
@@ -828,6 +1122,13 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `stage_id` | No | Required when the failure is stage-specific. |
 | `stage_class` | No | Required when output permission or lifecycle stage behavior is involved. |
 | `run_lock_key_ref` | No | Required for run-lock failures; raw lock inputs remain redacted. |
+| `run_lock_set_id` | No | Required when the failure affects an entire `RunLockSet`. |
+| `run_lock_operation_kind` | No | Required for acquire, heartbeat, assert, recover, release, and mark-lost failures. |
+| `run_lock_operation_evidence_ref` | No | Required when operation evidence was persisted. |
+| `run_lock_commit_guard_ref` | No | Required for commit-guard failures. |
+| `fencing_token_set_ref` | No | Required for fencing-token failures; raw token values may be redacted by policy. |
+| `lease_policy_checksum` | No | Required for timing and bounds failures. |
+| `idempotency_key_checksum` | No | Required for idempotency conflicts. |
 | `activation_artifact_ref` | No | Required for activation-artifact failures. |
 | `lifecycle_machine_ref` | No | Required for lifecycle machine failures. |
 | `version_manifest_ref` | No | Required when manifest validation was attempted. |
@@ -857,6 +1158,21 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-SCHEMA-PATCH-AC-003` | A forbidden or malformed core record fails before downstream domain algorithms execute. |
 | `030-DAG-ORDER-AC-001` | Duplicate stage IDs fail with `DAG_STAGE_ID_DUPLICATE`, cycles fail with `DAG_CYCLE_DETECTED`, and ready-stage ties sort lexically by `stage_id`. |
 | `030-RUNLOCK-AC-001` | Run lock acquisition is all-or-nothing and partial acquisition failure releases acquired locks before returning `RUN_LOCK_ACQUISITION_FAILED`. |
+| `030-RUNLOCK-CLOSE-DEFAULTS-AC-001` | Omitted lease fields materialize to `300/60/30/15/30`, `lock_store_time`, and `fencing_required = true` before lock checksum computation. |
+| `030-RUNLOCK-CLOSE-BOUNDS-AC-001` | Invalid TTL, heartbeat, grace, timeout, or commit-guard bounds fail with `RUN_LOCK_TIMING_INVALID` before lock mutation. |
+| `030-RUNLOCK-CLOSE-ACQUIRE-AC-001` | Multi-key acquisition is all-or-nothing; partial acquisition releases acquired keys and writes no production output. |
+| `030-RUNLOCK-CLOSE-HEARTBEAT-AC-001` | A valid heartbeat increments the sequence, extends the lease under lock-store time, persists evidence, and is idempotent for the same sequence. |
+| `030-RUNLOCK-CLOSE-RECOVERY-AC-001` | Stale recovery succeeds only when every predicate is true, evidence is persisted, and the new fencing token is strictly greater than the prior token. |
+| `030-RUNLOCK-CLOSE-RECOVERY-RACE-AC-001` | A newer heartbeat after contender read causes recovery failure and no production output. |
+| `030-RUNLOCK-CLOSE-OLD-HOLDER-FENCED-AC-001` | An old holder that wakes after recovery fails the commit guard with `RUN_LOCK_FENCING_TOKEN_STALE` and runs no downstream stage. |
+| `030-RUNLOCK-CLOSE-IDEMPOTENCY-AC-001` | Same operation idempotency key and input checksum returns byte-identical evidence; same key with different checksum fails before mutation. |
+| `030-RUNLOCK-CLOSE-COMMIT-GUARD-AC-001` | Every production commit has a successful `RunLockCommitGuard`; missing, stale, fenced, or failed guards block mutation. |
+| `030-RUNLOCK-CLOSE-MANIFEST-AC-001` | Lock policy, lock set, records, fencing tokens, operation evidence, recovery evidence, commit guards, idempotency keys, and lock-loss evidence appear in `VersionManifest` when output is lock-governed. |
+| `030-RUNLOCK-CLOSE-LOCK-LOSS-AC-001` | Lock loss blocks downstream stages and forbids watermark, graph apply promotion, package activation, absence, cleanup, retraction, graph expiry, table maintenance, last-known-good, and derived-view advancement. |
+| `030-RUNLOCK-CLOSE-GRAPH-HANDOFF-AC-001` | Graph apply consumes a valid commit guard before backend mutation and cannot advance derived view after lock loss. |
+| `030-RUNLOCK-CLOSE-PACKAGE-HANDOFF-AC-001` | Package activation uses the same `RunLockSet` semantics and preserves the current active set on lock loss or fencing failure. |
+| `030-RUNLOCK-CLOSE-MAINTENANCE-HANDOFF-AC-001` | Table maintenance uses `RunLockCommitGuard` before destructive or rewrite commits. |
+| `030-RUNLOCK-CLOSE-WATERMARK-BLOCK-AC-001` | Lock conflict, lock loss, stale fencing, heartbeat uncertainty, and stale recovery failure do not advance any watermark. |
 | `030-VERSION-MANIFEST-AC-001` | Same included refs and manifest kind produce the same `version_manifest_id`; checksum includes `created_at` but ID does not. |
 | `030-ACTIVATION-AC-001` | Every output-affecting activation-controlled artifact appears in `VersionManifest`. |
 | `030-ACTIVATION-AC-002` | Inactive, checksum-mismatched, scope-mismatched, or unvalidated artifacts fail with deterministic precedence. |
@@ -905,6 +1221,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-AC-005` | Production replay rejects missing, mutable-only, checksum-mismatched, or retention-ineligible manifest refs before writing output. |
 | `030-AC-006` | Declared subset execution fails closed for absence, cleanup, retraction, graph expiry, projection, and watermark effects unless the active subset profile and `060` effect gates both permit the requested behavior. |
 | `030-AC-007` | Identity output replay is incomplete unless every output-affecting resolver artifact, runtime state ref, explanation checksum, and split handoff ref is manifest-included. |
+| `030-AC-008` | Run-lock lease timing, heartbeat, stale recovery, fencing, idempotency, commit guards, and lock-loss effects are fully specified and contain no owner-local stale-lock `TODO:` row. |
+| `030-AC-009` | Two implementations given the same lock records, input checksums, policy defaults, and idempotency key produce byte-identical lock operation evidence. |
 
 ## Open Questions
 

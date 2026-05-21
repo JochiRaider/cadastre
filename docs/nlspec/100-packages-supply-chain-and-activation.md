@@ -544,6 +544,9 @@ Dependency locks are reproducibility evidence only. A dependency lock must not s
 ```text
 ActivatePackageSet(candidate_set, current_active_set):
 1. Verify candidate_set immutable checksum and release manifest checksums.
+1a. Acquire or assert `030.RunLockSet` for package-set activation scope, target environment, current active package set checksum, candidate package set checksum, and requested output class `package_activation`.
+1b. Before writing the active package-set pointer, call `030.AssertRunLockHeldBeforeCommit`.
+1c. Include lock policy, lock set, operation evidence, commit guard, and lifecycle transition evidence in `VersionManifest`.
 2. Verify package cohesion groups are complete.
 3. For each release, resolve exactly one PackageTypePolicyRow through ResolvePackageTypePolicyRow.
 4. Verify repository_form is one form allowed by the selected PackageTypePolicyRow.
@@ -560,7 +563,7 @@ ActivatePackageSet(candidate_set, current_active_set):
 15. Verify validation matrix and required negative fixtures.
 16. Verify VersionManifest includes every package-set, release, repository, trust, transparency, attestation, provenance, SBOM, dependency lock, compatibility, validation, stage binding, rollback, quarantine, emergency, health, lifecycle, and approval ref that can affect output.
 17. Persist PackagePromotionRecord with artifact refs.
-18. If any check fails, keep current_active_set active, write no candidate production output, and emit PackageActivationFailureEvent with the most specific package failure code.
+18. If any check fails, or if the activation lock is lost, stale, fenced, or idempotency-conflicted, keep `current_active_set` active, write no candidate production output, and emit `PackageActivationFailureEvent` with the most specific package failure code or imported `030` run-lock error as the owner cause.
 19. If all checks pass, activate package set and record PackageDeploymentRevision with artifact refs.
 20. Do not mark LastKnownGoodPackageSet until every required LastKnownGoodHealthGate passes.
 ```
@@ -626,7 +629,7 @@ replay_same_event
 | `validated` | `start_canary` | `canary_running` | Canary output only. |
 | `canary_running` | `canary_passed` | `validated` | Persist canary pass evidence. |
 | `canary_running` | `canary_failed` | `activation_failed` | Current active set preserved. |
-| `validated` | `activate` | `activating` | Activation lock and all gates required. |
+| `validated` | `activate` | `activating` | `030.RunLockSet` with valid lease, fencing token, idempotency key, and commit guard plus all activation gates required. |
 | `activating` | `activation_committed` | `active` | Persist `PackageDeploymentRevision`. |
 | `activating` | `activation_failed` | `activation_failed` | Current active set preserved. |
 | `active` | `post_activation_health_passed` | `last_known_good` | Persist `LastKnownGoodPackageSet`. |
@@ -1072,6 +1075,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | `failure_detail_ref` | Yes | Redacted evidence ref. |
 | `candidate_output_visibility` | Yes | Must be `none` for production output. |
 | `watermark_effect` | Yes | Must be `no_advancement`. |
+| `run_lock_operation_evidence_ref` | Required when lock-related | Required when failure is caused by lock conflict, lock loss, fencing, recovery, or idempotency conflict. |
 
 ### Package-set activation failure precedence
 
@@ -1085,6 +1089,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | compatibility failure | same | keep current | write none | no | unchanged |
 | validation matrix failure | same | keep current | write no production output | yes after candidate changes | unchanged |
 | post-activation health failure | same | keep activated only if policy permits, otherwise rollback plan | no new candidate output | policy-defined | do not mark last-known-good |
+| activation lock lost, stale, fenced, or idempotency-conflicted | same with imported `030` owner cause | keep current | write none | according to imported `030` retry class | unchanged |
 
 ### PackageErrorContext
 
@@ -1173,6 +1178,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | `100-LIFECYCLE-AC-003` | Canary and shadow never mark last-known-good or advance watermarks. |
 | `100-LIFECYCLE-AC-004` | Rollback target must be an immutable verified manifest. |
 | `100-LIFECYCLE-AC-005` | Quarantine blocks dependent activation and cannot clear directly to active. |
+| `100-RUNLOCK-ACTIVATION-AC-001` | `val-100-runlock-package-activation-loss` proves the current active package set remains unchanged when activation lock is lost, stale, fenced, recovered by another run, or idempotency-conflicted. |
 
 ## Definition of Done
 

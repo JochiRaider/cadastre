@@ -249,6 +249,15 @@ An implementation detail may appear only as an ambiguity-preventing mapping. It 
 | `rationale` | Route to `000` as non-runtime ADR rationale. |
 | `inactive_future_domain` | Route to `000` and `200`. |
 
+### 8.2 Run-lock signal distinction
+
+`domain.md` routes run-lock behavior to owner specs only. It must not duplicate lock TTL values, algorithm steps, schema fields, or error-code tables.
+
+| Distinction | Required domain meaning | Forbidden substitution | Owner |
+| --- | --- | --- | --- |
+| Run-lock heartbeat versus source heartbeat | Run-lock heartbeat is orchestration ownership evidence. | Source completeness, source liveness, no-change proof, absence, cleanup, graph expiry, or watermark authority. | `030`, `060`, `140` |
+| Run-lock lease lifecycle and stale recovery | Lock ownership behavior is specified by `030` and remains validation-blocked until `120-RUNLOCK-*` rows pass. | Root-domain timing defaults, lock-store algorithm ownership, source authority, graph authority, or package activation authority. | `030`, `120` |
+
 ## 9. Bounded contexts
 
 | Bounded context | Owns domain language for | Must not own | Primary owner |
@@ -328,7 +337,7 @@ The relationship matrix is split into two tables for readability. A context-map 
 | `doc_governance_to_all_contexts` | Documentation governance | `all_active_contexts` | `owner_import` | `SpecStatus`, `DocumentClass`, `SourceOfTruthRow`, `VolatilityClass` | `not_applicable` | `000.SourceOfTruthRow` |
 | `system_boundary_to_all_contexts` | System boundary and authority | `all_active_contexts` | `published_language` | `AuthorityClass`, `DirectSourceProhibition`, `ProjectionAuthorityRule`, `RuntimeTelemetryAuthorityRule` | `not_applicable` | `010.AuthorityClass` |
 | `lakehouse_feed_to_processing` | Lakehouse feed and table state | Processing and versioning | `authority_handoff` | `LakehouseFeedProfile`, `RawFeedManifest`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef`, `LakehouseReadCompletenessReceipt` | `supporting_evidence` | `020.LakehouseReadCompletenessReceipt` |
-| `processing_to_stage_owners` | Processing and versioning | `all_active_contexts` | `activation_gate` | `ProcessingStageDAG`, `StageStateRecord`, `VersionManifest`, `ActivationControlledArtifactRef`, `RunLockSet` | `not_applicable` | `030.ExecuteProcessingStageDAG` |
+| `processing_to_stage_owners` | Processing and versioning | `all_active_contexts` | `activation_gate` | `ProcessingStageDAG`, `StageStateRecord`, `VersionManifest`, `ActivationControlledArtifactRef`, `RunLockSet`, `RunLockLeasePolicy`, `RunLockOperationEvidence`, `RunLockRecoveryEvidence`, `RunLockCommitGuard` | `not_applicable` | `030.ExecuteProcessingStageDAG` |
 | `core_model_to_all_contexts` | Core data model | `all_active_contexts` | `published_language` | `RawRecord`, `CadastreSilverObservation`, `CanonicalEntity`, `SourceAsset`, `Identifier`, `GoldFact`, `EvidenceRef`, `FactAbsenceOutcome`, `CanonicalJSON` | `not_applicable` | `040.CoreRecordSchema` |
 | `normalization_to_source_authority` | Normalization and external schema | Source authority and absence | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet`, `ExternalSchemaAuthoritySignalMappingRow` | `supporting_evidence` | `050.NormalizeObservation` |
 | `normalization_to_identity` | Normalization and external schema | Identity resolution | `anti_corruption_translation` | `CadastreSilverObservation`, `ExternalSchemaProfile`, `ObservationToOCSFMappingRowSet`, `SourceExtensionFieldRuleSet` | `supporting_evidence` | `050.NormalizeObservation` |
@@ -354,7 +363,7 @@ The relationship matrix is split into two tables for readability. A context-map 
 | `doc_governance_to_all_contexts` | `owner_lookup` | Product runtime behavior; domain record fields; owner behavior promotion by implication. | `no_implicit_effect`; candidate or unregistered text must not drive implementation. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
 | `system_boundary_to_all_contexts` | `owner_lookup` | Data schemas; identity algorithms; graph algorithms; package activation; telemetry authority by implication. | `no_implicit_effect`; unowned authority claims fail or route to `TODO:`. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
 | `lakehouse_feed_to_processing` | `owner_lookup` | Raw import; absence; cleanup; retraction; graph expiry; watermark effect by read success alone. | `no_implicit_effect`; feed-read evidence alone has no source-level effect. | `120-DOMAIN-CMAP-*`; `120-SOURCE-CLOSURE-*` | `blocked_validation` |
-| `processing_to_stage_owners` | `owner_lookup` | Stage output outside owner-permitted classes; owner algorithm substitution; package activation by stage presence. | `no_implicit_effect`; stages cannot emit outside permitted owner outputs. | `120-DOMAIN-CMAP-*`; stage-specific validation rows | `blocked_validation` |
+| `processing_to_stage_owners` | `owner_lookup` | Stage output outside owner-permitted classes; owner algorithm substitution; package activation by stage presence; source authority, absence, cleanup, graph expiry, or watermark by run-lock signal. | `no_implicit_effect`; stages cannot emit outside permitted owner outputs and run-lock signals remain orchestration-only unless an owner handoff consumes persisted `030` evidence. | `120-DOMAIN-CMAP-*`; stage-specific validation rows; `120-RUNLOCK-CLOSE-*` | `blocked_validation` |
 | `core_model_to_all_contexts` | `owner_lookup` | Runtime authorization; owner algorithm selection; source authority; identity merge; graph projection by record name alone. | `no_implicit_effect`; core names do not authorize owner behavior. | `120-DOMAIN-CMAP-*` | `blocked_validation` |
 | `normalization_to_source_authority` | `term_translation` | Source authority; completeness; absence; cleanup; watermark advancement by parser or external schema output. | `no_implicit_effect`; mapped silver output is supporting evidence only. | `120-DOMAIN-CMAP-*`; `120-OCSF-MAP-*`; `120-SOURCE-CLOSURE-*` | `blocked_validation` |
 | `normalization_to_identity` | `term_translation` | Canonical identity; create; attach; merge; split; reject; score by parser or external schema output. | `no_implicit_effect`; identity requires `070` resolver ownership. | `120-DOMAIN-CMAP-*`; identity validation rows | `blocked_validation` |
@@ -1073,6 +1082,7 @@ Closed `domain_behavior_until_closed` values are `owner governs`, `validation fa
 | `DOM-TODO-008` | `050.ObservationToOCSFMappingRowSet` | `blocked_validation` | active MVP row-set refs, compiled artifact refs, fixture refs, expected-output checksums, and `120-OCSF-MAP-*` rows | validation fails | `120-DOMAIN-SECTION25-*`; `120-OCSF-MAP-*` |
 | `DOM-TODO-009` | `090.GraphEdgeSemanticsRegistry` | `blocked_validation` | `120-GRAPH-PROFILE-CLOSURE-*` fixture and expected-output checksums for the active MVP graph profile | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-PROFILE-CLOSURE-*` |
 | `DOM-TODO-010` | `030.RequiredLifecycleMachineBindings` plus owner-specific machine bindings | `blocked_validation` | lifecycle validation rows for `030`, `070`, `090`, `100`, and `120` machines | validation fails | `120-DOMAIN-SECTION25-*`; `120-LIFECYCLE-*` |
+| `DOM-TODO-020` | `030.RunLockSet`, `030.RunLockLeasePolicy`, `030.RunLockOperationEvidence`, `030.RunLockRecoveryEvidence`, and `030.RunLockCommitGuard` | `blocked_validation` | owner behavior specified in `030`; validation requires `120-RUNLOCK-*` | validation fails | `120-DOMAIN-SECTION25-*`; `120-RUNLOCK-CLOSE-*` |
 | `DOM-TODO-011` | `domain.md.Runtime exports` | `resolved_owner_routed` | none | not runtime | `120-DOMAIN-SECTION25-*` |
 | `DOM-RESOLVED-012` | `100.PackageType` | `resolved_owner_routed` | no enum blocker remains; `100-TODO-PACKAGE-TYPE-POLICY-ROWS` and deprecation/policy validation remain owner-local activation blockers | owner governs | `120-DOMAIN-SECTION25-*`; `120-PACKAGE-TYPE-*` |
 | `DOM-TODO-013` | `090.GraphBackendSelectionPolicy` | `blocked_validation` | `090`, `100`, and `120` backend/profile/package validation rows for any named backend selection and production activation | validation fails | `120-DOMAIN-SECTION25-*`; `120-GRAPH-BACKEND-PACKAGE-GATE-*` |
@@ -1094,6 +1104,8 @@ OCSF mapping behavior is owned by `050.ObservationToOCSFMappingRowSet`. Producti
 MVP edge semantics are owner-routed to `090.GraphEdgeSemanticsRegistry`. The active edge set is `observed_connection` only, but validation evidence remains blocked until `120-GRAPH-PROFILE-CLOSURE-*` rows pass.
 
 Lifecycle behavior is owner-routed to `030` lifecycle machines and owner-specific machine bindings. Validation remains blocked until lifecycle matrix rows pass.
+
+Run-lock lease lifecycle and stale recovery behavior is owner-routed to `030.RunLockSet`, `030.RunLockLeasePolicy`, `030.RunLockOperationEvidence`, `030.RunLockRecoveryEvidence`, and `030.RunLockCommitGuard`. Domain status remains `blocked_validation` until `120-RUNLOCK-CLOSE-*` passes.
 
 `domain.md` exports no runtime records.
 
@@ -1155,3 +1167,4 @@ A downstream implementation must not resolve a blocker by inference. `ValidateSp
 | `DOM-CMAP-AC-008` | Missing, inactive, stale, ambiguous, checksum-invalid, out-of-scope, or owner-uncovered crossing artifacts default to `no_implicit_effect` or `deferred_no_effect`. |
 | `DOM-CMAP-AC-009` | Graph backend product names do not define root-domain defaults, graph semantics, identity, source authority, package activation, or future-provider exclusion. |
 | `DOM-CMAP-AC-010` | The context-map revision adds no runtime exports to `domain.md`. |
+| `DOMAIN-RUNLOCK-STATUS-AC-001` | `DOMAIN_OWNER_STATUS_CONTRADICTION` fires if `domain.md`, `000`, `030`, or `120` disagree on run-lock closure status. |
