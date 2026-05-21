@@ -29,6 +29,10 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `ActivationControlledArtifactRef`
 - `EvidenceRef`
 - `EvidenceArtifactIdKindRegistry`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -244,8 +248,20 @@ Package type resolution error codes are:
 | `quarantine_scope_policy_ref` | Yes | none | Ref to active `QuarantineScopePolicy`. |
 | `emergency_override_allowed_effects` | Yes | none | Subset of allowed emergency effects in this spec. |
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows. |
-| `activation_scope` | Yes | none | Target environment and package scope in which the row may affect output. |
+| `activation_scope` | Yes | none | `030.ActivationScope` covering the target environment and package scope in which the row may affect output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### PackageEnvironmentScopeSelectorContext
+
+`PackageEnvironmentScopeSelectorContext` is the owner context for package target-environment and package policy activation matching. It instantiates `030.ScopeSelectorContext`; package trust, release evidence, compatibility, rollback, quarantine, and activation failure behavior remain owned by `100`.
+
+| Selector input | Required dimensions | Optional dimensions | Default subset behavior | Required behavior |
+| --- | --- | --- | --- | --- |
+| `ProductionPackageSetManifest.target_environment` | `environment_id`, `deployment_tier` | `region`, `tenant_scope`, `package_scope`, `canary_scope` | none | Must materialize to a normalized `030.ScopeSelector` before package type policy resolution. |
+| `PackageTypePolicyRow.activation_scope` | `environment_id`, `deployment_tier`, `package_type` | `region`, `tenant_scope`, `package_scope`, `canary_scope` | none | Must cover the materialized target-environment selector through `030.ResolveScopedRow`. |
+| `PackageReleaseManifest.activation_scope` | `environment_id`, `deployment_tier`, `package_type` | `region`, `tenant_scope`, `package_scope`, `canary_scope` | none | Must cover the package-set target environment before the release can be selected. |
+
+Runtime aliasing between `environment` and `target_environment` remains forbidden. A package activation implementation must not compare target environments as opaque strings after this materialization step.
 
 ### ResolvePackageTypePolicyRow
 
@@ -253,11 +269,12 @@ Package type resolution error codes are:
 ResolvePackageTypePolicyRow(package_type, target_environment, active_row_set):
 1. Validate active row-set ref through `030.ActivationControlledArtifactRef`.
 2. If `package_type` is not one confirmed `PackageType` token, fail with `PACKAGE_TYPE_UNKNOWN`.
-3. Keep only active rows whose `activation_scope` covers `target_environment`.
-4. Match `package_type` exactly.
-5. If zero rows remain, fail with `PACKAGE_TYPE_POLICY_MISSING`.
-6. If more than one equally specific row remains, fail with `PACKAGE_TYPE_POLICY_AMBIGUOUS`.
-7. Return the selected row and require its ref and checksum in `030.VersionManifest.included_refs`.
+3. Materialize `target_environment` into a normalized `030.ScopeSelector` using `PackageEnvironmentScopeSelectorContext`.
+4. Match `package_type` exactly as a non-scope predicate.
+5. Call `030.ResolveScopedRow` over `activation_scope` and the materialized target-environment selector.
+6. If zero rows remain, fail with `PACKAGE_TYPE_POLICY_MISSING`.
+7. If more than one maximal row remains under `030.CompareScopeSpecificity`, fail with `PACKAGE_TYPE_POLICY_AMBIGUOUS`; no lexical, file-order, package-order, or validation-order tie break is permitted.
+8. Return the selected row and require its ref, checksum, selector context ref, selector checksum, and activation artifact ref in `030.VersionManifest.included_refs`.
 ```
 
 Every confirmed `PackageType` token must have exactly one active policy row in the active row set for each target environment in which package activation is in scope. A package activation implementation must run this resolver before compatibility checks, validation checks, stage binding, rollback preflight, quarantine evaluation, or health gating.
@@ -454,7 +471,7 @@ The `PackageType` enum is closed. Activation remains blocked only when the activ
 
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows for the release and its package type. |
 | `release_checksum` | Yes | none | SHA-256 over canonical release manifest bytes excluding `release_checksum`. |
-| `activation_scope` | Yes | none | Scope in which the release may be selected; out-of-scope releases fail before activation. |
+| `activation_scope` | Yes | none | `030.ActivationScope` in which the release may be selected; out-of-scope releases fail before activation. |
 | `lifecycle_status` | Yes | none | Production selection requires lifecycle status permitted by the selected policy and activation mode. |
 
 Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required release fields reject before compatibility checks, package-set activation, rollback, quarantine, health gating, or candidate production output. A release manifest field does not substitute for `030.VersionManifest.included_refs`.
@@ -1114,7 +1131,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `quarantine_scope_policy_refs` | Yes | none | Selected quarantine scope policy refs and checksums. |
 | `emergency_override_refs` | Required when emergency action affects eligibility | explicit `[]` when no emergency action applies | Emergency override record refs and checksums; emergency trust bypass remains forbidden. |
 | `cohesion_groups` | Yes | none | Every group must be complete before activation. |
-| `target_environment` | Yes | none | Input environment token used by `ResolvePackageTypePolicyRow`. The legacy field `environment` is invalid after manifest creation. |
+| `target_environment` | Yes | none | Environment selector input that must materialize into a normalized `030.ScopeSelector` before `ResolvePackageTypePolicyRow`. The legacy field `environment` is invalid after manifest creation. |
 | `activation_mode` | Yes | none | Closed tokens: `production`, `canary`, `shadow`, `rollback`, `emergency_quarantine`, `emergency_retirement`, `emergency_abort`, `emergency_lkg_rollback`, `emergency_deprecation_extension`. |
 | `activation_artifact_refs` | Yes | explicit `[]` only when no package supplies activation artifacts | Immutable `030.ActivationControlledArtifactRef` rows for package-supplied artifacts. |
 | `artifact_owner_specs` | Yes | none | Stable core owner specs for package-supplied artifacts. |
@@ -1263,6 +1280,8 @@ Source-closure row catalogs included in a production package set must appear in 
 
 | ID | Criterion |
 | --- | --- |
+| `100-SCOPE-PACKAGE-AC-001` | Exact environment match, subset-disallowed environment row, ambiguous package policy rows, private target environment leak, omitted target environment, and manifest-inclusion fixtures pass. |
+| `100-SCOPE-PACKAGE-AC-002` | `ProductionPackageSetManifest.target_environment` materializes to `030.ScopeSelector` before package type policy resolution; opaque environment string matching is not used after materialization. |
 | `100-AC-001` | No production package can activate unless immutable artifact, package type policy, repository form, trust, freshness, anti-rollback, transparency, attestation, provenance, SBOM, dependency lock, compatibility, validation, and package-set evidence pass. |
 | `100-AC-002` | Candidate activation failure preserves the current active package set and writes no candidate production output. |
 | `100-AC-003` | Rollback targets immutable verified package-set manifests only and passes rollback compatibility gates before active state changes. |

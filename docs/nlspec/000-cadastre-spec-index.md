@@ -25,6 +25,13 @@ Define the self-contained Cadastre documentation set, source-of-truth ownership,
 ## Imports
 
 - `docs/reference/standards/nlspec-spec.md`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.NormalizeScopeSelector`
+- `030.ScopeSelectorCovers`
+- `030.CompareScopeSpecificity`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -99,6 +106,7 @@ Additional promotion gates:
 | identity resolver closure | When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, promotion fails if any required resolver artifact row set, activation report, validation row, fixture checksum, expected output checksum, manifest ref, package weakening row, or decision-ambiguity closure row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
 | package activation registry closure | When `PackageReleaseManifest`, `ProductionPackageSetManifest`, package activation, rollback, quarantine, emergency override, package stage binding, or package-supplied activation artifacts are in implementation scope, promotion fails if any required package activation registry ref, policy row set, compatibility row, deprecation row, validation row, fixture checksum, expected output checksum, error parity row, manifest ref, or package type coverage row is missing, stale, failed, blocked, not run, checksum-mismatched, or `TODO`. |
 | run-lock closure | When run-lock governed output is in implementation scope, promotion fails if run-lock lease policy, stale recovery behavior, fencing-token semantics, commit guard semantics, operation evidence, recovery evidence, error registry rows, or validation refs are missing, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
+| scope selector closure | Promotion fails if any active scoped owner family restates selector schema, equality, coverage, subset matching, specificity, ambiguity, or tie-breaking instead of importing the exact `030` selector contracts, or if required `120-SCOPE-SELECTOR-CLOSURE-*` fixtures are missing, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
 
 ### MVP Activation Catalog Closure Gate
 
@@ -606,6 +614,26 @@ Two Section 25 rows may point to the same owner contract only when they name dif
 
 Supporting duplicate inventories, runtime-restatement workbooks, concrete fixture bytes, expected-output checksums, and private source bindings belong in supporting material. Their path is `TODO:` until registered in `MANIFEST.md`.
 
+### Scope selector define-once closure
+
+`DefineOnceClosureInventory` must include the row family `scope_selector_closure` before promotion.
+
+| Contract | Sole runtime owner | Required validation row |
+| --- | --- | --- |
+| `ScopeSelector` | `030` | `val-000-scope-selector-owner-export-present` |
+| `ActivationScope` | `030` | `val-000-scope-selector-owner-export-present` |
+| `ScopeSelectorContext` | `030` | `val-000-scope-selector-owner-export-present` |
+| `NormalizeScopeSelector` | `030` | `val-000-scope-selector-owner-export-present` |
+| `ScopeSelectorCovers` | `030` | `val-000-scope-selector-owner-export-present` |
+| `CompareScopeSpecificity` | `030` | `val-000-scope-selector-owner-export-present` |
+| `ResolveScopedRow` | `030` | `val-000-scope-selector-owner-export-present` |
+
+Promotion must fail when any active non-`030` owner file uses `activation_scope`, `scope_selector`, `source_scope_selector`, `subject_scope_selector`, `object_scope_selector`, target-environment matching, the phrase `covers the request`, the phrase `exact scope`, or the phrase `equally specific` as selector runtime behavior without importing the exact `030` contract and routing selector behavior to it by name.
+
+Promotion must also fail when any active non-`030` file defines selector schema, selector equality, selector coverage, subset matching, specificity comparison, ambiguity resolution, row-order tie breaking, package-order tie breaking, backend-order tie breaking, file-order tie breaking, or validation-order tie breaking for selector selection instead of using `030.ScopeSelector`, `030.ActivationScope`, `030.ScopeSelectorContext`, `030.NormalizeScopeSelector`, `030.ScopeSelectorCovers`, `030.CompareScopeSpecificity`, and `030.ResolveScopedRow`.
+
+Required validation row families are `120-SCOPE-SELECTOR-CLOSURE-*`, `120-SCOPE-SELECTOR-OWNER-IMPORT-*`, `120-SCOPE-SELECTOR-NO-RESTATEMENT-*`, and `120-SCOPE-SELECTOR-FIXTURE-COVERAGE-*`.
+
 ### OwnerLocalStatusConsistencyRule
 
 `ValidateSpecSet` must evaluate owner-local closure state independently from document authority status. The following failure codes are closed for this rule.
@@ -688,6 +716,8 @@ Archived documents are historical reference only and never implementation author
 
 | ID | Criterion |
 | --- | --- |
+| `000-SCOPE-SELECTOR-DEFINE-ONCE-AC-001` | `ValidateSpecSet` fails when any non-`030` active spec defines selector schema, equality, subset, specificity, coverage, or ambiguity tie-breaking instead of routing to the exact `030` selector contracts. |
+| `000-SCOPE-SELECTOR-DEFINE-ONCE-AC-002` | Every active scoped owner imports or routes to `030.ScopeSelector`, `030.ActivationScope`, `030.ScopeSelectorContext`, `030.ScopeSelectorCovers`, `030.CompareScopeSpecificity`, and `030.ResolveScopedRow` by exact name when its rows use scope matching. |
 | `000-AC-001` | Every implementation-relevant behavior has exactly one owning spec. |
 | `000-AC-002` | Every active spec declares imports, exports, dependencies, non-scope, and Definition of Done. |
 | `000-AC-003` | Archived and reference documents are not cited as implementation authority. |

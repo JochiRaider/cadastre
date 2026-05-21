@@ -46,6 +46,9 @@ Define runtime telemetry signals, trace context propagation, telemetry correlati
 - `110.RedactionPolicy`
 - `110.AuthorizationDecision`
 - `120.ValidationMatrix`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ScopeSelectorCovers`
 
 ## Exports
 
@@ -98,6 +101,23 @@ Run-lock telemetry is diagnostic material only. Metrics, traces, structured logs
 | `backend_internal_id_in_telemetry` | `forbidden` | Backend-generated IDs fail before export. |
 
 A profile that requires production export must include an active `TelemetryExporterProfile`. If the exporter profile is omitted, telemetry export is disabled; local signal construction may still run for validation-only diagnostics and must not emit outside the process.
+
+## TelemetryScopeSelectorContext
+
+`TelemetryScopeSelectorContext` is the owner context family for instrumentation profile, signal policy, metric catalog, exporter profile, attribute policy, redaction policy, health mapping, and replay exclusion policy activation. It instantiates `030.ScopeSelectorContext`; it does not grant domain authority.
+
+| Telemetry artifact family | Required dimensions | Optional dimensions | Default subset behavior | Scope-match effect |
+| --- | --- | --- | --- | --- |
+| instrumentation profile | `stage_class`, `execution_mode` | `package_set_ref`, `deployment_scope` | none | Enables local telemetry construction only. |
+| signal policy | `signal_token`, `stage_class` | `execution_mode` | none | Determines whether the signal may be emitted. |
+| metric catalog | `metric_name`, `stage_class` | `deployment_scope` | none | Determines whether the metric row may export. |
+| exporter profile | `exporter_profile_id`, `deployment_scope` | `stage_class` | none | Determines export eligibility and health effect. |
+| attribute policy | `attribute_key`, `signal_token` | `stage_class` | none | Determines attribute retention or rejection. |
+| redaction policy | `data_class`, `signal_token` | `stage_class` | none | Determines telemetry redaction only. |
+| health mapping | `telemetry_condition`, `health_scope` | `deployment_scope` | none | Determines observability health mapping only. |
+| replay exclusion policy | `field_class`, `output_class` | `stage_class` | none | Determines telemetry replay exclusion only. |
+
+Telemetry selector matches determine telemetry emission, export, and health-mapping eligibility only. They must not affect domain outputs, replay checksums for non-telemetry output, watermarks, graph apply, package activation, identity, facts, completeness, source authority, or source absence.
 
 ## Signal Policy
 
@@ -193,7 +213,7 @@ Run-lock metric rows must not allow attributes containing raw lock keys, source-
 | `aggregation` | Yes | none | Closed token: `monotonic_sum`, `last_value`, `explicit_bucket_histogram`. |
 | `export_temporality` | No | `cumulative` | Closed token: `cumulative` or `delta`. |
 | `validation_refs` | Yes | none | Non-empty `120-OBSERVABILITY-*` rows. |
-| `activation_scope` | Yes | none | Scope in which the row may affect telemetry output. |
+| `activation_scope` | Yes | none | `030.ActivationScope` in which the row may affect telemetry output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ## Telemetry Attribute Policy
@@ -264,7 +284,7 @@ Redaction that changes a metric attribute value must re-run metric cardinality v
 | `shutdown_flush_timeout_ms` | Yes when export enabled | none | Range `0..30000`; failure does not mutate domain output. |
 | `failure_health_effect` | No | `degraded` | Closed token: `none`, `degraded`, `blocked` for observability health only. |
 | `validation_refs` | Yes | none | Non-empty `120-OBSERVABILITY-EXPORTER-*` rows. |
-| `activation_scope` | Yes | none | Scope in which export may run. |
+| `activation_scope` | Yes | none | `030.ActivationScope` in which export may run. |
 | `lifecycle_status` | Yes | none | Production export requires `active`. |
 
 TODO: Product operations governance must select production default exporter numeric values before production export is active. Until that TODO is resolved by an active exporter profile, production export remains blocked when export is required.
@@ -441,6 +461,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 
 | ID | Criterion |
 | --- | --- |
+| `140-SCOPE-TELEMETRY-AC-001` | Exact telemetry export scope, scope mismatch health degradation or blocking as policy declares, private exporter scope leak, and no domain mutation from telemetry scope failures fixtures pass. |
+| `140-SCOPE-TELEMETRY-AC-002` | Telemetry scope matching affects only telemetry emission, export, health mapping, and telemetry replay exclusion. |
 | `140-PROFILE-DEFAULTS-AC-001` | The default instrumentation profile materializes OpenTelemetry-compatible, OTLP-compatible traces, metrics, structured logs, bounded best-effort nonblocking delivery, no domain effect from export failure, degraded health effect from export failure, replay exclusion for trace/span IDs, and forbidden raw payload, private binding, and backend ID telemetry. |
 | `140-SIGNAL-POLICY-AC-001` | `trace`, `metric`, `structured_log`, and `baggage` are the only production signal tokens; unknown or disabled signals fail with `TELEMETRY_SIGNAL_FORBIDDEN` before export. |
 | `140-TRACE-CONTEXT-AC-001` | Trace context propagation, parent-child spans, async handoff, sampled/unsampled behavior, baggage restrictions, and context loss never alter stage order, output IDs, checksums, replay equivalence, package activation, or domain output. |

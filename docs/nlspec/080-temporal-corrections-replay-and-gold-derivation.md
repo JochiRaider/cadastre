@@ -40,6 +40,10 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ActivationControlledArtifactRef`
 - `GoldFactSubjectRefKindRegistry`
 - `GoldFactObjectValueKindRegistry`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -105,14 +109,22 @@ Repository snapshots may appear in replay provenance and validation diagnostics,
 | `REPLAY_REPOSITORY_REF_MISSING` | Replay input sufficiency requires structured-input refs but snapshot, validation, materialization, package, or manifest refs are omitted. |
 | `REPLAY_REPOSITORY_VALIDATION_STALE` | Replay, correction, temporal, or event-sequence validation was not run against the exact repository snapshot and policy checksum used for output. |
 
+### TemporalPolicyScopeSelectorContext
+
+`TemporalPolicyScopeSelectorContext` is the owner context for `TemporalSemanticsPolicy.source_scope_selector`. It instantiates `030.ScopeSelectorContext`; time fields, time-input precedence, fallback behavior, temporal error precedence, and known-time rules remain owned by `080`.
+
+Default temporal scope matching is exact. `subset_allowed_dimension_keys` defaults to `[]`, and no broad source-category fallback is implicit. A temporal policy that omits a request dimension fails with the owner-mapped `TEMPORAL_POLICY_UNRESOLVED` unless an active context row explicitly permits that dimension to be subset-matched.
+
+Shared selector ambiguity maps to `TEMPORAL_POLICY_UNRESOLVED` with ambiguity context. The ambiguity context may include selector checksums, context ref, row family, and redacted dimension keys; it must not include raw private selector values.
+
 ## ResolveFactTime Algorithm
 
 ```text
 ResolveFactTime(observation, temporal_policy_row_set, knowledge_time_policy_row_set, version_manifest):
 1. Validate required temporal and knowledge-time artifact refs through `030.ActivationControlledArtifactRef`.
-2. Resolve exactly one active `TemporalSemanticsPolicy` row whose tuple covers `source_dataset`, `observation_type`, `fact_type`, `predicate`, `source_scope_selector`, and `temporal_mode`.
+2. Apply exact non-scope predicates for `source_dataset`, `observation_type`, `fact_type`, `predicate`, and `temporal_mode`, then call `030.ResolveScopedRow` over `TemporalSemanticsPolicy.source_scope_selector` using `TemporalPolicyScopeSelectorContext`.
 3. If zero rows resolve, emit `TEMPORAL_POLICY_UNRESOLVED` and do not create a `GoldFact` candidate.
-4. If more than one equally specific row resolves, emit `TEMPORAL_POLICY_UNRESOLVED` with ambiguity context and do not create a `GoldFact` candidate.
+4. If more than one maximal row remains under `030.CompareScopeSpecificity`, emit `TEMPORAL_POLICY_UNRESOLVED` with ambiguity context and do not create a `GoldFact` candidate.
 5. Validate `valid_interval_model`, `valid_time_input_precedence`, `time_quality_requirements`, and the selected `KnowledgeTimeImportPolicy` row.
 6. Select the first valid-time input in precedence order that is authorized by the row, present, parseable, unambiguous, and quality-sufficient.
 7. Reject supplier collection time, supplier delivery time, table snapshot time, lakehouse commit time, CDC offset time, heartbeat time, schema-history time, graph apply time, replay time, and current platform time unless the resolved row explicitly permits that exact field for the requested temporal mode.
@@ -272,7 +284,7 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `observation_type` | Yes | none | Exact `050`/`040` observation type. Wildcards are forbidden. |
 | `fact_type` | Yes | none | Exact fact type. Wildcards are forbidden. |
 | `predicate` | Yes | none | Exact predicate. Wildcards are forbidden. |
-| `source_scope_selector` | Yes | none | Canonical scope selector; broad category fallback is forbidden. |
+| `source_scope_selector` | Yes | none | `030.ScopeSelector`; broad category fallback is forbidden. |
 | `temporal_mode` | Yes | none | Closed owner token selecting event-time, state-assertion-time, source-interval, or explicit policy mode. |
 | `valid_interval_model` | Yes | none | One of `instant`, `half_open_interval`, `closed_source_interval_imported_as_half_open`, or `open_until_replaced`. |
 | `valid_time_input_precedence` | Yes | none | Ordered source field paths and source metadata paths allowed to become valid time. Empty is invalid unless row emits deterministic block. |
@@ -724,6 +736,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `080-SCOPE-TEMPORAL-AC-001` | Exact temporal policy match, missing source-scope dimension, subset-disallowed temporal policy, ambiguous temporal rows, and `TEMPORAL_POLICY_UNRESOLVED` with no `GoldFact` candidate fixtures pass. |
+| `080-SCOPE-TEMPORAL-AC-002` | Temporal policy selection includes selected selector checksum and context ref in `VersionManifest` when policy selection affects gold output. |
 | `080-AC-001` | Current, valid-at, known-at, corrected-history, replay, and audit queries are reconstructable from persisted records. |
 | `080-AC-002` | Every gold fact candidate has a temporal resolution row or deterministic temporal error. |
 | `080-AC-003` | Corrections never mutate existing `GoldFact` rows in place. |

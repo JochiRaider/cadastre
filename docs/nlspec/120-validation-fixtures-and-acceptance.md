@@ -25,6 +25,10 @@ Define fixtures, validation matrices, golden corpus, shadow execution, replay va
 
 - `All exported 040 core record schemas`
 - `CoreRecordValidationAlgorithm`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ScopeSelectorErrorCodeSet`
 
 ## Exports
 
@@ -77,6 +81,7 @@ Every active domain spec must include at least one negative validation case for 
 | Observability | Telemetry span, metric, structured log, baggage, exporter success, exporter failure, Collector state, sampling decision, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
 | Structured input repository | Branch, tag, pull request, repository URL, or hook success used as activation target; stale branch-tip validation; exact tree mismatch; invalid path; private binding leak; unmaterialized Git snapshot activation; package release missing materialization refs; missing `VersionManifest` refs; rollback to branch or tag; and hook success as activation evidence fail before forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
+| Scope selector closure | Selector normalization, exact match, subset allowed, subset disallowed, duplicate dimension, duplicate value, unknown field, unsupported dimension, under-scoped request, private leak, ambiguity, no row-order tiebreak, owner error mapping, redaction, and manifest inclusion are covered for every active scoped owner family. |
 
 ## Required Volatility Boundary Test Classes
 
@@ -107,6 +112,32 @@ Validation must prove that volatile material cannot redefine stable behavior and
 `RunValidationMatrix` must produce a deterministic `AcceptanceReport` containing row ID, owner spec, fixture checksum, input checksum, expected output checksum, actual output checksum, result, failure code, and version manifest ref.
 
 `AcceptanceReport.result = pass` is forbidden when any non-deferred define-once, Section 25, owner-export, duplicate-owner, runtime-restatement, or owner-contradiction validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or contains a required `TODO` fixture checksum, expected output checksum, expected error, mutation-prohibition proof, activation ref, or manifest ref.
+
+### ScopeSelectorValidationMatrix
+
+This matrix verifies `030.ScopeSelector` behavior and every owner import that uses scoped rows. A row may pass only when fixture checksum, expected output checksum, owner error mapping, redaction proof, mutation-prohibition proof, and `030.VersionManifest` requirements are concrete and non-`TODO`.
+
+| validation_row_id | owner_spec | scenario | expected output or error | required fixture coverage |
+| --- | --- | --- | --- | --- |
+| `val-030-scope-normalization-canonical` | `030` | Same selector dimensions and values in different input orders. | byte-identical normalized selector checksum | canonical bytes and checksum. |
+| `val-030-scope-exact-equality` | `030` | `ScopeSelectorEquals` on equivalent normalized selectors. | true | exact equality. |
+| `val-030-scope-eq-coverage` | `030` | `eq` row selector covers identical `eq` request. | covered | exact coverage. |
+| `val-030-scope-in-coverage` | `030` | `in` row selector covers request value subset. | covered | multi-value coverage. |
+| `val-030-scope-subset-disallowed` | `030` | Row omits request dimension not listed in `subset_allowed_dimension_keys`. | `SCOPE_SUBSET_NOT_ALLOWED` | no mutation. |
+| `val-030-scope-subset-allowed` | `030` | Row omits request dimension listed in `subset_allowed_dimension_keys`. | covered | selected context ref and selector checksum. |
+| `val-030-scope-duplicate-dimension` | `030` | Duplicate dimension key. | `SCOPE_SELECTOR_DUPLICATE_DIMENSION` | no selected row. |
+| `val-030-scope-duplicate-value` | `030` | Duplicate value after normalization. | `SCOPE_SELECTOR_DUPLICATE_VALUE` | no selected row. |
+| `val-030-scope-unknown-field` | `030` | Unknown selector or dimension field. | `SCOPE_SELECTOR_UNKNOWN_FIELD` | no checksum. |
+| `val-030-scope-unsupported-dimension` | `030` | Dimension key not declared by context. | `SCOPE_SELECTOR_UNSUPPORTED_DIMENSION` | owner mapping. |
+| `val-030-scope-under-scoped-request` | `030` | Request omits a required context key. | `SCOPE_REQUEST_UNDER_SCOPED` | no owner mutation. |
+| `val-030-scope-private-binding-leak` | `010`, `030`, `110` | Raw private selector value appears in public selector bytes. | `PRIVATE_BINDING_LEAK` or owner-specific leak code | redaction proof. |
+| `val-030-scope-ambiguity-rejection` | `030` | Two maximal scoped rows remain. | `SCOPE_SELECTOR_AMBIGUOUS` | no selected row. |
+| `val-030-scope-no-row-order-tiebreak` | `030` | Reversed row order yields same ambiguity output. | byte-identical ambiguity diagnostic | no row-order selection. |
+| `val-030-scope-owner-error-mapping` | all scoped owners | Owner maps shared selector error to owner code. | owner-specific error | registry row and fixture ref. |
+| `val-030-scope-redaction` | `110` | Selector error response contains private raw value in source input. | redacted output only | checksum, dimension key, redacted ref. |
+| `val-030-scope-version-manifest` | all scoped owners | Scoped row selection affects output. | `VersionManifest` includes row ref, row checksum, context ref, selector checksum, activation artifact ref | manifest inclusion. |
+
+`AcceptanceReport.result = pass` is forbidden when any active scoped owner family lacks selector normalization, exact-match, subset-allowed, subset-disallowed, duplicate, private-leak, ambiguity, owner-error-mapping, redaction, and manifest-inclusion fixtures.
 
 ### ActivationCatalogClosureValidationMatrix
 
@@ -847,9 +878,9 @@ Required `100` fixture rows:
 | `PackageReleaseManifest.compatibility_matrix_refs` | `val-100-release-manifest-compatibility-refs-omitted` | `PACKAGE_COMPATIBILITY_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
 | `PackageReleaseManifest.validation_refs` | `val-100-release-manifest-validation-refs-omitted` | `PACKAGE_VALIDATION_FAILED` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
 | `PackageReleaseManifest.release_checksum` | `val-100-release-manifest-release-checksum-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
-| `PackageReleaseManifest.activation_scope` | `val-100-release-manifest-activation-scope-omitted` | `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
+| `PackageReleaseManifest.activation_scope` | `val-100-release-manifest-activation-scope-omitted` | shared selector validation error mapped to `PACKAGE_ACTIVATION_ARTIFACT_SCOPE_MISMATCH` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
 | `PackageReleaseManifest.lifecycle_status` | `val-100-release-manifest-lifecycle-status-omitted` | `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | blocking |
-| `ProductionPackageSetManifest.target_environment` | `val-100-package-set-target-environment-omitted` | `PACKAGE_TYPE_POLICY_MISSING` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
+| `ProductionPackageSetManifest.target_environment` | `val-100-package-set-target-environment-omitted` | shared selector validation before owner-specific `PACKAGE_TYPE_POLICY_MISSING` when applicable | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
 | `ProductionPackageSetManifest.activation_mode` | `val-100-package-set-activation-mode-omitted` | `PACKAGE_LIFECYCLE_ILLEGAL_TRANSITION` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
 | `ProductionPackageSetManifest.package_release_refs` | `val-100-package-set-release-refs-omitted` | `PACKAGE_COHESION_INCOMPLETE` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
 | `ProductionPackageSetManifest.release_manifest_checksums` | `val-100-package-set-release-checksums-omitted` | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100-PACKAGE-SET-MANIFEST-AC-001` | blocking |
@@ -1461,6 +1492,8 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 
 | ID | Criterion |
 | --- | --- |
+| `120-SCOPE-SELECTOR-CLOSURE-AC-001` | Every active scoped owner family provides exact-match, subset-allowed, subset-disallowed, duplicate-dimension, duplicate-value, private-leak, missing-row, ambiguous-row, owner-error-mapping, redaction, and manifest-inclusion fixtures. |
+| `120-SCOPE-SELECTOR-CLOSURE-AC-002` | `AcceptanceReport.result = pass` is forbidden when any active scoped owner family lacks required `ScopeSelectorValidationMatrix` fixture coverage. |
 | `120-AC-001` | Every domain NLSpec has binary acceptance criteria and validation matrix rows for success, rejection, no-op, and edge behavior. |
 | `120-AC-002` | Every required negative authority-boundary case is executable and produces the expected owner-specific error code. |
 | `120-AC-003` | Golden corpus replay produces byte-identical expected outputs or deterministic failure records. |

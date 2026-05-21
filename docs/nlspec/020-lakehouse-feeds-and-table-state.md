@@ -32,6 +32,10 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `ActivationControlledArtifactRef`
 - `EvidenceRef`
 - `EvidenceArtifactIdKindRegistry`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -87,7 +91,7 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 | `supplier_profile_ref` | Yes | none | `030.ActivationControlledArtifactRef` with `artifact_class = raw_supplier_profile`. |
 | `read_target_kind` | Yes | none | One of `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, or `manifest_list`; omission fails with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE`. |
 | `read_policy_ref` | Yes | none | Active `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_read_policy`. |
-| `scope_key_schema` | Yes | none | Canonical JSON object declaring scope keys, type, bounds, and redaction behavior. Empty scope key schema is forbidden for production feeds. |
+| `scope_key_schema` | Yes | none | Declares the feed-owned dimensions used to materialize `020.LakehouseFeedScopeSelectorContext`. Empty scope key schema is forbidden for production feeds. |
 | `absence_sensitive_domains` | No | `[]` | Canonically sorted domain tokens. Empty means the feed may preserve positive observations but must not support absence-sensitive effects. |
 | `partial_read_policy` | No | `positive_records_only` | Closed enum: `reject_read`, `positive_records_only`, `declared_subset_required`. The default permits positive raw import from known partial reads only and forbids absence-sensitive effects. |
 | `empty_scope_policy` | No | `not_authoritative_for_absence` | Closed enum: `not_authoritative_for_absence`, `empty_complete_requires_060`, `reject_empty_scope`. |
@@ -100,9 +104,25 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 | `parser_mapping_refs` | No | `[]` | Parser and mapping artifact refs required before raw records may advance past import into parsing or normalization. |
 | `fixture_refs` | Yes | none | Non-empty refs to `120.LakehouseFeedFixture` rows covering the category and target kind. |
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows for profile schema, branch behavior, category closure, and private-binding leak rejection. |
-| `activation_scope` | Yes | none | Vendor-neutral scope in which the profile may affect output. It must not contain concrete tenant inventories, routes, credentials, or private source lists. |
+| `activation_scope` | Yes | none | `030.ActivationScope` for the feed profile. It must not contain concrete tenant inventories, routes, credentials, or private source lists. |
 
 Profile validation must materialize defaults before checksum computation. Unknown fields fail before activation unless the owning profile schema version declares an extension map.
+
+### LakehouseFeedScopeSelectorContext
+
+`LakehouseFeedScopeSelectorContext` is the owner context family for `020` feed scopes. It instantiates `030.ScopeSelectorContext`; it does not define selector schema, equality, coverage, subset matching, specificity, or ambiguity behavior.
+
+| Feed operation | Required context dimensions | Optional context dimensions | Default subset behavior | Required behavior |
+| --- | --- | --- | --- | --- |
+| feed read request | `source_category`, `source_dataset`, `read_target_kind` | `feed_profile_id`, `supplier_profile_ref`, `object_batch_ref`, `partition_set_ref`, `manifest_ref`, `dataset_version_ref`, `table_snapshot_ref` | none | Materialize an exact `030.ScopeSelector` before availability, read, import, and completeness decisions. |
+| object batch read | `source_category`, `source_dataset`, `read_target_kind`, `object_batch_ref` | `supplier_profile_ref`, `manifest_ref` | none | Object refs remain lakehouse refs and must not contain private source routes. |
+| partition set read | `source_category`, `source_dataset`, `read_target_kind`, `partition_set_ref` | `dataset_version_ref`, `table_snapshot_ref` | none | Missing required partition scope fails before read completeness output. |
+| dataset version read | `source_category`, `source_dataset`, `read_target_kind`, `dataset_version_ref` | `table_snapshot_ref` | none | Dataset version scope is exact by default. |
+| manifest list read | `source_category`, `source_dataset`, `read_target_kind`, `manifest_ref` | `supplier_profile_ref` | none | Manifest validation and read completeness use the same selector checksum. |
+
+Feed diagnostics field `scope_selector_checksum` must contain the normalized `030.ScopeSelector.selector_checksum`. Raw selector values remain forbidden in diagnostics when they are private under `010.ScopeSelectorPublicBindingRule`.
+
+Every selected feed profile, feed category closure row, read policy row, completeness profile row, and feed-scope context that can affect output must add the selected row ref, row checksum, `ScopeSelectorContext.context_ref`, request selector checksum, selected row selector checksum, and activation artifact ref to `030.VersionManifest`.
 
 ### StructuredInputRepositoryFeedProfileHandoff
 
@@ -740,6 +760,8 @@ Profile, category, manifest, table-state, and activation errors render through `
 
 | ID | Criterion |
 | --- | --- |
+| `020-SCOPE-FEED-AC-001` | Feed read requests materialize a normalized `030.ScopeSelector` before availability, read, import, and completeness decisions. |
+| `020-SCOPE-FEED-AC-002` | Exact feed scope selection, subset-disallowed feed scope, missing required key, duplicate key, private-binding leak, and manifest-inclusion fixtures pass for every active production feed context. |
 | `020-AC-001` | Raw import can be replayed from declared feed/table/object refs without enterprise source calls. |
 | `020-AC-002` | Missing rows or objects never authorize absence without an imported completeness decision from `060`. |
 | `020-AC-003` | Every production read and write has table-format-native refs when it can affect output or replay. |

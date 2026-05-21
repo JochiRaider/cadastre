@@ -22,7 +22,9 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 
 ## Imports
 
-- None.
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeDimension`
 
 ## Exports
 
@@ -33,6 +35,7 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 - `DirectSourceProhibition`
 - `SourceOfRecordRule`
 - `VolatilityBoundaryRule`
+- `ScopeSelectorPublicBindingRule`
 
 ## Boundary Contract
 
@@ -109,6 +112,23 @@ Public structured-input repositories must not contain concrete private routes, c
 | repository profile ID, snapshot ID, validation status, materialization status | Public only as redacted refs or checksums | May appear in public validation or API output when `110` redaction permits. |
 | branch name, file path, repository URL, commit SHA | Diagnostic only | Must be redacted, hashed, or bounded before public output according to `110` and `140`. |
 | private route, credential, tenant inventory, host list, account list, private sample bytes | Private only | Must fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` before public persistence, publication, export, API response, audit response, telemetry export, or validation-report materialization. |
+
+### ScopeSelectorPublicBindingRule
+
+`ScopeSelectorPublicBindingRule` applies to every `030.ScopeSelector` and `030.ActivationScope` before persistence, publication, export, API output, audit output, telemetry export, package report materialization, validation report materialization, or public structured-input materialization.
+
+Public selector dimension values may contain only the value kinds permitted by `030.ScopeDimension.value_kind`: `enum_token`, `cadastre_id`, `external_ref_id`, `redacted_ref`, and `sha256_hex`. A public selector must not contain raw private tenant IDs, source routes, scanner sites, host lists, account lists, credentials, private inventories, raw private fixture bytes, source-native identity values, backend internal IDs, private endpoint URLs, private repository routes, or concrete environment-specific source target lists.
+
+| Selector value class | Public status | Required behavior |
+| --- | --- | --- |
+| Vendor-neutral enum token | Allowed | Validate through the owner `030.ScopeSelectorContext`; do not reinterpret as private binding. |
+| Cadastre ID | Allowed | Must reference a public Cadastre record or redacted public record ref. |
+| External ref ID | Allowed when redacted or non-sensitive | Must not encode private route, credential, tenant inventory, host list, account list, scanner site, or backend internal ID. |
+| Redacted ref | Allowed | Must be opaque and irreversible from public bytes. |
+| SHA-256 hex | Allowed | May prove equality of private values only when the raw value is not exposed and the owner redaction rule permits the hash. |
+| Raw private binding value | Forbidden | Fail with `PRIVATE_BINDING_LEAK` or a more specific owner code before public output. |
+
+Private binding artifacts may map concrete values to public redacted refs or hashes. They must not alter `030.NormalizeScopeSelector`, `030.ScopeSelectorEquals`, `030.ScopeSelectorCovers`, `030.CompareScopeSpecificity`, `030.ResolveScopedRow`, default exactness, subset eligibility, error precedence, ambiguity behavior, activation gates, or owner non-scope predicates.
 
 ### SourceAuthorityRowPublicBindingRule
 
@@ -316,6 +336,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-VOLATILITY-AC-001` | No activation-controlled artifact can define product authority. |
 | `010-VOLATILITY-AC-002` | Activation artifacts that conflict with stable core fail before production output. |
 | `010-VOLATILITY-AC-003` | Product authority, identity semantics, temporal semantics, and projection boundaries remain stable-core owned. |
+| `010-SCOPE-SELECTOR-PUBLIC-BINDING-AC-001` | Public `030.ScopeSelector` and `030.ActivationScope` values containing raw tenant IDs, private routes, scanner sites, host lists, account lists, credentials, backend internal IDs, private endpoint URLs, private inventories, or raw private fixture bytes fail before persistence, publication, export, API output, audit output, telemetry export, package report materialization, or validation report materialization. |
+| `010-SCOPE-SELECTOR-PUBLIC-BINDING-AC-002` | Private bindings may map concrete values to redacted refs or hashes, but selector normalization, coverage, specificity, ambiguity, default exactness, subset eligibility, and activation gates remain byte-identical to public selector behavior. |
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-001` | A public source-authority row containing a private route or concrete tenant inventory fails before persistence, publication, export, or validation-report materialization. |
 | `010-SOURCE-CLOSURE-PRIVATE-BINDING-AC-002` | A public source-closure row, deterministic block row, closure validation result, or closure acceptance report containing a private route, concrete product name, tenant inventory, scanner site, zone inventory, account list, host list, or credential fails with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response materialization, or validation-report materialization. |
 | `010-IDENTITY-PRIVATE-BINDING-AC-001` | Public resolver profile rows, identifier scope rows, and package-supplied resolver artifacts containing concrete tenant inventories, private routes, credentials, scanner site names, or account lists fail with `PRIVATE_BINDING_LEAK` before persistence, publication, export, API response, package report, or validation-report materialization. |

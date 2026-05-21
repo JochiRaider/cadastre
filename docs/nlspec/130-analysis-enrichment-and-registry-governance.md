@@ -42,6 +42,9 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `080.ReplayEquivalencePolicy`
 - `060.SourceAuthorityProfileRow`
 - `060.AbsenceDerivationResult`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ScopeSelectorCovers`
 
 ## Exports
 
@@ -120,10 +123,24 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 | `allowed_output_effect` | Yes | `analysis_only` when analysis output is requested; `no_output` otherwise | Closed enum: `analysis_only`, `graph_delta_via_090`, `gold_fact_via_080`, `no_output`. |
 | `unsupported_behavior` | No | `explicit_no_op` | Unknown, unsupported, or unrepresentable rule outputs emit an explicit no-op unless the active row declares a stricter owner error. |
 | `validation_refs` | Yes | none | Non-empty refs to `120` derived-edge positive, negative, no-op, replay, and routing rows. |
-| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `activation_scope` | Yes | none | `030.ActivationScope` in which the row may affect output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 `allowed_output_effect` defaults to `analysis_only` or `no_output`. Direct graph mutation is forbidden. Gold fact output must route through `080`. Graph delta output must route through `090`. Unsupported or supportless generated edges remain analysis-only or no-op outputs.
+
+### AnalysisRegistryScopeSelectorContext
+
+`AnalysisRegistryScopeSelectorContext` is the owner context family for derived-edge, analysis-rule, enrichment, lineage, and registry governance artifact activation. It instantiates `030.ScopeSelectorContext`; it does not grant fact, identity, source authority, package, graph apply, or watermark authority.
+
+| Artifact family | Required dimensions | Optional dimensions | Default subset behavior | Permitted effect of scope match |
+| --- | --- | --- | --- | --- |
+| `DerivedGraphEdgeRule` | `artifact_family`, `rule_id`, `allowed_output_effect` | `graph_profile_id`, `fact_type`, `predicate` | none | Eligibility to route through the declared `allowed_output_effect` only. |
+| `AnalysisRuleBundle` | `artifact_family`, `analysis_rule_bundle_ref` | `query_class`, `graph_profile_id` | none | Eligibility for read-only analysis execution only. |
+| `ThreatIntelEnrichmentProfile` | `artifact_family`, `enrichment_profile_ref` | `source_category`, `source_dataset` | none | Eligibility for enrichment-only output only. |
+| `LineageFacetMappingPolicy` | `artifact_family`, `facet_namespace` | `dataset_ref`, `schema_url` | none | Eligibility for lineage metadata mapping only. |
+| `RegistryArtifactGovernance` | `artifact_family`, `registry_artifact_ref` | `domain`, `classification` | none | Eligibility for governance metadata activation only. |
+
+Scope matching must not widen `allowed_output_effect`, bypass `090` projection, bypass `080` derivation, create source authority, mutate identity, activate packages, or advance watermarks.
 
 ### DerivedGraphEdgeRule effect routing
 
@@ -164,7 +181,7 @@ They must not become identity, source completeness, source authority, gold fact,
 | `identity_effect` | Yes | `none` | Must be `none` for MVP. |
 | `authority_effect` | Yes | `none` | Must be `none` for MVP. |
 | `validation_refs` | Yes | none | Non-empty refs to `120` threat-intel positive, rejection, distribution, redaction, no-authority, and replay rows. |
-| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; scope matching never grants authority beyond the explicit allowed output effect. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### ThreatIntelEnrichmentRecord schema
@@ -257,7 +274,7 @@ Repository approval metadata is governance metadata only. It must not become pro
 | `glossary_refs` | No | `[]` | Governance metadata only. |
 | `custom_property_schema_refs` | No | `[]` | Exact `RegistryCustomPropertySchema` refs for every custom property path. |
 | `approval_refs` | Yes | none | Approval metadata refs; approval by itself does not grant production activation. |
-| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; scope matching never grants authority beyond the explicit allowed output effect. |
 | `package_set_ref` | Required when package-supplied | null otherwise | Immutable `100.ProductionPackageSetManifest` ref. |
 | `authority_grant_ref` | No | null | Non-null is valid only when another active owner spec exports the exact authority interface and validation refs pass. |
 | `validation_refs` | Yes | none | Non-empty refs to `120` registry activation, authority rejection, custom-property, classification, redaction, package-set, and replay rows. |
@@ -279,7 +296,7 @@ Repository approval metadata is governance metadata only. It must not become pro
 | `allowed_attachment_targets` | Yes | none | Closed set of registry artifact classes; wildcards are forbidden. |
 | `authority_effect` | Yes | `none` | Must be `none` unless another owner spec grants the exact authority interface. |
 | `validation_refs` | Yes | none | Non-empty refs to bounds, unknown field, redaction, attachment-target, authority-forbidden, and replay rows. |
-| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; scope matching never grants authority beyond the explicit allowed output effect. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### RegistryClassificationPolicy
@@ -294,7 +311,7 @@ Repository approval metadata is governance metadata only. It must not become pro
 | `export_effect` | Yes | `metadata_only` | Must not grant fact, source, graph, completeness, identity, package, approval, or watermark authority. |
 | `authority_effect` | Yes | `none` | Non-`none` fails with `REGISTRY_CLASSIFICATION_AUTHORITY_FORBIDDEN` unless imported by exact owner interface. |
 | `validation_refs` | Yes | none | Non-empty refs to label, attachment, redaction, authority-forbidden, and replay rows. |
-| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; scope matching never grants authority beyond the explicit allowed output effect. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### ActivateRegistryArtifact
@@ -302,7 +319,7 @@ Repository approval metadata is governance metadata only. It must not become pro
 ```text
 ActivateRegistryArtifact(governance_row, artifact_ref, package_set_ref, validation_matrix):
 1. Validate `artifact_ref` through `030.ActivationControlledArtifactRef` using owner spec `130` or the imported owner spec named by the governance row.
-2. Validate lifecycle status is `active`, artifact checksum matches, activation scope covers the request, and validation refs are non-empty.
+2. Validate lifecycle status is `active`, artifact checksum matches, validation refs are non-empty, and `030.ScopeSelectorCovers(artifact_ref.activation_scope, request_scope, selected_context)` returns covered.
 3. If the artifact is package-supplied, require `package_set_ref` and require it to match `governance_row.package_set_ref`.
 4. Validate every referenced `RegistryCustomPropertySchema` and `RegistryClassificationPolicy` row.
 5. If `authority_grant_ref` is null, activate governance metadata only.
@@ -402,7 +419,7 @@ Default `numeric_scoring_authority = disabled`. Numeric risk or exposure scores 
 | `allowed_effects` | No | `[]` | Fact, identity, completeness, graph, package, or watermark effects are forbidden for MVP. |
 | `redaction_policy_ref` | Required when raw facet bytes or raw values may be stored | none | Missing redaction policy rejects production storage. |
 | `validation_refs` | Yes | none | Non-empty refs to `120` lineage facet schema, checksum, collision, redaction, no-authority, and replay rows. |
-| `activation_scope` | Yes | none | Vendor-neutral scope only. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; scope matching never grants authority beyond the explicit allowed output effect. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### ArtifactClassPolicy substitution matrix
@@ -601,6 +618,8 @@ Numeric scoring is disabled by default. Attempts to emit authoritative numeric r
 
 | ID | Criterion |
 | --- | --- |
+| `130-SCOPE-ANALYSIS-AC-001` | Derived-edge exact activation scope, out-of-scope no mutation, registry artifact scope mismatch, ambiguity rejection, and private activation scope leak fixtures pass. |
+| `130-SCOPE-ANALYSIS-AC-002` | Analysis and registry scoped selection includes selector checksums and context refs in replay and validation artifacts when output can be affected. |
 | `130-AC-001` | Analysis rules cannot mutate authoritative or graph-serving state. |
 | `130-AC-002` | Threat-intel enrichment cannot create identity or fact authority without a separate active contract. |
 | `130-AC-003` | External lineage facets with mutable schema URLs, missing schema bytes, checksum mismatches, or namespace collisions are rejected. |

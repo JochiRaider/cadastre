@@ -42,6 +42,10 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `GoldFactPredicateContractRow`
 - `GoldFactSubjectRefKindRegistry`
 - `GoldFactObjectValueKindRegistry`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -237,6 +241,24 @@ The MVP active graph profile must close graph semantic selection before projecti
 
 Concrete JanusGraph rows must remain supporting material or deterministic block rows. They must not become core spec examples that imply production backend activation.
 
+### GraphScopeSelectorContextSet
+
+`GraphScopeSelectorContextSet` is the owner context family for graph serving, graph projection, graph backend, backend taxonomy, query translation, apply profile, and schema profile activation. Each context instantiates `030.ScopeSelectorContext`; graph identity, graph truth, graph edge semantics, traversal eligibility, backend query translation, and graph apply behavior remain owned by `090`.
+
+| Context name | Row families covered | Required dimensions | Optional dimensions | Subset behavior |
+| --- | --- | --- | --- | --- |
+| `graph_serving_scope` | graph serving profiles and derived-view state visibility | `graph_profile_id`, `query_class` | `consumer_scope`, `dataset_version_ref` | none by default. |
+| `graph_projection_scope` | `GraphProjectionProfile` rows | `graph_profile_id`, `fact_type`, `predicate` | `edge_type`, `node_type` | none by default. |
+| `backend_profile_scope` | `GraphBackendProfile` rows | `provider_id`, `graph_profile_id` | `storage_backend_kind`, `index_backend_kind`, `deployment_scope` | none by default. |
+| `backend_taxonomy_scope` | `GraphBackendTaxonomyMappingProfile` rows | `provider_id`, `graph_profile_id` | `node_type`, `edge_type`, `property_path` | none by default. |
+| `query_translation_scope` | `GraphQueryTranslationProfile` rows | `query_class`, `provider_id`, `graph_profile_id` | `node_type`, `edge_type`, `operation` | none by default. |
+| `apply_profile_scope` | `GraphApplyProfile` rows | `graph_profile_id`, `provider_id`, `operation` | `deployment_scope` | none by default. |
+| `schema_profile_scope` | `GraphReadModelSchemaProfile` rows | `graph_profile_id`, `provider_id` | `node_type`, `edge_type`, `property_path` | none by default. |
+
+Graph profile and backend selection algorithms must call `030.ResolveScopedRow` after non-scope predicates such as graph profile ID, provider ID, query class, edge type, node type, or requested operation match. Ambiguous graph profile or backend profile scope produces no graph delta and no backend mutation.
+
+Selector-only endpoint strings, graph backend IDs, backend labels, provider-native query text, backend-generated IDs, and backend internal cursor values are forbidden as identity selectors, evidence selectors, replay keys, drillback keys, response IDs, or page-token identity. This guard is independent of scope matching.
+
 ### GraphBackendSelectionPolicy
 
 Graph backend selection is active only when graph serving, graph apply, graph query, graph rebuild, graph drift check, or graph-serving promotion is in implementation scope. Backend selection is not fact authority, identity authority, source-completeness authority, or graph truth.
@@ -288,7 +310,7 @@ A `GraphBackendProfile` is provider-neutral. Provider-specific fields may appear
 | `raw_write_bypass_policy_ref` | Yes | none | Must prove raw Gremlin/admin/import writes are blocked, detected, or excluded from production. |
 | `package_set_manifest_ref` | Yes | none | Active `100.ProductionPackageSetManifest`. |
 | `validation_refs` | Yes | none | Non-empty refs to `120` backend-profile validation rows. |
-| `activation_scope` | Yes | none | Graph serving scope. |
+| `activation_scope` | Yes | none | `030.ActivationScope` for graph serving scope. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### GraphBackendActivationChecklist
@@ -450,7 +472,7 @@ A concrete graph projection profile row may affect output only through `030.Acti
 | `query_translation_profile_ref` | Yes | none | Active `GraphQueryTranslationProfile` ref for graph-serving output. |
 | `no_op_rules` | Yes | none | Must cover missing flow role, ambiguous flow role, unresolved endpoint, unsupported source fact, prohibited reachability, and generic external payload cases. |
 | `validation_refs` | Yes | none | Non-empty refs to passing `120.GraphActiveProfileClosureValidationMatrix` rows. |
-| `activation_scope` | Yes | none | Scope in which the row may affect graph output. |
+| `activation_scope` | Yes | none | `030.ActivationScope` for the graph output scope. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ### Closed GoldFact consumption for graph projection
@@ -1107,6 +1129,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `090-SCOPE-GRAPH-AC-001` | Exact graph profile selection, ambiguous graph profile rejection, backend activation scope mismatch, backend-generated ID leakage, selector-only endpoint rejection, and graph scope context manifest-inclusion fixtures pass. |
+| `090-SCOPE-GRAPH-AC-002` | Graph profile or backend ambiguity selects no row, emits no graph delta, and performs no backend mutation. |
 | `090-AC-001` | Graph state is rebuildable from authoritative lakehouse records and persisted graph deltas. |
 | `090-AC-002` | Query results are deterministically ordered and never depend on backend natural order or internal IDs. |
 | `090-AC-003` | Graph apply rejects stale schema fingerprints and missing constraints before mutation. |

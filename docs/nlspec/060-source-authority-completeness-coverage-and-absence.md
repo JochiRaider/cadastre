@@ -38,6 +38,11 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `GoldFactPredicateContractRow`
 - `GoldFactSubjectRefKindRegistry`
 - `GoldFactObjectValueKindRegistry`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
+- `030.CompareScopeSpecificity`
 
 ## Exports
 
@@ -108,8 +113,8 @@ Graph derived-view lag, missing graph objects, graph apply success, graph index 
 | `source_dataset` | Yes | none | Vendor-neutral source dataset. Wildcards are forbidden. |
 | `source_instance_selector` | Yes | `dataset_default` only when `instance_default_allowed = true` | Exact source instance selector or dataset-default selector. |
 | `instance_default_allowed` | Yes | `false` | `true` permits dataset-default matching only when no exact source-instance row exists. |
-| `subject_scope_selector` | Yes | none | Canonical selector covering the subject scope. |
-| `object_scope_selector` | Yes | none | Canonical selector covering the object scope. |
+| `subject_scope_selector` | Yes | none | `030.ScopeSelector` covering the subject scope under `060.SourceAuthorityScopeSelectorContextSet`. |
+| `object_scope_selector` | Yes | none | `030.ScopeSelector` covering the object scope under `060.SourceAuthorityScopeSelectorContextSet`. |
 | `required_gold_fact_predicate_contract_ref` | Yes | none | Exact active `080.GoldFactPredicateContractRow` ref covering `fact_type` and `predicate`. |
 | `subject_ref_kind_scope` | Yes | none | Non-empty subset of the selected `080.allowed_subject_ref_kinds`; it must not broaden the predicate contract. |
 | `object_value_kind_scope` | Yes | none | Non-empty subset of the selected `080.allowed_object_value_kinds`; it must not broaden the predicate contract. |
@@ -126,7 +131,7 @@ Graph derived-view lag, missing graph objects, graph apply success, graph index 
 | `required_supplier_visibility_profile_refs` | Required for permission-sensitive absence | `[]` when visibility cannot affect the effect | Exact `SupplierCollectionVisibilityProfile` refs. |
 | `absence_source_state_mapping` | Required when `allowed_effects` is non-empty | none | Map from source state to `040.FactAbsenceOutcome` token or blocking reason. |
 | `validation_refs` | Yes | none | Non-empty refs proving positive, blocked, missing-row, ambiguous-row, and manifest behavior. |
-| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; selected through `060.SourceAuthorityScopeSelectorContextSet` before the row may affect output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 Closed `authority_mode` values are:
@@ -157,18 +162,49 @@ A `SourceAuthorityProfileRow` may authorize only a `GoldFact` candidate whose `f
 
 External schema field presence, external schema field absence, OCSF object metadata, progress signals, freshness signals, and source-history metadata must not satisfy object authority without an exact `060` row and a matching `080` predicate contract row. Missing, inactive, checksum-mismatched, out-of-scope, or stale predicate contract refs block authority before gold output.
 
+### SourceAuthorityScopeSelectorContextSet
+
+`SourceAuthorityScopeSelectorContextSet` is the owner context family for scoped rows in `060`. Each context instantiates `030.ScopeSelectorContext`; no row in this section defines selector schema, equality, coverage, subset matching, specificity, or ambiguity behavior.
+
+| Context name | Row families covered | Required dimensions | Optional dimensions | Subset-allowed dimensions | Owner-local predicate that remains outside selector matching |
+| --- | --- | --- | --- | --- | --- |
+| `source_authority_activation_scope` | `SourceAuthorityProfileRow` activation | `source_category`, `source_dataset`, `fact_type`, `predicate`, `requested_effect` | `source_instance`, `subject_scope`, `object_scope` | `source_instance` only when owner row also has `instance_default_allowed = true` | fact type, predicate, object kind, subject ref kind, object value kind, authority mode, lifecycle status. |
+| `subject_scope` | `SourceAuthorityProfileRow.subject_scope_selector` | owner-declared subject keys | owner-declared subject refinements | none unless exact context row permits | subject reference kind validation. |
+| `object_scope` | `SourceAuthorityProfileRow.object_scope_selector` | owner-declared object keys | owner-declared object refinements | none unless exact context row permits | object value kind, null-object, structured-object validation. |
+| `coverage_scope` | `CoverageDimensionProfile` | `coverage_domain`, `source_category`, `source_dataset`, `fact_type`, `predicate` | owner-declared coverage dimensions | none | coverage state mapping and freshness policy. |
+| `staleness_scope` | `SourceStalenessPolicy` | `source_category`, `source_dataset`, `fact_type`, `predicate` | owner-declared time-basis keys | none | time-input precedence and expiry effects. |
+| `visibility_scope` | `SupplierCollectionVisibilityProfile` | `source_category`, `source_dataset`, `collection_method` | owner-declared permission keys | none | permission-state interpretation. |
+| `progress_signal_scope` | `ProgressSignalInterpretationPolicy` | `source_category`, `source_dataset`, `signal_kind` | owner-declared signal keys | none | allowed effect and non-authority mapping. |
+| `source_history_scope` | `SourceHistoryRetentionProfile` | `source_category`, `source_dataset`, `history_kind` | owner-declared retention keys | none | source-native history-window handling. |
+| `control_result_scope` | `ControlResultMappingRow` | `source_category`, `source_dataset`, `control_vocab` | benchmark/check scope | none | external vocabulary result mapping. |
+| `external_schema_authority_scope` | `ExternalSchemaAuthoritySignalMappingRow` | `external_schema_profile_ref`, `field_path`, `source_dataset`, `fact_type`, `predicate`, `requested_effect` | owner-declared schema refinements | none | external-schema authority handoff refs. |
+| `watermark_scope` | `ProjectionWatermarkPolicy` | `source_category`, `source_dataset`, `requested_effect` | owner-declared watermark keys | none | watermark advancement rule. |
+
+Dataset-default behavior is not a wildcard. A dataset-default source-authority row may cover a source-instance request only when the selected context lists `source_instance` in `subset_allowed_dimension_keys` and the candidate row has `instance_default_allowed = true`. Otherwise omission of `source_instance` returns the owner-mapped `SCOPE_SUBSET_NOT_ALLOWED` error before authority effects.
+
+Owner selector errors map as follows unless a narrower owner row maps the error more specifically.
+
+| Shared selector error | Default `060` owner error |
+| --- | --- |
+| `SCOPE_SELECTOR_MISMATCH` | `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` |
+| `SCOPE_REQUEST_UNDER_SCOPED` | `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` |
+| `SCOPE_SUBSET_NOT_ALLOWED` | `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` |
+| `SCOPE_SELECTOR_UNSUPPORTED_DIMENSION` | `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` |
+| `SCOPE_SELECTOR_AMBIGUOUS` | `SOURCE_AUTHORITY_ROW_AMBIGUOUS` |
+| selector structural validation errors | most specific `060` owner validation error, or `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` when no narrower code exists |
+
 ### ResolveSourceAuthorityProfileRow
 
 ```text
 ResolveSourceAuthorityProfileRow(request, active_row_set):
 1. Validate row-set ref through `030.ActivationControlledArtifactRef`.
-2. Keep only active rows whose activation scope covers the request.
-3. Match exact fact_type, predicate, source_category, source_dataset, requested effect, subject scope, and object scope.
-4. If request names a source instance, select only rows for that exact instance unless no specific row exists.
-5. Permit a dataset-default row only when `instance_default_allowed = true`.
-6. If zero rows remain, return `SOURCE_AUTHORITY_ROW_MISSING`.
-7. If more than one equally specific row remains, return `SOURCE_AUTHORITY_ROW_AMBIGUOUS`.
-8. Return the selected row and require its ref and checksum in `VersionManifest`.
+2. Apply exact non-scope predicates for fact_type, predicate, source_category, source_dataset, requested effect, subject reference kind, object value kind, object kind, null-object state, structured schema refs, authority mode, lifecycle status, and validation refs.
+3. Materialize request activation, subject, and object selectors under `060.SourceAuthorityScopeSelectorContextSet`.
+4. Select candidate rows by calling `030.ResolveScopedRow` for `activation_scope`, `subject_scope_selector`, and `object_scope_selector` using the selected contexts and owner error map.
+5. If request names a source instance, exact source-instance rows are non-scope preferred. Dataset-default rows may cover only when `instance_default_allowed = true` and the context permits `source_instance` subset matching.
+6. If zero rows remain after selector resolution, return `SOURCE_AUTHORITY_ROW_MISSING` or `SOURCE_AUTHORITY_ROW_SCOPE_MISMATCH` according to the mapped selector failure.
+7. If more than one maximal row remains under `030.CompareScopeSpecificity`, return `SOURCE_AUTHORITY_ROW_AMBIGUOUS`. No lexical, file-order, package-order, or validation-order tie break is permitted.
+8. Return the selected row and require its ref, row checksum, selector context refs, selector checksums, and activation artifact ref in `VersionManifest`.
 ```
 
 ### StructuredInputRepositorySourceAuthorityHandoff
@@ -741,7 +777,7 @@ Deterministic error handling for external-schema authority signal resolution is:
 | `source_dataset` | Yes | none | Vendor-neutral source dataset. |
 | `fact_type` | Yes | none | Exact fact type. |
 | `predicate` | Yes | none | Exact predicate. |
-| `scope_selector` | Yes | none | Canonical source/feed scope selector. |
+| `scope_selector` | Yes | none | `030.ScopeSelector` for the source/feed scope under `060.SourceAuthorityScopeSelectorContextSet`. |
 | `required_dimensions` | Yes | none | Non-empty ordered set of required dimensions for the domain. |
 | `authorized_dimension_states` | Yes | `covered` only | Authorized states are `covered` and explicitly permitted `empty_covered` only. |
 | `blocking_dimension_states` | Yes | all blocking states | Must include `permission_limited`, `partial_known_gap`, `partial_unknown_gap`, `source_unavailable`, `scope_unavailable`, `stale`, `unsupported`, `not_checked`, and `error` unless a narrower owner row maps a non-negative result. |
@@ -751,7 +787,7 @@ Deterministic error handling for external-schema authority signal resolution is:
 | `activation_scope` | Yes | none | Scope in which the row may affect output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
-`ResolveCoverageDimensionProfile(request, active_row_set)` must validate the row set through `030.ActivationControlledArtifactRef`, select active rows whose activation scope covers the request, match exact coverage domain, source category, source dataset, fact type, predicate, and scope selector, return `COVERAGE_DIMENSION_ROW_MISSING` when no row matches, return `COVERAGE_DIMENSION_ROW_AMBIGUOUS` when more than one equally specific row matches, and include the selected ref and checksum in `VersionManifest`.
+`ResolveCoverageDimensionProfile(request, active_row_set)` must validate the row set through `030.ActivationControlledArtifactRef`, apply exact non-scope predicates for coverage domain, source category, source dataset, fact type, and predicate, then call `030.ResolveScopedRow` over `scope_selector` using the `coverage_scope` context. Missing rows return `COVERAGE_DIMENSION_ROW_MISSING`; multiple maximal rows under `030.CompareScopeSpecificity` return `COVERAGE_DIMENSION_ROW_AMBIGUOUS`. The selected ref, checksum, context ref, selector checksum, and activation artifact ref must appear in `VersionManifest`.
 
 | Row ID | Domain | Dimension | Required evidence | Freshness policy | Permission-limited behavior | Partial behavior | Stale behavior | Default output | CoverageClosureStatus |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -1012,6 +1048,8 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 
 | ID | Criterion |
 | --- | --- |
+| `060-SCOPE-AUTHORITY-AC-001` | Exact row selection, dataset-default subset selection, dataset-default subset refusal, ambiguous maximal rows, missing required subject/object dimensions, coverage scope mismatch, source-instance override precedence, and no mutation on ambiguity fixtures pass through `030.ResolveScopedRow`. |
+| `060-SCOPE-AUTHORITY-AC-002` | Every output-affecting source-authority scoped selection includes selected row refs, row checksums, selector context refs, selector checksums, and activation artifact refs in `VersionManifest`. |
 | `060-AC-001` | Missing, stale, partial, permission-limited, unsupported, or unavailable evidence cannot become absence unless an active profile authorizes it. |
 | `060-AC-002` | Weak progress signals cannot be combined into stronger authority than each active policy row permits. |
 | `060-AC-003` | Every coverage-dependent fact has a current coverage assertion or emits a deterministic unknown/error outcome. |

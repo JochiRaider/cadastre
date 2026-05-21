@@ -35,6 +35,9 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `CoreRecordSchema`
 - `CoreRecordValidationAlgorithm`
 - `CoreRecordChecksumPolicy`
+- `010.ScopeSelectorPublicBindingRule`
+- `040.CanonicalJSON`
+- `040.ScalarType`
 
 ## Exports
 
@@ -82,6 +85,16 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `RunLockKeyDerivation`
 - `RunLockClosureValidationHandoff`
 - `LifecycleClosureValidationHandoff`
+- `ScopeSelector`
+- `ActivationScope`
+- `ScopeDimension`
+- `ScopeSelectorContext`
+- `NormalizeScopeSelector`
+- `ScopeSelectorEquals`
+- `ScopeSelectorCovers`
+- `CompareScopeSpecificity`
+- `ResolveScopedRow`
+- `ScopeSelectorErrorCodeSet`
 
 ## Stage Graph Contract
 
@@ -681,6 +694,140 @@ When any output emits `EvidenceRef`, `VersionManifest` must include the active `
 
 A `SourceAuthorityClosureMatrix` validation result may be referenced in `VersionManifest`, but it must not substitute for the underlying activation-controlled artifact refs and checksums. Absence-sensitive output must include every consulted `060` row-set ref even when the closure validation result is also included.
 
+## Scope Selector Contract
+
+`ScopeSelector` is the only reusable runtime selector schema in the Cadastre spec set. `ActivationScope` is an exact alias of `ScopeSelector`; it does not define a second shape, default, checksum, equality rule, coverage rule, subset rule, specificity rule, or ambiguity rule.
+
+Owner specs may define only their `ScopeSelectorContext` rows and non-scope predicates. A non-`030` spec that defines selector schema, selector equality, selector coverage, subset matching, specificity ordering, or ambiguity tie-breaking fails `000.DefineOnceClosureInventory` before promotion.
+
+### ScopeSelector schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `selector_version` | Yes | none | Must equal `scope_selector.v1`. Other values fail with `SCOPE_SELECTOR_VERSION_UNSUPPORTED`. |
+| `dimensions` | Yes | `[]` only when the selected context permits global scope | Array of `ScopeDimension` rows. Maximum 64 dimensions after normalization. Duplicate `key` values fail. |
+| `selector_checksum` | No | computed | SHA-256 over `040.CanonicalJSON` bytes of the normalized selector with `selector_checksum` omitted. |
+
+Unknown fields, null values, duplicate dimension keys, unsupported dimension keys, unsupported operators, unsupported value kinds, duplicate values, invalid value counts, and private-binding values fail before selector checksum computation. Public selector bytes must not contain raw private tenant IDs, private source routes, scanner sites, host lists, account lists, source-native secret values, backend internal IDs, credentials, private endpoint URLs, raw private fixture bytes, or private inventories.
+
+### ScopeDimension schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `key` | Yes | none | Dimension key declared by the selected `ScopeSelectorContext`. Unknown keys fail with `SCOPE_SELECTOR_UNSUPPORTED_DIMENSION`. |
+| `operator` | Yes | none | Closed enum: `eq`, `in`. |
+| `value_kind` | Yes | none | Closed enum: `enum_token`, `cadastre_id`, `external_ref_id`, `redacted_ref`, `sha256_hex`. |
+| `values` | Yes | none | Canonical array of values. `eq` requires exactly 1 value. `in` requires 2 through 128 values. Duplicate canonical values fail. |
+| `visibility` | Yes | `public` | Closed enum: `public`, `redacted_public`, `private_forbidden`. `private_forbidden` is valid only as a validation failure class and must not persist in public selector bytes. |
+
+Dimension values use `040.ScalarType` normalization for the named `value_kind`. `redacted_ref` is an opaque public reference produced by `010.ScopeSelectorPublicBindingRule`; it is not a reversible private binding.
+
+### ScopeSelectorContext schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `context_ref` | Yes | none | Stable owner context ref included in `VersionManifest` when selection can affect output. |
+| `owner_spec` | Yes | none | Exact owner spec that uses the context. |
+| `row_family` | Yes | none | Owner row family being selected. |
+| `required_dimension_keys` | Yes | `[]` | Request selectors must contain every required key unless `global_scope_allowed = true` and `dimensions = []`. |
+| `optional_dimension_keys` | Yes | `[]` | Supported keys that may appear but are not required. |
+| `subset_allowed_dimension_keys` | Yes | `[]` | Keys that a row selector may omit while still covering a request. Omitted-key subset matching is invalid for all other keys. |
+| `global_scope_allowed` | No | `false` | `true` permits `dimensions = []`; otherwise an empty selector fails with `SCOPE_REQUEST_UNDER_SCOPED`. |
+| `specificity_dimension_order` | Yes | all supported keys sorted lexically | Used for deterministic diagnostics and validation only. It must not resolve incomparable selectors. |
+| `owner_error_map` | Yes | none | Total mapping from every `ScopeSelectorErrorCodeSet` value the owner can expose to an owner-specific error code. |
+| `validation_refs` | Yes | none | Non-empty refs covering exact, subset, duplicate, unsupported, ambiguity, redaction, and manifest cases. |
+
+The supported key set is the union of `required_dimension_keys`, `optional_dimension_keys`, and `subset_allowed_dimension_keys`. A key listed in `subset_allowed_dimension_keys` must also be listed in `optional_dimension_keys` unless `global_scope_allowed = true`. This context permits subset matching only at the selector layer. Owner-local row flags, such as `060.instance_default_allowed`, remain non-scope predicates and must be checked before or after the selector call as declared by the owner algorithm.
+
+### ScopeSelectorErrorCodeSet
+
+| Error code | Required use |
+| --- | --- |
+| `SCOPE_SELECTOR_VERSION_UNSUPPORTED` | `selector_version` is absent or not `scope_selector.v1`. |
+| `SCOPE_SELECTOR_UNKNOWN_FIELD` | A selector or dimension contains an undeclared field. |
+| `SCOPE_SELECTOR_NULL_FORBIDDEN` | Any selector or dimension field is null. |
+| `SCOPE_SELECTOR_DUPLICATE_DIMENSION` | More than one dimension uses the same `key`. |
+| `SCOPE_SELECTOR_DUPLICATE_VALUE` | A dimension contains duplicate canonical values. |
+| `SCOPE_SELECTOR_INVALID_VALUE_COUNT` | `eq` has a value count other than 1, or `in` has fewer than 2 or more than 128 values. |
+| `SCOPE_SELECTOR_UNSUPPORTED_DIMENSION` | A dimension key is not declared by the selected context. |
+| `SCOPE_SELECTOR_UNSUPPORTED_OPERATOR` | `operator` is not `eq` or `in`. |
+| `SCOPE_SELECTOR_UNSUPPORTED_VALUE_KIND` | `value_kind` is not in the closed value-kind set. |
+| `SCOPE_REQUEST_UNDER_SCOPED` | The request selector omits a required key or a row key needed to evaluate coverage. |
+| `SCOPE_SUBSET_NOT_ALLOWED` | A row selector omits a request key that is not in `subset_allowed_dimension_keys`. |
+| `SCOPE_SELECTOR_PRIVATE_BINDING_LEAK` | Public selector bytes contain a raw private binding or forbidden private value. |
+| `SCOPE_SELECTOR_MISMATCH` | A valid row selector does not cover the request selector. |
+| `SCOPE_SELECTOR_AMBIGUOUS` | More than one maximal row selector remains, or selectors are incomparable under `CompareScopeSpecificity`. |
+| `SCOPE_SELECTOR_CONTEXT_INCOMPLETE` | The selected context omits required keys, owner error mappings, or validation refs. |
+
+### NormalizeScopeSelector
+
+```text
+NormalizeScopeSelector(selector, context, visibility_context):
+1. Reject missing selector, unknown fields, null fields, unsupported selector_version, and invalid context.
+2. Validate every dimension key against context.supported key set.
+3. Reject duplicate dimension keys before sorting.
+4. Validate operator, value_kind, visibility, and value count.
+5. Normalize every value through the matching `040.ScalarType` rule or `redacted_ref` rule.
+6. Reject duplicate normalized values inside a dimension.
+7. Sort each dimension's values by canonical UTF-8 bytes.
+8. Sort dimensions by ascending lexical `key`.
+9. If dimensions is empty and context.global_scope_allowed is false, fail with `SCOPE_REQUEST_UNDER_SCOPED`.
+10. Apply `010.ScopeSelectorPublicBindingRule` when visibility_context is public, public-output, validation-output, package-output, API-output, audit-output, export-output, or telemetry-output.
+11. Compute selector_checksum as SHA-256 over `040.CanonicalJSON` bytes with `selector_checksum` omitted.
+12. Return the normalized selector with computed selector_checksum.
+```
+
+### ScopeSelectorEquals
+
+`ScopeSelectorEquals(a, b, context)` normalizes both selectors under the same `ScopeSelectorContext` and returns true only when the normalized selector canonical bytes, excluding `selector_checksum`, are byte-identical. Input order never affects equality. Unknown fields, private-binding leaks, duplicate keys, duplicate values, unsupported keys, and under-scoped requests fail before equality returns.
+
+### ScopeSelectorCovers
+
+```text
+ScopeSelectorCovers(row_scope, request_scope, context):
+1. Normalize row_scope and request_scope using the same context.
+2. Require request_scope to contain every context.required_dimension_keys entry unless context.global_scope_allowed permits an empty request.
+3. For every dimension in row_scope, require request_scope to contain the same key. If request_scope omits the key, fail with `SCOPE_REQUEST_UNDER_SCOPED`.
+4. For every dimension in request_scope:
+   a. If row_scope contains the key, row values must cover request values.
+   b. If row_scope omits the key and key is in context.subset_allowed_dimension_keys, treat the row as a permitted broader row for that key.
+   c. If row_scope omits the key and key is not subset-allowed, fail with `SCOPE_SUBSET_NOT_ALLOWED`.
+5. `eq` covers only the same single canonical value.
+6. `in` covers a request when every request value is a subset of the row value set.
+7. Return covered only when every request dimension is covered.
+```
+
+Default matching is exact because `subset_allowed_dimension_keys` defaults to `[]`. Subset coverage must not be inferred from missing dimensions, wildcard strings, empty arrays, lexical row ID order, file order, package order, backend order, insertion order, or validation report order.
+
+### CompareScopeSpecificity
+
+`CompareScopeSpecificity(a, b, request_scope, context)` compares only selectors that already cover the request. It returns one of `a_more_specific`, `b_more_specific`, `equal_specificity`, or `incomparable_ambiguous`.
+
+A selector is more specific only when every dimension value set is equal to or narrower than the other selector and at least one dimension is narrower or present where the other selector is subset-omitted. An `eq` value is narrower than an `in` set containing that value. A selector with an additional covered dimension is narrower than a selector that omits that dimension only when the omitted dimension is subset-allowed. If each selector is narrower on at least one different dimension, the result is `incomparable_ambiguous`.
+
+`context.specificity_dimension_order` is used for stable diagnostic ordering and validation row enumeration only. It must not break ties or select among incomparable selectors.
+
+### ResolveScopedRow
+
+```text
+ResolveScopedRow(candidate_rows, row_scope_field, request_scope, context, owner_non_scope_predicates):
+1. Validate context and owner_error_map.
+2. Keep only rows that satisfy owner_non_scope_predicates declared by the owner spec.
+3. Normalize request_scope.
+4. For each remaining row, normalize row[row_scope_field] and evaluate ScopeSelectorCovers(row[row_scope_field], request_scope, context).
+5. Drop rows with `SCOPE_SELECTOR_MISMATCH` only when at least one active row set exists for the owner family; propagate all structural selector errors through owner_error_map.
+6. If zero rows remain, return the owner's mapped missing or scope-mismatch error.
+7. Compute maximal rows using CompareScopeSpecificity.
+8. If exactly one maximal row remains, return that row plus row ref, row checksum, context ref, selector checksum, and activation artifact ref requirements.
+9. If more than one maximal row remains, return the owner's mapped ambiguity error with redacted ambiguity diagnostics and no selected row.
+```
+
+Ambiguity is never resolved by lexical row ID, file order, package order, backend order, insertion order, validation report order, or implementation-local default.
+
+### Scope selector manifest requirements
+
+When a scoped row selection can affect output, `030.VersionManifest.included_refs` must include the selected row ref, selected row checksum, selected `ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, and activation artifact ref. Ambiguity diagnostics that affect a visible error, audit event, validation result, health output, package report, or replay result must include redacted selector checksums and context refs, not raw private selector values.
+
 ## Activation-Controlled Artifact Reference Contract
 
 `ActivationControlledArtifactRef` is the canonical reference shape for every output-affecting activation-controlled artifact. Owner specs may require additional artifact payload fields, but they must not redefine this reference shape.
@@ -693,7 +840,7 @@ A `SourceAuthorityClosureMatrix` validation result may be referenced in `Version
 | `artifact_version` | Yes | Owner-defined immutable version string. |
 | `artifact_checksum` | Yes | SHA-256 over the canonical artifact payload or registry row set. |
 | `lifecycle_status` | Yes | Must be allowed for the execution mode. |
-| `activation_scope` | Yes | Scope in which the artifact may affect output. |
+| `activation_scope` | Yes | `030.ActivationScope`; it must be normalized through `030.NormalizeScopeSelector` before validation and before checksum computation. |
 | `validation_refs` | Yes | Non-empty refs to passing validation rows required by the owner. |
 | `package_set_ref` | Required when package-supplied | Immutable `ProductionPackageSetManifest` ref. |
 | `supersedes` | No | Prior artifact refs replaced by this artifact. Default `[]`. |
@@ -856,7 +1003,7 @@ ValidateActivationControlledArtifactRef(ref, execution_scope, required_owner_spe
 3. If `artifact_class` is not in the closed registry, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
 4. If checksum validation fails, fail with the owner checksum code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
 5. If lifecycle status is not allowed for execution mode, fail with the owner lifecycle code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
-6. If activation scope does not cover execution_scope, fail with the owner scope code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
+6. If `030.ScopeSelectorCovers(ref.activation_scope, execution_scope, activation_context)` does not return covered, fail with the owner scope code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
 7. If required validation refs are missing, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
 8. If package-set membership is required and mismatched, fail with the package owner code or `ACTIVATION_ARTIFACT_INCOMPLETE`.
 9. If a superseded artifact is selected, fail with `ACTIVATION_ARTIFACT_INCOMPLETE`.
@@ -1073,6 +1220,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Output class | Required refs |
 | --- | --- |
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
+| Scoped row selection | selected scoped row ref, selected row checksum, selected `030.ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, activation artifact ref, and redacted ambiguity diagnostic refs when selection failure affects output. |
 | `feed_category_closure` | active `020.LakehouseFeedCategoryClosureRowSet` ref, every selected category row ref/checksum, source-dataset catalog ref or deterministic block row ref, validation refs, package-set refs when package-supplied, and closure outcome. |
 | `ocsf_mapping_closure` | active `050.ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, `CanonicalValidationOutput`, row checksums, validation refs, and package-set refs when package-supplied. |
 | `source_authority_closure` | active `060.SourceAuthorityClosureMatrixRowSet` or exact deterministic block row ref plus all underlying source authority, completeness, coverage, staleness, progress-signal, visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row-set refs consulted by the effect. |
@@ -1388,6 +1536,13 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-EVIDENCE-ARTIFACT-MANIFEST-AC-002` | Activation artifact evidence fails when artifact lifecycle is inactive, checksum mismatches, package-set membership is required but absent, or evidence artifact class row-set refs are omitted. |
 | `030-PACKAGE-VM-AC-001` | Package activation output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE` when any required package-set, release, trust, repository, SBOM, provenance, compatibility, rollback, quarantine, emergency, health, validation, lifecycle, or approval ref is missing from `VersionManifest.included_refs`. |
 | `030-PACKAGE-POLICY-MANIFEST-AC-001` | Package activation fails before output when the selected `PackageTypePolicyRowSet`, selected `PackageTypePolicyRow`, selected deprecation policy row, package compatibility row, package type coverage matrix checksum, or release manifest checksum is missing from `VersionManifest.included_refs` or checksum-mismatched. |
+
+| `030-SCOPE-SELECTOR-AC-001` | Equivalent selector inputs with different dimension order or value order normalize to byte-identical canonical bytes and selector checksums. |
+| `030-SCOPE-SELECTOR-AC-002` | Duplicate dimension keys, duplicate values, unknown fields, unsupported dimensions, invalid operator/value-kind pairs, and invalid `in` counts fail before row selection. |
+| `030-SCOPE-SELECTOR-AC-003` | Default matching is exact; subset matching fails unless the selected context lists the omitted key in `subset_allowed_dimension_keys`. |
+| `030-SCOPE-SELECTOR-AC-004` | Ambiguous or incomparable maximal scoped rows produce the owner mapped ambiguity error and select no row. |
+| `030-SCOPE-SELECTOR-AC-005` | Public selector bytes containing raw private bindings fail before persistence, publication, API output, audit output, telemetry export, package report materialization, or validation report materialization. |
+| `030-SCOPE-SELECTOR-AC-006` | Output-affecting scoped row selection includes selected row refs, row checksums, context refs, selector checksums, and activation artifact refs in `VersionManifest`. |
 
 ### Structured input repository acceptance criteria
 

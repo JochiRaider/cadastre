@@ -31,6 +31,9 @@ Define how parsed raw records become silver observations and how external schema
 - `CoreRecordValidationAlgorithm`
 - `CadastreSilverObservationSchema`
 - `ActivationControlledArtifactRef`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ScopeSelectorCovers`
 
 ## Exports
 
@@ -109,8 +112,23 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 | `source_extension_rule_set_ref` | Active rule set or explicit empty rule set. |
 | `upgrade_report_ref` | Required when replacing an active production profile. |
 | `validation_refs` | Non-empty. |
-| `activation_scope` | Vendor-neutral scope. |
+| `activation_scope` | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Production use requires `active`. |
+
+### MappingScopeSelectorContext
+
+`MappingScopeSelectorContext` is the owner context family for `050` mapping, external schema profile, source extension, and mapping-tool activation scopes. It instantiates `030.ScopeSelectorContext`; it does not define selector equality, coverage, specificity, subset rules, or ambiguity behavior.
+
+| Row family | Required request dimensions | Optional dimensions | Subset-allowed dimensions | Owner-local predicates kept outside scope matching |
+| --- | --- | --- | --- | --- |
+| `ExternalSchemaProfile` | `source_category`, `source_dataset`, `schema_name`, `schema_version` | `observation_type`, `mapping_bundle_ref` | none | compiled artifact validation, class allowlist, profile set, extension set, lifecycle status. |
+| `ObservationToOCSFMappingRow` | `source_category`, `source_dataset`, `observation_type` | `schema_name`, `schema_version`, `mapping_bundle_ref` | none | mapping discriminator evaluation, OCSF category/class/activity/type validation, source-extension validation. |
+| `MappingProjectManifest` | `source_category`, `source_dataset`, `mapping_project_ref` | `observation_type`, `schema_name`, `schema_version` | none | repository snapshot validation, compiler pipeline validation, plugin policy. |
+| `SourceExtensionFieldRule` | `source_category`, `source_dataset`, `field_path` | `observation_type`, `mapping_bundle_ref` | none | namespace collision, secret scanning, OCSF reserved-name policy. |
+
+`ResolveOCSFMapping` must normalize the request execution scope, reject under-scoped requests through the owner error map, and keep only active mapping/profile rows whose `activation_scope` covers the request through `030.ScopeSelectorCovers` before mapping discriminator evaluation. Discriminator ordering and OCSF class validation remain owner-local and must run only after scope-filtered row selection.
+
+Scope mismatch must remain distinguishable from missing discriminator input and ambiguous discriminator input. A mapping selection that fails scope coverage must not emit silver output.
 
 ## OCSF Mapping Requirements
 
@@ -182,7 +200,7 @@ Absent or ambiguous source direction emits no qualifying `FlowRoleEvidence` item
 | `source_extension_rule_set_ref` | Yes | empty rule set when omitted by explicit row policy | Ref to an active `SourceExtensionFieldRuleSet`; omitted means no source-extension fields may be emitted. |
 | `cadastre_owned_field_policy_refs` | Yes | `[]` | Refs to owner policies for Cadastre-owned envelope fields used by the row. |
 | `validation_fixture_refs` | Yes | none | Non-empty refs to positive and negative fixtures before activation. |
-| `activation_scope` | Yes | none | Scope in which the row may affect output. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Yes | none | Imported from `030.LifecycleStatus`; production mapping requires `active`. |
 
 Unknown fields in `ObservationToOCSFMappingRow` fail before row-set activation. Row-set canonical bytes sort rows by ascending lexical `row_id`.
@@ -192,8 +210,9 @@ Unknown fields in `ObservationToOCSFMappingRow` fail before row-set activation. 
 ```text
 ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
 1. Validate ExternalSchemaProfile, ExternalSchemaArtifactRef, ProfileResolutionManifest, ExternalEnumMappingRuleSet, OCSFBaseEventFieldPolicySet, SourceExtensionFieldRuleSet, and ObservationToOCSFMappingRowSet through 030.ActivationControlledArtifactRef.
-2. Load active ObservationToOCSFMappingRow rows whose observation_type equals observation.observation_type.
-3. Evaluate mapping_discriminator rows in ascending lexical row_id order.
+2. Normalize the request execution scope and reject under-scoped requests before row selection.
+3. Keep only active `ObservationToOCSFMappingRow` and profile rows whose `activation_scope` covers the request through `030.ScopeSelectorCovers`, then load rows whose `observation_type` equals `observation.observation_type`.
+4. Evaluate mapping_discriminator rows in ascending lexical row_id order.
 4. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
 5. If more than one row matches, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
 6. Validate category_uid, class_uid, activity_id, type_uid, and type_name against the compiled OCSF artifact.
@@ -456,7 +475,7 @@ A mapping artifact entering `active` status must have `030.LifecycleTransitionEv
 | `deprecated_field_set` | Canonically sorted deprecated fields and waiver refs. |
 | `manifest_checksum` | SHA-256 over canonical manifest bytes. |
 | `validation_refs` | Non-empty. |
-| `activation_scope` | Vendor-neutral scope. |
+| `activation_scope` | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Production use requires `active`. |
 
 ### Observation-to-OCSF mapping matrix
@@ -504,7 +523,7 @@ A required path may be absent only when the active row declares a field-quality 
 | `redaction_policy_ref` | Required when value may persist or display. |
 | `authority_effect` | Must be `none`; any other value fails activation. |
 | `validation_refs` | Non-empty. |
-| `activation_scope` | Vendor-neutral scope. |
+| `activation_scope` | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Production use requires `active`. |
 
 `raw_data`, `raw_data_hash`, and `unmapped` are disabled by default. Observables, enrichments, severity, status, and confidence are non-authoritative by default. Any active policy that permits bounded metadata persistence must include redaction refs and validation fixtures proving no raw evidence, omission, identity, gold, graph, source-authority, or confidence-policy substitution.
@@ -538,7 +557,7 @@ A required path may be absent only when the active row declares a field-quality 
 | `raw_value_preservation_path` | Required for `Other` or unknown diagnostics. |
 | `deprecated_enum_behavior` | Default `reject`; waiver ref required otherwise. |
 | `validation_refs` | Non-empty. |
-| `activation_scope` | Vendor-neutral scope. |
+| `activation_scope` | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Production use requires `active`. |
 
 Unknown enum values must not invent enum IDs. `Other` may be emitted only when the compiled enum contains `Other`, the active rule permits `emit_other_with_raw_preservation`, and `raw_value_preservation_path` names a declared diagnostic or source-extension path permitted by the active source-extension policy.
@@ -758,6 +777,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `050-SCOPE-MAPPING-AC-001` | Mapping activation scope mismatch, private activation scope leak, exact scope match, duplicate selector dimension rejection, and selected mapping scope context manifest-inclusion fixtures pass before silver output. |
+| `050-SCOPE-MAPPING-AC-002` | `ResolveOCSFMapping` distinguishes scope mismatch from missing discriminator and ambiguous discriminator without emitting silver output for scope failures. |
 | `050-AC-001` | Every production mapping bundle emits deterministic `CanonicalValidationOutput`. |
 | `050-AC-002` | OCSF-aligned observations validate against the exact compiled external schema artifact. |
 | `050-AC-003` | Undeclared source extension fields fail before production output. |

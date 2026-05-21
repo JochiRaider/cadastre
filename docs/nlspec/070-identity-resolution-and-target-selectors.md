@@ -41,6 +41,10 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `GoldFactSubjectRefKindRegistry`
 - `GoldFactObjectValueKindRegistry`
 - `GoldFactPredicateContractRow`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.ScopeSelectorContext`
+- `030.ResolveScopedRow`
 
 ## Exports
 
@@ -149,8 +153,8 @@ Private source bindings in resolver row catalogs fail under `010` and `110` reda
 | `profile_version` | Yes | none | Immutable owner version included in explanation and manifest checksums. |
 | `run_mode` | Yes | none | Closed token; production selection requires `production` unless a validation/shadow/canary mode is explicitly requested. |
 | `entity_type` | Yes | none | Must match one row in `ResolverProfileCoverageMatrix`. |
-| `source_scope_selector` | Yes | none | Canonical selector over source/feed scopes; concrete private source bindings are forbidden in public rows. |
-| `source_scope_match_policy` | Yes | `exact_scope_required` | Closed enum: `exact_scope_required`, `scope_subset_allowed_for_review_only`. Subset policy must not create, attach, or merge. |
+| `source_scope_selector` | Yes | none | `030.ScopeSelector` over source/feed scopes; concrete private source bindings are forbidden in public rows. |
+| `source_scope_match_policy` | Yes | `exact_scope_required` | Closed enum: `exact_scope_required`, `scope_subset_allowed_for_review_only`. `exact_scope_required` means the selected `030.ScopeSelectorContext` has no subset-allowed keys. `scope_subset_allowed_for_review_only` means subset keys may exist only in the selected context and selected row; subset matches may route only to review or no-decision and must not create, attach, merge, or split. |
 | `evidence_class_set_ref` | Yes | none | `030.ActivationControlledArtifactRef` with `artifact_class = identifier_evidence_class_row_set`. |
 | `identifier_scope_row_refs` | Yes | none | Non-empty canonical array of active `IdentifierScope` row refs. |
 | `candidate_generation_profile_ref` | Yes | none | `artifact_class = candidate_generation_profile`. |
@@ -167,7 +171,7 @@ Private source bindings in resolver row catalogs fail under `010` and `110` reda
 | `merge_policy` | Yes | `durable_evidence_merge_allowed` | Merge still requires exact durable evidence, exact scope, no blocker, and selected decision row. |
 | `learned_artifact_policy` | No | `disabled` | Learned artifacts may propose candidates only when active; they must not override blockers or emit create, attach, or merge decisions by themselves. |
 | `validation_refs` | Yes | none | Non-empty refs proving creation, attachment, durable merge, weak rejection, blockers, overflow, review totality, split handoff, selector safety, explanation checksum, and replay. |
-| `activation_scope` | Yes | none | Vendor-neutral scope in which the row may affect output. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; selected through `070.IdentifierScopeSelectorContext` before the row may affect output. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 ## Resolver artifact activation boundary
@@ -363,8 +367,8 @@ The active hard blocker row set must contain exactly one most-specific active ro
 ResolveIdentity(evidence_items, resolver_profile, source_authority_context, version_manifest):
 1. Validate `ResolverProfile`, `ResolverProfileRow`, `IdentifierEvidenceClass`, `IdentifierScope`, `CandidateGenerationProfile`, `IdentityHardBlockerRowSet`, `AssetGenerationBoundary`, `ResolverDecisionMatrix`, `IdentityConfidenceBand`, `IdentityReviewRoutingPolicy`, `SplitPolicy`, `ResolverExplanationPolicy`, and `TargetSelectorSafetyPolicy` refs through `030.ActivationControlledArtifactRef`.
 2. Fail before candidate generation when any required row or artifact is inactive, missing, ambiguous, checksum-mismatched, out of scope, superseded, or unvalidated.
-3. Resolve exactly one active `ResolverProfileRow` for run mode, entity type, source scopes, evidence classes, lifecycle boundary types, and activation scope.
-4. Normalize identifiers into `IdentifierScope`-aware `IdentityEvidenceItem` rows and materialize defaults before checksum computation.
+3. Resolve exactly one active `ResolverProfileRow` for run mode, entity type, evidence classes, lifecycle boundary types, source scope, and activation scope by applying owner non-scope predicates and then calling `030.ResolveScopedRow` over `source_scope_selector` and `activation_scope`.
+4. Normalize identifiers into `IdentifierScopeSelectorContext`-aware `IdentityEvidenceItem` rows and materialize defaults before checksum computation.
 5. Reject uncovered or under-scoped evidence with the most specific resolver error.
 6. Generate blocking keys from the canonical blocking-key table; reject under-scoped keys before candidate pair materialization.
 7. For each blocking key, sort members lexically by source asset ID and evidence item checksum, generate unordered candidate pairs, and stop at the first overflow bound crossed.
@@ -425,6 +429,32 @@ IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-
 | `unsupported_entity_type` | any | any | any | any | `no_decision` only | `identity-unsupported-entity-type` |
 
 The `unsupported_entity_type` row is closed behavior. It must emit `RESOLVER_ENTITY_TYPE_UNSUPPORTED`, must emit `no_decision`, must not open review, and must not mutate `CanonicalEntity`, `SourceAsset`, or `Identifier`.
+
+### IdentifierScopeSelectorContext
+
+`IdentifierScopeSelectorContext` converts identity source-scope and identifier-scope matching to `030.ScopeSelectorContext` rows. It does not define selector schema, equality, coverage, specificity, subset rules, or ambiguity behavior.
+
+| Source class | Identifier class | Required selector dimensions | Optional dimensions | Subset behavior | Uncovered-scope behavior |
+| --- | --- | --- | --- | --- | --- |
+| cloud provider | provider resource ID | `provider`, `account_or_project_or_subscription` | `region`, `generation` | none | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates. |
+| endpoint agent | agent durable ID | `enrollment_tenant`, `deployment`, `agent_namespace` | `generation` | none | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates. |
+| directory | user or service account durable ID | `directory_tenant_or_domain`, `directory_source`, `immutable_object_id` | none | none | `IDENTITY_EVIDENCE_UNDER_SCOPED`; no candidates. |
+| Kubernetes | UID | `cluster`, `namespace`, `resource_kind`, `uid` | `generation` | none | source-object identity only by default. |
+| network | `ip_address` | `address_family`, `observed_interval`, `source_scope` | none | none | weak evidence only. |
+| DNS | name/PTR | `zone_or_source_scope`, `observed_interval` | none | none | weak evidence only. |
+| graph | backend key | `backend_profile`, `graph_object_scope` | none | none | selector only; no identity. |
+
+Identifier normalization remains owner-local after selector validation: provider tokens are lowercased where the existing identity evidence rule requires it, exact durable IDs remain exact after NFC, FQDN normalization remains owner-local, and IP textual normalization remains owner-local. Selector context validation occurs before candidate generation.
+
+Shared selector errors map to resolver errors as follows.
+
+| Shared selector error | Resolver error |
+| --- | --- |
+| `SCOPE_REQUEST_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `SCOPE_SELECTOR_UNSUPPORTED_DIMENSION` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `SCOPE_SUBSET_NOT_ALLOWED` | `RESOLVER_SCOPE_SUBSET_MUTATION_FORBIDDEN` |
+| `SCOPE_SELECTOR_AMBIGUOUS` | `RESOLVER_PROFILE_ROW_AMBIGUOUS` |
+| `SCOPE_SELECTOR_PRIVATE_BINDING_LEAK` | `RESOLVER_REPOSITORY_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` by publication context |
 
 ### IdentifierScope canonicalization
 
@@ -869,6 +899,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 | ID | Criterion |
 | --- | --- |
+| `070-SCOPE-IDENTITY-AC-001` | Exact durable evidence, missing required identifier-scope key, provider/account scope mismatch, subset review-only route, subset create/merge rejection, private resolver scope leak, ambiguous resolver row, and manifest-inclusion fixtures pass. |
+| `070-SCOPE-IDENTITY-AC-002` | Candidate generation does not start until resolver row scope and every identity evidence scope normalize under the active `030.ScopeSelectorContext`. |
 | `070-AC-001` | Same inputs, active resolver row, source scopes, blockers, artifact refs, and version manifest produce byte-identical identity decisions and explanations. |
 | `070-AC-002` | IP-only, hostname-only, DNS-only, PTR-only, graph-key-only, source-native-merge-only, mapped-target-only, learned-only, and selector-only evidence never create, attach, or merge. |
 | `070-AC-003` | Hard blockers and lifecycle boundaries override confidence scores and reviewer notes. |

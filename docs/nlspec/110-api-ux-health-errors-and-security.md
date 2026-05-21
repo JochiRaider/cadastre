@@ -39,6 +39,8 @@ Define observable API behavior, user-facing states, health, shared error records
 - `EvidenceRef`
 - `CommonRecordHeader`
 - `ActivationControlledArtifactRef`
+- `030.ScopeSelectorErrorCodeSet`
+- `030.ScopeSelectorContext`
 
 ## Exports
 
@@ -435,6 +437,28 @@ Every owner context schema referenced by an error fragment must include the foll
 | `redaction_classes` | Yes | Map from owner-context field path to one redaction class. |
 | `blocking_reason` | No | Required when `severity = blocked`. |
 
+### ScopeSelectorErrorMappingHandoff
+
+`110` renders shared selector failures only after the owning spec maps `030.ScopeSelectorErrorCodeSet` values to owner-specific error codes. Generic selector errors must not be exposed when an owner-specific selector error exists.
+
+Caller-visible selector diagnostics may include owner spec, owner row family, selected `030.ScopeSelectorContext.context_ref`, selector checksum, redacted dimension keys, row checksum, activation artifact ref, and owner error code. Caller-visible responses must not include raw private selector values, private binding values, private routes, credentials, host lists, account lists, scanner sites, backend internal IDs, private endpoint URLs, or raw private fixture bytes.
+
+Endpoint outcomes for selector errors are closed by this table.
+
+| Selector failure class | Required caller-visible outcome | Required state label when state output exists |
+| --- | --- | --- |
+| duplicate dimension | owner-specific blocked error | `blocked` |
+| duplicate value | owner-specific blocked error | `blocked` |
+| unknown field | owner-specific blocked error | `blocked` |
+| unsupported dimension | owner-specific blocked error | `blocked` |
+| under-scoped request | owner-specific blocked error | `blocked` |
+| subset disallowed | owner-specific blocked error | `blocked` |
+| private-binding leak | owner-specific security error or `010.PRIVATE_BINDING_LEAK` | `blocked` |
+| scope mismatch | owner-specific missing or mismatch error | `blocked` or endpoint-specific no-op when the owner declares no visible output |
+| ambiguity | owner-specific ambiguity error | `ambiguous` |
+
+Selector ambiguity must render as `SourceStateLabel.ambiguous` when a state label is emitted. It must not render as conflict, pass, fail, authorized absence, cleanup, graph expiry, retraction, watermark, remediation, or generic blocked state when owner ambiguity context is available.
+
 ### ErrorCodeRegistryRow schema
 
 `ErrorCodeRegistry` is generated from owner fragments and shared `110` rows. Owner specs own error causes and owner context. `110` owns the caller-visible registry shape, final severity, final retry class, redaction behavior, and generic-code precedence.
@@ -605,6 +629,11 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `telemetry_attribute` | Hidden unless allowlisted. | `140.TelemetryAttributePolicy` and endpoint permission. | Attribute key, redaction class, checksum. | Reject or redact raw payloads, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, usernames, and provider-native query text by default. |
 | `telemetry_runtime_state` | Summary only. | `health.read` plus operator/admin diagnostics for detail. | Runtime state refs, checksums, counts, and policy refs. | Do not expose private endpoints, exporter credentials, Collector routes, or raw queue payloads. |
 | `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
+| `scope_selector_dimension_key` | Redacted bounded key by default. | Diagnostic and audit contexts may show the key when it is not private. | Dimension key and owner context. | Must not expose a private route, tenant, host, account, scanner site, backend ID, or endpoint URL. |
+| `scope_selector_public_value` | Visible only when the value kind is public and endpoint authorization permits it. | Visible as value, ref, or checksum according to owner policy. | Public enum tokens, Cadastre IDs, external refs, redacted refs, and SHA-256 values. | Must not include raw private values. |
+| `scope_selector_redacted_value_ref` | Visible as opaque ref when policy permits. | Visible as ref and checksum. | Redacted selector value refs. | Must not be reversible from public bytes. |
+| `scope_selector_checksum` | Visible when owner diagnostics permit. | Visible. | Normalized selector checksum. | Does not imply access to raw selector values. |
+| `scope_selector_private_value` | Forbidden. | Hash and byte count only in secure private validation contexts when policy permits. | Raw private selector value. | Fail before public output, audit output, telemetry export, package report, or validation report. |
 | `structured_input_repository_url` | Hidden. | Operator/admin diagnostic policy only. | Redacted ref/checksum. | Must not expose private routes or credentials. |
 | `structured_input_branch_name` | Hidden or bounded class only. | Repository admin diagnostic policy. | Redacted value class and checksum. | Raw branch names must not become metric labels or public output. |
 | `structured_input_commit_sha` | Redacted or checksum-like diagnostic when policy permits. | Repository admin diagnostic policy. | Ref/checksum only. | Must not become replay, audit, activation, rollback, or source-authority evidence. |
@@ -1267,6 +1296,9 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 | ID | Criterion |
 | --- | --- |
+| `110-SCOPE-SELECTOR-ERROR-AC-001` | Selector ambiguity renders as `SourceStateLabel.ambiguous`, not conflict or generic blocked, when owner ambiguity context is available. |
+| `110-SCOPE-SELECTOR-ERROR-AC-002` | Private selector values are hidden from API, export, audit, health, telemetry, package report, and validation outputs; permitted outputs use selector checksums, redacted refs, and redacted dimension keys only. |
+| `110-SCOPE-SELECTOR-ERROR-AC-003` | Generated error registry rejects generic selector errors when the owner-specific selector error exists. |
 | `110-AC-001` | Every observable API outcome has deterministic success, empty-result, redaction, authorization, stale-state, partial-state, and error behavior. |
 | `110-AC-002` | Raw payload requests without permission return metadata plus redaction marker, not raw bytes. |
 | `110-AC-003` | Source stale and derived-view stale states are never collapsed. |

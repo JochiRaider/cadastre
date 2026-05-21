@@ -26,6 +26,9 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 - `AuthorityClass`
 - `VersionManifest`
 - `ActivationControlledArtifactRef`
+- `030.ScopeSelector`
+- `030.ActivationScope`
+- `030.NormalizeScopeSelector`
 
 ## Exports
 
@@ -98,6 +101,14 @@ Canonical JSON rules:
 | Decimal | Base-10 string when precision affects output; binary floating point is forbidden for checksummed values. |
 | Arrays | Input order is preserved unless the field declares canonical sort keys. |
 | Unknown field | Rejected unless the record declares an extension field map. |
+
+### ScopeSelectorCanonicalSerializationHandoff
+
+`030.ScopeSelector` and `030.ActivationScope` use `040.CanonicalJSON` and `040.ScalarType` bounds for canonical bytes, selector checksums, unknown-field rejection, null and omission behavior, arrays, maps, scalar normalization, and SHA-256 values.
+
+`040` does not define selector schema, selector equality, selector coverage, selector specificity, subset eligibility, owner contexts, row resolution, ambiguity behavior, or selector error mapping. Those behaviors are owned only by `030`.
+
+Any `040`-owned schema row containing `activation_scope` must validate that field as `030.ActivationScope`. Canonical bytes for the field are computed by `040.CanonicalJSON` only after `030.NormalizeScopeSelector` materializes selector defaults, sorts dimensions, sorts dimension values, rejects private bindings, and computes or verifies `selector_checksum`.
 
 ## Omission Semantics
 
@@ -428,7 +439,7 @@ Every field schema table in this registry uses the following columns and meaning
 | `permitted_observation_types` | `array<enum_token>` | yes | `[]` | no | no | sorted lexical |
 | `permitted_mapping_bundle_refs` | `array<cadastre_id>` | yes | `[]` | no | no | sorted lexical |
 | `validation_fixture_refs` | `array<external_ref_id>` | yes | none | no | no | non-empty before activation |
-| `activation_scope` | `canonical_object` | yes | none | no | no | max 65536 bytes |
+| `activation_scope` | `canonical_object` | yes | none | no | no | must validate as `030.ActivationScope`; canonical bytes are computed by `040.CanonicalJSON` after `030.NormalizeScopeSelector` materializes defaults |
 | `lifecycle_status` | `enum_token` | yes | none | no | no | imported from `030` |
 
 Shape validation materializes required defaults before checksum computation. Unknown fields fail with `CORE_UNKNOWN_FIELD`. Non-canonical ordering fails checksum validation. `040` validates shape and canonical bytes only. `050` validates whether the rule permits a `source_extension_fields` path.
@@ -948,6 +959,8 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 
 | ID | Criterion |
 | --- | --- |
+| `040-SCOPE-SELECTOR-SERIALIZATION-AC-001` | Selector input order does not affect normalized selector bytes or selector checksum after `030.NormalizeScopeSelector` and `040.CanonicalJSON` are applied. |
+| `040-SCOPE-SELECTOR-SERIALIZATION-AC-002` | A `040` schema row containing `activation_scope` rejects selector bytes that fail `030.ActivationScope` validation before core record checksum computation. |
 | `040-AC-001` | Two implementations serialize, hash, compare, and validate every core record shape identically. |
 | `040-AC-002` | Omitted, null, empty, redacted, permission-limited, unknown, and unsupported values are distinguishable in serialized output. |
 | `040-AC-003` | Graph delta primitive records cannot be created from backend internal IDs. |
