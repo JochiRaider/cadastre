@@ -517,6 +517,20 @@ Theoretical reachability and host ownership remain deterministic blocks in MVP. 
 
 Every `SourceAuthorityClosureMatrixRow` must either resolve the full row chain for the exact scope and effect or select one deterministic block row for the exact blocked scope and effect. Missing, duplicated, ambiguous, inactive, checksum-mismatched, out-of-scope, stale, unvalidated, or `TODO` member rows block the requested effect and emit no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, or compliance negative output.
 
+### MVPSourceAuthorityClosureInventory
+
+The MVP source-authority closure inventory is total over every active tuple of feed category, source dataset, fact type, predicate, subject scope, object scope, and requested effect. For each tuple in the selected production scope, the active closure row set must contain exactly one `SourceAuthorityClosureMatrixRow` with complete underlying refs or exactly one deterministic block row for the exact blocked tuple. Missing rows, broad source-category fallbacks, wildcard predicates, validation summaries, row-set checksums alone, package labels, or private bindings must not satisfy closure.
+
+| Tuple family | Required closure decision | Default behavior when exact closure is absent | Required refs before active output |
+| --- | --- | --- | --- |
+| Active absence-sensitive tuple | One closure row or deterministic block row for the exact feed category, source dataset, fact type, predicate, subject scope, object scope, and requested effect. | `SOURCE_AUTHORITY_CLOSURE_INCOMPLETE`; no absence, cleanup, retraction, graph expiry, watermark, pass/fail, no-change proof, or compliance negative output. | Selected `020.SourceDatasetCatalogRow`, source-authority row, completeness row, coverage row when required, staleness row, absence policy, validation refs, package-set refs when package-supplied, and `VersionManifest` refs. |
+| `directory_inventory` gold-output attempt | Deterministic block unless exact `070` resolver rows and exact `060` authority rows separately authorize a downstream predicate. | `DIRECTORY_INVENTORY_GOLD_OUTPUT_BLOCKED`; resolver input may remain evidence only. | Exact resolver input refs for evidence generation; no gold refs unless separate owner rows exist. |
+| `source_history` no-change proof | Deterministic block unless `SourceHistoryRetentionProfile`, coverage, staleness, completeness, authority, absence, validation, package-set, and manifest refs all cover the exact scope and history window. | `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED`; emit unknown or no-op. | Source-history retention row, coverage assertion, completeness decision, staleness policy, source authority row, absence policy, closure row, and validation refs. |
+| `network_flow` non-observation | Deterministic block by default for MVP. | `FLOW_ABSENCE_BLOCKED_MVP`; emit unknown/no-op and no graph mutation. | Positive observed-connection authority for positive facts only; future flow absence requires a new exact closure row and validation. |
+| `future_reachability` | Deterministic block while `200` is `inactive_deferred`. | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN`; no fact, graph edge, graph property, API claim, package activation effect, or production validation pass. | Deferred validation-only negative fixture refs only. |
+
+A closure row for `directory_inventory`, `source_history`, `network_flow`, or `future_reachability` must include mutation-prohibition refs proving that blocked states produce no fact, no correction, no graph delta, no cleanup, no watermark, no pass/fail, no no-change proof, no compliance negative output, and no authorized-negative API output.
+
 #### ResolveSourceAuthorityClosureMatrixRow
 
 ```text

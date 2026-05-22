@@ -170,7 +170,7 @@ Forbidden identity-specific leak examples include private scanner site names, di
 
 ### ActivationCatalogPublicBindingRule
 
-This rule applies to every activation-controlled row catalog in `000.MVPActivationCatalogClosurePack`, including feed-category, OCSF mapping, source-authority, resolver, graph profile, graph backend, package policy, package deprecation, package release, package-set, and validation-output catalogs.
+This rule applies to every activation-controlled row catalog in `000.MVPActivationCatalogClosurePack`, including source-dataset catalogs, deterministic source-dataset block rows, feed-category catalogs, OCSF mapping catalogs, source-authority closure catalogs, underlying `060` row sets, resolver catalogs, graph profile catalogs, graph backend catalogs, package policy rows, package deprecation rows, package release manifests, production package-set manifests, validation-output catalogs, acceptance reports, package reports, API outputs, audit outputs, and telemetry-visible diagnostics that reference source-dataset or source-authority closure.
 
 | Public catalog field class | Public status | Required behavior |
 | --- | --- | --- |
@@ -179,7 +179,7 @@ This rule applies to every activation-controlled row catalog in `000.MVPActivati
 | concrete vendor, product, tenant ID, account list, host list, directory tenant inventory, scanner site name, route, credential, private schema payload, backend credential, private source-native object ID, or private sample byte | forbidden | Must fail before persistence, publication, API response, export, audit output, telemetry export, package report, or validation-report materialization. |
 | Git snapshot, validation run, repository branch, repository tag, package label, backend default, research report, or ADR | non-authority | Must not satisfy activation-catalog closure, source authority, package activation, graph backend activation, production approval, or `VersionManifest` completeness. |
 
-Private implementation artifacts may bind concrete sources, private schemas, backend endpoints, deployment credentials, or package repositories to public rows. Those private bindings must not alter public row-selection order, defaults, error precedence, authority semantics, activation gates, package gates, manifest requirements, or validation requirements.
+Private implementation artifacts may bind concrete sources, private schemas, backend endpoints, deployment credentials, or package repositories to public rows. Those private bindings may map concrete values to redacted refs or hashes only. They must not alter row selection, row checksum, error precedence, effect default, validation requirement, activation scope, package-set requirement, manifest inclusion, source-authority closure outcome, or public missing-row behavior.
 
 If an activation-catalog publication leak is covered by `PRIVATE_BINDING_LEAK`, `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK`, `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK`, `RESOLVER_REPOSITORY_PRIVATE_BINDING_LEAK`, or another more specific owner code, the most specific existing code must be used. `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` is emitted only when no more specific private-binding error covers the closure-pack catalog family.
 

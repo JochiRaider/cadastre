@@ -51,3 +51,19 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/archive/PRD-Cadastre.revised-draft.md` |
 | `docs/archive/RES-012-graph-backend-comparison.md` |
 | `docs/archive/RES-015-janusgraph.md` |
+
+## Unresolved supporting activation-controlled artifacts
+
+The uploaded file set does not include concrete bytes for the production source-dataset, feed-category, source-authority, validation, expected-output, mutation-prohibition, or package-set artifacts required by `000.MVPActivationCatalogClosurePack`.
+
+Do not add synthetic paths to the path table. Product governance must supply exact repository-relative paths before these artifacts can be manifest-listed as production inputs. Until those paths and checksums exist, validation rows that depend on them must remain `blocked`, and promotion must fail.
+
+| Required artifact family | Required future manifest action | Default until supplied |
+| --- | --- | --- |
+| `020.SourceDatasetCatalogRowSet` | Add the exact public source-dataset row-set path and checksum. | Referenced `source_dataset` values without selected row refs fail closed. |
+| selected `020.SourceDatasetCatalogRow` refs and deterministic block rows | Add exact row artifact paths or row-set member refs supplied by governance. | No source-dataset row or block row may affect output. |
+| `020.LakehouseFeedCategoryClosureRowSet` | Add the exact feed-category closure row-set path and checksum. | Feed category closure remains blocked for production. |
+| `060.SourceAuthorityClosureMatrixRowSet` and underlying `060` row sets | Add exact closure-matrix, authority, completeness, coverage, staleness, progress-signal, visibility, control-result, source-history, absence, external-schema-authority, and watermark row-set paths. | Absence-sensitive effects remain blocked or no-op. |
+| validation fixtures and expected outputs | Add exact fixture, expected-output, expected-error, and mutation-prohibition proof paths with checksums. | Validation rows with `TODO:` checksums remain blocked. |
+| package release and production package-set manifests | Add exact paths when any closure artifact is package-supplied. | Package-supplied rows cannot activate. |
+

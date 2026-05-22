@@ -959,6 +959,9 @@ The generated `ErrorCodeRegistry` must include every `060` source-authority clos
 | `PROGRESS_SIGNAL_POLICY_ROW_AMBIGUOUS` | `060` | error | no, until policy rows change | matching rows redacted | `progress-signal-ambiguous` |
 | `SOURCE_HISTORY_RETENTION_ROW_MISSING` | `060` | blocked | no, until retention row activates | history scope redacted | `staleness-policy-source-history-outside-window` |
 | `SOURCE_HISTORY_RETENTION_ROW_AMBIGUOUS` | `060` | error | no, until retention rows change | matching rows redacted | `source-history-retention-ambiguous` |
+| `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED` | `060` | blocked | no, until exact source-history closure rows activate | history scope and requested effect visible when public; private refs redacted | `source-history-no-change-proof-blocked` |
+| `DIRECTORY_INVENTORY_GOLD_OUTPUT_BLOCKED` | `060` | blocked | no, until exact resolver and authority rows activate | directory source-dataset token visible; private directory values redacted | `directory-inventory-gold-output-blocked` |
+| `FLOW_ABSENCE_BLOCKED_MVP` | `060` | blocked | no, until future exact flow absence closure is accepted | flow source-dataset token and requested effect visible; private sensor refs redacted | `network-flow-absence-blocked-mvp` |
 | `SUPPLIER_VISIBILITY_PROFILE_ROW_MISSING` | `060` | blocked | no, until visibility row activates | scope redacted | `directory-visibility-hidden-membership` |
 | `SUPPLIER_VISIBILITY_PROFILE_ROW_AMBIGUOUS` | `060` | error | no, until visibility rows change | matching rows redacted | `directory-visibility-ambiguous` |
 | `SOURCE_STATE_MAPPING_ROW_MISSING` | `060` | blocked | no, until mapping row activates | source state visible; refs redacted | `source-authority-state-mapping-missing` |
@@ -1211,6 +1214,19 @@ Coverage-domain token failures must route to generated `060` owner-specific `Err
 | benchmark status | benchmark row refs when performance gates are in scope | blocked while thresholds are `TODO`, missing, failed, or stale | benchmark refs only |
 
 Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, PostgreSQL OIDs, tuple IDs, sequence values, AGE IDs, SQL/Cypher text, credentials, private provider configuration, raw package evidence, provider exception class names, database names when private, schema names when private, or AGE graph namespace names when private to callers.
+
+### ActivationCatalogClosureHealthComponents
+
+Activation-catalog closure health is operator-visible status only. It must not authorize absence, pass, fail, remediation, cleanup, retraction, graph expiry, watermark advancement, package activation, or validation acceptance.
+
+| Health component | Required state refs | Caller-visible status | Forbidden interpretation |
+| --- | --- | --- | --- |
+| source-dataset catalog closure | selected row-set refs, selected row refs or deterministic block refs, validation refs, package-set refs when package-supplied, and `VersionManifest` refs | `healthy`, `blocked`, or `error` | Must not infer dataset identity or authorized negative output. |
+| feed-category closure | category row-set ref, selected category rows, total effect map validation, and closure validation refs | `healthy`, `blocked`, or `error` | Must not authorize absence-sensitive effects by health state. |
+| source-authority closure | closure matrix row-set refs, selected closure rows, underlying `060` refs, deterministic block refs, and mutation-prohibition refs | `healthy`, `blocked`, or `error` | Must not substitute for `060.AbsenceDerivationResult` or selected row refs. |
+| source-history no-change closure | source-history retention, coverage, completeness, authority, absence, validation, package-set, and manifest refs | `blocked` until all exact refs exist | Must not render silence as no-change, pass, fail, or absence. |
+| network-flow absence closure | flow source-dataset row, flow-role evidence, closure refs, and graph closure refs | `blocked` for MVP absence attempts | Must not render missing flow as no observed connection or reachability. |
+| future reachability closure | deterministic block refs and deferred validation refs | `blocked` or omitted from non-diagnostic output | Must not expose unqualified reachability claims. |
 
 ### SourceStateLabelMapping
 

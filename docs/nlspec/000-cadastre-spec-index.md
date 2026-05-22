@@ -131,6 +131,32 @@ Additional promotion gates:
 | `package_activation_registry_closure` | `100.PackageTypePolicyRowSet`, package deprecation window policy row set, compatibility rows, trust/provenance/SBOM policy rows, package release manifests, and production package-set manifests. |
 | `error_registry_closure` | Generated `110.ErrorCodeRegistry` rows, every owner error fragment from active owner specs, shared `110` rows, owner context schemas, exact fixture refs, validation row refs, and `030.VersionManifest.generated_error_registry_checksum`. |
 
+#### MVPProductionInputClosurePackRequiredMembers
+
+The production input closure pack must contain the exact member families below for every selected MVP production scope. A row-set checksum, owner prose, package label, validation summary, repository snapshot, ADR, or research report must not substitute for selected row refs and selected row checksums.
+
+| Required member | Required refs and checksums | Promotion behavior when absent, `TODO:`, mismatched, or unmanifested |
+| --- | --- | --- |
+| selected source-dataset row-set | `020.SourceDatasetCatalogRowSet` ref and row-set checksum. | `blocked_missing_ref`, `blocked_todo`, `blocked_checksum`, or `blocked_manifest`; no production effect. |
+| selected source-dataset rows | One selected `020.SourceDatasetCatalogRow` ref/checksum for every active feed profile, mapping row, source-authority row, graph or analysis handoff, API filter, validation fixture, or package-supplied row catalog that references `source_dataset`. | Promotion fails; private binding or owner prose must not infer dataset identity. |
+| deterministic source-dataset block rows | Exact block row refs/checksums for `future_reachability` and any out-of-scope dataset or effect. | May pass only as `closed_deterministically_blocked` with mutation-prohibition proof. |
+| selected feed-category row-set | `020.LakehouseFeedCategoryClosureRowSet` ref and row-set checksum. | Feed activation and source-effect closure remain blocked. |
+| selected feed-category rows | One selected category row ref/checksum for every category in `020.LakehouseFeedCategoryClosureRequirementTable`. | Promotion fails unless the category is exact deterministic block for the selected scope. |
+| source-authority closure matrix rows | `060.SourceAuthorityClosureMatrixRowSet` ref/checksum and one selected closure row or deterministic block row for every absence-sensitive effect in scope. | Absence, cleanup, retraction, graph expiry, watermark, pass/fail, no-change proof, compliance negative output, and source-effect validation pass are forbidden. |
+| underlying `060` row sets | Every consulted authority, completeness, coverage, staleness, progress-signal, supplier-visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row-set ref/checksum. | `SourceAuthorityClosureMatrix` output alone is insufficient; promotion fails. |
+| validation refs | Closure validation refs from `120.ActivationCatalogClosureValidationMatrix`, including fixture checksums, expected-output or expected-error checksums, mutation-prohibition proof, and owner acceptance IDs. | `TODO:` validation bytes force `blocked_todo`; `AcceptanceReport.result = pass` is forbidden. |
+| package-set refs | `100.PackageReleaseManifest` and `100.ProductionPackageSetManifest` refs/checksums when any closure artifact is package-supplied. | `blocked_package_set`; candidate package output remains invisible. |
+| `030.VersionManifest` refs | Owner `VersionManifest.included_refs` for every output-affecting selected row, block row, validation row, selector checksum, runtime state ref, package release, and package set. | `blocked_manifest`; API/export/health/validation visibility fails before rendering. |
+
+#### MVPProductionInputClosureDatasetDecisions
+
+| Public source dataset | Closure decision for MVP | Required owner behavior |
+| --- | --- | --- |
+| `directory_inventory` | Resolver-input-only unless exact `070` resolver rows and exact `060` authority closure rows exist. | May produce `IdentityEvidenceItem` candidates only through `070`; must not emit membership facts, nonmembership, deletion, source absence, graph edge removal, cleanup, graph expiry, or gold output by itself. |
+| `source_history` | Supporting evidence only unless exact retention, coverage, authority, absence, validation, package-set, and manifest refs exist. | Must not produce no-change proof, negative output, cleanup, retraction, graph expiry, watermark, control state, or compliance negative output by silence or outside-window history. |
+| `network_flow` | Positive observed traffic only for MVP. | Missing flow, flow non-observation, missing flow-role evidence, ambiguous flow-role evidence, and OCSF endpoint order must emit no absence edge, graph expiry, cleanup, retraction, watermark, or theoretical reachability. |
+| `future_reachability` | Inactive deterministic block while `docs/deferred/200-future-reachability-analysis-domain.md` remains `inactive_deferred`. | Must emit no read target, fact, graph edge, graph property, API claim, package activation effect, or production reachability validation pass. |
+
 Closed closure result states are:
 
 | State | Promotion behavior |

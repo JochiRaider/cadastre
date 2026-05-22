@@ -166,6 +166,18 @@ OCSF field absence, OCSF object absence, status, severity, confidence, observabl
 
 Active `ObservationToOCSFMappingRow`, `ExternalSchemaProfile`, and `SourceExtensionFieldRule` selections that use `source_dataset` must include `source_dataset_catalog_row_ref` and `source_dataset_catalog_row_checksum` in their activation-controlled row refs and in `030.VersionManifest` when they affect output.
 
+### SourceDatasetMappingCatalogHandoff
+
+Every active `ObservationToOCSFMappingRow`, `ExternalSchemaProfile`, `SourceExtensionFieldRule`, and `MappingProjectManifest` that uses `source_dataset` must include the selected `020.SourceDatasetCatalogRow` ref/checksum, the source-dataset row-set ref/checksum, selector checksum when scoped, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs before mapping activation can emit silver output.
+
+A missing, deterministically blocked, ambiguous, inactive, checksum-mismatched, private-leaking, unvalidated, package-set-missing, or unmanifested source-dataset row fails mapping activation before silver output when the row is required for mapping selection. The failure must use the most specific `020`, `030`, `050`, `100`, or `110` owner error. A mapping implementation must not infer `source_dataset` from OCSF category, class, activity, object path, source extension field, external schema profile, package name, module name, artifact filename, repository path, validation run, feed category, table path, or private binding.
+
+| Source dataset or signal | Mapping output allowed | Authority and absence behavior |
+| --- | --- | --- |
+| `directory_inventory` | Observation metadata and resolver-input fields only. | Must not authorize `identity_membership_fact.member_of`, nonmembership, user deletion, group deletion, source absence, graph edge removal, cleanup, graph expiry, or gold output. |
+| `source_history` | Observation metadata and supporting evidence refs only. | Must not authorize no-change proof, disappearance proof, negative output, cleanup, retraction, graph expiry, watermark, or compliance negative output without exact `060` retention and closure refs. |
+| `network_flow` | Endpoint, time-window, sensor, and flow-role evidence fields may be preserved. | Must not infer absence, source/destination direction, graph edge direction, graph expiry, cleanup, or theoretical reachability from OCSF endpoint order or missing rows. Direction requires `050.FlowRoleEvidence` and graph rules in `090`. |
+
 ### GoldFactObjectBoundaryHandoff
 
 `NormalizeObservation` and `ResolveOCSFMapping` must not emit `GoldFact` bytes, `GoldFact.subject_ref`, `GoldFact.object_value`, `EvidenceRef.artifact_id`, graph deltas, source authority decisions, absence outcomes, correction outputs, or watermark effects. Mapping output may supply observation metadata only. Gold object values may be derived only by `080.DeriveFacts` after `040` one-of validation, `060` authority validation, and `080` predicate-contract validation.

@@ -31,6 +31,12 @@ Repository merge, validation, materialization, package release creation, or pack
 
 Future activation must update `docs/nlspec/000-cadastre-spec-index.md`, assign active owner specs, classify volatility, add active owner contracts, add package and manifest gates when package-supplied, and add passing `120` fixtures before any reachability fact, graph edge, graph property, API output, package activation effect, or user-facing reachability claim can execute.
 
+### FutureReachabilitySourceDatasetBlockHandoff
+
+Any active `020.future_reachability` source-dataset row while this document remains `inactive_deferred` must be an exact deterministic block row. It must emit no production read target, fact, graph edge, graph property, API output, package activation effect, production validation pass for reachability, or unqualified reachability wording.
+
+A `future_reachability` row may appear only as inactive future-domain material or validation-only negative fixture input. Repository merge, materialization, package release creation, package-set inclusion, graph profile activation, API wording, or validation report creation must not convert that row into runtime reachability behavior while this document remains deferred.
+
 ## Explicit Non-Scope While Deferred
 
 - MVP graph projection.

@@ -144,6 +144,14 @@ Graph expiry and cleanup deltas require all of the following:
 | missing source-dataset catalog row | Reject before delta persistence. |
 | missing `VersionManifest` refs | Reject with manifest error before delta persistence. |
 
+### SourceDatasetGraphClosureHandoff
+
+Graph expiry, cleanup, and any graph delta whose source-effect dependency is absence-sensitive must include the selected `020.SourceDatasetCatalogRow` ref/checksum, the selected `060.SourceAuthorityClosureMatrixRow` ref/checksum or deterministic block row ref/checksum, every underlying consulted `060` row ref/checksum, the `060.AbsenceDerivationResult` ref/checksum when absence or effect authorization is evaluated, and the producing `030.VersionManifest` ref before delta persistence and before backend mutation.
+
+`network_flow` may project only positive `gfp-mvp-flow-observed-connection-v1` facts in MVP. Flow non-observation, missing flow-role evidence, ambiguous flow-role evidence, missing source-dataset catalog rows, missing source-authority closure refs, OCSF endpoint order, and unresolved endpoint identity must emit no edge, no absence edge, no expiry, no cleanup, no graph property, no pathfinding input, and no backend mutation. The allowed positive edge remains subject to `050.FlowRoleEvidence`, `070` endpoint identity handoff, active `GraphEdgeSemantics`, active `GraphObjectOutputEligibilityRow`, and graph profile closure.
+
+`future_reachability` deterministic block rows must map to inactive `has_theoretical_reachability` behavior. While `200` remains `inactive_deferred`, a graph profile, backend profile, analysis rule, package release, query profile, or validation row must not activate `has_theoretical_reachability`, modeled reachability facts, boolean reachability properties, or unqualified reachability wording.
+
 ### GoldFactChangeSet graph handoff matrix
 
 `090.ProjectGraphDeltas` consumes `080` graph handoff effects. `080` emits metadata only; graph projection remains a deterministic derived view.

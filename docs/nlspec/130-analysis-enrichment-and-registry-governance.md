@@ -169,6 +169,17 @@ Scope matching must not widen `allowed_output_effect`, bypass `090` projection, 
 
 `130` owns derived-edge rule activation and effect routing only; `080` owns gold fact derivation and `090` owns graph delta projection, graph delta identity, graph apply, query, rebuild, and backend behavior.
 
+### SourceDatasetDerivedRuleClosureHandoff
+
+A derived-edge or analysis rule whose support is absence-sensitive, cleanup-sensitive, expiry-sensitive, retraction-sensitive, no-change, or watermark-affecting must include selected `020.SourceDatasetCatalogRow` refs or deterministic source-dataset block refs, selected `060.SourceAuthorityClosureMatrixRow` refs or deterministic block refs, `060.AbsenceDerivationResult` refs for the requested effect, mutation-prohibition refs for blocked/no-op cases, and `030.VersionManifest` refs before producing findings, metrics, pathfinding-visible output, gold facts through `080`, graph deltas through `090`, or any caller-visible analysis output.
+
+| Support family | Required analysis behavior |
+| --- | --- |
+| `network_flow` non-observation | Must not produce analysis-visible absence, risk finding, metric, graph delta, pathfinding input, cleanup, retraction, graph expiry, or watermark. Positive observed-flow analysis may read only authorized `observed_connection` output. |
+| `source_history` no-change | Must not produce no-change findings, metrics, graph deltas, or gold output unless exact retention, coverage, source-authority closure, validation, package-set, and manifest refs exist. |
+| `future_reachability` | Must not produce reachability facts, graph edges, graph properties, metrics, findings, pathfinding input, or unqualified reachability wording while `200` is inactive deferred. |
+| deterministic source-dataset block | Must emit explicit no-op or owner error only and include mutation-prohibition proof. |
+
 ## Threat-Intel Enrichment
 
 Threat-intel indicators, sightings, taxonomies, galaxies, object templates, confidence labels, distribution labels, sharing groups, and TLP-like classifications are enrichment context by default. They must be materialized through `ThreatIntelEnrichmentProfile`, `ThreatIntelEnrichmentRecord`, `ThreatIntelDistributionMappingPolicy`, and `ThreatIntelArtifactRef`.

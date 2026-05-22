@@ -320,6 +320,19 @@ Package-supplied row catalogs must appear in release refs, package type policy r
 
 A package-supplied `source_dataset_catalog_row_set` must include a package-set ref before feed activation, mapping activation, source-authority closure, graph/analysis handoff, API filtering, validation acceptance, or replay output can depend on any selected source-dataset row. Missing package-set refs fail with `STRUCTURED_INPUT_PACKAGESET_REF_MISSING` or the most specific package policy error before activation.
 
+### PackageSuppliedProductionInputClosureCatalogs
+
+Package-supplied production input closure catalogs must activate only through an active `ProductionPackageSetManifest`. The following package types require exact package type policy resolution, package release manifest refs, production package-set refs, validation refs, compatibility refs, supply-chain refs required by the active policy, schema compatibility refs when row schema affects output, package-set checksum, and `030.VersionManifest` inclusion before any selected row can affect output:
+
+| Package-supplied catalog type | Required package activation evidence | Broad-label substitutes that must fail |
+| --- | --- | --- |
+| `source_dataset_catalog_row_set` | `PackageTypePolicyRow`, `PackageReleaseManifest`, `ProductionPackageSetManifest`, selected row refs/checksums, validation refs, compatibility refs, package-set checksum, and `VersionManifest` refs. | `policy_bundle`, `feed reader`, package name, module name, artifact filename, repository path, version string, validation run. |
+| `lakehouse_feed_category_closure_row_set` | Same package-set evidence plus feed-category closure validation and coverage-domain compatibility refs. | `feed reader`, `feed closure`, package label, repository path, branch, tag, validation summary. |
+| `source_authority_closure_matrix_row_set` | Same package-set evidence plus selected closure rows, deterministic block rows, underlying `060` row-set refs, mutation-prohibition refs, and source-closure validation refs. | `source closure`, `authority bundle`, `policy_bundle`, row-set checksum alone, validation report alone. |
+| underlying `060` row-set package types | Same package-set evidence for `source_authority_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, and `external_schema_authority_signal_mapping_row_set`. | Any broad policy label, module name, artifact filename, repository path, version string, dependency lock, SBOM, provenance record, or validation run standing alone. |
+
+A missing package-set ref, policy row, validation ref, compatibility ref, trust/provenance/SBOM evidence required by the active policy, schema compatibility ref, package-set checksum, or `VersionManifest` ref must fail candidate package-set activation and preserve the current active package set. Package labels and release names are evidence fields only; they must not become package types or activation authority.
+
 | Owner boundary | Package policy family | Validation family |
 | --- | --- | --- |
 | `020` feed closure | `lakehouse/feed/read` | `120-FEED-CLOSURE-*`; `120-PACKAGE-*` |

@@ -171,6 +171,15 @@ When a candidate gold fact depends on missing evidence, stale evidence, source-d
 
 Every row in this matrix must validate the selected `020.SourceDatasetCatalogRow` or deterministic source-dataset block row and route through `060.DeriveAbsenceOrUnknown` before fact creation, correction, graph handoff, or watermark-affecting output. Missing, blocked, ambiguous, inactive, checksum-mismatched, unvalidated, or unmanifested source-dataset refs select the default behavior and must not be reinterpreted by `080`.
 
+#### MVPSourceDatasetGoldBlockCompanionMatrix
+
+| Blocked candidate | Required source-dataset row or block ref | Required source-authority closure | Default behavior | Mutation allowed | Validation family |
+| --- | --- | --- | --- | --- | --- |
+| `directory_inventory_gold_output_blocked` | Selected `020.directory_inventory` catalog row or `DIRECTORY_INVENTORY_GOLD_OUTPUT_BLOCKED` deterministic block row. | No gold closure unless exact future owner rows exist. | Emit explicit no-op or owner error; no `GoldFact`, `GoldFactChangeSet`, graph handoff, absence outcome, cleanup, graph expiry, watermark, membership, nonmembership, or deletion. | No | `120-GOLD-PREDICATE-CATALOG-*`; `120-SOURCE-DATASET-CATALOG-*`; `120-IDENTITY-CLOSURE-*`. |
+| `source_history_no_change_proof_blocked` | Selected `020.source_history` catalog row or `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED` deterministic block row. | Exact retention, coverage, staleness, completeness, authority, absence, validation, package-set, and manifest refs are required to unblock. | Emit unknown/no-op; no no-change proof, disappearance proof, negative output, cleanup, retraction, graph expiry, watermark, or compliance negative output. | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*`; `120-GOLD-PREDICATE-CATALOG-*`. |
+| `network_flow_non_observation_blocked` | Selected `020.network_flow` catalog row or `FLOW_ABSENCE_BLOCKED_MVP` deterministic block row. | Future exact flow absence closure only; MVP default is blocked. | Emit unknown/no-op; no absence edge, graph expiry, cleanup, retraction, watermark, or theoretical reachability. | No | `120-SOURCE-CLOSURE-*`; `120-GRAPH-PROFILE-CLOSURE-*`; `120-OCSF-DIRECTION-*`. |
+| `future_reachability_blocked` | Exact `020.future_reachability` deterministic block row. | None while `200` remains inactive deferred. | Emit no production output and no production reachability validation pass. | No | reachability-prohibition rows; `120-SOURCE-DATASET-CATALOG-*`. |
+
 ### DerivationRuleBundle handoff from 130
 
 `130` derivation artifacts may supply derivation rules and candidates only. `080` remains the sole gold derivation path. A package, analysis rule, registry artifact, enrichment profile, or derived-edge rule must not persist `GoldFact` bytes directly.
@@ -278,6 +287,8 @@ The active row inventory above is total for MVP positive predicate selection. A 
 | `gfp-block-exposure-theoretical-reachability-v1` | `exposure_fact` / `has_theoretical_reachability` | Emit no fact, no correction, no graph edge, no graph property, no watermark, and no API reachability claim. |
 | `gfp-block-flow-theoretical-reachability-v1` | `observed_network_flow_fact` / `has_theoretical_reachability` | Emit no fact, no correction, no graph edge, no graph property, no watermark, and no API reachability claim. |
 | `gfp-block-host-ownership-v1` | `host_ownership_fact` / `owned_by` and owner-like host predicates | Emit no fact and no ownership label until an exact ownership authority contract is specified. |
+| `gfp-block-directory-inventory-gold-output-v1` | Any gold predicate output attempted from `directory_inventory` alone | Emit no fact, no correction, no membership/nonmembership fact, no deletion, no graph edge, no cleanup, no graph expiry, no watermark, and no authorized-negative API output. |
+| `gfp-block-source-history-no-change-v1` | Source-history no-change, disappearance, or outside-window negative proof without exact source-history closure rows | Emit no fact, no correction, no no-change proof, no cleanup, no graph expiry, no watermark, and no compliance negative output. |
 
 A deterministic block row is selected only for its exact blocked family. It must not act as a wildcard row for unrelated predicates. Selection of a block row must produce explicit no-output evidence and mutation-prohibition evidence, and that evidence must be manifest-included before validation acceptance can pass.
 
@@ -904,7 +915,7 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
 | `080-OCSF-STRUCTURED-OBJECT-AC-001` | OCSF-derived structured object output fails before `gold_fact_key_id` computation unless `050.ProfileResolutionManifest`, `080.GoldFactPredicateContractRow.structured_value_schema_refs`, and required `060` authority refs validate and appear in `VersionManifest`. |
 | `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
-| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-001` | The active MVP predicate catalog contains exactly the 18 active rows in `MVPGoldFactPredicateActiveRowInventory` and the four deterministic block rows in `GoldFactPredicateDeterministicBlockInventory`; missing, duplicate, extra-active, inactive, `TODO`-bearing, or checksum-mismatched rows fail validation. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-001` | The active MVP predicate catalog contains exactly the 18 active rows in `MVPGoldFactPredicateActiveRowInventory` and the six deterministic block rows in `GoldFactPredicateDeterministicBlockInventory`; missing, duplicate, extra-active, inactive, `TODO`-bearing, or checksum-mismatched rows fail validation. |
 | `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-002` | Every active predicate row uses only `040` subject/object kinds and rejects forbidden entity types, forbidden identifier types, forbidden nulls, and identity-like strings before ID computation. |
 | `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-003` | Every structured object candidate uses one exact active schema ref from `MVPGoldFactStructuredValueSchemaCatalog`; missing or checksum-mismatched schema refs fail before `gold_fact_key_id` computation. |
 | `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-004` | Deterministic block rows for modeled reachability, theoretical reachability, and ownership emit no fact, no correction, no graph handoff except `none`, no watermark, and no API authorized-negative output. |

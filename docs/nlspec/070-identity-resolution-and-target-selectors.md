@@ -49,6 +49,8 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `030.ActivationControlledRowField`
 - `030.ActivationControlledRowRef`
 - `030.ActivationControlledRowSetSchema`
+- `020.SourceDatasetCatalogRow`
+- `020.SourceDatasetCatalogRowSet`
 
 ## Exports
 
@@ -115,6 +117,17 @@ A downstream spec may import these artifact names by exact name. It must not inf
 Identity inputs must be materialized as typed `IdentityEvidenceItem` rows before candidate generation, blocker evaluation, review routing, creation, attachment, merge, split, reject, conflict, or no-decision output.
 
 A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier` records only by emitting records that pass the corresponding `040` schema and `040.ValidateCoreRecord`. `creation_identity_decision_id`, `resolver_profile_id`, and `identity_policy_version` must be present when a `CanonicalEntity` is created. `SourceAsset.source_scope`, `SourceAsset.source_native_identity`, and `SourceAsset.source_asset_type` must be sufficient for `040.SourceAssetSchema`; under-scoped source identity fails before candidate generation. `Identifier` outputs must include typed scope, quality, validity, known time, and evidence refs. `ResolverExplanation` must reference core record IDs and checksums rather than duplicate core fields.
+
+### DirectoryInventoryResolverInputHandoff
+
+A `directory_inventory` source-dataset row may produce `IdentityEvidenceItem` candidates only when all of the following hold:
+
+1. The selected `020.SourceDatasetCatalogRow` ref/checksum and row-set ref/checksum are present, checksum-valid, active or exact deterministic block as applicable, and included in `030.VersionManifest`.
+2. The active `ResolverProfileRow` covers the directory scope, entity type, resolver run mode, evidence classes, identifier scopes, lifecycle boundary types, and activation scope.
+3. The selected `IdentifierEvidenceClass` row is active and allows the evidence role produced by the directory inventory observation.
+4. No lifecycle blocker, hard blocker, under-scoped source identity, private-binding leak, validation blocker, package-set blocker, or manifest blocker applies.
+
+`directory_inventory` does not by itself authorize `identity_membership_fact.member_of`, nonmembership, user deletion, group deletion, source absence, cleanup, graph expiry, graph edge removal, canonical merge, or gold output. Directory display names, group names, usernames, labels, hidden-membership hints, permission-limited states, and directory object presence may be evidence only as typed resolver inputs. `directory_membership`, not `directory_inventory`, is the positive membership dataset for `gfp-mvp-identity-member-of-v1`.
 
 ### TelemetryIdentityNonAuthorityHandoff
 
