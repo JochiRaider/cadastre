@@ -85,7 +85,9 @@ Analysis, enrichment, lineage, and registry outputs must not mutate facts, graph
 
 `AnalysisRuleBundle` contains read-only rules. A rule may query declared read models only when `RuleGraphCompatibilityMatrix` passes for the active graph projection profile, graph edge semantics row refs, traversal class set, graph object output eligibility row refs, graph property refs, query translation profile, derived-view lag policy, query class, node types, edge types, edge directions, temporal fields, authorization/redaction refs, expected query checksum, expected result checksum, and read-only mutation proof.
 
-An `AnalysisRule` must not embed provider-native Gremlin, Cypher, AQL, or other backend query text as production graph behavior unless `ValidateAnalysisQueryImport` maps the query into an active `090.GraphQueryTranslationProfile` row and `RuleGraphCompatibilityMatrix` proves read-only behavior, expected result checksum, authorization/redaction behavior, and mutation prohibition. Provider-native query text is validation-only by default.
+An `AnalysisRule` must not embed provider-native Gremlin, Cypher, AQL, SQL, SQL/Cypher composition, AGE `ag_catalog.cypher()` strings, prepared statement text, query-plan text, or other backend query text as production graph behavior unless `ValidateAnalysisQueryImport` maps the query into an active `090.GraphQueryTranslationProfile` row and `RuleGraphCompatibilityMatrix` proves read-only behavior, expected query checksum, expected result checksum, authorization/redaction behavior, and mutation prohibition. Provider-native query text is validation-only by default.
+
+PostgreSQL and AGE compatibility rows must name `provider = postgresql` or `provider = postgresql_age` before a rule can target those profiles. Every PostgreSQL/AGE-compatible analysis rule must include an expected translated query checksum, expected result checksum, mutation-prohibition proof for SQL DML/DDL, mutation-prohibition proof for AGE mutating Cypher clauses, authorization refs, redaction refs, derived-view state refs, and `030.VersionManifest` refs. A rule embedding raw SQL, AGE Cypher, SQL/Cypher composition, prepared statement text, query-plan text, or provider-native query handles without those rows fails before analysis execution.
 
 `observed_connection` is analysis-readable only when the compatibility matrix names `observed_connection_path` or a read-only detail query and the active output eligibility row permits that context. `generic_external_graph_payload` must not produce findings, metrics, identity influence, or pathfinding input.
 
@@ -597,7 +599,10 @@ Default graph compatibility rules:
 | `generic_external_graph_payload` | Cannot produce findings, metrics, identity influence, or pathfinding input. |
 | derived-view stale state | Rejected for compliance/audit analysis by default; otherwise labeled only when `110` permits. |
 | mutation attempt | Fails with `ANALYSIS_MUTATION_FORBIDDEN` before any owner state changes. |
-| `gremlin_text` under JanusGraph default | Rejected unless translated into a declared `QueryGraph` class or validation-only import row; no production mutation; expected checksum required. |
+| `gremlin_text` under explicit non-default JanusGraph | Rejected unless translated into a declared `QueryGraph` class or validation-only import row; no production mutation; expected checksum required. |
+| `sql_text` under PostgreSQL relational profile | Rejected unless mapped into an active `090.GraphQueryTranslationProfile` and compatibility row; SQL DML/DDL mutation proof required. |
+| AGE `ag_catalog.cypher()` or SQL/Cypher composition | Rejected unless mapped into active PostgreSQL AGE translation rows; mutating Cypher clauses, namespace DML/DDL, and AGE internal ID leakage proofs required. |
+| prepared statement or query-plan text | Validation-only diagnostic material; must not execute or export unless translated and redacted through owner profiles. |
 
 ### RiskScoringBoundary validation
 
@@ -646,7 +651,7 @@ Analysis, enrichment, lineage, registry activation, or derived-edge routing must
 | `130-ANALYSIS-REPLAY-AC-001` | Analysis replay exact match includes rule bundle refs, rule row refs, graph compatibility refs, query target refs, derived-view refs, authorization/redaction refs, output checksum, and `VersionManifest` ref. |
 | `130-ANALYSIS-REPLAY-AC-002` | Rule bundle mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, or mutation attempt rejects production replay before output. |
 | `130-ANALYSIS-REPLAY-AC-003` | Shadow-only comparison is non-production and may not mutate facts, graph state, completeness, watermarks, identity, package state, or source authority. |
-| `130-PROVIDER-NATIVE-QUERY-IMPORT-AC-001` | Gremlin analysis import without translation fails before execution; valid translated read-only import passes with expected result checksum; mutation attempts fail before graph/backend execution. |
+| `130-PROVIDER-NATIVE-QUERY-IMPORT-AC-001` | Gremlin, SQL, SQL/Cypher, AGE `ag_catalog.cypher()` string, prepared statement text, or query-plan text without translation fails before execution; valid translated read-only import passes with expected query checksum and expected result checksum; SQL DML/DDL and AGE mutating-Cypher attempts fail before graph/backend execution. |
 | `130-VOLATILITY-AC-001` | Registry classification creating source authority, analysis rule bundle manifest omission, lineage facet checksum mismatch, threat-intel identity authority attempt, and derived graph edge mutation outside `090` fail before production effect. |
 | `130-VOLATILITY-AC-002` | Registry activation records include owner, lifecycle, checksum, validation refs, activation scope, and package-set ref when package-supplied. |
 | `130-LIFECYCLE-AC-001` | Every analysis, enrichment, lineage, and registry activation-controlled artifact entering `active` status has generic artifact lifecycle transition evidence and owner-specific guard results. |

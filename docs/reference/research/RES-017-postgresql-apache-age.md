@@ -1,5 +1,5 @@
 ---
-doc_id: RES-018
+doc_id: RES-017
 project: Cadastre
 title: PostgreSQL with Apache AGE as a Graph-Capable Persistence Backend
 status: research-report

@@ -246,9 +246,18 @@ Default allowed attribute keys:
 | `telemetry_profile_ref` | `ObservabilityInstrumentationProfile` ref | 64 | Ref and checksum only. |
 | `exporter_profile_ref` | `TelemetryExporterProfile` ref | 64 | Ref and checksum only. |
 | `graph_operation` | Closed graph operation class | 64 | Diagnostic only; must not include provider query text. |
+| `graph_backend_profile_ref` | Ref/checksum only | 64 | No provider config bytes. |
+| `graph_backend_provider_token` | Closed provider token | 16 | One of `postgresql`, `postgresql_age`, explicit non-default providers. |
+| `graph_backend_preflight_status` | Closed preflight token | 16 | One of `pass`, `fail`, `blocked`, `not_run`, `stale`. |
+| `backend_schema_fingerprint_ref` | Ref/checksum only | 1024 | No schema DDL text. |
+| `postgresql_version_ref` | Bounded version ref | 32 | No connection string. |
+| `age_extension_version_ref` | Bounded version ref | 32 | Only when AGE is selected. |
+| `graph_query_class` | Closed query class | 32 | No SQL, Cypher, or SQL/Cypher text. |
+| `provider_support_status` | Closed support-status token | 16 | No account, tenant, database, region-private, or provider-private identifiers. |
+| `query_plan_class` | Closed diagnostic class | 64 | No literal values or raw plan text. |
 | `endpoint_class` | Public endpoint class | 64 | Diagnostic only; must not include route names or private paths. |
 
-Forbidden values include raw payload bytes, raw payload hashes when not authorized by `110`, private source bindings, private routes, credentials, secrets, tokens, tenant inventories, environment-specific source target lists, backend internal IDs, source-native IDs, canonical entity IDs, raw hostnames, IP addresses, user names, provider-native query text, raw graph property values, package payload bytes, and unredacted source identifiers.
+Forbidden values include raw payload bytes, raw payload hashes when not authorized by `110`, private source bindings, private routes, credentials, secrets, tokens, tenant inventories, environment-specific source target lists, backend internal IDs, source-native IDs, canonical entity IDs, raw hostnames, IP addresses, user names, provider-native query text, raw SQL text, raw Cypher text, SQL/Cypher composed text, SQL literals, Cypher literals, query plans containing literals, connection strings, private database names, private schema names, PostgreSQL OIDs, tuple IDs, sequence values, prepared statement names, cursor names, AGE vertex IDs, AGE edge IDs, AGE path IDs, AGE graph namespace names when private, AGE graph/label IDs, agtype object IDs, raw graph property values, package payload bytes, and unredacted source identifiers.
 
 A forbidden key or value must fail before export with the most specific telemetry error code.
 
@@ -267,6 +276,12 @@ Structured-input telemetry must not contain raw branch names unless redacted to 
 | Canonical Cadastre entity or identity ID | Reject unless a future owner policy allows a bounded hashed diagnostic form. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
 | Hostname, IP address, user name, account name | Reject unless a future owner policy allows a bounded redacted form. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
 | Provider-native query text | Reject by default. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| Raw SQL text, raw Cypher text, or SQL/Cypher composed text | Reject before export. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| SQL literal, Cypher literal, or query plan containing literal values | Reject before export. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| Connection string, private database name, private schema name, or private AGE graph namespace name | Reject before export. | `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` |
+| PostgreSQL OID, tuple ID, sequence value, physical row locator, prepared statement name, or cursor name | Reject before export. | `TELEMETRY_BACKEND_ID_FORBIDDEN` |
+| AGE vertex ID, AGE edge ID, AGE path ID, AGE graph ID, AGE label ID, or agtype object ID | Reject before export. | `TELEMETRY_BACKEND_ID_FORBIDDEN` |
+| Raw graph property value | Reject before export. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
 | Exporter endpoint or Collector route | Redact to opaque ref before telemetry or API output. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
 
 Redaction that changes a metric attribute value must re-run metric cardinality validation on the redacted value set before export.
@@ -365,7 +380,7 @@ EmitTelemetry(signal, attributes, value, context, profile, runtime_state):
 5. Validate the active trace context. If context is missing and tracing or structured logs are enabled, create runtime diagnostic context only.
 6. Canonicalize attribute keys and values.
 7. Reject any attribute key or value not allowlisted by `TelemetryAttributePolicy`.
-8. Run `TelemetryRedactionPolicy` and `110.RedactionPolicy` preflight; reject raw payload bytes, private bindings, credentials, backend IDs, and provider-native query text before export.
+8. Run `TelemetryRedactionPolicy` and `110.RedactionPolicy` preflight; reject raw payload bytes, private bindings, credentials, backend IDs, provider-native query text, raw SQL text, raw Cypher text, SQL/Cypher composed text, SQL/Cypher literals, literal-bearing query plans, connection strings, PostgreSQL internal IDs, SQL cursor or prepared statement names, AGE internal IDs, and raw graph property values before export.
 9. If `signal = metric`, resolve exactly one `MetricInstrumentRow`, validate instrument type, unit, allowed attributes, cardinality class, and per-run cardinality bound.
 10. Enforce `TelemetryNonAuthorityRule`; if telemetry attempts to create, modify, authorize, validate, replay, or persist a non-telemetry authoritative record, fail with `TELEMETRY_AUTHORITY_VIOLATION` before the forbidden effect.
 11. Submit the telemetry item through `TelemetryExporterProfile` using bounded non-blocking behavior when export is enabled.
@@ -491,7 +506,7 @@ Telemetry validation, export, health mapping, or replay exclusion must fail befo
 | `140-PROFILE-DEFAULTS-AC-001` | The default instrumentation profile materializes OpenTelemetry-compatible, OTLP-compatible traces, metrics, structured logs, bounded best-effort nonblocking delivery, no domain effect from export failure, degraded health effect from export failure, replay exclusion for trace/span IDs, and forbidden raw payload, private binding, and backend ID telemetry. |
 | `140-SIGNAL-POLICY-AC-001` | `trace`, `metric`, `structured_log`, and `baggage` are the only production signal tokens; unknown or disabled signals fail with `TELEMETRY_SIGNAL_FORBIDDEN` before export. |
 | `140-TRACE-CONTEXT-AC-001` | Trace context propagation, parent-child spans, async handoff, sampled/unsampled behavior, baggage restrictions, and context loss never alter stage order, output IDs, checksums, replay equivalence, package activation, or domain output. |
-| `140-ATTRIBUTE-REDACTION-AC-001` | Raw payload bytes, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, user names, tenant inventories, route names, and provider-native query text are rejected or redacted before export according to `TelemetryAttributePolicy`, `TelemetryRedactionPolicy`, and `110.RedactionPolicy`. |
+| `140-ATTRIBUTE-REDACTION-AC-001` | Raw payload bytes, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, user names, tenant inventories, route names, provider-native query text, raw SQL, raw Cypher, SQL/Cypher text, SQL/Cypher literals, literal-bearing query plans, connection strings, PostgreSQL internal IDs, SQL cursor or prepared statement names, AGE internal IDs, and raw graph property values are rejected or redacted before export according to `TelemetryAttributePolicy`, `TelemetryRedactionPolicy`, and `110.RedactionPolicy`. |
 | `140-CARDINALITY-AC-001` | Every emitted metric resolves exactly one `MetricInstrumentRow`; unbounded attributes and cardinality overrun fail with `TELEMETRY_CARDINALITY_VIOLATION` before export. |
 | `140-EXPORTER-AC-001` | Exporter outage, Collector outage, timeout, and queue overflow update `TelemetryRuntimeState`, may degrade observability health through policy, and do not mutate authoritative domain records. |
 | `140-HEALTH-AC-001` | Telemetry runtime state affects `110.OperationalHealthStatus` only through `TelemetryHealthMappingPolicy` and never repairs, invalidates, or mutates domain outputs. |

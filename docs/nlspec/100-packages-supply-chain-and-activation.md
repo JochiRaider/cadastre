@@ -380,13 +380,13 @@ These rows are package type policies for confirmed `PackageType` tokens. They mu
 
 | Package type | Public API boundary | Runtime protocol | Required compatibility inputs |
 | --- | --- | --- | --- |
-| `graph_backend_provider_package` | `090.GraphBackendProfile` and provider adapter contract | provider runtime | provider version, license, SBOM, vulnerabilities, storage/index compatibility |
-| `graph_provider_adapter_package` | `090.GraphProviderAdapterContract` | driver/client protocol | query translation, apply, rebuild, errors, raw-write bypass |
-| `graph_backend_driver_package` | provider driver API | TinkerPop/Gremlin driver for JanusGraph MVP | driver version, provider version, serialization compatibility |
-| `graph_storage_backend_adapter_package` | provider storage adapter | storage backend API | durable mode, topology, lock/ID behavior, failure modes |
-| `graph_index_backend_adapter_package` | provider index adapter | index provider API | index freshness, mapping, query feature compatibility |
-| `graph_backend_runtime_distribution` | runtime distribution | server/container/distribution | package checks, startup config, health, rollback |
-| `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | server mode, storage config, index config, schema-init config, health |
+| `graph_backend_provider_package` | `090.GraphBackendProfile` and provider adapter contract | PostgreSQL runtime/distribution or AGE extension-capable runtime package | provider/runtime version, license, SBOM, vulnerabilities, provider support, restore, upgrade, and schema compatibility |
+| `graph_provider_adapter_package` | `090.GraphProviderAdapterContract` | Cadastre PostgreSQL graph adapter package | SQL query translation, apply, rebuild, errors, raw-write bypass, role/security preflight, and AGE routing when selected |
+| `graph_backend_driver_package` | provider driver API | PostgreSQL driver/client package | driver protocol version, provider version, transaction behavior, timeout/cancellation behavior, and serialization compatibility |
+| `graph_storage_backend_adapter_package` | provider storage adapter | `not_required` for PostgreSQL relational unless an external storage adapter is selected | deterministic block for PostgreSQL relational; external storage evidence only when selected |
+| `graph_index_backend_adapter_package` | provider index adapter | PostgreSQL indexes profile evidence unless a separate search/index backend is selected | index freshness, mapping, query feature compatibility, query-plan regression, and deterministic block when not separately required |
+| `graph_backend_runtime_distribution` | runtime distribution | PostgreSQL server/container/distribution, including AGE binaries/control files when AGE is enabled | package checks, startup config, restore, upgrade, health, rollback, extension files, and version compatibility |
+| `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | provider, region, engine version, service tier, extension support, role model, RLS, `search_path`, backup/restore, upgrade, and health refs |
 
 ### Observability package type policy rows
 
@@ -971,20 +971,23 @@ Git commit timestamp, branch name, tag name, repository URL, or tree hash must n
 
 Every output-affecting axis named by `PackageTypePolicyRow` must have a passing compatibility row. A missing, expired, mismatched, or failed compatibility row emits `PACKAGE_COMPATIBILITY_FAILED` before activation or rollback.
 
-### JanusGraph backend compatibility axes
+### Graph backend compatibility axes
 
-| Compatibility axis | Required for JanusGraph MVP |
-| --- | --- |
-| provider runtime version | pinned immutable package or release ref |
-| TinkerPop version | must match `090.GraphBackendProfile` |
-| Gremlin driver version | must match provider adapter contract |
-| storage adapter | must match selected storage backend kind/version |
-| index adapter | must match selected index backend kind/version |
-| schema profile | must match `090.GraphReadModelSchemaProfile` checksum |
-| query translation | must match `090.GraphQueryTranslationProfile` checksum |
-| graph apply | must match `090.GraphApplyProfile` checksum |
-| license/SBOM/vulnerability | must pass package policy |
-| rollback | must preserve graph provider compatibility or block rollback |
+| Compatibility axis | Required for PostgreSQL relational default | Required when AGE is selected | Explicit non-default JanusGraph behavior |
+| --- | --- | --- | --- |
+| PostgreSQL major and patch version | Pinned immutable runtime distribution or provider ref. | Same, and must be supported by selected AGE version. | Not applicable. |
+| PostgreSQL driver protocol version | Must match provider adapter contract and timeout/cancellation behavior. | Same. | Not applicable. |
+| deployment provider, region, engine version, and service tier | Required when provider support affects activation. | Required with exact AGE support status. | Required only when JanusGraph selected. |
+| AGE extension version | Not applicable. | Required exact extension version and supported PostgreSQL major. | Not applicable. |
+| extension files/control scripts availability | Not applicable unless another PostgreSQL extension is selected. | Required for restore and upgrade. | Not applicable. |
+| schema migration compatibility | Must match relational schema profile and migration plan. | Must match relational anchor schema plus AGE label/property/index migration plan. | Must match selected JanusGraph schema profile. |
+| schema fingerprint compatibility | Must match `090.BackendSchemaFingerprint`. | Must match relational fingerprint and AGE extension/version inventory. | Must match JanusGraph fingerprint. |
+| query translation profile compatibility | Must match PostgreSQL SQL `090.GraphQueryTranslationProfile` checksum. | Must match AGE SQL/Cypher translation and relational-anchor parity checksums. | Must match Gremlin translation checksum. |
+| query plan regression policy | Required when query plan class affects latency, full-scan rejection, or output safety. | Required for SQL/Cypher composition and AGE traversal. | Required when selected query classes require optimizer evidence. |
+| restore compatibility | Clean-environment restore proof required. | Restore proof must include AGE extension binaries, control files, SQL scripts, and graph namespace. | Required only when JanusGraph selected. |
+| upgrade compatibility | PostgreSQL major-version upgrade or rebuild migration proof required. | Same plus AGE upgrade rehearsal or rebuild migration proof. | Required only when JanusGraph selected. |
+| role/RLS/search-path compatibility | Required for API and apply roles. | Required plus AGE namespace security preflight. | Required for selected JanusGraph operational model. |
+| package cohort compatibility | Runtime, adapter, driver, schema profile, query profile, apply profile, deployment profile, package set, validation refs, and rollback refs must match. | Same plus AGE extension package cohort. | Same for selected JanusGraph package cohort. |
 
 ### Package type compatibility closure
 
@@ -1275,7 +1278,7 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-PACKAGE-TYPE-POLICY-AC-003` | Known package type with no active policy row fails with `PACKAGE_TYPE_POLICY_MISSING`. |
 | `100-PACKAGE-TYPE-POLICY-AC-004` | Ambiguous package type policy resolution fails with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. |
 | `100-PACKAGE-TYPE-POLICY-AC-005` | A known token with one active in-scope policy row succeeds and records the selected row ref and checksum in `030.VersionManifest.included_refs`. |
-| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has exactly 81 unique tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
+| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has exactly 84 unique tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
 | `100-PACKAGE-TYPE-COVERAGE-AC-001` | Every confirmed token appears exactly once in `PackageTypePolicyRowCoverageMatrix`, and absent, duplicate, or multi-family assignments fail validation. |
 | `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
 | `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for row-specific package types and fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate output. |
@@ -1286,9 +1289,9 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | Every required `PackageReleaseManifest` field omission, null-forbidden value, checksum mismatch, inactive ref, failed ref, or out-of-scope ref fails before activation. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package-set ID, package release refs, release checksums, selected package type policy row-set refs, selected package type policy refs, deprecation refs, repository refs, supply-chain policy/evidence refs, cohesion groups, `target_environment`, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, lifecycle evidence refs, approval refs, and checksum. |
-| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing JanusGraph provider, adapter, driver, storage adapter, index adapter, runtime distribution, SBOM, provenance, compatibility, or package-set refs fail graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
-| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | Storage adapter version mismatch, index adapter version mismatch, or TinkerPop/driver compatibility mismatch fails candidate activation and preserves the current active package set. |
-| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing PostgreSQL runtime/distribution, PostgreSQL adapter, PostgreSQL driver, deployment profile, compatibility row, SBOM/provenance where required, provider support evidence, restore/upgrade evidence, package-set membership, or AGE extension package refs when AGE is selected fails graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | PostgreSQL driver protocol mismatch, AGE extension version mismatch, provider support mismatch, schema fingerprint incompatibility, query translation incompatibility, query-plan regression policy failure, restore incompatibility, upgrade incompatibility, role/RLS/search-path incompatibility, or package cohort mismatch fails candidate activation and preserves the current active package set. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes, graph serving promotion, graph apply, or query serving. |
 | `100-OBSERVABILITY-PACKAGE-TYPE-AC-001` | Observability policy bundle, telemetry runtime distribution, and telemetry collector deployment package types resolve exactly one active `PackageTypePolicyRow`; unknown, missing, ambiguous, unsafe, untrusted, or incompatible telemetry packages fail before activation. |
 | `100-OBSERVABILITY-PACKAGE-NONAUTH-AC-001` | Telemetry packages cannot emit domain production records or bypass `140` non-authority, redaction, metric cardinality, health mapping, replay exclusion, or exporter bounds. |
 | `100-COMPATIBILITY-AC-001` | Missing or failed compatibility on any required output-affecting axis fails activation or rollback with `PACKAGE_COMPATIBILITY_FAILED`. |

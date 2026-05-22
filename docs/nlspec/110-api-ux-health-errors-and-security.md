@@ -277,7 +277,7 @@ Default mapping:
 | `max_depth` | Required for path queries | `3` | Bounds from API table. |
 | `page_size` | No | `100` | Bounds from API table. |
 | `timeout_seconds` | No | `30` | Bounds from API table. |
-| `page_token` | No | null | Must be a Cadastre page token; backend cursors are rejected. |
+| `page_token` | No | null | Must be a Cadastre page token; backend cursors, SQL cursor names, prepared statement names, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, AGE vertex IDs, AGE edge IDs, AGE path IDs, AGE graph/label IDs, agtype object IDs, and provider-native query handles are rejected. |
 | `page_token_ttl_seconds` | No | `900` | Bounds `60..3600`; omitted value is materialized before `request_checksum`. |
 | `include_evidence` | No | `false` | Evidence metadata only unless authorization permits more. |
 | `include_raw_payload` | No | `false` | Raw payload returned only with raw-evidence permission. |
@@ -531,7 +531,7 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 `GenerateErrorCodeRegistry` must generate exact rows for `DOMAIN_LEDGER_OWNER_DUPLICATE`, `OWNER_CONTRACT_REF_UNEXPORTED`, and `DUPLICATE_OWNER_EXPORT`. A generic validation or registry error must not substitute for define-once closure failures.
 
-If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
+If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure. PostgreSQL and AGE graph backend failures must use the owner-specific `090` rows for schema fingerprint, duplicate IDs, orphan edges, query timeout, unsupported query plan, direct DML, unsafe `search_path`, RLS bypass, provider support, AGE extension, AGE mutation, AGE namespace bypass, AGE internal ID, restore, and upgrade errors; generic graph or API errors are forbidden when those rows cover the failure.
 
 Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
 
@@ -1120,6 +1120,25 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `GRAPH_INDEX_FRESHNESS_REQUIRED` | `090` | blocked | yes after refresh | affected query classes blocked | index consistency ref |
 | `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | `090` | error | yes with narrower query or index policy | query rejected before backend traversal | query class, translation profile ref |
 | `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | no, until adapter/profile changes | backend profile activation blocked | adapter ref, provider ref |
+
+| `GRAPH_POSTGRES_SCHEMA_FINGERPRINT_STALE` | `090` | blocked | no, until schema evidence refresh | graph backend blocked | backend schema fingerprint ref, schema profile ref |
+| `GRAPH_POSTGRES_DUPLICATE_NODE_ID` | `090` | error | no, until data/profile repair | graph apply/query blocked for affected object | graph node ID checksum, profile ref |
+| `GRAPH_POSTGRES_DUPLICATE_EDGE_ID` | `090` | error | no, until data/profile repair | graph apply/query blocked for affected object | graph edge ID checksum, profile ref |
+| `GRAPH_POSTGRES_ORPHAN_EDGE` | `090` | error | no, until data/profile repair | edge omitted and apply/query blocked as specified by `090` | edge checksum, endpoint refs |
+| `GRAPH_POSTGRES_QUERY_TIMEOUT` | `090` | error | yes under bounded retry or narrower query | no partial output unless query class permits | query checksum, timeout, profile refs |
+| `GRAPH_POSTGRES_QUERY_PLAN_UNSUPPORTED` | `090` | error | yes with narrower query or index/profile change | query rejected before backend execution | query class, plan class ref, translation profile ref |
+| `GRAPH_POSTGRES_DIRECT_DML_FORBIDDEN` | `090` | security_error | none | no mutation and no graph serving effect | role ref, attempted operation class |
+| `GRAPH_POSTGRES_SEARCH_PATH_UNSAFE` | `090` | security_error | none | backend preflight blocked | search-path preflight ref |
+| `GRAPH_POSTGRES_RLS_BYPASS_FORBIDDEN` | `090` | security_error | none | backend preflight blocked | role/RLS preflight ref |
+| `GRAPH_PROVIDER_UNSUPPORTED` | `090` | blocked | no, until provider/profile changes | backend activation blocked | provider support evidence ref |
+| `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` | `090` | blocked | no, until evidence supplied | backend activation blocked | provider support evidence requirement ref |
+| `GRAPH_AGE_EXTENSION_MISSING` | `090` | blocked | no, until extension refs change | AGE activation blocked | extension package/version refs |
+| `GRAPH_AGE_EXTENSION_VERSION_UNSUPPORTED` | `090` | blocked | no, until extension/profile changes | AGE activation blocked | extension version ref, PostgreSQL version ref |
+| `GRAPH_AGE_MUTATION_FORBIDDEN` | `090` | security_error | none | no mutation and no query result | query checksum, mutation class |
+| `GRAPH_AGE_NAMESPACE_BYPASS_FORBIDDEN` | `090` | security_error | none | no mutation and AGE activation blocked | namespace preflight ref |
+| `GRAPH_AGE_INTERNAL_ID_FORBIDDEN` | `090` | security_error | none | output rejected before visibility | rejected ID class, response field path |
+| `GRAPH_BACKEND_RESTORE_UNVERIFIED` | `090` | blocked | no, until restore proof changes | backend promotion blocked | restore rehearsal ref |
+| `GRAPH_BACKEND_UPGRADE_UNVERIFIED` | `090` | blocked | no, until upgrade proof changes | backend promotion blocked | upgrade rehearsal or rebuild migration ref |
 | `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `110` | error | `policy_change_required` | output wording rejected | output checksum and owner policy refs |
 
 ### ReachabilityWordingGuard
@@ -1177,8 +1196,21 @@ Coverage-domain token failures must route to generated `060` owner-specific `Err
 | schema fingerprint | backend schema fingerprint and schema profile | stale schema labels graph component blocked | fingerprint ref |
 | index freshness | index consistency check and affected query classes | stale index blocks affected query classes | index check ref |
 | raw-write bypass | bypass evidence | unsafe bypass blocks graph serving | bypass evidence ref |
+| PostgreSQL runtime/version | PostgreSQL runtime ref, package ref, provider ref, and compatibility row | `healthy`, `degraded`, `blocked`, or `error` according to selected preflight state | PostgreSQL version ref and package checksum only |
+| PostgreSQL adapter/driver package gate | adapter package, driver package, compatibility row, package-set ref | blocked when failed or missing | package refs redacted by policy |
+| relational schema fingerprint | relational anchor schema fingerprint, schema profile, constraint/index inventory | blocked when stale or mismatched | fingerprint ref |
+| relational constraints/index readiness | constraint/index preflight and query plan class refs | degraded or blocked for affected query classes | preflight refs |
+| query translation profile | SQL or SQL/Cypher translation profile and expected checksum refs | blocked when missing, stale, or parity-failed | translation profile ref |
+| apply profile and apply-state freshness | apply profile, apply state, idempotency, read-after-write, and derived-view refs | blocked when resume unsafe or stale | apply-state ref |
+| provider support evidence | provider, region, engine version, service tier, extension support, restore, and upgrade support refs | blocked when missing or unsupported | provider support ref only |
+| AGE extension presence/version | required only when AGE profile selected | blocked when missing or unsupported | extension version ref only |
+| AGE graph namespace/security preflight | namespace, role, mutating Cypher, and bypass preflight refs | blocked on unsafe preflight | namespace/security preflight ref, no raw namespace when private |
+| role/RLS/search-path readiness | role model, RLS policy, and `search_path` preflight refs | blocked when unsafe | preflight ref |
+| restore rehearsal status | restore rehearsal ref and checksum | blocked when missing, stale, failed, or not run | restore ref |
+| upgrade rehearsal status | upgrade rehearsal or rebuild migration ref and checksum | blocked when missing, stale, failed, or not run | upgrade ref |
+| benchmark status | benchmark row refs when performance gates are in scope | blocked while thresholds are `TODO`, missing, failed, or stale | benchmark refs only |
 
-Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, credentials, private provider configuration, raw package evidence, or provider exception class names to callers.
+Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, PostgreSQL OIDs, tuple IDs, sequence values, AGE IDs, SQL/Cypher text, credentials, private provider configuration, raw package evidence, provider exception class names, database names when private, schema names when private, or AGE graph namespace names when private to callers.
 
 ### SourceStateLabelMapping
 
@@ -1302,7 +1334,7 @@ Public docs, APIs, exports, and validation reports must fail closed or redact wh
 
 ### Page token canonicalization
 
-API page tokens must be generated from `040.CanonicalJSON` over query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. Backend cursors or internal IDs are forbidden as page token identity.
+API page tokens must be generated from `040.CanonicalJSON` over query checksum, authorization context checksum, owner profile refs, ordering keys, page boundary, derived-view state when applicable, and expiration. Backend cursors or internal IDs are forbidden as page token identity. Forbidden PostgreSQL/AGE token inputs include PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, SQL cursor names, prepared statement names, provider-native query handles, AGE vertex IDs, AGE edge IDs, AGE path IDs, AGE graph IDs, AGE label IDs, and agtype object IDs.
 
 ### PageTokenPolicy
 
@@ -1319,7 +1351,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | derived-view mismatch | Reject with `DERIVED_VIEW_LAG_ERROR` when current state is required; otherwise reject with `PAGE_TOKEN_INVALID` if the token identity no longer matches. |
 | graph profile mismatch | Reject with `GRAPH_PAGE_TOKEN_INVALID` or `PAGE_TOKEN_INVALID` before backend query execution. |
 | redaction mismatch | Reject with `PAGE_TOKEN_INVALID` before owner execution because page boundaries may differ after redaction. |
-| backend cursor identity | Reject with `PAGE_TOKEN_INVALID`; backend cursors and backend-native IDs are forbidden token identity. |
+| backend cursor identity | Reject with `PAGE_TOKEN_INVALID`; backend cursors, backend-native IDs, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, SQL cursor names, prepared statement names, provider-native query handles, AGE vertex IDs, AGE edge IDs, AGE path IDs, AGE graph IDs, AGE label IDs, and agtype object IDs are forbidden token identity. |
 | portability | Tokens are not portable across callers, roles, authorization decisions, graph profiles, redaction contexts, endpoint outcome states, request checksums, or derived-view states. |
 | promotion behavior | `110-PAGE-TOKEN-DEFAULTS-AC-001` and `110-ENDPOINT-OUTCOME-TOTAL-AC-001` pass only when every endpoint token case has `120` fixtures. |
 
