@@ -102,10 +102,14 @@ Core schemas may name vendor-neutral source categories and redacted refs only. A
 | --- | --- |
 | `RawSupplierProfile` | Public, vendor-neutral. |
 | `LakehouseFeedProfile` | Public, vendor-neutral. |
+| `SourceDatasetCatalogRowSet` | Public, vendor-neutral. |
+| Concrete source-dataset-to-vendor/product/route binding | Private only. It may be represented through private implementation artifacts or redacted refs; it must never appear in public catalog bytes. |
 | `PrivateSourceFeedBinding` | Private only. |
 | `PrivateFeedSchemaInventory` | Private only. |
 | `PrivateCompletenessEvidenceInventory` | Private only. |
 | `PrivateGoldenCorpus` | Private only unless redacted into `LakehouseFeedFixture`. |
+
+A public source-dataset catalog row must not contain a vendor product name, private route, credential, tenant inventory, scanner site, directory tenant list, cloud account list, host list, or private schema payload. A private implementation may bind concrete upstream systems to a public `source_dataset` token only when the binding does not alter public row selection, row checksum, default missing-row behavior, error precedence, activation scope, validation requirements, or `030.VersionManifest` inclusion.
 
 Public structured-input repositories must not contain concrete private routes, credentials, tenant IDs, private inventories, source-native secrets, unredacted private schema payloads, or raw private fixture bytes. Private structured-input repositories may bind concrete private systems to public rows, but those bindings must not alter public row-selection order, defaults, error precedence, authority semantics, or activation gates.
 

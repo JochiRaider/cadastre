@@ -50,6 +50,7 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `030.ActivationControlledRowField`
 - `030.ActivationControlledRowRef`
 - `030.ActivationControlledRowSetSchema`
+- `020.SourceDatasetCatalogRow`
 
 ## Exports
 
@@ -127,10 +128,21 @@ Graph expiry and cleanup deltas require all of the following:
 
 1. `060.AbsenceDerivationResult.requested_effect` equals the graph handoff effect.
 2. `060.AbsenceDerivationResult.allowed_effects` contains the requested effect.
-3. The producing `VersionManifest` includes the selected `SourceAuthorityClosureMatrixRowSet` ref or deterministic block validation ref and all underlying `060` row refs.
-4. `closure_outcome = closed`.
+3. The selected `060.SourceAuthorityClosureMatrixRow.closure_outcome` maps to `000.closed_active` through `000.SourceAuthorityClosureStateCrosswalk`.
+4. The producing `VersionManifest` includes the selected `020.SourceDatasetCatalogRow` ref/checksum and every underlying `060` row ref/checksum consulted by the requested effect.
 
-`closure_outcome = deterministically_blocked` and `closure_outcome = blocked_validation` must emit no graph delta. A deterministic block row may be recorded as a graph no-op diagnostic only; it must not become graph expiry, cleanup, retraction, absence, or watermark permission.
+`closure_outcome = deterministically_blocked` and `closure_outcome = blocked_validation` must emit no graph delta. A deterministic block row may be recorded as a graph no-op diagnostic only; it must not become graph expiry, cleanup, retraction, absence, or watermark permission. Missing source-dataset catalog rows or missing `VersionManifest` refs reject before delta persistence.
+
+#### SourceEffectGraphOutcomeMatrix
+
+| `060` closure state | Required `090` behavior |
+| --- | --- |
+| `closed` for `graph_expiry` | May emit expiry delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset and all underlying `060` refs. |
+| `closed` for `cleanup` | May emit cleanup delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset and all underlying `060` refs. |
+| `deterministically_blocked` | Emit graph no-op diagnostic only; no backend mutation. |
+| `blocked_validation` | Reject before delta persistence. |
+| missing source-dataset catalog row | Reject before delta persistence. |
+| missing `VersionManifest` refs | Reject with manifest error before delta persistence. |
 
 ### GoldFactChangeSet graph handoff matrix
 
@@ -140,9 +152,9 @@ Graph expiry and cleanup deltas require all of the following:
 | --- | --- | --- | --- |
 | `none` | Emit no graph delta. | `GoldFactChangeSet` ref only. | no-op. |
 | `reproject_fact_key` | Recompute projected graph objects for the affected fact key using the active `GraphProjectionProfile`. | `GoldFactChangeSet` ref, temporal refs, projection profile ref. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED`. |
-| `expire_projected_object` | Emit expiry delta only when `060.AbsenceDerivationResult.allowed_effects` contains `graph_expiry`. | `GoldFactChangeSet` ref and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
-| `cleanup_projected_object` | Emit cleanup delta only when `060.AbsenceDerivationResult.allowed_effects` contains `cleanup`. | `GoldFactChangeSet` ref and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
-| `source_authority_blocked` | Emit no graph delta and record graph no-op diagnostic. | deterministic block row ref | no-op; no backend mutation |
+| `expire_projected_object` | Emit expiry delta only when `060.AbsenceDerivationResult.allowed_effects` contains `graph_expiry` and the selected source-dataset catalog row is manifest-included. | `GoldFactChangeSet` ref, `020.SourceDatasetCatalogRow` ref/checksum, and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
+| `cleanup_projected_object` | Emit cleanup delta only when `060.AbsenceDerivationResult.allowed_effects` contains `cleanup` and the selected source-dataset catalog row is manifest-included. | `GoldFactChangeSet` ref, `020.SourceDatasetCatalogRow` ref/checksum, and `060.AbsenceDerivationResult` ref. | no graph delta plus `GRAPH_EXPIRY_SOURCE_AUTHORITY_REQUIRED`. |
+| `source_authority_blocked` | Emit no graph delta and record graph no-op diagnostic. | deterministic source-dataset or source-authority block row ref | no-op; no backend mutation |
 | `conflict_visibility_update` | Update graph visibility only when `GraphEdgeSemantics` and `GraphObjectOutputEligibilityRow` permit conflicted or stale assertions. | `GoldFactChangeSet` ref, graph semantics row ref, eligibility row ref. | no pathfinding-visible delta. |
 | `identity_split_handoff` | Consume `070.GraphCorrectionHandoff`, validate `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, `resolver_explanation_checksum`, and `version_manifest_ref`, sort affected fact refs lexically when enumerated, and route affected facts through the active `GraphProjectionProfile` only. | `GraphCorrectionHandoff` ref/checksum, `split_identity_decision_ref`, `split_policy_ref`, `retained_canonical_entity_ref`, `new_canonical_entity_refs`, `split_partition_refs`, `affected_fact_refs` or `affected_fact_selection_checksum`, projection profile ref, resolver explanation checksum. | `GRAPH_HANDOFF_EFFECT_UNSUPPORTED` when the active projection profile does not support the handoff; missing or invalid metadata rejects before delta persistence. |
 
@@ -1106,6 +1118,8 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-SOURCE-CLOSURE-GRAPH-AC-003` | Missing flow evidence emits no absence edge and no expiry. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-004` | Deterministic source-authority block rows emit no graph delta and no backend mutation. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-005` | A graph expiry or cleanup delta missing closure row-set refs, closure validation refs, or underlying `060` row refs fails before graph apply. |
+| `090-SOURCE-DATASET-CATALOG-GRAPH-AC-001` | Expiry and cleanup deltas require selected `020.SourceDatasetCatalogRow` refs/checksums in the producing `VersionManifest`. |
+| `090-SOURCE-DATASET-CATALOG-GRAPH-AC-002` | Missing, blocked, ambiguous, inactive, checksum-mismatched, unvalidated, or unmanifested source-dataset catalog rows reject before graph delta persistence and produce no backend mutation. |
 | `090-GRAPH-HANDOFF-AC-001` | `none` handoff emits no graph delta. |
 | `090-GRAPH-HANDOFF-AC-002` | `reproject_fact_key` recomputes affected projected graph objects and includes source `GoldFactChangeSet` refs. |
 | `090-GRAPH-HANDOFF-AC-003` | `expire_projected_object` emits expiry only when `060` authorizes `graph_expiry`. |

@@ -97,9 +97,11 @@ Until this index marks a document `authoritative`, the NLSpec set remains candid
 | `candidate` | `authoritative` | Passing owner `AcceptanceReport`; no unresolved owner `TODO:` rows; registry row marks the file active. | Failed, blocked, missing, or stale validation evidence; unresolved owner `TODO:` rows; duplicate owner for a runtime contract. |
 | `authoritative` | `superseded` | New accepted `SpecSetVersion` names the replacement. | Missing replacement checksum or missing registry row. |
 
-Promotion must fail when any active absence-sensitive feed category or category row with non-empty `allowed_effects` can affect output and the spec set lacks registered, classified, validated, and manifest-included source-authority closure row-catalog refs or deterministic block catalog refs for every out-of-scope family.
+Promotion must fail when any active absence-sensitive feed category or category row with non-empty `allowed_effects` can affect output and the spec set lacks registered, classified, validated, and manifest-included source-dataset catalog refs, source-authority closure row-catalog refs, or deterministic block catalog refs for every out-of-scope family.
 
 Promotion must fail when any active MVP OCSF mapping row set exists and the spec set lacks registered, classified, validated, and manifest-included refs for `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, and `CanonicalValidationOutput`.
+
+Promotion must fail when any active feed profile, source-authority row, mapping row, graph or analysis handoff, package-supplied row catalog, API filter, or validation fixture references a `source_dataset` token that lacks exactly one active `020.SourceDatasetCatalogRow` or exactly one deterministic source-dataset block row. A closure summary, validation report, package label, row-set checksum, owner prose, or private binding must not substitute for selected source-dataset row refs and checksums.
 
 Additional promotion gates:
 
@@ -119,9 +121,9 @@ Additional promotion gates:
 
 | Catalog family | Required member refs |
 | --- | --- |
-| `feed_category_closure` | `020` source-dataset catalog refs and `LakehouseFeedCategoryClosureRowSet` refs for every declared feed category. |
+| `feed_category_closure` | `020.SourceDatasetCatalogRowSet` refs, selected `020.SourceDatasetCatalogRow` refs/checksums, deterministic source-dataset block row refs when applicable, `020.LakehouseFeedCategoryClosureRowSet` refs, selected category row refs/checksums, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs. |
 | `ocsf_mapping_closure` | `050` `ExternalSchemaProfile`, compiled artifact ref, profile-resolution manifest refs, observation-to-OCSF mapping row set, enum rule set, base-event field policy set, source-extension rule set, observation-type validation matrix, and canonical validation output. |
-| `source_authority_closure` | `060.SourceAuthorityClosureMatrixRowSet` plus `060.CoverageDomainCatalog` checksum, selected `060.CoverageDomainToken` array checksum when coverage-domain selection affects output, and every underlying source authority, completeness, coverage, staleness, progress-signal, supplier-visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row set required by the selected effect. |
+| `source_authority_closure` | `060.SourceAuthorityClosureMatrixRowSet`, selected `020.SourceDatasetCatalogRow` ref/checksum for every active `source_dataset` used by a source-authority closure matrix row, `060.CoverageDomainCatalog` checksum, selected `060.CoverageDomainToken` array checksum when coverage-domain selection affects output, and every underlying source authority, completeness, coverage, staleness, progress-signal, supplier-visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row set required by the selected effect. |
 | `resolver_catalog_closure` | `070.ResolverProfileRowSet` and every resolver artifact row set, including `ResolverActivationReportPolicy`. |
 | `graph_active_profile_closure` | `090.GraphActiveProfileClosure`, `GraphEdgeSemantics` row set, `GraphObjectOutputEligibilityRowSet`, active graph profile refs, and deterministic inactive/block rows for out-of-scope edge types. |
 | `graph_backend_selection_closure` | `090.GraphBackendSelectionDefaultDecision`, backend selection policy refs, graph backend profile refs when supplied, and `GraphBackendActivationBlockerSet` refs for unresolved provider, storage, index, schema, fixture, and package gates. |
@@ -140,6 +142,21 @@ Closed closure result states are:
 | `blocked_checksum` | Must fail promotion. |
 | `blocked_package_set` | Must fail promotion. |
 | `blocked_manifest` | Must fail promotion. |
+
+#### SourceAuthorityClosureStateCrosswalk
+
+Owner-local source-authority states must map to promotion closure states through this table. A state not listed here must fail promotion with `blocked_validation` until `000` is updated.
+
+| Owner-local source-authority state | Promotion closure state |
+| --- | --- |
+| `060.closure_outcome = closed` | `closed_active` |
+| `060.closure_outcome = deterministically_blocked` | `closed_deterministically_blocked` |
+| `060.closure_outcome = blocked_validation` | `blocked_validation` |
+| missing catalog row | `blocked_missing_ref` |
+| selected row contains `TODO:` | `blocked_todo` |
+| selected row checksum mismatch | `blocked_checksum` |
+| package-supplied row without package-set ref | `blocked_package_set` |
+| selected row omitted from manifest | `blocked_manifest` |
 
 Promotion to `authoritative` may pass this gate only when every closure-pack family in the selected production scope is `closed_active` or `closed_deterministically_blocked`. A deterministic block row must be exact to the blocked family, source dataset, row set, effect, package scope, graph scope, or resolver scope and must prove no production mutation for that scope. Closure summaries, validation reports, package labels, repository snapshots, branches, tags, ADRs, research reports, and owner prose must not substitute for the underlying owner row refs.
 
@@ -172,10 +189,14 @@ The required validation rows for this gate are `val-000-activation-catalog-closu
 
 `SpecSetVersion.validation_matrix_refs` must include `120-COVERAGE-DOMAIN-*` whenever any active feed profile has non-empty `absence_sensitive_domains`, any category row has non-empty `required_coverage_domains`, or any coverage-sensitive output is in implementation scope.
 
+`SpecSetVersion.validation_matrix_refs` must include `120-SOURCE-DATASET-CATALOG-*` and `120-VERSION-MANIFEST-SOURCE-DATASET-*` whenever any active feed profile, source-authority row, mapping row, graph/analysis handoff, package-supplied row catalog, API filter, or validation fixture references `source_dataset`.
+
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
 When structured-input repositories are enabled, `activation_artifact_registry_refs` must include active structured-input repository profile row sets, repository access policy row sets, repository redaction policy row sets, materialization validation refs, and deterministic block refs for any structured-input family intentionally out of scope. These refs must also appear in owner `VersionManifest` records whenever repository-authored artifacts affect output.
+
+When any output-affecting behavior references a `source_dataset` token, `activation_artifact_registry_refs` must include active `020.SourceDatasetCatalogRowSet` refs, selected row refs/checksums or exact deterministic source-dataset block refs, source-dataset validation refs, package-set refs when package-supplied, and owner `VersionManifest` inclusion requirements. Missing or mismatched refs block promotion with the most specific closure state from `MVPActivationCatalogClosurePack`.
 
 ### Identity resolver spec-set registry refs
 

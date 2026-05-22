@@ -134,6 +134,7 @@ observation_type_external_mapping_validation_matrix
 lakehouse_read_policy
 lakehouse_feed_completeness_profile
 lakehouse_feed_category_closure_row_set
+source_dataset_catalog_row_set
 source_authority_row_set
 source_authority_closure_matrix_row_set
 coverage_dimension_profile_row_set
@@ -195,7 +196,7 @@ projection_loss_policy
 
 ### PackageTypeEnumClosure
 
-`PackageType` is closed for this spec version. The closed enum contains exactly 81 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
+`PackageType` is closed for this spec version. The closed enum contains exactly 82 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
 
 | Supplied token class | Required behavior |
 | --- | --- |
@@ -291,7 +292,7 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 | --- | --- | --- |
 | `lakehouse/feed/read` | `020`, `030`, `100`, `120` | `lakehouse_feed_package`, `parser_package`, `lakehouse_read_policy`, `lakehouse_feed_completeness_profile`, `lakehouse_feed_category_closure_row_set`, `declared_dag_subset_profile` |
 | `mapping/external-schema/toolchain` | `050`, `100`, `120` | `mapping_bundle`, `source_schema_import_profile`, `semantic_overlay_artifact`, `mapping_validation_rule_set`, `mapping_project_manifest`, `mapping_compiler_pipeline`, `canonical_validation_output_schema`, `validation_scenario`, `toolchain_dependency_review`, `external_tool_capability_evidence`, `mapping_toolchain_package`, `external_schema_profile`, `observation_to_ocsf_mapping_row_set`, `external_schema_artifact_ref`, `profile_resolution_manifest`, `external_enum_mapping_rule_set`, `ocsf_base_event_field_policy_set`, `source_extension_field_rule_set`, `observation_type_external_mapping_validation_matrix`, `cim_projection_profile`, `projection_loss_policy` |
-| `source-authority closure` | `020`, `060`, `100`, `120` | `source_authority_row_set`, `source_authority_closure_matrix_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, `external_schema_authority_signal_mapping_row_set` |
+| `source-authority closure` | `020`, `060`, `100`, `120` | `source_dataset_catalog_row_set`, `source_authority_row_set`, `source_authority_closure_matrix_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, `external_schema_authority_signal_mapping_row_set` |
 | `identity resolver` | `070`, `100`, `120` | `resolver_profile`, `identifier_evidence_class_row_set`, `identifier_scope_row_set`, `candidate_generation_profile`, `identity_hard_blocker_row_set`, `asset_generation_boundary_row_set`, `resolver_decision_matrix_row_set`, `identity_confidence_band_row_set`, `identity_review_routing_policy`, `identity_split_policy`, `resolver_explanation_policy`, `resolver_activation_report_policy`, `target_selector_safety_policy` |
 | `analysis/enrichment/lineage/registry` | `080`, `090`, `130`, `100`, `120` | `analysis_rule_bundle`, `analysis_rule_row_set`, `rule_graph_compatibility_matrix`, `derivation_rule_bundle`, `derived_graph_edge_rule_set`, `threat_intel_enrichment_profile`, `threat_intel_distribution_mapping_policy`, `threat_intel_artifact_package`, `lineage_facet_mapping_policy`, `artifact_class_policy_row_set`, `registry_governance_artifact`, `registry_custom_property_schema`, `registry_classification_policy`, `policy_bundle` |
 | `observability` | `140`, `110`, `100`, `120` | `observability_policy_bundle`, `telemetry_runtime_distribution`, `telemetry_collector_deployment_profile` |
@@ -313,6 +314,8 @@ Package activation registry closure is required before any package release, pack
 | candidate failure | Preserve the current active package set, emit `PackageActivationFailureEvent`, and write no candidate production output. |
 
 Package-supplied row catalogs must appear in release refs, package type policy refs, supply-chain policy refs, compatibility refs, validation refs, `ProductionPackageSetManifest.activation_artifact_refs`, and `030.VersionManifest.included_refs` when output-affecting.
+
+A package-supplied `source_dataset_catalog_row_set` must include a package-set ref before feed activation, mapping activation, source-authority closure, graph/analysis handoff, API filtering, validation acceptance, or replay output can depend on any selected source-dataset row. Missing package-set refs fail with `STRUCTURED_INPUT_PACKAGESET_REF_MISSING` or the most specific package policy error before activation.
 
 | Owner boundary | Package policy family | Validation family |
 | --- | --- | --- |
@@ -403,6 +406,7 @@ These rows are package type policies for declarative source-closure row-catalog 
 | Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required policy fields |
 | --- | --- | --- | --- | --- | --- |
 | `lakehouse_feed_category_closure_row_set` | `020.LakehouseFeedCategoryClosureRow` | `none` | `[]` | `[]` | trust required; attestation required unless declarative-only exception; SBOM `not_applicable_declarative_only` only for pure declarative rows; required coverage-domain fields must use `060.CoverageDomainToken` and must pass feed-category-to-coverage-domain validation; `120-SOURCE-CLOSURE-*`, `120-COVERAGE-DOMAIN-*`, and private-binding leak fixtures required. |
+| `source_dataset_catalog_row_set` | `020.SourceDatasetCatalogRow` | `none` | `[]` | `[]` | declarative catalog only; no direct production execution; validation must cover positive resolution, missing row, ambiguous row, private-binding leak, unsupported category, deterministic block, manifest inclusion, and package-set inclusion; schema compatibility inputs must include `020.SourceDatasetCatalogRow` schema version and checksum; trust required unless a deterministic block row declares non-production; attestation may be `not_applicable_declarative_only` only when owner policy explicitly permits; SBOM is `not_applicable_declarative_only` for pure row bundles and required for code-bearing catalog tooling. |
 | `source_authority_row_set` | `060.SourceAuthorityProfileRow` | `none` | `[]` | `[]` | trust, validation, checksum replay, mutation-prohibition, and owner schema compatibility required. |
 | `source_authority_closure_matrix_row_set` | `060.SourceAuthorityClosureMatrix` | `none` | `[]` | `[]` | validation view only; underlying row-set refs remain required. |
 | `coverage_dimension_profile_row_set` | `060.CoverageDimensionProfile` | `none` | `[]` | `[]` | required for coverage-sensitive output; every row must validate `coverage_domain` through `060.ValidateCoverageDomainToken`; package-supplied catalogs must not define new coverage-domain tokens, runtime aliases, display-label aliases, or package-local token mappings; `120-COVERAGE-DOMAIN-*` and `120-SOURCE-CLOSURE-*` fixtures required. |
@@ -1242,6 +1246,9 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 
 | ID | Criterion |
 | --- | --- |
+| `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-001` | `source_dataset_catalog_row_set` is a confirmed `PackageType` token and broad labels cannot substitute for it. |
+| `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-002` | Package activation fails when a package-supplied source-dataset catalog row set lacks an active package type policy row, package-set ref, validation refs, schema compatibility inputs, or `030.VersionManifest` inclusion. |
+| `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-003` | Declarative source-dataset catalog packages cannot execute stages or emit production records directly. |
 | `100-ANALYSIS-REGISTRY-PACKAGE-TYPE-AC-001` | Each candidate `130` package type has exactly one active `PackageTypePolicyRow` in validation scope, and missing-policy, unknown-type, and ambiguous-policy fixtures fail closed before package activation. |
 | `100-ANALYSIS-REGISTRY-PACKAGE-SET-AC-001` | Package-supplied `130` artifacts require immutable package-set membership, exact `030.ActivationControlledArtifactRef`, compatibility row, validation refs, and `VersionManifest` inclusion before output. |
 | `100-ANALYSIS-REGISTRY-STAGE-OUTPUT-AC-001` | Package policy permits only the stage classes and output record classes listed in the `130` package type table and fails with `FORBIDDEN_STAGE_OUTPUT` or package-policy errors for every other output. |

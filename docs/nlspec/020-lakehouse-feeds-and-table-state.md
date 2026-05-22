@@ -43,6 +43,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `060.CoverageDomainToken`
 - `060.ValidateCoverageDomainTokenArray`
 - `060.CoverageDomainCatalog`
+- `080.GoldFactPredicateContractRow`
 
 ## Exports
 
@@ -50,6 +51,10 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `LakehouseFeedProfile`
 - `LakehouseFeedProfileSchema`
 - `LakehouseFeedFeasibilityAssessment`
+- `SourceDatasetCatalogRow`
+- `SourceDatasetCatalogRowSet`
+- `ResolveSourceDatasetCatalogRow`
+- `SourceDatasetCatalogErrorCodeSet`
 - `LakehouseFeedCategoryClosureRow`
 - `LakehouseFeedCategoryClosureRowSet`
 - `LakehouseFeedAvailabilityCheck`
@@ -73,7 +78,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 
 A production feed read must start from an active `LakehouseFeedProfile`. The profile must name the supplier class, read target kind, scope keys, schema refs, object or table refs, package bindings, replay-relevant configuration hashes, and redacted access-reference hashes.
 
-A production feed read must validate the profile against `LakehouseFeedProfileSchema` and must resolve exactly one active `LakehouseFeedCategoryClosureRow` from an active `LakehouseFeedCategoryClosureRowSet` before reading or importing raw records. The phrase `profile permits` is not runtime behavior. Every profile-dependent branch must resolve to a named profile field, an active activation-controlled artifact ref, a deterministic branch result, and a validation row.
+A production feed read must validate the profile against `LakehouseFeedProfileSchema`, must resolve the profile `source_dataset` through exactly one active `SourceDatasetCatalogRow` or exactly one deterministic source-dataset block row, and must resolve exactly one active `LakehouseFeedCategoryClosureRow` from an active `LakehouseFeedCategoryClosureRowSet` before reading or importing raw records. The phrase `profile permits` is not runtime behavior. Every profile-dependent branch must resolve to a named profile field, an active activation-controlled artifact ref, a deterministic branch result, and a validation row.
 
 | Read target kind | Required reference | Output allowed |
 | --- | --- | --- |
@@ -94,7 +99,9 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 | `feed_profile_id` | Yes | none | Stable profile identifier scoped to `020`; must not encode a private source route. |
 | `feed_category` | Yes | none | Closed category token from `LakehouseFeedCategoryClosureRequirementTable`; unknown tokens fail closed until an active category closure row set and validation rows exist. |
 | `source_category` | Yes | none | Vendor-neutral source category; private vendor/product names are forbidden in public profile bytes. |
-| `source_dataset` | Yes | none | Vendor-neutral dataset token used by `060` authority, coverage, staleness, and completeness rows. |
+| `source_dataset` | Yes | none | Vendor-neutral lower-snake-case dataset token used by `060` authority, coverage, staleness, and completeness rows. Production activation requires a selected `SourceDatasetCatalogRow` ref and checksum. |
+| `source_dataset_catalog_row_ref` | Yes for production activation | none | Structured `030.ActivationControlledRowRef` for the selected `SourceDatasetCatalogRow` or deterministic source-dataset block row. Bare string refs fail before read/import. |
+| `source_dataset_catalog_row_checksum` | Yes for production activation | none | SHA-256 of the selected row after defaults materialize. A mismatch fails before read/import, completeness evaluation, mapping activation, source-authority closure, graph handoff, analysis handoff, API filtering, or validation acceptance. |
 | `supplier_profile_ref` | Yes | none | `030.ActivationControlledArtifactRef` with `artifact_class = raw_supplier_profile`. |
 | `read_target_kind` | Yes | none | One of `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, or `manifest_list`; omission fails with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE`. |
 | `read_policy_ref` | Yes | none | Active `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_read_policy`. |
@@ -115,6 +122,68 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 
 Profile validation must materialize defaults before checksum computation. Unknown fields fail before activation unless the owning profile schema version declares an extension map.
 
+### SourceDatasetCatalogRowSet
+
+`SourceDatasetCatalogRowSet` is the activation-controlled public row catalog for `source_dataset` token identity. It is represented by `030.ActivationControlledArtifactRef` with `artifact_class = source_dataset_catalog_row_set`. The catalog is vendor-neutral. It must not contain concrete vendor names, product names, private source routes, credentials, tenant inventories, scanner sites, directory tenant lists, cloud account lists, host lists, private schema payloads, or raw private fixture bytes.
+
+`SourceDatasetCatalogRow` is the row-level public contract for one allowed `source_dataset` token. Concrete production rows are activation-controlled artifacts or package-supplied artifacts. Core prose must not embed private production row instances.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_set_id` | Yes | none | Stable catalog row-set ID. |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable version included in row checksum. |
+| `source_dataset` | Yes | none | Vendor-neutral lower-snake-case token. It must not encode vendor, route, table path, tenant, scanner site, account, host list, source-native product, or private inventory. |
+| `feed_category` | Yes | none | One token from `LakehouseFeedCategoryClosureRequirementTable`. |
+| `source_category` | Yes | none | Vendor-neutral source category. |
+| `scope_key_schema_ref` | Yes | none | Exact schema ref for required public scope dimensions. |
+| `allowed_read_target_kinds` | Yes unless deterministically blocked | `[]` only when `deterministic_block_code` is present | Canonical set from the closed read-target kind set. Duplicate values fail. |
+| `supported_fact_predicate_refs` | Yes | `[]` only when the row is positive-raw-only or deterministically blocked | Canonical set of active `080.GoldFactPredicateContractRow` refs. |
+| `coverage_domain_tokens` | Yes | `[]` only when no absence-sensitive coverage can be supported | Canonical set of `060.CoverageDomainToken` values. Duplicates fail. Unsupported feed-category/token pairs fail with `SOURCE_DATASET_UNSUPPORTED_FOR_FEED_CATEGORY` before activation. |
+| `absence_sensitive_effects` | Yes | `[]` | Canonical set selected from `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark`. Empty means positive-only for source-effect behavior. |
+| `default_missing_row_result` | Yes | none | One of `unknown`, `not_authoritative_for_absence`, `no_op`, or an owner deterministic error. It must not be `authorized_absent`. |
+| `private_binding_policy` | Yes | `public_row_no_private_binding` | The public row cannot contain private bindings. Concrete bindings are private-only and must not alter row selection, checksums, missing-row behavior, error precedence, activation scope, or validation requirements. |
+| `deterministic_block_code` | Required when intentionally blocked | null only for active non-block rows | Exact owner code used when the dataset is intentionally blocked. A block row must emit no absence-sensitive mutation. |
+| `validation_refs` | Yes | none | Non-empty source-dataset catalog validation refs. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+#### SourceDatasetCatalogErrorCodeSet
+
+| Error code | Required use |
+| --- | --- |
+| `SOURCE_DATASET_CATALOG_ROW_MISSING` | No active row or deterministic block row matches the requested `source_dataset`, source category, feed category, and activation scope. |
+| `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` | More than one equally specific active row matches after scoped resolution. |
+| `SOURCE_DATASET_CATALOG_ROW_INACTIVE` | A matching row exists but lifecycle status is not `active`. |
+| `SOURCE_DATASET_CATALOG_ROW_CHECKSUM_MISMATCH` | The selected row checksum, row-set checksum, package-set checksum, or manifest checksum does not match. |
+| `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK` | A public catalog row exposes a private binding value, private inventory, route, credential, raw private fixture byte, or private schema payload. |
+| `SOURCE_DATASET_UNSUPPORTED_FOR_FEED_CATEGORY` | The catalog row names a feed-category/token or coverage-domain combination not permitted by `FeedCategoryToCoverageDomainTokenMapping`. |
+| `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED` | The selected row intentionally blocks the dataset or effect and emits no absence-sensitive mutation. |
+| `SOURCE_DATASET_CATALOG_ROW_TODO` | The selected row, validation ref, package ref, or manifest ref contains `TODO:`. |
+| `SOURCE_DATASET_CATALOG_ROW_UNVALIDATED` | The selected row lacks non-empty passing validation refs for the requested scope. |
+
+#### ResolveSourceDatasetCatalogRow
+
+```text
+ResolveSourceDatasetCatalogRow(request, active_catalog):
+1. Validate row-set activation ref, row-set checksum, package-set ref when supplied, lifecycle status, and validation refs.
+2. Normalize request scope with `030.NormalizeScopeSelector` under `020.LakehouseFeedScopeSelectorContext`.
+3. Match exact `source_dataset`, `source_category`, `feed_category`, and activation scope.
+4. If zero rows match, fail with `SOURCE_DATASET_CATALOG_ROW_MISSING` and emit no absence-sensitive effect.
+5. If more than one maximal row matches, fail with `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` and emit no absence-sensitive effect.
+6. If the selected row is inactive, checksum-mismatched, package-set-mismatched, out of scope, `TODO:`-bearing, private-leaking, or unvalidated, fail with the most specific `SourceDatasetCatalogErrorCodeSet` code.
+7. If the selected row has `deterministic_block_code`, return `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED`, the selected block row ref/checksum, and no absence-sensitive effect.
+8. Include the selected row ref, row checksum, row-set ref, row-set checksum, selector checksum, validation refs, and package-set ref when package-supplied in `030.VersionManifest`.
+9. Return the selected row and manifest inclusion requirement.
+```
+
+The resolver is deterministic. It must not infer a dataset token from a runtime route, table path, package name, source-native product, OCSF class, coverage-domain token, feed category, validation fixture name, or private binding.
+
+#### SourceDatasetDeterministicBlockDefaults
+
+Concrete public source-dataset rows are not supplied by this core spec. Until a selected production scope supplies active catalog rows or exact deterministic block rows, every referenced `source_dataset` resolves to `SOURCE_DATASET_CATALOG_ROW_MISSING` and no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change proof, graph delta, compliance negative output, or source-effect validation pass may be emitted.
+
 ### LakehouseFeedScopeSelectorContext
 
 `LakehouseFeedScopeSelectorContext` is the owner context family for `020` feed scopes. It instantiates `030.ScopeSelectorContext`; it does not define selector schema, equality, coverage, subset matching, specificity, or ambiguity behavior.
@@ -129,11 +198,11 @@ Profile validation must materialize defaults before checksum computation. Unknow
 
 Feed diagnostics field `scope_selector_checksum` must contain the normalized `030.ScopeSelector.selector_checksum`. Raw selector values remain forbidden in diagnostics when they are private under `010.ScopeSelectorPublicBindingRule`.
 
-Every selected feed profile, feed category closure row, read policy row, completeness profile row, and feed-scope context that can affect output must add the selected row ref, row checksum, `ScopeSelectorContext.context_ref`, request selector checksum, selected row selector checksum, and activation artifact ref to `030.VersionManifest`.
+Every selected feed profile, source-dataset catalog row or deterministic block row, feed category closure row, read policy row, completeness profile row, and feed-scope context that can affect output must add the selected row ref, row checksum, `ScopeSelectorContext.context_ref`, request selector checksum, selected row selector checksum, and activation artifact ref to `030.VersionManifest`.
 
 ### StructuredInputRepositoryFeedProfileHandoff
 
-Repository-authored `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, and feed category closure row catalogs are inert until materialized into activation-controlled artifact refs and, when package-supplied, included in an active `100.ProductionPackageSetManifest`.
+Repository-authored `LakehouseFeedProfile`, `RawSupplierProfile`, `LakehouseReadPolicy`, `SourceDatasetCatalogRowSet`, and feed category closure row catalogs are inert until materialized into activation-controlled artifact refs and, when package-supplied, included in an active `100.ProductionPackageSetManifest`.
 
 `StructuredInputRepositorySnapshot` must not be a `read_target_kind`. The closed `read_target_kind` set remains `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, and `manifest_list`.
 
@@ -168,7 +237,7 @@ A repository merge, pull request approval, branch update, validation run, or hoo
 | --- | ---: | --- | --- |
 | `row_id` | Yes | none | Stable row ID scoped to `LakehouseFeedCategoryClosureRowSet`; required for refs, checksums, and validation output. |
 | `row_version` | Yes | none | Immutable owner version. |
-| `source_dataset_allowlist_ref` | Yes | none | Ref to the vendor-neutral source dataset catalog or deterministic block proof used by the row. If no source-dataset catalog exists, activation fails. |
+| `source_dataset_allowlist_ref` | Yes | none | Canonical set of structured `030.ActivationControlledRowRef` objects for selected `SourceDatasetCatalogRow` rows or exact deterministic source-dataset block rows. Bare string refs fail before feed activation, source-authority closure, validation acceptance, or absence-sensitive effects. |
 | `category_activation_state` | Yes | none | Closed enum: `active_for_effects`, `active_positive_only`, `deterministically_blocked`. |
 | `feed_category` | Yes | none | Must be one category from `LakehouseFeedCategoryClosureRequirementTable`. |
 | `allowed_read_target_kinds` | Yes | none | Non-empty array of closed read target kinds unless `deterministic_block_code` blocks the category. |
@@ -524,6 +593,25 @@ This table maps every feed category in `LakehouseFeedCategoryClosureRequirementT
 | `source_history` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SourceHistoryRetentionProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | Outside-window no-result must not become no-change proof; no-change proof requires source-history coverage plus retention. |
 | `future_reachability` | deterministic block row only | `120-SOURCE-CLOSURE-*` deterministic block row only | MVP behavior is deterministic no-op or deferred reachability error; activation of any read target or absence-sensitive effect is prohibited. |
 
+### MVPCategoryEffectDefaultPosture
+
+This table is total for every feed category in `LakehouseFeedCategoryClosureRequirementTable` and every closed requested-effect token. A cell value is a default posture only; it does not authorize an effect. `requires_060_closure` means the effect may execute only after `020`, `060`, `030`, `100` when package-supplied, and `120` refs resolve. `positive_only`, `deterministic_block`, `validation_only`, and `inactive_deferred` emit no absence-sensitive mutation.
+
+| Feed category | `absence` | `cleanup` | `retraction` | `graph_expiry` | `watermark` |
+| --- | --- | --- | --- | --- | --- |
+| `endpoint_inventory` | `requires_060_closure` | `requires_060_closure` | `deterministic_block` | `requires_060_closure` | `requires_060_closure` |
+| `configuration_inventory` | `requires_060_closure` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `vulnerability_scan` | `requires_060_closure` | `deterministic_block` | `requires_060_closure` | `deterministic_block` | `requires_060_closure` |
+| `control_evaluation` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `directory_inventory` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `directory_membership` | `requires_060_closure` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `dns_record_set` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `dhcp_ipam_assignment` | `requires_060_closure` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `network_flow` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `cloud_asset_inventory` | `requires_060_closure` | `requires_060_closure` | `deterministic_block` | `requires_060_closure` | `requires_060_closure` |
+| `source_history` | `requires_060_closure` | `deterministic_block` | `deterministic_block` | `deterministic_block` | `requires_060_closure` |
+| `future_reachability` | `inactive_deferred` | `inactive_deferred` | `inactive_deferred` | `inactive_deferred` | `inactive_deferred` |
+
 ### LakehouseReadPolicy payload limits
 
 | Field | Required behavior | Default | Bounds |
@@ -745,8 +833,8 @@ The following `020` row families can affect feed activation, feed read, raw impo
 
 | row_family | production classification | required precision status |
 | --- | --- | --- |
-| `LakehouseFeedProfileSchema` | output_affecting | TODO: replace the existing lightweight field table with a full `030.ActivationControlledRowField` table. |
-| `LakehouseFeedCategoryClosureRow` | output_affecting | TODO: add full field precision for category token, allowed effects, effect closure requirements, authority refs, deterministic block refs, validation refs, activation scope, and lifecycle status. |
+| `LakehouseFeedProfileSchema` | output_affecting | Closed for source-effect selection by the field table above plus required `source_dataset_catalog_row_ref`, row checksum, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. Remaining non-source-effect precision work in this table still blocks unrelated production feed behavior. |
+| `LakehouseFeedCategoryClosureRow` | output_affecting | Closed for source-effect selection by the field table above, structured `source_dataset_allowlist_ref`, total `effect_closure_requirements`, deterministic block refs, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. Remaining non-source-effect precision work in this table still blocks unrelated production feed behavior. |
 | `RawSupplierProfile` | output_affecting when referenced by feed profile | TODO: declare as a closed enum plus full row schema or as an explicit non-row classification table that cannot be referenced as an activation row. |
 | `LakehouseReadPolicy` | output_affecting | TODO: add full field precision for read target refs, payload limits, retries, timeouts, failed-object behavior, omitted-object behavior, checksum behavior, and replay behavior. |
 | `LakehouseTableProfile` | output_affecting | TODO: add full field precision for table identity, table format, catalog binding, replay requirement, maintenance policy, schema compatibility policy, and checksum behavior. |
@@ -810,6 +898,10 @@ A production feed read, raw import, completeness evaluation, absence-sensitive e
 | `020-STRUCTURED-INPUT-FEED-AC-001` | Repository-authored feed profile changes produce no feed read, raw import, absence evaluation, cleanup, graph expiry, retraction, or watermark advancement until the profile is materialized, activated, and manifest-included. |
 | `020-STRUCTURED-INPUT-FEED-AC-002` | `StructuredInputRepositorySnapshot` cannot satisfy `read_target_kind`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `RawFeedManifest`, feed category closure, or lakehouse read policy refs. |
 | `020-STRUCTURED-INPUT-FEED-AC-003` | Repository-authored feed profiles that leak private bindings fail with `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK` or imported `PRIVATE_BINDING_LEAK` before publication or validation-report materialization. |
+| `020-SOURCE-DATASET-CATALOG-AC-001` | Every active `LakehouseFeedProfile.source_dataset` resolves to exactly one active `SourceDatasetCatalogRow` or one exact deterministic source-dataset block row before feed activation or read/import. |
+| `020-SOURCE-DATASET-CATALOG-AC-002` | Public source-dataset catalog rows that contain private route names, tenant IDs, scanner sites, account lists, host lists, raw sample bytes, source-native secret values, or private schema payloads fail with `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK`. |
+| `020-SOURCE-DATASET-CATALOG-AC-003` | `030.VersionManifest` includes selected source-dataset row refs/checksums, row-set refs/checksums, selector checksums, validation refs, and package-set refs when package-supplied. |
+| `020-SOURCE-DATASET-CATALOG-AC-004` | `future_reachability` source-dataset rows resolve only to deterministic block or inactive-deferred behavior while `200` remains inactive. |
 
 ## Definition of Done
 
@@ -831,5 +923,5 @@ Open questions marked `TODO:` block authoritative status for the affected contra
 
 | ID | Question | Blocking scope | Required owner decision | Default until resolved |
 | --- | --- | --- | --- | --- |
-| `020-TODO-SOURCE-DATASET-CATALOG` | TODO: Provide the vendor-neutral `source_dataset` catalog or deterministic block rows for every `source_dataset` referenced by active feed profiles and source-authority closure rows. | Feed activation, source-authority closure, and validation. | Product governance plus `020`, `060`, and `120`. | Active absence-sensitive effects remain blocked. |
+| `020-TODO-SOURCE-DATASET-CATALOG` | TODO: supporting artifact path and concrete public row catalog are not supplied in the uploaded files. The schema and deterministic missing-row behavior are defined by `SourceDatasetCatalogRowSet`; production requires active catalog rows or exact deterministic source-dataset block rows. | Feed activation, mapping activation, source-authority closure, graph/analysis handoff, API filtering, package-supplied catalogs, and validation. | Product governance plus `020`, `030`, `060`, `100`, and `120`. | Referenced datasets without selected catalog or block rows fail with `SOURCE_DATASET_CATALOG_ROW_MISSING` and emit no absence-sensitive mutation. |
 | `020-TODO-FEED-CATEGORY-CLOSURE-ROW-SET` | TODO: Provide an active `LakehouseFeedCategoryClosureRowSet` or deterministic block row for every category in `LakehouseFeedCategoryClosureRequirementTable`, with validation refs and `VersionManifest` inclusion. | Production feed activation and absence-sensitive effects. | Product governance plus `020`, `060`, `100`, and `120` validation refs. | Production feed categories without active rows fail with `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` or deterministic block behavior. |

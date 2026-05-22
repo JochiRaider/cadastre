@@ -68,8 +68,8 @@ Every active domain spec must include at least one negative validation case for 
 | --- | --- |
 | Direct source calls | Production package attempts enterprise source API call and fails before output. |
 | Feed completeness | Missing feed row attempts absence and fails. |
-| Feed profile closure | Missing feed profile field, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
-| Source authority | Missing exact authority row, ambiguous authority row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
+| Feed profile closure | Missing feed profile field, missing source-dataset catalog row, ambiguous source-dataset catalog row, blocked source-dataset catalog row, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
+| Source authority | Missing exact authority row, ambiguous authority row, missing source-dataset catalog row, ambiguous source-dataset catalog row, checksum-mismatched source-dataset catalog row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
 | Coverage-domain token closure | Alias/display values, unknown tokens, duplicate tokens, unsupported feed-category/token pairs, omitted required token fields, empty arrays for absence-sensitive effects, and inactive `reachability` usage fail before source authority, absence, cleanup, graph expiry, retraction, watermark, package activation, API output, or validation acceptance. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
 | Identity | Weak-only create/attach/merge attempts, selector-only attempts, source-native-merge-history-only attempts, candidate overflow auto-merge attempts, reviewer override of hard blocker, missing explanation, missing resolver row, ambiguous resolver row, and package-supplied weak-default override fail before identity mutation. |
@@ -148,6 +148,7 @@ This matrix aggregates closure-pack validation rows. A row may pass only when th
 | Validation family | Required owner |
 | --- | --- |
 | `120-FEED-CLOSURE-*` | `020` |
+| `120-SOURCE-DATASET-CATALOG-*` | `020`, with authority, mapping, graph, package, API, and validation handoffs in `050`, `060`, `080`, `090`, `100`, `110`, and `130` |
 | `120-OCSF-MAP-*` | `050` |
 | `120-SOURCE-EXT-*` | `050` |
 | `120-OCSF-NONAUTH-*` | `050`, `060`, `090` |
@@ -184,6 +185,12 @@ Every activation catalog closure validation row must use this interface:
 
 | ID | Criterion |
 | --- | --- |
+| `120-SOURCE-DATASET-CATALOG-AC-001` | Every selected `source_dataset` resolves to one active catalog row or deterministic source-dataset block row. |
+| `120-SOURCE-DATASET-CATALOG-AC-002` | Private values in public source-dataset rows fail before activation. |
+| `120-SOURCE-DATASET-CATALOG-AC-003` | Selected source-dataset rows appear in `VersionManifest.included_refs`. |
+| `120-SOURCE-EFFECT-CLOSURE-AC-001` | Every selected category/dataset/fact/predicate/scope/effect tuple resolves to closure or deterministic block. |
+| `120-SOURCE-EFFECT-CLOSURE-AC-002` | Weak signals remain diagnostic-only unless an exact active row grants the exact effect. |
+| `120-SOURCE-EFFECT-CLOSURE-AC-003` | Deterministic block rows prove no fact, correction, graph delta, cleanup, watermark, pass/fail, or no-change proof is emitted. |
 | `120-ACTIVATION-CATALOG-CLOSURE-AC-001` | Every selected scope has active row-set refs or exact deterministic block refs. |
 | `120-ACTIVATION-CATALOG-CLOSURE-AC-002` | Every output-affecting member ref appears in `030.VersionManifest.included_refs`. |
 | `120-ACTIVATION-CATALOG-CLOSURE-AC-003` | Every MVP observation family has OCSF row coverage, exact `cadastre_only`, or deterministic block. |
@@ -197,6 +204,21 @@ Every activation catalog closure validation row must use this interface:
 `AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs. It is also forbidden when any activation-controlled row-schema precision row is blocked, not run, failed, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, owner-error-incomplete, or contains a required `TODO` fixture checksum, expected output checksum, expected error, row checksum, row-set checksum, or mutation-prohibition proof.
 
 ### ActivationControlledRowSchemaValidationMatrix
+
+### SourceDatasetCatalogValidationMatrix
+
+A source-dataset catalog validation row may pass only when the fixture checksum, input artifact refs, expected output or expected error checksum, mutation-prohibition proof, package-set refs when package-supplied, and `030.VersionManifest` requirements are concrete and non-`TODO`.
+
+| Fixture family | Required coverage | Expected result |
+| --- | --- | --- |
+| `source-dataset-valid-*` | Active row resolves for source category, feed category, source dataset, scope, and lifecycle. | Selected row ref/checksum emitted. |
+| `source-dataset-missing-*` | Referenced dataset has no active row. | `SOURCE_DATASET_CATALOG_ROW_MISSING`; no output. |
+| `source-dataset-ambiguous-*` | Two equally specific rows match. | `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS`; no output. |
+| `source-dataset-blocked-*` | Dataset intentionally blocked. | Deterministic no-op/block; no mutation. |
+| `source-dataset-private-leak-*` | Public row includes private route, tenant, scanner site, account, host list, or raw fixture bytes. | `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK`. |
+| `source-dataset-unsupported-category-*` | Dataset/category pair unsupported. | `SOURCE_DATASET_UNSUPPORTED_FOR_FEED_CATEGORY`; no effect. |
+| `source-dataset-manifest-omission-*` | Selected row omitted from `VersionManifest`. | `VERSION_MANIFEST_INCOMPLETE` or owner manifest error. |
+| `source-dataset-package-set-omission-*` | Package-supplied row lacks package-set ref. | Package-set owner error; no activation. |
 
 This matrix verifies activation-controlled row schema precision for every production-affecting row family in `020`, `050`, `060`, `070`, `080`, `090`, `100`, `130`, and `140`. A row may pass only when fixture checksum, expected output checksum, expected error checksum, row checksum, row-set checksum, package-set refs when package-supplied, owner error registry rows, and `030.VersionManifest` requirements are concrete and non-`TODO`.
 
@@ -645,6 +667,8 @@ Rows in this matrix validate behavior owned by `090` and cross-owner handoffs re
 
 ### FeedCategoryClosureValidationMatrix
 
+Feed-category validation must evaluate every active feed category across the five requested effects `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark`. Every category/effect cell must produce either `closed_active` or `closed_deterministically_blocked`; `blocked_missing_ref`, `blocked_validation`, `blocked_todo`, `blocked_checksum`, `blocked_package_set`, and `blocked_manifest` fail acceptance.
+
 Each fixture family in this matrix applies to every active feed category in `020.LakehouseFeedCategoryClosureRequirementTable`. `future_reachability` must use deterministic block/no-op fixtures for MVP instead of positive reachability output.
 
 | Fixture family | Required coverage | Expected result |
@@ -733,6 +757,10 @@ This matrix is the executable validation interface for `030` run-lock stale reco
 
 ### SourceAuthorityClosureValidationMatrix
 
+The source-authority closure matrix must include row-chain fixture families for `authority`, `completeness`, `coverage`, `staleness`, `progress_signal`, `visibility`, `control_result`, `source_history`, `external_schema_authority_signal`, `absence_policy`, `watermark_policy`, and `source_dataset_catalog`.
+
+Weak-signal fixture families must cover `cursor_exhaustion`, `delta_token_complete`, `cdc_offset`, `cdc_heartbeat`, `queue_drain`, `end_to_end_ack`, `provenance_closure`, `freshness_artifact`, `graph_apply_success`, `graph_index_state`, `graph_drift_check`, `destination_cleanup`, `source_history_no_result`, `live_source_probe_zero_rows`, and `telemetry_metric`.
+
 Every fixture family in this matrix is required before `SourceAuthorityClosureMatrix` may satisfy promotion for an active absence-sensitive feed category. `120` validates owner behavior; it must not define source-authority behavior beyond validation artifact shapes, fixture IDs, expected outputs, and acceptance aggregation.
 
 | Fixture family | Required cases |
@@ -815,6 +843,8 @@ Rows in this matrix validate behavior owned by `010`, `030`, `040`, `050`, `060`
 | `140` | private route leak, unbounded file path labels, branch-name redaction, commit SHA allowed and forbidden cases, no domain mutation |
 
 ### PackageActivationValidationMatrix
+
+Package validation rows for `source_dataset_catalog_row_set` must cover unknown token rejection, policy row omission, package-set omission, checksum mismatch, deterministic block package row, source-dataset private leak, and manifest inclusion.
 
 Every row in this matrix validates behavior owned by `100`, manifest inclusion owned by `030`, observable error handling owned by `110`, or acceptance aggregation owned by `120`. Rows with `TODO` fixture checksums or expected output checksums are blocking and must prevent authoritative package activation handoff.
 
@@ -1219,6 +1249,7 @@ This matrix verifies behavior owned by `110`; it does not define new API behavio
 | `derived_view_stale` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-derived-view-stale` |
 | `unknown` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-unknown` |
 | `not_applicable` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-not-applicable` |
+| `authorized_absent` | `110.SourceStateLabelMapping` | must not collapse to `authorized_not_observed`, pass, fail, unknown, not_checked, not_applicable, graph cleanup, retraction, watermark, remediation, conflict, ambiguity, or error | `state-label-110-authorized-absent` |
 | `authorized_not_observed` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-authorized-not-observed` |
 | `permission_limited` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-permission-limited` |
 | `source_unavailable` | `110.SourceStateLabelMapping` | must not collapse to pass, fail, authorized absence, graph cleanup, retraction, watermark, or remediation | `state-label-110-source-unavailable` |
@@ -1453,6 +1484,8 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-LINEAGE-FACET-COVERAGE-AC-001` | Validation rows prove lineage facet policy, schema immutability, checksum, namespace collision, freshness no-completeness, facet-only non-evidence, and redaction behavior. |
 | `120-REGISTRY-GOVERNANCE-COVERAGE-AC-001` | Validation rows prove registry activation, inactive artifact, owner mismatch, custom-property bounds, classification authority rejection, package-set refs, and private binding redaction. |
 | `120-DERIVED-GRAPH-EDGE-COVERAGE-AC-001` | Validation rows prove derived-edge supporting-fact rejection, `090` routing, direct mutation rejection, `080` routing, exact replay, replay mismatch, and explicit no-op behavior. |
+| `120-SOURCE-DATASET-CATALOG-AC-004` | Source-dataset catalog fixtures cover valid resolution, missing, ambiguous, deterministic block, private leak, unsupported category, manifest omission, and package-set omission. |
+| `120-SOURCE-EFFECT-CLOSURE-AC-004` | Acceptance fails when any source-dataset catalog row, category/effect closure row, source-authority chain row, package-set ref, fixture checksum, expected output checksum, error row, mutation-prohibition proof, or `VersionManifest` ref is missing, stale, failed, blocked, checksum-mismatched, or `TODO`-bearing. |
 | `120-OBSERVABILITY-COVERAGE-AC-001` | Observability validation rows prove telemetry non-authority, redaction, cardinality, exporter failure, health mapping, replay exclusion, audit independence, version-manifest completeness, and package activation gating. |
 | `120-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-janusgraph.v1`; graph serving disabled materializes no backend; explicit required mode rejects omission. |
 | `120-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, and missing package gates before mutation or query. |

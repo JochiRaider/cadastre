@@ -38,6 +38,8 @@ Define how parsed raw records become silver observations and how external schema
 - `030.ActivationControlledRowField`
 - `030.ActivationControlledRowRef`
 - `030.ActivationControlledRowSetSchema`
+- `020.ResolveSourceDatasetCatalogRow`
+- `020.SourceDatasetCatalogRow`
 
 ## Exports
 
@@ -130,7 +132,7 @@ Production OCSF profile status must be `active` only after `ExternalSchemaArtifa
 | `MappingProjectManifest` | `source_category`, `source_dataset`, `mapping_project_ref` | `observation_type`, `schema_name`, `schema_version` | none | repository snapshot validation, compiler pipeline validation, plugin policy. |
 | `SourceExtensionFieldRule` | `source_category`, `source_dataset`, `field_path` | `observation_type`, `mapping_bundle_ref` | none | namespace collision, secret scanning, OCSF reserved-name policy. |
 
-`ResolveOCSFMapping` must normalize the request execution scope, reject under-scoped requests through the owner error map, and keep only active mapping/profile rows whose `activation_scope` covers the request through `030.ScopeSelectorCovers` before mapping discriminator evaluation. Discriminator ordering and OCSF class validation remain owner-local and must run only after scope-filtered row selection.
+`ResolveOCSFMapping` must normalize the request execution scope, resolve `source_dataset` through `020.ResolveSourceDatasetCatalogRow` before scope-filtered row selection when a row uses `source_dataset`, reject under-scoped requests through the owner error map, and keep only active mapping/profile rows whose `activation_scope` covers the request through `030.ScopeSelectorCovers` before mapping discriminator evaluation. Discriminator ordering and OCSF class validation remain owner-local and must run only after source-dataset catalog resolution and scope-filtered row selection. Missing, ambiguous, inactive, private-leaking, checksum-mismatched, unmanifested, or deterministically blocked source-dataset rows fail mapping activation or emit the owner diagnostic declared by the selected mapping execution mode. A valid normalized observation remains non-authoritative unless `060` later maps a specific signal to a specific requested effect.
 
 Scope mismatch must remain distinguishable from missing discriminator input and ambiguous discriminator input. A mapping selection that fails scope coverage must not emit silver output.
 
@@ -151,11 +153,15 @@ Scope mismatch must remain distinguishable from missing discriminator input and 
 
 Authority effects are owned by `060.ExternalSchemaAuthoritySignalMappingRow`; this section defines no authority, absence, cleanup, graph-expiry, control-state, or watermark behavior.
 
-If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060.ExternalSchemaAuthoritySignalMappingRow` must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
+If a mapping bundle intends an external schema field to be considered by authority logic, it must emit the normalized field as observation metadata only. A separate active `060.ExternalSchemaAuthoritySignalMappingRow` must name the external schema profile ref, field path, source dataset, selected `020.SourceDatasetCatalogRow` ref/checksum, fact type, predicate, requested effect, authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status.
 
-`060.ExternalSchemaAuthoritySignalMappingRow` must also reference the selected `SourceAuthorityClosureMatrixRow` or deterministic block row, `SourceAuthorityProfileRow`, `CoverageDimensionProfile` when coverage-sensitive, `SourceStalenessPolicy`, `ControlResultMappingRow` when control-state output is requested, `AbsenceDerivationPolicy` when absence-sensitive output is requested, and `ProjectionWatermarkPolicy` when watermark is requested.
+`060.ExternalSchemaAuthoritySignalMappingRow` must also reference the selected `SourceAuthorityClosureMatrixRow` or deterministic block row, `SourceAuthorityProfileRow`, `CoverageDimensionProfile` when coverage-sensitive, `SourceStalenessPolicy`, `ControlResultMappingRow` when control-state output is requested, `AbsenceDerivationPolicy` when absence-sensitive output is requested, `ProjectionWatermarkPolicy` when watermark is requested, and `030.VersionManifest` refs for the selected source-dataset catalog row and every consulted source-authority row.
 
 Missing `060.ExternalSchemaAuthoritySignalMappingRow` means the external schema signal remains non-authoritative. A mapping row or diagnostic that attempts to set authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effects must route the failure to imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` before the attempted authority effect. The normalized fields may remain persisted as observation metadata when the mapping itself is valid.
+
+OCSF field absence, OCSF object absence, status, severity, confidence, observables, enrichments, endpoint order, `raw_data`, `unmapped`, external enum values, or source-extension values must not set `040.FactAbsenceOutcome`, cleanup, retraction, graph expiry, control pass/fail, or watermark behavior without an exact active `060.SourceAuthorityClosureMatrixRow` or deterministic block row.
+
+Active `ObservationToOCSFMappingRow`, `ExternalSchemaProfile`, and `SourceExtensionFieldRule` selections that use `source_dataset` must include `source_dataset_catalog_row_ref` and `source_dataset_catalog_row_checksum` in their activation-controlled row refs and in `030.VersionManifest` when they affect output.
 
 ### GoldFactObjectBoundaryHandoff
 
@@ -762,6 +768,9 @@ A mapping bundle must fail before silver output when any selected `050` row fami
 
 | ID | Criterion |
 | --- | --- |
+| `050-SOURCE-DATASET-CATALOG-AC-001` | Mapping activation resolves `source_dataset` through `020.ResolveSourceDatasetCatalogRow` before scope-filtered row selection. |
+| `050-SOURCE-DATASET-CATALOG-AC-002` | Missing, ambiguous, inactive, checksum-mismatched, private-leaking, or deterministically blocked source-dataset rows emit no authority, absence, cleanup, retraction, graph expiry, control pass/fail, or watermark effect. |
+| `050-EXTERNAL-SCHEMA-NONAUTH-AC-001` | OCSF field absence, endpoint order, status, severity, confidence, observables, enrichments, `raw_data`, `unmapped`, and external enum values cannot become source-effect authority without exact `060` closure rows. |
 | `050-CLEANUP-AC-001` | No banned reference class remains. |
 | `050-CLEANUP-AC-002` | `normalized_fields` remains governed by active OCSF profile unless an observation type is declared `cadastre_only`. |
 | `050-CLEANUP-AC-003` | OCSF raw, unmapped, observable, enrichment, status, severity, and confidence fields remain non-authoritative unless explicitly governed by policy. |

@@ -49,6 +49,7 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `030.ActivationControlledRowField`
 - `030.ActivationControlledRowRef`
 - `030.ActivationControlledRowSetSchema`
+- `020.SourceDatasetCatalogRow`
 
 ## Exports
 
@@ -117,6 +118,10 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 | `rule_version` | Yes | none | Immutable owner version included in output identity and replay checksums. |
 | `input_fact_selector` | Yes | none | Names exact fact types and predicates. Wildcards are forbidden. |
 | `required_supporting_fact_refs_policy` | Required for graph-emitting rules | none | Non-empty for any rule whose output can affect graph output. Missing support fails with `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED`. |
+| `required_source_dataset_catalog_row_refs` | Required when output is `graph_delta_via_090` or `gold_fact_via_080` and support is absence-sensitive, cleanup-sensitive, expiry-sensitive, retraction-sensitive, no-change, or watermark-affecting | none | Exact selected `020.SourceDatasetCatalogRow` refs or deterministic source-dataset block refs. Missing refs fail before analysis, gold, graph, metric, finding, or watermark output. |
+| `required_source_authority_closure_matrix_refs` | Required when supporting facts affect output | none | Exact `060.SourceAuthorityClosureMatrixRow` refs or deterministic block row refs. |
+| `required_absence_derivation_result_refs` | Required when absence-sensitive support affects output | none | Exact `060.AbsenceDerivationResult` refs for the requested effect. |
+| `required_mutation_prohibition_refs` | Required for no-op/block rows | none | Refs proving no fact, graph delta, cleanup, watermark, pass/fail, no-change proof, or analysis-visible mutation was emitted. |
 | `required_source_authority_refs` | Required when supporting facts affect output | none | Exact `060.SourceAuthorityProfileRow` refs. |
 | `required_completeness_refs` | Required for negative, absence-sensitive, cleanup-sensitive, or expiry-sensitive output | none | Exact completeness, coverage, staleness, absence, and progress-signal refs required by `060`. |
 | `required_temporal_refs` | Yes | none | Exact temporal resolution and replay refs required for deterministic replay. |
@@ -131,6 +136,8 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 `allowed_output_effect` defaults to `analysis_only` or `no_output`. Direct graph mutation is forbidden. Gold fact output must route through `080`. Graph delta output must route through `090`. Unsupported or supportless generated edges remain analysis-only or no-op outputs.
+
+A derived graph edge rule that consumes absence-sensitive, cleanup-sensitive, expiry-sensitive, retraction-sensitive, no-change, or watermark-affecting support must not emit analysis, gold, graph, metric, finding, or watermark-affecting output unless every supporting fact and source-effect row required by `060` is present, active, checksum-valid, scoped, validated, and manifest-included. Missing source-dataset catalog refs, source-authority closure refs, supporting fact refs, absence derivation result refs, mutation-prohibition refs, or `VersionManifest` refs must emit an explicit no-op or owner error with no graph mutation, no gold fact, and no watermark advancement.
 
 ### AnalysisRegistryScopeSelectorContext
 
@@ -599,7 +606,7 @@ The following `130` row families can affect analysis execution, derived graph ed
 
 | row_family | production classification | required precision status |
 | --- | --- | --- |
-| `DerivedGraphEdgeRule` | output_affecting | TODO: convert existing schema to full `030.ActivationControlledRowField` columns for structured row refs, allowed output effect, unsupported behavior, deterministic ID inputs, validation refs, activation scope, and lifecycle status. |
+| `DerivedGraphEdgeRule` | output_affecting | Closed for source-effect routing by the existing schema plus required source-dataset catalog refs, source-authority closure matrix refs, absence derivation result refs, mutation-prohibition refs, structured row refs, allowed output effect, unsupported behavior, deterministic ID inputs, validation refs, activation scope, lifecycle status, and manifest inclusion. Remaining threat-intel, lineage, registry, and custom-property precision work remains blocked until separately closed. |
 | `ThreatIntelEnrichmentProfile` | enrichment_affecting | TODO: add full field precision for permitted formats, indicator normalization, sighting semantics, visibility policy, output restrictions, ref arrays, and validation refs. |
 | `ThreatIntelEnrichmentRecord` | enrichment_runtime_record | TODO: declare runtime-state field precision or full row precision for indicator, sighting, taxonomy, galaxy, object-template, confidence, distribution, and checksum behavior. |
 | `RegistryArtifactGovernance` | output_affecting for registry activation | TODO: add full field precision for owner, domain, classification, glossary, policy, approval, lifecycle, and checksum metadata. |
@@ -622,6 +629,8 @@ Analysis, enrichment, lineage, registry activation, or derived-edge routing must
 | `130-REGISTRY-GOVERNANCE-SCHEMA-AC-001` | `120` registry fixture families prove activation success, inactive artifact rejection, owner mismatch rejection, package-set-ref requirement, private binding redaction, and authority-grant rejection. |
 | `130-REGISTRY-CUSTOM-PROPERTY-AC-001` | `120` registry fixture families prove custom-property bounds, type, cardinality, default, redaction, attachment-target, authority-forbidden, and replay behavior. |
 | `130-DERIVED-GRAPH-EDGE-RULE-AC-001` | `120` derived-edge fixture families prove supporting facts required, `090`-routed graph output, direct graph mutation rejection, `080`-routed gold output, exact replay, replay mismatch, and explicit no-op behavior. |
+| `130-SOURCE-DATASET-CATALOG-AC-001` | Derived graph edge rules with graph or gold output reject or no-op when source-dataset catalog refs, source-authority closure refs, supporting fact refs, absence derivation result refs, mutation-prohibition refs, or `VersionManifest` refs are missing. |
+| `130-SOURCE-EFFECT-NONAUTH-AC-001` | Analysis and derived-edge content cannot become an alternate source-effect authority path; unauthorized support emits no graph mutation, no gold fact, no metric/finding authority, and no watermark. |
 | `130-ANALYSIS-OUTPUT-AUTHORITY-TOTAL-AC-001` | `120` analysis fixture families prove every output class in `AnalysisOutputAuthorityMatrix` is non-authoritative by default and cannot mutate raw, silver, identity, gold, graph, completeness, watermark, package, or source authority state. |
 | `130-ERROR-FRAGMENT-TOTAL-AC-001` | `120` error-registry fixture refs cover every `130.AnalysisErrorRegistryFragment` row and `110.GenerateErrorCodeRegistry` rejects missing, duplicate, unknown severity, unknown retry class, unredacted, legacy `code` caller fields, owner-specific top-level caller fields, or unfixtured rows. |
 | `130-API-HANDOFF-AC-001` | Analysis API handoff fixtures cover analysis mutation rejection, graph compatibility mismatch, stale derived-view rejection or allowed stale display, empty read-only output, authorization/redaction mismatch, and lineage facet checksum mismatch. |

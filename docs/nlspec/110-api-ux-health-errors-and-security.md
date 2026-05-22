@@ -311,6 +311,7 @@ source_stale
 derived_view_stale
 unknown
 not_applicable
+authorized_absent
 authorized_not_observed
 permission_limited
 source_unavailable
@@ -340,7 +341,7 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 
 | `060` outcome/error class | Caller label | Authorized negative? | Compliance export behavior | Graph query behavior | Health severity | Required audit fields |
 | --- | --- | ---: | --- | --- | --- | --- |
-| `authorized_absent` | `authorized_not_observed` or owner-specific absence label | Yes, only for predicates permitting negative facts. | owner fact result | graph effect only when `060` and `090` authorize | informational | authority, completeness, coverage, staleness, effect refs |
+| `authorized_absent` | `authorized_absent` | Yes, only for predicates permitting negative facts. | owner fact result | graph effect only when `060` and `090` authorize | informational | source-dataset, authority, completeness, coverage, staleness, effect refs |
 | `authorized_not_observed` | `authorized_not_observed` | Yes, only for predicates permitting negative facts. | owner fact result | graph effect only when `060` and `090` authorize | informational | authority, completeness, coverage, staleness, effect refs |
 | `SOURCE_AUTHORITY_ROW_MISSING` | `unknown` | No | not pass and not fail | no absence edge, no expiry | blocked | row selector, requested effect, redacted refs |
 | `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | `ambiguous` | No | not pass and not fail | no absence edge, no expiry | error | matching row refs when authorized |
@@ -864,7 +865,13 @@ The generated `ErrorCodeRegistry` must include owner-specific closure-pack error
 | --- | --- | --- | --- | --- | --- |
 | `FEED_CATEGORY_CLOSURE_ROW_MISSING` | `020` | blocked | no, until row set changes | category visible; refs redacted | `fixture-020-category-row-missing` |
 | `FEED_CATEGORY_CLOSURE_ROW_AMBIGUOUS` | `020` | error | no, until row set changes | matching rows redacted | `fixture-020-category-row-ambiguous` |
-| `SOURCE_DATASET_CATALOG_MISSING` | `020`, `060` | blocked | no, until catalog activates | dataset token visible; refs redacted | `fixture-020-source-dataset-catalog-missing` |
+| `SOURCE_DATASET_CATALOG_ROW_MISSING` | `020` | blocked | no, until catalog activates | dataset token visible when public; refs redacted | `fixture-020-source-dataset-catalog-missing` |
+| `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS` | `020` | error | no, until catalog rows change | matching rows redacted unless public | `fixture-020-source-dataset-catalog-ambiguous` |
+| `SOURCE_DATASET_CATALOG_ROW_INACTIVE` | `020` | blocked | no, until lifecycle changes | selected row ref and lifecycle status | `fixture-020-source-dataset-catalog-inactive` |
+| `SOURCE_DATASET_CATALOG_ROW_CHECKSUM_MISMATCH` | `020` | error | no, until row or manifest changes | selected row ref, expected checksum, actual checksum | `fixture-020-source-dataset-catalog-checksum-mismatch` |
+| `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK` | `020` | security | no | leaked field path only; raw private value forbidden | `fixture-020-source-dataset-private-leak` |
+| `SOURCE_DATASET_UNSUPPORTED_FOR_FEED_CATEGORY` | `020` | blocked | no, until catalog or category row changes | feed category, coverage-domain token when public | `fixture-020-source-dataset-unsupported-category` |
+| `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED` | `020` | blocked | no, until deterministic block is removed by validated row | deterministic block code and block scope | `fixture-020-source-dataset-deterministically-blocked` |
 | `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` | `050` | error | no, until artifact changes | checksum policy-visible | `fixture-050-compiled-artifact-checksum-mismatch` |
 | `OCSF_MAPPING_ROW_MISSING` | `050` | blocked | no, until row set changes | observation type visible | `fixture-050-mapping-row-missing` |
 | `OCSF_MAPPING_ROW_AMBIGUOUS` | `050` | error | no, until row set changes | matching rows redacted | `fixture-050-mapping-row-ambiguous` |
@@ -1156,6 +1163,7 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `derived_view_stale` | `derived_view_stale` | reject by default | `derived_view_stale` | `derived_view_stale` | No. | Preserve as graph/read-model lag; do not collapse into source staleness. |
 | `unknown` | `unknown` | `unknown` | `unknown` | `unknown` | No. | Display as unknown with owner context when diagnostics are permitted. |
 | `not_applicable` | `not_applicable` | `not applicable` | `not_applicable` | not projected by default | No. | Display only when owner row says the fact/control does not apply. |
+| `authorized_absent` | `authorized_absent` | owner fact result | `authorized_absent` | owner-defined only | Yes, only when `060.AbsenceDerivationResult.absence_authorized = true` and requested effect, predicate, and scope permit. | Requires exact source-dataset, authority, completeness, coverage, staleness, absence policy, and manifest refs. |
 | `authorized_not_observed` | `authorized_not_observed` | owner fact result | `authorized_not_observed` | owner-defined only | Yes, only when `060.AbsenceDerivationResult.absence_authorized = true` and predicate permits. | Requires exact authority, completeness, coverage, and staleness refs. |
 | `permission_limited` | `permission_limited` | `unknown` | `permission_limited` | `permission_limited` | No. | Preserve permission-limited state and redact private permission details. |
 | `source_unavailable` | `source_unavailable` | `error` or `unknown` by owner export policy | `source_unavailable` | `source_unavailable` | No. | Preserve unavailable source/feed state; no negative fact. |
@@ -1188,7 +1196,8 @@ Graph health output must normalize provider-specific details into Cadastre healt
 | `source_unavailable` | `source_unavailable` | unavailable source/feed target class | forbidden |
 | `scope_unavailable` | `scope_unavailable` | unavailable scope selector class | forbidden |
 | stale source output | `source_stale` | staleness policy ref and selected time basis when permitted | forbidden |
-| authorized empty or negative output with `060.AbsenceDerivationResult.absence_authorized = true` | `authorized_not_observed` | exact authority, completeness, coverage, and staleness refs | allowed only for the authorized predicate and scope |
+| `040.GoldFact.absence_outcome = authorized_absent` | `authorized_absent` | exact source-dataset, authority, completeness, coverage, staleness, absence policy, effect, predicate, scope, and manifest refs | allowed only for the authorized predicate and scope |
+| `040.GoldFact.absence_outcome = authorized_not_observed` | `authorized_not_observed` | exact authority, completeness, coverage, and staleness refs | allowed only for the authorized predicate and scope |
 | `run_lock_conflict` | `blocked` | lock scope class, output class, redacted lock key ref, and retry class | forbidden |
 | `run_lock_lost` | `blocked` | run ID, run attempt ID, output class, and lock evidence refs | forbidden |
 | `run_lock_heartbeat_uncertain` | `blocked` or `degraded` by endpoint context | heartbeat evidence ref and assertion retry state | forbidden |
@@ -1306,6 +1315,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 
 `EndpointOutcomeMatrix` is total for public endpoint classes in this spec. Endpoint implementations must select the row by endpoint before executing owner behavior and must apply the most-specific error precedence after owner result materialization.
 
+Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `authorized_not_observed`, `not_checked`, `not_applicable`, `permission_limited`, `conflicted`, `ambiguous`, and `error`. A response may render `authorized_absent` only when owner context includes `060.AbsenceDerivationResult.absence_authorized = true`, the selected source-dataset catalog row ref/checksum, and the requested effect/predicate/scope authorization refs.
+
 | Endpoint | Success payload | Empty result | Unauthorized behavior | Raw payload behavior | Source stale behavior | Derived-view stale behavior | Partial known gap | Partial unknown gap | Conflicted behavior | Ambiguous behavior | Page token behavior | Most-specific error precedence | Mutation prohibition |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `AssetSearch` | `AssetSearchResponse.assets[]` plus envelope. | Return `assets = []`, `result_count = 0`, and envelope; do not expose inaccessible counts. | Omit unauthorized matches; deny scope with `AUTHORIZATION_ERROR`. | Raw bytes forbidden in search results. | Label matching rows `source_stale`. | Label only when graph-derived context is included; otherwise not applicable. | Preserve `partial_known_gap`. | Preserve `partial_unknown_gap`. | Preserve `conflicted`; no pass/fail inference. | Preserve `ambiguous`; no result merging. | Validate before enumeration; token not portable across caller or redaction. | Owner-specific validation before `API_BOUNDS_INVALID` when owner context is already selected. | Must not mutate identity, facts, graph, completeness, package, or watermarks. |
@@ -1323,6 +1334,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | --- | --- |
 | `110-API-SCHEMA-TOTAL-AC-001` | Every exported request and response object has a field table with required status, default, bounds or omitted-case behavior, redaction behavior, and error behavior. |
 | `110-STATE-LABEL-TOTAL-AC-001` | Every declared `SourceStateLabel` appears exactly once in `SourceStateLabelMapping`. |
+| `110-STATE-LABEL-AUTHORIZED-ABSENT-AC-001` | `authorized_absent` remains distinct from `authorized_not_observed`, `unknown`, `not_checked`, `not_applicable`, `permission_limited`, `conflicted`, `ambiguous`, and `error` in API, compliance, audit, evidence drillback, and graph-query rendering. |
+| `110-SOURCE-DATASET-ERROR-AC-001` | Every source-dataset catalog error emitted by `020` has exactly one generated `ErrorCodeRegistryRow`, owner context schema, fixture ref, and manifest checksum inclusion rule. |
 | `110-STATE-LABEL-CONFLICT-AC-001` | `conflicted` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or ambiguity by default. |
 | `110-OBSERVABILITY-HEALTH-AC-001` | Telemetry exporter, Collector, queue, profile, and dropped-signal states render through `OperationalHealthStatus` using `140.TelemetryHealthMappingPolicy` and cannot mutate domain records. |
 | `110-OBSERVABILITY-REDACTION-AC-001` | Raw trace/span IDs, telemetry attributes, exporter endpoints, Collector routes, private bindings, backend IDs, provider-native query text, and raw payload values are redacted or rejected according to `140` and `110`. |
