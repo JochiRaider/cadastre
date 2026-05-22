@@ -68,6 +68,7 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 - `CoreOneOfRegistry`
 - `GoldFactSubjectRefKindRegistry`
 - `GoldFactObjectValueKindRegistry`
+- `GoldFactPredicateCatalogShapeHandoff`
 - `EvidenceArtifactIdKindRegistry`
 - `EvidenceArtifactClassRegistry`
 - `ComputeEvidenceRefId`
@@ -300,6 +301,23 @@ Raw records, silver observations, evidence refs, graph node IDs, graph edge IDs,
 Identity-like object values, including IP addresses, hostnames, DNS names, PTR names, provider keys, mapped targets, graph keys, source-native identities, and selector-only values, must use one of the reference kinds when an active predicate contract treats the value as identity-like. They must not be encoded as `string_value` to bypass resolver governance.
 
 `structured_value.schema_ref` must reference an active owner-declared object-value schema row and must not serve as an unbounded escape hatch. OCSF objects, observables, raw data, unmapped fields, lineage facets, detection results, registry labels, graph backend objects, and external taxonomies are not object authority unless an owning spec derives a bounded value through the gold derivation interface.
+
+### GoldFactPredicateCatalogShapeHandoff
+
+The MVP predicate catalog owned by `080` must not add subject or object shapes beyond the closed registries in this spec.
+
+| Handoff rule | Required behavior |
+| --- | --- |
+| Subject kind set | `080.GoldFactPredicateContractRow.allowed_subject_ref_kinds` must be a non-empty subset of `GoldFactSubjectRefKindRegistry`. |
+| Object value kind set | `080.GoldFactPredicateContractRow.allowed_object_value_kinds` must be a non-empty subset of `GoldFactObjectValueKindRegistry`. |
+| New kind creation | Forbidden. A predicate catalog row that names a subject kind or object value kind outside the `040` registries fails before activation. |
+| Entity-type eligibility | Validated by `070` and the selected `080` predicate row after the core one-of shape passes. |
+| Identifier-type eligibility | Validated by `070` and the selected `080` predicate row after the core one-of shape passes. |
+| Structured values | `object_value.kind = structured_value` must include `schema_ref`. The schema ref must be active, checksum-valid, package-set-valid when package-supplied, and manifest-included under `080`. |
+| Object-kind equality | `GoldFact.object_kind` must equal `GoldFact.object_value.kind` before `ComputeGoldFactKeyId`. |
+| Key ID input | `ComputeGoldFactKeyId` uses the complete canonical subject object and complete canonical object/value object after predicate-catalog validation. Serializing only the inner value members is forbidden. |
+
+`040` validates core shape and canonical serialization. `080` may narrow the permitted combinations for MVP fact semantics. `080` must not widen `040` registries, redefine the one-of shape, or define a second key serialization.
 
 ### EvidenceArtifactIdKindRegistry
 

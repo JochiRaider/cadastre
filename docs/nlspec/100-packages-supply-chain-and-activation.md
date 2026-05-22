@@ -146,6 +146,8 @@ source_history_retention_profile_row_set
 absence_derivation_policy_row_set
 projection_watermark_policy_row_set
 external_schema_authority_signal_mapping_row_set
+gold_fact_predicate_contract_row_set
+gold_fact_structured_value_schema_row_set
 declared_dag_subset_profile
 resolver_profile
 identifier_evidence_class_row_set
@@ -196,7 +198,7 @@ projection_loss_policy
 
 ### PackageTypeEnumClosure
 
-`PackageType` is closed for this spec version. The closed enum contains exactly 82 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
+`PackageType` is closed for this spec version. The closed enum contains exactly 84 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
 
 | Supplied token class | Required behavior |
 | --- | --- |
@@ -293,6 +295,7 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 | `lakehouse/feed/read` | `020`, `030`, `100`, `120` | `lakehouse_feed_package`, `parser_package`, `lakehouse_read_policy`, `lakehouse_feed_completeness_profile`, `lakehouse_feed_category_closure_row_set`, `declared_dag_subset_profile` |
 | `mapping/external-schema/toolchain` | `050`, `100`, `120` | `mapping_bundle`, `source_schema_import_profile`, `semantic_overlay_artifact`, `mapping_validation_rule_set`, `mapping_project_manifest`, `mapping_compiler_pipeline`, `canonical_validation_output_schema`, `validation_scenario`, `toolchain_dependency_review`, `external_tool_capability_evidence`, `mapping_toolchain_package`, `external_schema_profile`, `observation_to_ocsf_mapping_row_set`, `external_schema_artifact_ref`, `profile_resolution_manifest`, `external_enum_mapping_rule_set`, `ocsf_base_event_field_policy_set`, `source_extension_field_rule_set`, `observation_type_external_mapping_validation_matrix`, `cim_projection_profile`, `projection_loss_policy` |
 | `source-authority closure` | `020`, `060`, `100`, `120` | `source_dataset_catalog_row_set`, `source_authority_row_set`, `source_authority_closure_matrix_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, `external_schema_authority_signal_mapping_row_set` |
+| `gold predicate catalog` | `080`, `100`, `120` | `gold_fact_predicate_contract_row_set`, `gold_fact_structured_value_schema_row_set` |
 | `identity resolver` | `070`, `100`, `120` | `resolver_profile`, `identifier_evidence_class_row_set`, `identifier_scope_row_set`, `candidate_generation_profile`, `identity_hard_blocker_row_set`, `asset_generation_boundary_row_set`, `resolver_decision_matrix_row_set`, `identity_confidence_band_row_set`, `identity_review_routing_policy`, `identity_split_policy`, `resolver_explanation_policy`, `resolver_activation_report_policy`, `target_selector_safety_policy` |
 | `analysis/enrichment/lineage/registry` | `080`, `090`, `130`, `100`, `120` | `analysis_rule_bundle`, `analysis_rule_row_set`, `rule_graph_compatibility_matrix`, `derivation_rule_bundle`, `derived_graph_edge_rule_set`, `threat_intel_enrichment_profile`, `threat_intel_distribution_mapping_policy`, `threat_intel_artifact_package`, `lineage_facet_mapping_policy`, `artifact_class_policy_row_set`, `registry_governance_artifact`, `registry_custom_property_schema`, `registry_classification_policy`, `policy_bundle` |
 | `observability` | `140`, `110`, `100`, `120` | `observability_policy_bundle`, `telemetry_runtime_distribution`, `telemetry_collector_deployment_profile` |
@@ -420,6 +423,17 @@ These rows are package type policies for declarative source-closure row-catalog 
 | `external_schema_authority_signal_mapping_row_set` | `060.ExternalSchemaAuthoritySignalMappingRow` | `none` | `[]` | `[]` | external-schema non-authority and exact signal-row fixtures required. |
 
 For every row in this table, `trust_policy_requirement = required`, `validation_matrix_requirements` must include `120-SOURCE-CLOSURE-*`, owner-specific private-binding leak tests, checksum replay tests, and mutation-prohibition tests, `schema_compatibility_inputs` must include the owner row schema version and artifact-class registry checksum, and `graph_compatibility_inputs` is required only for graph-expiry or cleanup effects.
+
+### Gold predicate catalog package type policy rows
+
+These rows are package type policies for declarative gold predicate row-catalog material. They make package-supplied `080` predicate catalogs eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, owner error registry parity, and `030.VersionManifest` inclusion.
+
+| Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required policy fields |
+| --- | --- | --- | --- | --- | --- |
+| `gold_fact_predicate_contract_row_set` | `080.GoldFactPredicateContractRow` and `080.MVPGoldFactPredicateContractRowSetClosure` | `none` | `[]` | `[]` | Declarative catalog only; no direct production execution; validation must cover active inventory totality, deterministic block rows, subject/object boundary rejection, null rejection, identity-like string rejection, source-authority handoff, replay checksum drift, manifest inclusion, package-set inclusion, and error-registry parity. |
+| `gold_fact_structured_value_schema_row_set` | `080.MVPGoldFactStructuredValueSchemaCatalog` | `none` | `[]` | `[]` | Declarative schema catalog only; no direct production execution; validation must cover exact schema refs, full field-table precision, schema checksum drift, structured-object rejection when schema missing, manifest inclusion, package-set inclusion, and rollback compatibility. |
+
+For both package types, `allowed_stage_classes = []`, `allowed_output_record_classes = []`, and direct production record output is forbidden. Package activation must fail with the most specific `080` or `100` error when a package-supplied predicate row catalog arrives under `policy_bundle`, `mapping_bundle`, `source_authority_row_set`, a package name, a module name, an artifact filename, a repository path, a version string, or any other broad label.
 
 ### Analysis, enrichment, lineage, and registry package type policy rows
 
@@ -1296,6 +1310,7 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-VOLATILITY-AC-001` | Package set with mapping bundle wrong owner spec, resolver profile checksum mismatch, missing graph projection profile, or invalid artifact validation refs keeps the current active set and writes no candidate production output. |
 | `100-VOLATILITY-AC-002` | `ProductionPackageSetManifest` includes activation artifact refs, owner specs, validation refs, compatibility refs, activation scope, and artifact registry snapshot refs when package-supplied artifacts can affect output. |
 | `100-SOURCE-CLOSURE-PACKAGE-AC-001` | Source-closure row catalog packages fail before production output when package type policy, trust, compatibility, validation, package-set membership, or `VersionManifest` refs are missing. |
+| `100-GOLD-PREDICATE-PACKAGE-AC-001` | Gold predicate and structured schema row-set packages fail before production output when package type policy, trust, compatibility, validation, package-set membership, rollback compatibility, owner error registry parity, or `VersionManifest` refs are missing. |
 | `100-SOURCE-CLOSURE-PACKAGE-AC-002` | `policy_bundle` cannot substitute for an explicit source-closure row-catalog package type. |
 | `100-PACKAGE-EVIDENCE-ARTIFACT-AC-001` | Package release and package-set evidence refs succeed only with an allowed `EvidenceRef.artifact_id.kind` and checksum. |
 | `100-PACKAGE-EVIDENCE-ARTIFACT-AC-002` | Package payload bytes, SBOM bytes, provenance bytes, registry metadata bytes, and signature bundles are rejected when inlined into evidence refs. |

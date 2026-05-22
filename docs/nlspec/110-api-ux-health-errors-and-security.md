@@ -997,6 +997,33 @@ The generated registry must include every `080` temporal, correction, late-arriv
 
 Temporal, correction, and replay errors must be audit-visible even when caller-visible fields are redacted. Replay errors must not mutate source labels, facts, graph state, watermarks, or exports.
 
+### GoldPredicateCatalogErrorRegistryRows
+
+The generated registry must include every `080` gold predicate-catalog error below. Generic validation, graph, mapping, API, or activation errors must not substitute for these codes when the selected failure is predicate-catalog-owned.
+
+| Error code | Owner | Severity | Retryability | Redaction | Caller-visible behavior | Audit-visible fields | Validation fixture |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `GOLD_FACT_PREDICATE_CONTRACT_MISSING` | `080` | blocked | no, until row activates | fact type and predicate visible when public; refs redacted | block gold output before fact ID computation | row-set refs, candidate fact type, predicate | `val-080-gold-predicate-row-missing` |
+| `GOLD_FACT_PREDICATE_CONTRACT_AMBIGUOUS` | `080` | error | no, until row set changes | matching rows redacted | block gold output before fact ID computation | matching row refs/checksums | `val-080-gold-predicate-row-ambiguous` |
+| `GOLD_FACT_PREDICATE_CONTRACT_BLOCKED` | `080` | blocked | no, until block row changes | block row ref redacted | explicit no-output diagnostic only | block row ref, mutation-prohibition proof | `val-080-gold-predicate-block-row-reachability` |
+| `GOLD_FACT_PREDICATE_SUBJECT_KIND_FORBIDDEN` | `080` | error | no, until candidate or row changes | subject ref redacted | block before fact ID computation | selected row ref, subject kind | `val-080-gold-predicate-subject-kind-boundary` |
+| `GOLD_FACT_PREDICATE_OBJECT_KIND_FORBIDDEN` | `080` | error | no, until candidate or row changes | object value redacted | block before fact ID computation | selected row ref, object kind | `val-080-gold-predicate-object-kind-boundary` |
+| `GOLD_FACT_PREDICATE_REFERENCE_ENTITY_TYPE_FORBIDDEN` | `080` | error | no, until candidate or resolver row changes | entity ref redacted | block before fact ID computation | selected row ref, entity type | `val-080-gold-predicate-reference-eligibility` |
+| `GOLD_FACT_PREDICATE_REFERENCE_IDENTIFIER_TYPE_FORBIDDEN` | `080` | error | no, until candidate or resolver row changes | identifier ref redacted | block before fact ID computation | selected row ref, identifier type | `val-080-gold-predicate-reference-eligibility` |
+| `GOLD_FACT_PREDICATE_NULL_FORBIDDEN` | `080` | error | no, until candidate or row changes | value redacted | block before fact ID computation | selected row ref, null policy | `val-080-gold-predicate-null-forbidden` |
+| `GOLD_FACT_PREDICATE_IDENTITY_STRING_FORBIDDEN` | `080` | error | no, until candidate changes | raw string forbidden; classification visible | block before fact ID computation | selected row ref, string class | `val-080-gold-predicate-identity-like-string-rejected` |
+| `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` | `080` | blocked | no, until schema row activates | schema ref visible when public | block before fact ID computation | selected predicate row, required schema ref | `val-080-gold-predicate-structured-schema-required` |
+| `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` | `080` | error | no, until schema or manifest changes | checksums policy-visible | block before fact ID computation or replay output | expected and actual checksums | `val-080-gold-predicate-replay-checksum` |
+| `GOLD_FACT_PREDICATE_ROW_TODO` | `080` | blocked_validation | no, until owner spec or row material changes | row family visible; row values redacted | block validation and promotion | row family, row ref | `val-080-gold-predicate-rowset-total-mvp` |
+| `GOLD_FACT_PREDICATE_PACKAGE_SET_MISSING` | `080`, `100` | blocked | no, until package set activates | package refs redacted | block package activation and dependent output | package release refs, row-set ref | `val-080-gold-predicate-rowset-package-set` |
+| `GOLD_FACT_PREDICATE_MANIFEST_INCOMPLETE` | `080`, `030` | blocked | retry after manifest repair | missing ref class visible; refs redacted | block visible output or replay | missing refs, manifest ref | `val-030-gold-predicate-manifest-completeness` |
+
+### GoldPredicateCatalogErrorAcceptance
+
+| ID | Criterion |
+| --- | --- |
+| `110-GOLD-PREDICATE-ERROR-AC-001` | `GenerateErrorCodeRegistry` emits exactly one generated row for every `080` predicate-catalog code in `GoldPredicateCatalogErrorRegistryRows`; missing, duplicate, wildcard-fixtured, TODO-bearing, or generic-substitute rows fail registry generation. |
+
 ### Activation artifact error handling
 
 Artifact activation failures must use the most specific owner code when available. `030.ACTIVATION_ARTIFACT_INCOMPLETE` is the generic fallback only when no domain-specific code exists.

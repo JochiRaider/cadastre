@@ -79,6 +79,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `SourceAuthorityArtifactLifecycleGuardRows`
 - `SourceAuthorityClosureMatrix`
 - `SourceAuthorityClosureMatrixRowSet`
+- `MVPGoldPredicateSourceAuthorityClosure`
 - `ExternalSchemaAuthoritySignalMappingRow`
 - `ExternalSchemaAuthoritySignalMappingRowSet`
 
@@ -482,6 +483,37 @@ Requested effect coverage is total:
 | `retraction` | Full row chain or deterministic block row. |
 | `graph_expiry` | Full row chain plus graph handoff validation, or deterministic block row. |
 | `watermark` | Full row chain including `ProjectionWatermarkPolicy`, or deterministic block row. |
+
+#### MVPGoldPredicateSourceAuthorityClosure
+
+For MVP, every active `080.MVPGoldFactPredicateContractRowSetClosure` row must have at least one exact `SourceAuthorityProfileRow` or one exact deterministic source-authority block row before the predicate can emit production output. The source-authority row must set `required_gold_fact_predicate_contract_ref` to the exact `080` row ID.
+
+| `080` predicate row | Minimum `060` closure requirement | Additional required refs |
+| --- | --- | --- |
+| `gfp-mvp-host-id-resolved-to-canonical-v1` | Exact positive authority row or deterministic block. | Source-dataset catalog row, resolver eligibility refs, validation refs. |
+| `gfp-mvp-host-id-has-identifier-v1` | Exact positive authority row or deterministic block. | Identifier scope refs and resolver eligibility refs. |
+| `gfp-mvp-host-attr-has-os-v1` | Exact positive authority row or deterministic block. | Structured schema ref `080.struct.os_descriptor.v1`; source staleness refs when stale state can block output. |
+| `gfp-mvp-host-attr-lifecycle-v1` | Exact positive authority row or deterministic block. | Structured schema ref `080.struct.host_lifecycle_state.v1`; source staleness refs when stale state can block output. |
+| `gfp-mvp-host-attr-management-v1` | Exact positive authority row or deterministic block. | Structured schema ref `080.struct.host_management_state.v1`. |
+| `gfp-mvp-host-ip-had-ip-v1` | Exact positive authority row or deterministic block. | DNS/DHCP/IPAM staleness policy refs when lease or assignment time affects output. |
+| `gfp-mvp-host-dns-has-dns-name-v1` | Exact positive authority row or deterministic block. | DNS staleness policy refs when TTL or observation time affects output. |
+| `gfp-mvp-host-dns-resolved-to-ip-v1` | Exact positive authority row or deterministic block. | DNS staleness policy refs when TTL or observation time affects output. |
+| `gfp-mvp-host-vuln-has-vulnerability-v1` | Exact positive authority row plus exact coverage closure, or deterministic block. | `CoverageDimensionProfile`, `CoverageAssertion`, source staleness refs, absence derivation refs for absence or fixed-state effects. |
+| `gfp-mvp-host-software-runs-software-v1` | Exact positive authority row or deterministic block. | Structured schema ref `080.struct.software_instance_key.v1`. |
+| `gfp-mvp-control-failed-v1` | Exact control-result authority row or deterministic block. | `ControlResultMappingRowSet`, coverage refs, source staleness refs. |
+| `gfp-mvp-control-passed-v1` | Exact control-result authority row or deterministic block. | `ControlResultMappingRowSet`, coverage refs, source staleness refs. |
+| `gfp-mvp-control-unknown-v1` | Exact control-result authority row or deterministic block. | `ControlResultMappingRowSet`, coverage refs, source staleness refs. |
+| `gfp-mvp-identity-member-of-v1` | Exact directory membership authority row or deterministic block. | Directory membership coverage refs and supplier visibility refs when hidden or permission-limited membership can affect output. |
+| `gfp-mvp-user-logged-on-to-v1` | Exact positive authority row or deterministic block. | Supplier visibility refs when logged-on evidence is permission-limited. |
+| `gfp-mvp-user-used-device-v1` | Exact positive authority row or deterministic block. | Supplier visibility refs when device-use evidence is permission-limited. |
+| `gfp-mvp-flow-observed-connection-v1` | Exact positive authority row may exist; absence-sensitive effects are blocked by default. | `020.network_flow` catalog row, `050.FlowRoleEvidence` handoff, graph projection refs when graph output is requested. |
+| `gfp-mvp-exposure-observed-v1` | Exact positive observed-exposure authority row or deterministic block. | Must not authorize theoretical reachability or service access. |
+
+For coverage-sensitive facts, the selected source-authority row must name exact `CoverageDimensionProfile` refs and the producing run must include exact `CoverageAssertion` refs. For control facts, the selected row must name exact `ControlResultMappingRowSet` refs. For DNS, DHCP, IPAM, and flow rows, exact staleness policy refs are required when freshness can affect output. For vulnerability absence, fixed-state, cleanup, retraction, graph expiry, or no-change effects, the selected closure must include coverage, completeness, staleness, and absence-derivation refs.
+
+Positive `observed_network_flow_fact.observed_connection` authority may exist for observed traffic only. Flow non-observation, missing flow rows, weak flow progress signals, graph derived-view lag, and graph backend state remain blocked for absence, cleanup, retraction, graph expiry, and watermark by default.
+
+Theoretical reachability and host ownership remain deterministic blocks in MVP. A source-authority row must not authorize `modeled_reachability_fact`, `has_theoretical_reachability`, `host_ownership_fact.owned_by`, or an owner-like host predicate unless a later active owner spec replaces the block rows and adds passing validation.
 
 Every `SourceAuthorityClosureMatrixRow` must either resolve the full row chain for the exact scope and effect or select one deterministic block row for the exact blocked scope and effect. Missing, duplicated, ambiguous, inactive, checksum-mismatched, out-of-scope, stale, unvalidated, or `TODO` member rows block the requested effect and emit no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, or compliance negative output.
 

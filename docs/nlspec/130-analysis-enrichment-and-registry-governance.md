@@ -117,6 +117,7 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 | `rule_id` | Yes | none | Stable ID scoped to the derived-edge rule row set. |
 | `rule_version` | Yes | none | Immutable owner version included in output identity and replay checksums. |
 | `input_fact_selector` | Yes | none | Names exact fact types and predicates. Wildcards are forbidden. |
+| `required_gold_fact_predicate_contract_refs` | Required when `allowed_output_effect` is `graph_delta_via_090` or `gold_fact_via_080`; required for `analysis_only` when the result is pathfinding-visible or metric-visible over a fact-backed edge | none | Exact structured `030.ActivationControlledRowRef` values for active `080.GoldFactPredicateContractRow` rows. Fact/predicate strings are not substitutes. Missing, inactive, blocked, checksum-mismatched, or unmanifested refs emit explicit no-op or owner error with no graph, gold, metric-visible, pathfinding-visible, or watermark-affecting output. |
 | `required_supporting_fact_refs_policy` | Required for graph-emitting rules | none | Non-empty for any rule whose output can affect graph output. Missing support fails with `DERIVED_GRAPH_EDGE_SUPPORTING_FACTS_REQUIRED`. |
 | `required_source_dataset_catalog_row_refs` | Required when output is `graph_delta_via_090` or `gold_fact_via_080` and support is absence-sensitive, cleanup-sensitive, expiry-sensitive, retraction-sensitive, no-change, or watermark-affecting | none | Exact selected `020.SourceDatasetCatalogRow` refs or deterministic source-dataset block refs. Missing refs fail before analysis, gold, graph, metric, finding, or watermark output. |
 | `required_source_authority_closure_matrix_refs` | Required when supporting facts affect output | none | Exact `060.SourceAuthorityClosureMatrixRow` refs or deterministic block row refs. |
@@ -139,6 +140,8 @@ Changed output-affecting inputs reject production replay before output. Shadow-o
 
 A derived graph edge rule that consumes absence-sensitive, cleanup-sensitive, expiry-sensitive, retraction-sensitive, no-change, or watermark-affecting support must not emit analysis, gold, graph, metric, finding, or watermark-affecting output unless every supporting fact and source-effect row required by `060` is present, active, checksum-valid, scoped, validated, and manifest-included. Missing source-dataset catalog refs, source-authority closure refs, supporting fact refs, absence derivation result refs, mutation-prohibition refs, or `VersionManifest` refs must emit an explicit no-op or owner error with no graph mutation, no gold fact, and no watermark advancement.
 
+A derived-edge rule must validate `required_gold_fact_predicate_contract_refs` before execution whenever it consumes or emits fact-backed output. The refs must match active `080` rows, be checksum-valid, lifecycle-active, package-set-valid when package-supplied, and included in `030.VersionManifest`. A rule must not become an alternate predicate activation mechanism by consuming fact-type and predicate strings without the selected row refs.
+
 ### AnalysisRegistryScopeSelectorContext
 
 `AnalysisRegistryScopeSelectorContext` is the owner context family for derived-edge, analysis-rule, enrichment, lineage, and registry governance artifact activation. It instantiates `030.ScopeSelectorContext`; it does not grant fact, identity, source authority, package, graph apply, or watermark authority.
@@ -158,8 +161,8 @@ Scope matching must not widen `allowed_output_effect`, bypass `090` projection, 
 | `allowed_output_effect` | Required route | Forbidden output | Failure or no-op condition |
 | --- | --- | --- | --- |
 | `analysis_only` | `AnalysisFinding` or `AnalysisMetric` only. | `GoldFact`, `GraphDeltaSet`, backend write, source authority, identity. | Missing analysis validation refs fails before output. |
-| `graph_delta_via_090` | `090.DerivedGraphEdgeRule graph handoff`. | Direct graph backend write or graph-serving mutation. | Missing supporting fact refs or projection refs fails before delta persistence. |
-| `gold_fact_via_080` | `080.DerivationRuleBundle handoff from 130`. | Package-emitted or analysis-emitted raw `GoldFact` bytes. | Missing temporal, authority, completeness, replay, or validation refs fails before fact ID computation. |
+| `graph_delta_via_090` | `090.DerivedGraphEdgeRule graph handoff`. | Direct graph backend write or graph-serving mutation. | Missing supporting fact refs, required predicate row refs, or projection refs fails before delta persistence. |
+| `gold_fact_via_080` | `080.DerivationRuleBundle handoff from 130`. | Package-emitted or analysis-emitted raw `GoldFact` bytes. | Missing required predicate row refs, temporal, authority, completeness, replay, or validation refs fails before fact ID computation. |
 | `no_output` | Explicit no-op record or no visible output as declared by validation row. | Any fact, graph, identity, completeness, package, or watermark mutation. | Unsupported behavior defaults to `explicit_no_op`. |
 
 `130` owns derived-edge rule activation and effect routing only; `080` owns gold fact derivation and `090` owns graph delta projection, graph delta identity, graph apply, query, rebuild, and backend behavior.

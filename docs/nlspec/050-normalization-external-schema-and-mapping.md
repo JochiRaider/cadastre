@@ -40,6 +40,8 @@ Define how parsed raw records become silver observations and how external schema
 - `030.ActivationControlledRowSetSchema`
 - `020.ResolveSourceDatasetCatalogRow`
 - `020.SourceDatasetCatalogRow`
+- `080.GoldFactPredicateContractRow`
+- `080.MVPGoldFactStructuredValueSchemaCatalog`
 
 ## Exports
 
@@ -66,6 +68,7 @@ Define how parsed raw records become silver observations and how external schema
 - `ResolveOCSFMapping`
 - `SourceExtensionFieldRule`
 - `SourceExtensionFieldRuleSet`
+- `MVPStructuredGoldObjectMappingHandoff`
 - `MappingArtifactLifecycleGuardRows`
 
 ## Parser Contract
@@ -170,6 +173,23 @@ Active `ObservationToOCSFMappingRow`, `ExternalSchemaProfile`, and `SourceExtens
 OCSF objects may become `structured_value` only through an active `080.GoldFactPredicateContractRow.structured_value_schema_refs` entry and a matching `060` authority row when authority is required. OCSF `raw_data`, `unmapped`, observables, enrichments, status, severity, and confidence remain non-authoritative unless exact `050`, `060`, and `080` handoff rows permit a bounded interpretation.
 
 `source_extension_fields` are never subject/object authority by themselves. A mapping bundle that attempts to set `object_kind`, `object_value.kind`, `GoldFact.subject_ref`, `EvidenceRef.artifact_id`, `absence_outcome`, source authority, correction output, graph output, or watermark output must fail before silver output or emit a mapping diagnostic using the most specific owner error.
+
+### MVPStructuredGoldObjectMappingHandoff
+
+Mapping output may preserve inputs used later by `080.DeriveFacts`, but it must not construct gold object values. Every MVP structured gold object schema must route through `080` and exact authority handoffs.
+
+| Structured schema ref or evidence object | Permitted mapping output | Required downstream refs before gold or graph output | Forbidden shortcut |
+| --- | --- | --- | --- |
+| `080.struct.os_descriptor.v1` | Observation metadata in `normalized_fields` or declared `source_extension_fields`. | Exact `ObservationToOCSFMappingRow` or `cadastre_only` row, `ExternalSchemaProfile` and `ProfileResolutionManifest` when OCSF-derived, selected `020.SourceDatasetCatalogRow`, active `080` predicate row, active schema ref, and exact `060` authority row. | Direct `GoldFact.object_value` construction from OCSF device or OS objects. |
+| `080.struct.host_lifecycle_state.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, and exact `060` authority/staleness rows. | Treating OCSF status, activity, severity, or field absence as lifecycle truth. |
+| `080.struct.host_management_state.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, and exact `060` authority rows. | Treating management-plane labels or source-extension fields as canonical management state. |
+| `080.struct.vulnerability_instance_key.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, exact `060` authority, coverage, staleness, and absence refs. | Treating scanner severity, confidence, or missing rows as vulnerability truth or absence. |
+| `080.struct.software_instance_key.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, and exact `060` authority rows. | Treating arbitrary package strings as identity without schema and authority validation. |
+| `080.struct.control_evaluation_key.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, exact `060.ControlResultMappingRowSet`, coverage, staleness, and authority refs. | Treating external control result strings as pass/fail/unknown without `060` mapping. |
+| `080.struct.observed_exposure_key.v1` | Observation metadata only. | Exact mapping row refs, source-dataset catalog row, active `080` predicate row, active schema ref, and exact positive observed-exposure authority rows. | Treating observed exposure as theoretical reachability, service access, or identity-conditioned access. |
+| `FlowRoleEvidence` for `gfp-mvp-flow-observed-connection-v1` | Cadastre-owned flow-role evidence with source path refs, ambiguity state, and field-quality metadata. | `090` projection may consume it only with `gfp-mvp-flow-observed-connection-v1`, both endpoint identities resolved, and graph profile/semantics/eligibility refs active. | Using OCSF endpoint order, provider field names, or source/destination labels alone as graph direction. |
+
+If a structured object value requires a source path not expressible in active OCSF artifacts, the mapping bundle must use an exact `cadastre_only` mapping row or an active `SourceExtensionFieldRule`. The mapping row still emits observation metadata only. Gold object construction remains a later `080` responsibility after source authority and predicate validation.
 
 ### FlowRoleEvidenceMappingHandoff
 

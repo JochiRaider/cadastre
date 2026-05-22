@@ -71,6 +71,9 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `ComputeReplayEquivalenceChecksum`
 - `LifecycleEvidenceReplayEquivalence`
 - `GoldFactPredicateContractRow`
+- `MVPGoldFactPredicateContractRowSetClosure`
+- `MVPGoldFactStructuredValueSchemaCatalog`
+- `GoldFactPredicateBlockRowSemantics`
 
 ## Temporal Axes
 
@@ -214,6 +217,101 @@ Correction candidates whose mutation depends on absence, cleanup, retraction, so
 When a candidate `structured_value` is derived from `CadastreSilverObservation.normalized_fields` governed by OCSF, the selected `GoldFactPredicateContractRow` must name the exact structured schema ref, the producing `050.ProfileResolutionManifest` ref, and the producing external schema profile ref. When authority is required, an exact `060.SourceAuthorityProfileRow` and, when applicable, exact `060.ExternalSchemaAuthoritySignalMappingRow` must also validate. OCSF object presence, object absence, observables, enrichments, `unmapped`, status, severity, and confidence must not satisfy `structured_value_schema_refs` or object authority by themselves.
 
 Predicate contract refs and predicate contract checksums are replay-affecting for `gold` and `gold_correction` output classes.
+
+### MVPGoldFactPredicateContractRowSetClosure
+
+`MVPGoldFactPredicateContractRowSetClosure` is the public MVP predicate-catalog closure. It instantiates `GoldFactPredicateContractRow` without redefining the row schema.
+
+| Field | Required value or behavior |
+| --- | --- |
+| `row_set_id` | `gfp-mvp-gold-fact-predicate-contracts-v1`. |
+| `row_set_lifecycle_status` | Production use requires `active`. |
+| `row_set_checksum` | Required before production output. It is SHA-256 over the materialized row set after row defaults materialize and rows sort by ascending lexical `row_id`. |
+| `row_checksums` | Required for every active row and deterministic block row. Concrete checksum bytes belong in activation-controlled material, not in this core spec. |
+| `package_set_ref` | Required when any row, structured schema row, block row, or row-set envelope is package-supplied. |
+| `validation_refs` | Must include `120-GOLD-PREDICATE-CATALOG-*`, `120-SOURCE-CLOSURE-*`, `120-SOURCE-DATASET-CATALOG-*`, `120-GRAPH-PROFILE-CLOSURE-*`, `120-VERSION-MANIFEST-*`, and `120-ERROR-REGISTRY-*` rows that cover the selected production scope. |
+| `version_manifest_refs` | `030.VersionManifest.included_refs` must include the row-set ref/checksum, every selected row ref/checksum, every selected block row ref/checksum, every structured schema ref/checksum, every validation ref, and package-set refs when package-supplied. |
+
+A production gold-derivation run in MVP must classify every candidate `fact_type` and `predicate` by exactly one row in the active-row inventory below or by exactly one deterministic block row in `GoldFactPredicateDeterministicBlockInventory`. Missing, ambiguous, inactive, checksum-mismatched, package-set-mismatched, unvalidated, unmanifested, or `TODO:`-bearing rows fail before `gold_fact_key_id` computation and emit the most specific `080` predicate-catalog error.
+
+Common defaults for every active row in this section are:
+
+| Default | Required behavior |
+| --- | --- |
+| `null_object_policy` | `forbidden`. |
+| `identity_like_string_policy` | `reject`. |
+| top-level `string_value` for identity-like object values | Forbidden. IP addresses, hostnames, DNS names, PTR names, provider keys, mapped targets, graph keys, source-native IDs, user names, group names, and account names must use permitted reference kinds or structured schemas. |
+| `structured_value` | Permitted only when the selected row names the exact active schema ref and checksum in `MVPGoldFactStructuredValueSchemaCatalog`. |
+| wildcard matching | Forbidden for fact type, predicate, subject kind, object kind, entity type, identifier type, and schema ref. |
+| selected refs | Every selected row, schema, authority row, temporal row, correction row, replay row, validation row, and package-set ref must appear in `VersionManifest`. |
+
+#### MVPGoldFactPredicateActiveRowInventory
+
+| Required row ID | Fact type | Predicate | Subject rule | Object rule | Additional required behavior |
+| --- | --- | --- | --- | --- | --- |
+| `gfp-mvp-host-id-resolved-to-canonical-v1` | `host_identity_link` | `resolved_to_canonical` | `source_asset_ref` or `identifier_ref`; host-scoped only | `canonical_entity_ref`; entity type `host` | Resolver eligibility for the object canonical entity must pass `070`. |
+| `gfp-mvp-host-id-has-identifier-v1` | `host_identity_link` | `has_identifier` | `canonical_entity_ref`; entity type `host` | `identifier_ref`; bounded identifier type | Identifier type must be one active bounded host identifier type under `070.IdentifierScope`. |
+| `gfp-mvp-host-attr-has-os-v1` | `host_attribute_fact` | `has_os` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.os_descriptor.v1` | Structured schema ref and checksum are replay-affecting. |
+| `gfp-mvp-host-attr-lifecycle-v1` | `host_attribute_fact` | `has_lifecycle_state` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.host_lifecycle_state.v1` | Structured schema ref and checksum are replay-affecting. |
+| `gfp-mvp-host-attr-management-v1` | `host_attribute_fact` | `has_management_state` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.host_management_state.v1` | Structured schema ref and checksum are replay-affecting. |
+| `gfp-mvp-host-ip-had-ip-v1` | `host_ip_assignment_fact` | `had_ip` | `canonical_entity_ref`; entity type `host` | `identifier_ref`; identifier type `ip_address` | IP textual strings are forbidden as object `string_value`. |
+| `gfp-mvp-host-dns-has-dns-name-v1` | `host_dns_name_fact` | `has_dns_name` | `canonical_entity_ref`; entity type `host` | `identifier_ref`; identifier type `dns_name` | DNS textual strings are forbidden as object `string_value`. |
+| `gfp-mvp-host-dns-resolved-to-ip-v1` | `host_dns_name_fact` | `resolved_to_ip` | `identifier_ref`; identifier type `dns_name` | `identifier_ref`; identifier type `ip_address` | Subject and object identifier scopes must be valid under `070`. |
+| `gfp-mvp-host-vuln-has-vulnerability-v1` | `host_vulnerability_fact` | `has_vulnerability` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.vulnerability_instance_key.v1` | Coverage-sensitive; requires exact `060` coverage and authority rows before positive or negative output. |
+| `gfp-mvp-host-software-runs-software-v1` | `host_software_fact` | `runs_software` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.software_instance_key.v1` | Software identity strings must remain inside the structured schema. |
+| `gfp-mvp-control-failed-v1` | `host_control_state_fact` | `failed_control` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.control_evaluation_key.v1` | Requires exact `060.ControlResultMappingRow` before output. |
+| `gfp-mvp-control-passed-v1` | `host_control_state_fact` | `passed_control` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.control_evaluation_key.v1` | Requires exact `060.ControlResultMappingRow` before output. |
+| `gfp-mvp-control-unknown-v1` | `host_control_state_fact` | `control_unknown` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.control_evaluation_key.v1` | Requires exact `060.ControlResultMappingRow` before output. |
+| `gfp-mvp-identity-member-of-v1` | `identity_membership_fact` | `member_of` | `canonical_entity_ref`; entity type `user`, `service_account`, or `group` | `canonical_entity_ref`; entity type `group` | Both member and group refs require qualifying `070.IdentityDecision` output. |
+| `gfp-mvp-user-logged-on-to-v1` | `user_host_activity_fact` | `logged_on_to` | `canonical_entity_ref`; entity type `user` or `service_account` | `canonical_entity_ref`; entity type `host` | User/service-account and host refs require qualifying identity decisions. |
+| `gfp-mvp-user-used-device-v1` | `user_host_activity_fact` | `used_device` | `canonical_entity_ref`; entity type `user` or `service_account` | `canonical_entity_ref`; entity type `host` | User/service-account and host refs require qualifying identity decisions. |
+| `gfp-mvp-flow-observed-connection-v1` | `observed_network_flow_fact` | `observed_connection` | `canonical_entity_ref`; entity type `host` | `canonical_entity_ref`; entity type `host` | Graph projection may consume only this row for MVP `observed_connection`. Direction still requires `050.FlowRoleEvidence` and `090` graph rules. |
+| `gfp-mvp-exposure-observed-v1` | `exposure_fact` | `has_observed_exposure` | `canonical_entity_ref`; entity type `host` | `structured_value`; schema `080.struct.observed_exposure_key.v1` | Observed exposure only; must not imply theoretical reachability or service access. |
+
+The active row inventory above is total for MVP positive predicate selection. A new positive fact type or predicate must not be emitted by adding an implementation-local row. It requires an owner-spec change, package policy coverage when package-supplied, validation rows, manifest inclusion, and promotion through `000.MVPActivationCatalogClosurePack`.
+
+#### GoldFactPredicateDeterministicBlockInventory
+
+| Block row ID | Blocked predicate family | Required no-output behavior |
+| --- | --- | --- |
+| `gfp-block-modeled-reachability-v1` | `modeled_reachability_fact` and any modeled reachability predicate | Emit no fact, no correction, no graph edge, no graph property, no watermark, and no API reachability claim. |
+| `gfp-block-exposure-theoretical-reachability-v1` | `exposure_fact` / `has_theoretical_reachability` | Emit no fact, no correction, no graph edge, no graph property, no watermark, and no API reachability claim. |
+| `gfp-block-flow-theoretical-reachability-v1` | `observed_network_flow_fact` / `has_theoretical_reachability` | Emit no fact, no correction, no graph edge, no graph property, no watermark, and no API reachability claim. |
+| `gfp-block-host-ownership-v1` | `host_ownership_fact` / `owned_by` and owner-like host predicates | Emit no fact and no ownership label until an exact ownership authority contract is specified. |
+
+A deterministic block row is selected only for its exact blocked family. It must not act as a wildcard row for unrelated predicates. Selection of a block row must produce explicit no-output evidence and mutation-prohibition evidence, and that evidence must be manifest-included before validation acceptance can pass.
+
+### MVPGoldFactStructuredValueSchemaCatalog
+
+`MVPGoldFactStructuredValueSchemaCatalog` is the MVP structured object schema catalog referenced by active predicate rows. It is an activation-controlled schema catalog. This section defines schema identity and required closure status only; concrete field tables and row checksums must be supplied by activation-controlled material before promotion.
+
+| Schema ref | Used by predicate rows | Required closure status |
+| --- | --- | --- |
+| `080.struct.os_descriptor.v1` | `gfp-mvp-host-attr-has-os-v1` | TODO: add complete field table, field bounds, enum behavior, unknown-field policy, checksum inputs, and validation fixture refs. |
+| `080.struct.host_lifecycle_state.v1` | `gfp-mvp-host-attr-lifecycle-v1` | TODO: add complete field table, lifecycle-state enum behavior, source-state mapping, checksum inputs, and validation fixture refs. |
+| `080.struct.host_management_state.v1` | `gfp-mvp-host-attr-management-v1` | TODO: add complete field table, management-state enum behavior, source-state mapping, checksum inputs, and validation fixture refs. |
+| `080.struct.vulnerability_instance_key.v1` | `gfp-mvp-host-vuln-has-vulnerability-v1` | TODO: add complete field table for scanner-neutral vulnerability instance identity, coverage refs, checksum inputs, and validation fixture refs. |
+| `080.struct.software_instance_key.v1` | `gfp-mvp-host-software-runs-software-v1` | TODO: add complete field table for software identity, version/package fields, checksum inputs, and validation fixture refs. |
+| `080.struct.control_evaluation_key.v1` | `gfp-mvp-control-failed-v1`, `gfp-mvp-control-passed-v1`, `gfp-mvp-control-unknown-v1` | TODO: add complete field table for control identity, target scope, evaluation source, external control-result mapping refs, checksum inputs, and validation fixture refs. |
+| `080.struct.observed_exposure_key.v1` | `gfp-mvp-exposure-observed-v1` | TODO: add complete field table for observed-exposure identity, observation scope, non-reachability wording, checksum inputs, and validation fixture refs. |
+
+`DeriveFacts` must reject `structured_value` before ID computation when the selected schema ref is absent, inactive, checksum-mismatched, package-set-mismatched, unmanifested, or `TODO:`-bearing. The required error is `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` when no active schema ref exists and `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` when the selected schema checksum differs from the active manifest entry.
+
+### GoldFactPredicateBlockRowSemantics
+
+A selected deterministic predicate block row must behave as follows.
+
+| Output class | Required behavior when selected block row applies |
+| --- | --- |
+| `GoldFact` | Emit no fact. |
+| `GoldFactChangeSet` | Emit no correction except an explicit no-op diagnostic when the validation row requires one. |
+| Graph handoff | Emit `graph_handoff_effect = none`; no graph delta, graph property, graph edge, traversal class, or derived-view advancement. |
+| Source authority or absence | Do not call absence authority as a substitute for the block row; no authorized-negative output is produced. |
+| Watermark | Do not advance source, projection, graph, or presence-only watermarks from the blocked candidate. |
+| API, export, health, audit | API-visible output may expose only the owner diagnostic permitted by `110`; it must not expose an authorized negative fact, reachability claim, ownership label, or graph mutation. |
+| Manifest | Include block row ref/checksum, row-set ref/checksum, validation refs, mutation-prohibition proof, and package-set refs when package-supplied. |
+
+Block-row selection has higher precedence than source authority selection for the blocked predicate family. A blocked predicate must not be reinterpreted as missing authority, unknown, absent, stale, or unsupported unless the selected block row explicitly routes to that owner diagnostic without mutation.
 
 ## Correction Contract
 
@@ -658,6 +756,21 @@ Temporal, correction, no-op, and replay failures are owner errors with audit imp
 | `REPLAY_INPUT_INSUFFICIENT` | Required replay input, sufficiency check, snapshot ref, retention ref, manifest ref, or owner ref is absent. |
 | `REPLAY_CHECKSUM_MISMATCH` | Replay output checksum differs after all higher-precedence failures are excluded. |
 
+| `GOLD_FACT_PREDICATE_CONTRACT_MISSING` | No active predicate contract row covers the candidate fact type and predicate. |
+| `GOLD_FACT_PREDICATE_CONTRACT_AMBIGUOUS` | More than one equally specific active predicate contract row covers the candidate fact type and predicate. |
+| `GOLD_FACT_PREDICATE_CONTRACT_BLOCKED` | A deterministic predicate block row covers the candidate and forbids output. |
+| `GOLD_FACT_PREDICATE_SUBJECT_KIND_FORBIDDEN` | The candidate subject reference kind is not allowed by the selected predicate row. |
+| `GOLD_FACT_PREDICATE_OBJECT_KIND_FORBIDDEN` | The candidate object value kind or `object_kind` is not allowed by the selected predicate row. |
+| `GOLD_FACT_PREDICATE_REFERENCE_ENTITY_TYPE_FORBIDDEN` | A canonical entity ref has an entity type not permitted by the selected predicate row. |
+| `GOLD_FACT_PREDICATE_REFERENCE_IDENTIFIER_TYPE_FORBIDDEN` | An identifier ref has an identifier type not permitted by the selected predicate row. |
+| `GOLD_FACT_PREDICATE_NULL_FORBIDDEN` | A candidate uses `null_value` where the selected predicate row has `null_object_policy = forbidden`. |
+| `GOLD_FACT_PREDICATE_IDENTITY_STRING_FORBIDDEN` | A candidate encodes identity-like content as a `string_value` where the selected predicate row requires a reference or structured schema. |
+| `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` | A candidate structured object lacks an active exact schema ref named by the selected predicate row. |
+| `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` | A structured schema checksum mismatches the active manifest entry. |
+| `GOLD_FACT_PREDICATE_ROW_TODO` | A selected predicate row, block row, or structured schema row contains a promotion-blocking `TODO:`. |
+| `GOLD_FACT_PREDICATE_PACKAGE_SET_MISSING` | A package-supplied predicate row set, block row, or structured schema row lacks a package-set ref. |
+| `GOLD_FACT_PREDICATE_MANIFEST_INCOMPLETE` | A selected predicate row, block row, structured schema row, validation row, or package-set ref is absent from `030.VersionManifest`. |
+
 ### TemporalErrorRegistryFragment
 
 This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the generated caller-visible registry. This table must not render API output by itself. Rows with `TODO:` cells block authoritative promotion and must be resolved by the owning domain before `110-ERROR-REGISTRY-TOTAL-AC-001` can pass.
@@ -680,6 +793,21 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `REPLAY_POLICY_ARTIFACT_MISSING` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-policy-artifact-missing` |
 | `REPLAY_INPUT_INSUFFICIENT` | `080` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-input-insufficient` |
 | `REPLAY_CHECKSUM_MISMATCH` | `080` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-checksum-mismatch` |
+
+| `GOLD_FACT_PREDICATE_CONTRACT_MISSING` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-contract-missing` |
+| `GOLD_FACT_PREDICATE_CONTRACT_AMBIGUOUS` | `080` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-contract-ambiguous` |
+| `GOLD_FACT_PREDICATE_CONTRACT_BLOCKED` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-contract-blocked` |
+| `GOLD_FACT_PREDICATE_SUBJECT_KIND_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-subject-kind-forbidden` |
+| `GOLD_FACT_PREDICATE_OBJECT_KIND_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-object-kind-forbidden` |
+| `GOLD_FACT_PREDICATE_REFERENCE_ENTITY_TYPE_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-reference-entity-type-forbidden` |
+| `GOLD_FACT_PREDICATE_REFERENCE_IDENTIFIER_TYPE_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-reference-identifier-type-forbidden` |
+| `GOLD_FACT_PREDICATE_NULL_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-null-forbidden` |
+| `GOLD_FACT_PREDICATE_IDENTITY_STRING_FORBIDDEN` | `080` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-identity-string-forbidden` |
+| `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-structured-schema-missing` |
+| `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` | `080` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-structured-schema-checksum-mismatch` |
+| `GOLD_FACT_PREDICATE_ROW_TODO` | `080` | `blocked_validation` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-row-todo` |
+| `GOLD_FACT_PREDICATE_PACKAGE_SET_MISSING` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-package-set-missing` |
+| `GOLD_FACT_PREDICATE_MANIFEST_INCOMPLETE` | `080` | `blocked` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-gold-fact-predicate-manifest-incomplete` |
 
 ### TemporalErrorContext
 
@@ -776,6 +904,12 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | `080-GOLD-PREDICATE-CONTRACT-AC-005` | `structured_value` requires one active structured schema ref named by the predicate contract and included in `VersionManifest`. |
 | `080-OCSF-STRUCTURED-OBJECT-AC-001` | OCSF-derived structured object output fails before `gold_fact_key_id` computation unless `050.ProfileResolutionManifest`, `080.GoldFactPredicateContractRow.structured_value_schema_refs`, and required `060` authority refs validate and appear in `VersionManifest`. |
 | `080-GOLD-PREDICATE-CONTRACT-REPLAY-AC-001` | Gold and gold-correction replay fail when the selected predicate contract checksum changes. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-001` | The active MVP predicate catalog contains exactly the 18 active rows in `MVPGoldFactPredicateActiveRowInventory` and the four deterministic block rows in `GoldFactPredicateDeterministicBlockInventory`; missing, duplicate, extra-active, inactive, `TODO`-bearing, or checksum-mismatched rows fail validation. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-002` | Every active predicate row uses only `040` subject/object kinds and rejects forbidden entity types, forbidden identifier types, forbidden nulls, and identity-like strings before ID computation. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-003` | Every structured object candidate uses one exact active schema ref from `MVPGoldFactStructuredValueSchemaCatalog`; missing or checksum-mismatched schema refs fail before `gold_fact_key_id` computation. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-004` | Deterministic block rows for modeled reachability, theoretical reachability, and ownership emit no fact, no correction, no graph handoff except `none`, no watermark, and no API authorized-negative output. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-005` | Gold replay and correction replay fail when the row-set checksum, selected row checksum, selected structured schema checksum, source authority ref, or manifest inclusion differs from the recorded `VersionManifest`. |
+| `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-006` | Package-supplied predicate row sets and structured schema row sets fail activation when package-set refs or validation refs are missing. |
 | `080-DOMAIN-RESOLVED-ROUTING-AC-001` | Domain rows for `CorrectionSnapshotRefPolicy` and `ReplayEquivalencePolicy` remain resolved only while this file has no owner-local `TODO:` for those stable contracts and the required `120` temporal, correction, and replay validation row families pass. |
 
 ### Structured input temporal and replay acceptance criteria

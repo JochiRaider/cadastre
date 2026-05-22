@@ -55,6 +55,7 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `SourceDatasetCatalogRowSet`
 - `ResolveSourceDatasetCatalogRow`
 - `SourceDatasetCatalogErrorCodeSet`
+- `MVPSourceDatasetPredicateSupportClosure`
 - `LakehouseFeedCategoryClosureRow`
 - `LakehouseFeedCategoryClosureRowSet`
 - `LakehouseFeedAvailabilityCheck`
@@ -183,6 +184,40 @@ The resolver is deterministic. It must not infer a dataset token from a runtime 
 #### SourceDatasetDeterministicBlockDefaults
 
 Concrete public source-dataset rows are not supplied by this core spec. Until a selected production scope supplies active catalog rows or exact deterministic block rows, every referenced `source_dataset` resolves to `SOURCE_DATASET_CATALOG_ROW_MISSING` and no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change proof, graph delta, compliance negative output, or source-effect validation pass may be emitted.
+
+### MVPSourceDatasetPredicateSupportClosure
+
+`MVPSourceDatasetPredicateSupportClosure` defines the public MVP source-dataset support closure for predicate-catalog handoff. It instantiates `SourceDatasetCatalogRow` and does not embed private routes, vendor products, tenant inventories, scanner sites, account lists, host lists, private schema payloads, or raw fixture bytes.
+
+| Field | Required value or behavior |
+| --- | --- |
+| `row_set_id` | `sdc-mvp-public-source-datasets-v1`. |
+| `row_set_lifecycle_status` | Production use requires `active`. |
+| `source_dataset_catalog_row_set_ref` | Required and manifest-included. |
+| `row_set_checksum` | Required before production feed activation, mapping activation, source-authority closure, graph/analysis handoff, API filtering, validation acceptance, or replay output can depend on any selected row. |
+| `package_set_ref` | Required when the row set is package-supplied. |
+| `validation_refs` | Must include `120-SOURCE-DATASET-CATALOG-*`, `120-GOLD-PREDICATE-CATALOG-*`, `120-SOURCE-CLOSURE-*`, `120-PACKAGE-*`, and `120-VERSION-MANIFEST-*` rows. |
+
+The active MVP public source-dataset rows must support only the exact `080` predicate rows listed below. A dataset row may list a strict subset when product governance keeps the missing predicate family out of the selected production scope. It must not list a predicate by fact-type string alone, wildcard, source-native product term, OCSF class, coverage-domain token, private route, or package label.
+
+| Public `source_dataset` token | Feed category | Required `supported_fact_predicate_refs` | Required default effect posture |
+| --- | --- | --- | --- |
+| `endpoint_inventory` | `endpoint_inventory` | `gfp-mvp-host-id-resolved-to-canonical-v1`, `gfp-mvp-host-id-has-identifier-v1`, `gfp-mvp-host-attr-has-os-v1`, `gfp-mvp-host-attr-lifecycle-v1`, `gfp-mvp-host-attr-management-v1`, `gfp-mvp-user-logged-on-to-v1`, `gfp-mvp-user-used-device-v1` | Positive observations only unless exact `060` rows authorize absence-sensitive effects. |
+| `configuration_inventory` | `configuration_inventory` | `gfp-mvp-host-attr-has-os-v1`, `gfp-mvp-host-attr-lifecycle-v1`, `gfp-mvp-host-attr-management-v1`, `gfp-mvp-host-software-runs-software-v1` | Positive observations only unless exact `060` rows authorize absence-sensitive effects. |
+| `vulnerability_scan` | `vulnerability_scan` | `gfp-mvp-host-vuln-has-vulnerability-v1` | Coverage-sensitive; absence or fixed-state effects require exact `060` coverage, completeness, staleness, authority, and absence rows. |
+| `control_evaluation` | `control_evaluation` | `gfp-mvp-control-failed-v1`, `gfp-mvp-control-passed-v1`, `gfp-mvp-control-unknown-v1` | Control output requires exact `060.ControlResultMappingRow` refs. |
+| `directory_inventory` | `directory_inventory` | TODO: product governance must decide whether directory inventory may support identity facts beyond resolver inputs; until resolved, this row is validation-blocked for gold predicate output. | No gold predicate output while TODO remains. |
+| `directory_membership` | `directory_membership` | `gfp-mvp-identity-member-of-v1` | Requires `070` group resolver coverage and exact `060` membership authority rows. |
+| `dns_record_set` | `dns_record_set` | `gfp-mvp-host-dns-has-dns-name-v1`, `gfp-mvp-host-dns-resolved-to-ip-v1` | DNS absence or TTL-derived effects require exact `060` staleness and authority rows. |
+| `dhcp_ipam_assignment` | `dhcp_ipam_assignment` | `gfp-mvp-host-ip-had-ip-v1` | DHCP/IPAM lease expiry must not imply host absence without exact `060` rows. |
+| `network_flow` | `network_flow` | `gfp-mvp-flow-observed-connection-v1` | Positive observed flow only. Absence-sensitive flow effects remain blocked unless a future exact `060` row permits them. |
+| `cloud_asset_inventory` | `cloud_asset_inventory` | `gfp-mvp-host-id-resolved-to-canonical-v1`, `gfp-mvp-host-id-has-identifier-v1`, `gfp-mvp-host-attr-lifecycle-v1`, `gfp-mvp-host-attr-management-v1`, `gfp-mvp-exposure-observed-v1` | Positive observations only unless exact `060` rows authorize absence-sensitive effects. |
+| `source_history` | `source_history` | TODO: product governance must bind source-history no-change or disappearance evidence to exact predicates; until resolved, this row is validation-blocked for gold predicate output. | No no-change proof or negative output while TODO remains. |
+| `future_reachability` | deterministic block row | `[]` | `deterministic_block_code = REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN`; no production read target, no fact, no graph edge, no graph property, and no API reachability claim. |
+
+`network_flow` may support `gfp-mvp-flow-observed-connection-v1` only for positive observed traffic. `network_flow` must not support flow absence, no-change proof, observed-connection absence edges, theoretical reachability, service access, or identity-conditioned access in MVP.
+
+Rows with `TODO:` in `supported_fact_predicate_refs` are not active for gold output. They may remain as planning blockers only. `ValidateSpecSet` must classify them as `blocked_todo` and promotion must fail if their dataset is in selected gold-derivation scope.
 
 ### LakehouseFeedScopeSelectorContext
 
