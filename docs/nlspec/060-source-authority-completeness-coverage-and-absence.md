@@ -248,6 +248,26 @@ Repository-authored source-authority, completeness, coverage, staleness, progres
 
 `StructuredInputRepositorySnapshot` may be cited as provenance, but it must not satisfy `SourceAuthorityClosureMatrix`, `SourceAuthorityProfileRowSet`, `LakehouseFeedCompletenessProfileRowSet`, `CoverageDimensionProfileRowSet`, `SourceStalenessPolicyRowSet`, `ProgressSignalInterpretationPolicyRowSet`, `ControlResultMappingRowSet`, `SourceHistoryRetentionProfileRowSet`, `AbsenceDerivationPolicyRowSet`, or `ProjectionWatermarkPolicyRowSet`.
 
+Remote-maintained source-authority artifacts require the repository-authored source-authority closure input set below before any absence, cleanup, retraction, graph-expiry, watermark, pass/fail, no-change proof, or authorized-negative API output can occur.
+
+| Closure input | Required when | Default when missing |
+| --- | --- | --- |
+| repository profile ref | repository-authored | no source-authority effect |
+| exact snapshot ref | repository-authored | no source-authority effect |
+| file manifest checksum | repository-authored | no source-authority effect |
+| repository template contract ref | profile declares `template_required = true` | no source-authority effect |
+| producer CI validation ref | producer CI evidence is supplied or accepted | no source-authority effect when stale or mismatched |
+| materialization result ref | repository output is materialized | no source-authority effect |
+| publication manifest ref | remote publication is consumed | no source-authority effect |
+| package release ref | package release is created | no source-authority effect |
+| package-set ref | artifact is package-supplied | no source-authority effect |
+| candidate sync record ref | sync imported the candidate | discovery/audit only; no effect |
+| selected row-set refs and row checksums | every source-authority row family | no source-authority effect |
+| repository group ref | cross-repository artifacts are declared | no effect until group coherence passes |
+| `VersionManifest` refs | every output-affecting ref | no source-authority effect |
+
+Template conformance maps to validation evidence only. Stale producer CI maps to no source-authority effect. Sync records map to candidate discovery only. Cross-repository source-authority artifacts require `030.StructuredInputRepositoryGroup` coherence before source-authority closure.
+
 Closure for repository-authored row catalogs requires active row-set refs, exact row-set checksums, lifecycle status permitted for production, validation refs for the exact repository snapshot and row bytes, materialization refs when packaged, package-set refs when package-supplied, and `030.VersionManifest` inclusion.
 
 Public repository-authored row catalogs must satisfy `010` public/private rules. Concrete product names, tenant IDs, private routes, credentials, host lists, scanner site names, directory tenant inventories, zone inventories, account lists, source-native secrets, raw private fixture bytes, and environment-specific source target lists fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` before publication, validation-report materialization, API response, export, audit output, or telemetry export.
@@ -258,6 +278,11 @@ A repository merge, pull request approval, branch update, validation run, or hoo
 | --- | --- |
 | `SOURCE_AUTHORITY_REPOSITORY_ROWSET_INACTIVE` | Repository-authored row catalog exists but is not an active materialized row set with required lifecycle, validation, materialization, package, and manifest refs. |
 | `SOURCE_AUTHORITY_REPOSITORY_SNAPSHOT_ONLY_FORBIDDEN` | A `StructuredInputRepositorySnapshot` is used as source-authority closure, completeness, coverage, staleness, absence, cleanup, graph-expiry, retraction, or watermark authority. |
+| `SOURCE_AUTHORITY_REPOSITORY_TEMPLATE_MISMATCH` | Repository-authored source-authority catalog does not match required template contract. |
+| `SOURCE_AUTHORITY_REPOSITORY_CI_STALE` | Producer CI evidence is stale or not bound to exact snapshot, selected paths, file manifest checksum, toolchain refs, and validation refs. |
+| `SOURCE_AUTHORITY_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest does not match materialized source-authority artifacts, package type, validation refs, or release refs. |
+| `SOURCE_AUTHORITY_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used as source-authority, completeness, coverage, absence, cleanup, graph-expiry, retraction, or watermark authority. |
+| `SOURCE_AUTHORITY_REPOSITORY_GROUP_MISMATCH` | Cross-repository source-authority artifacts are not coherent under the selected repository group. |
 | `SOURCE_AUTHORITY_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored authority catalog or validation output exposes private binding data or raw private fixture bytes. |
 
 ## Completeness Contract
@@ -1308,6 +1333,7 @@ Missing row and ambiguous row errors must remain distinct and owner-specific. So
 | `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-001` | Source-closure validation fails when a repository-authored row catalog exists only in Git and is not an active materialized row set. |
 | `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-002` | Repository snapshot provenance, exact row-set refs, closure rows, validation refs, materialization refs when packaged, package-set refs when package-supplied, and manifest refs are all required when source-authority rows are repository-authored. |
 | `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-003` | Repository-authored private binding leaks fail before absence, cleanup, retraction, graph expiry, watermark, API, export, audit, telemetry, or validation-report output. |
+| `060-STRUCTURED-INPUT-SOURCE-AUTHORITY-AC-004` | Stale CI, missing publication manifest, sync-record-only authority attempt, template-only authority attempt, and multi-repository group mismatch produce no absence, cleanup, retraction, graph expiry, or watermark mutation. |
 
 ## Definition of Done
 

@@ -91,6 +91,8 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `PackageDeprecationWindowPolicy`
 - `PackageDeprecationWindowPolicyRow`
 - `StructuredInputMaterializationResult`
+- `StructuredInputPublicationManifest`
+- `ImportStructuredInputPublicationManifest`
 - `PackageTypeEnumClosure`
 - `PackageTypePolicyRowCoverageMatrix`
 - `PackageActivationValidationMatrix`
@@ -223,6 +225,11 @@ Package type resolution error codes are:
 | `STRUCTURED_INPUT_MATERIALIZATION_MISMATCH` | Materialization snapshot checksum, artifact digest, release input checksum, validation refs, or redaction refs do not match the package release. |
 | `STRUCTURED_INPUT_PACKAGE_TYPE_MISMATCH` | Materialization result package type differs from `PackageReleaseManifest.package_type` or selected package type policy. |
 | `STRUCTURED_INPUT_PACKAGESET_REF_MISSING` | Repository-authored package-supplied artifact lacks required package-set ref or `VersionManifest` inclusion. |
+| `STRUCTURED_INPUT_PUBLICATION_MANIFEST_MISSING` | A repository profile or package release requires a publication manifest but none is supplied. |
+| `STRUCTURED_INPUT_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest snapshot, file manifest, materialization result, digest, size, media type, package type, validation refs, redaction refs, CI refs, or tool invocation refs do not match. |
+| `STRUCTURED_INPUT_PUBLISHED_ARTIFACT_DIGEST_MISMATCH` | Published artifact digest or size does not match immutable artifact bytes. |
+| `STRUCTURED_INPUT_PRODUCER_CI_STALE` | Producer CI evidence is stale or not exact-snapshot-bound. |
+| `STRUCTURED_INPUT_SYNC_RECORD_NONAUTHORITY` | Candidate sync record is used as package activation, production approval, rollback, source authority, graph authority, or system-of-record state. |
 | `PACKAGE_TYPE_UNKNOWN` | `PackageReleaseManifest.package_type` is not one confirmed `PackageType` token. |
 | `PACKAGE_TYPE_POLICY_MISSING` | The package type is known but no active `PackageTypePolicyRow` covers it for the target environment. |
 | `PACKAGE_TYPE_POLICY_AMBIGUOUS` | More than one equally specific active policy row covers the package type and target environment. |
@@ -523,6 +530,10 @@ The `PackageType` enum is closed. Activation remains blocked only when the activ
 | `stage_binding_refs` | Required when the package can execute in a stage | `[]` only for non-executable declarative artifacts | Missing required stage binding rejects before package execution. |
 | `activation_artifact_refs` | Required when the package supplies activation-controlled artifacts | `[]` only when package supplies none | Each ref must validate through `030.ActivationControlledArtifactRef`. |
 | `source_materialization_refs` | Required when package artifact bytes are produced from `030.StructuredInputRepositorySnapshot` | `[]` only when not repository-authored | Refs to `StructuredInputMaterializationResult`; every ref must appear in `030.VersionManifest.included_refs`. |
+| `structured_input_publication_manifest_refs` | Required when a producer publication manifest was imported | `[]` only when no publication manifest was consumed | Each ref must validate through `100.StructuredInputPublicationManifest` and appear in `030.VersionManifest.included_refs`. |
+| `producer_ci_validation_refs` | Required when producer CI evidence is accepted | `[]` otherwise | Refs must be exact-snapshot-bound and match imported publication/materialization refs. |
+| `maintenance_tool_invocation_refs` | Required when tool output affected package bytes, validation, materialization input, or publication manifest | `[]` otherwise | Invocation refs must match tool contract, input checksum, output checksum, and generated artifact manifest checksum. |
+| `candidate_sync_record_refs` | Required when manifest sync staged the release candidate | `[]` otherwise | Sync refs are discovery and audit evidence only; they must not activate the release. |
 
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows for the release and its package type. |
 | `release_checksum` | Yes | none | SHA-256 over canonical release manifest bytes excluding `release_checksum`. |
@@ -530,6 +541,48 @@ The `PackageType` enum is closed. Activation remains blocked only when the activ
 | `lifecycle_status` | Yes | none | Production selection requires lifecycle status permitted by the selected policy and activation mode. |
 
 Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required release fields reject before compatibility checks, package-set activation, rollback, quarantine, health gating, or candidate production output. A release manifest field does not substitute for `030.VersionManifest.included_refs`.
+
+## Structured Input Publication Manifest
+
+`StructuredInputPublicationManifest` is the producer-published metadata interface for remote structured-input repository outputs. It is candidate package evidence only. It must not activate production behavior, satisfy package-set activation, satisfy validation acceptance by itself, grant source authority, or become system-of-record state.
+
+### StructuredInputPublicationManifest schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `publication_manifest_id` | Yes | none | Stable ID over producer profile, snapshot, materialization, artifact digest, size, media type, package type, validation refs, and publication checksum. |
+| `producer_repository_profile_ref` | Yes | none | Exact `030.StructuredInputRepositoryProfile` ref. |
+| `repository_snapshot_ref` | Yes | none | Exact `030.StructuredInputRepositorySnapshot` ref; mutable refs are forbidden. |
+| `file_manifest_checksum` | Yes | none | Must match the exact repository snapshot selected paths. |
+| `materialization_result_ref` | Yes | none | Exact `StructuredInputMaterializationResult` ref. |
+| `published_artifact_digest` | Yes | none | Must match immutable artifact bytes before release candidacy. |
+| `published_artifact_size_bytes` | Yes | none | Must match immutable artifact bytes. |
+| `published_media_type` | Yes | none | Must match the selected package repository model. |
+| `declared_package_type` | Yes | none | Must be one confirmed `PackageType` token and must match release manifest package type. |
+| `declared_artifact_classes` | Yes | none | Non-empty subset of closed `030.artifact_class` tokens. |
+| `schema_version_refs` | Yes | none | Refs to schema/profile versions asserted by the producer. |
+| `compatibility_claim_refs` | Yes | none | Candidate evidence only; must be verified by package compatibility rows. |
+| `validation_refs` | Yes | none | Non-empty exact-snapshot validation refs. |
+| `redaction_validation_refs` | Yes | none | Non-empty refs proving no forbidden private values are exposed. |
+| `producer_ci_refs` | No | `[]` | Required when the repository profile accepts producer CI evidence. |
+| `maintenance_tool_invocation_refs` | No | `[]` | Required when tool output affected publication or artifact bytes. |
+| `publication_checksum` | Yes | none | SHA-256 over canonical publication manifest bytes excluding this field. |
+| `lifecycle_status` | Yes | none | Import requires `validated` or owner-approved active publication state; production activation still requires package-set gates. |
+
+### ImportStructuredInputPublicationManifest
+
+```text
+ImportStructuredInputPublicationManifest(publication_manifest, package_release_candidate, version_manifest):
+1. Validate exact repository snapshot, file manifest checksum, and materialization result refs.
+2. Verify artifact digest, artifact size, media type, package type, and declared artifact classes against immutable artifact bytes.
+3. Verify producer CI and validation refs are exact-snapshot-bound when they are supplied or accepted.
+4. Verify redaction refs before API, audit, package report, telemetry, or validation output.
+5. Create or validate `PackageReleaseManifest.source_materialization_refs`, `structured_input_publication_manifest_refs`, `producer_ci_validation_refs`, `maintenance_tool_invocation_refs`, and `candidate_sync_record_refs`.
+6. Reject mismatch before compatibility, promotion, rollback eligibility, or package-set activation.
+7. Emit a package release candidate only; do not activate production behavior.
+```
+
+A publication manifest mismatch must preserve the current active package set and must write no candidate production output.
 
 ## Structured Input Materialization
 
@@ -1375,6 +1428,9 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-STRUCTURED-INPUT-MATERIALIZATION-AC-001` | A valid exact repository snapshot materializes into an allowed repository form and matching `PackageReleaseManifest.source_materialization_refs`. |
 | `100-STRUCTURED-INPUT-GIT-AUTHORITY-AC-001` | Direct production activation from `repository_form = git_tree_snapshot`, branch, tag, repository URL, or rebuilt tip still fails and preserves the current active package set. |
 | `100-STRUCTURED-INPUT-ROLLBACK-AC-001` | Branch, tag, repository URL, default branch, or rebuilt tip rollback target fails before active state changes. |
+| `100-STRUCTURED-INPUT-PUBLICATION-AC-001` | Publication manifest import verifies digest, size, media type, package type, materialization refs, validation refs, redaction refs, CI refs, and tool invocation refs before package release candidacy. |
+| `100-STRUCTURED-INPUT-PUBLICATION-AC-002` | Publication manifest mismatch, digest mismatch, stale producer CI, repository form `git_tree_snapshot` as production artifact, package-set ref omission, mutable rollback target, and candidate activation failure preserve the current active package set and write no candidate production output. |
+| `100-PACKAGE-ROW-PRECISION-TODO-001` | TODO: Product governance must supply final concrete field precision rows for `PackageReleaseManifest`, `ProductionPackageSetManifest`, and `PackageRepositoryModelRow` before authoritative promotion. Until resolved, affected package-set activation remains blocked. |
 
 ## Definition of Done
 

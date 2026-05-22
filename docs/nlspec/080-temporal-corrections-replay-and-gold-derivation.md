@@ -111,11 +111,18 @@ Repository snapshots may appear in replay provenance and validation diagnostics,
 
 `ReplayInputSufficiencyCheck` must require structured-input snapshot refs, file manifest checksums, validation refs, materialization refs when packaged, package-set refs when package-supplied, and owner artifact refs whenever output-affecting temporal, correction, late-arrival, replay, predicate, assertion, or event-sequence rows were repository-authored.
 
+For repository-authored artifacts, `ReplayInputSufficiencyCheck` must also require repository template contract refs when required, producer CI validation refs when accepted, maintenance tool contract and invocation refs when policy rows or corpora are generated, publication manifest refs when artifacts are published, candidate sync record refs when imported by sync, and package release plus package-set refs when package-supplied.
+
+If replay output depends on a repository-authored artifact and any workflow ref is missing, stale, checksum-mismatched, package-set-mismatched, unmanifested, or private-leaking, replay must fail before output with the most specific repository workflow error. Sync-only replay attempts and publication-only replay attempts must emit no replay output, correction output, gold derivation output, graph handoff output, watermark mutation, or validation pass.
+
 | Error code | Required use |
 | --- | --- |
 | `TEMPORAL_REPOSITORY_POLICY_INACTIVE` | Repository-authored temporal, correction, replay, predicate, assertion, or event-sequence policy row exists only in Git or lacks active materialized refs. |
 | `REPLAY_REPOSITORY_REF_MISSING` | Replay input sufficiency requires structured-input refs but snapshot, validation, materialization, package, or manifest refs are omitted. |
 | `REPLAY_REPOSITORY_VALIDATION_STALE` | Replay, correction, temporal, or event-sequence validation was not run against the exact repository snapshot and policy checksum used for output. |
+| `REPLAY_REPOSITORY_TOOL_REF_MISSING` | Replay depends on generated repository-authored artifact bytes but the maintenance tool contract or invocation ref is missing. |
+| `REPLAY_REPOSITORY_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest does not match replay, temporal, predicate, assertion, corpus, materialization, package, or validation refs. |
+| `REPLAY_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used as replay, correction, temporal, predicate, assertion, event-sequence, or gold derivation authority. |
 
 ### TemporalPolicyScopeSelectorContext
 
@@ -987,6 +994,7 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | --- | --- |
 | `080-STRUCTURED-INPUT-TEMPORAL-AC-001` | Git-authored temporal, correction, late-arrival, replay, predicate, assertion, or event-sequence rows do not affect fact time, known time, correction, replay, graph handoff, or gold derivation until active materialized refs and manifest refs exist. |
 | `080-STRUCTURED-INPUT-REPLAY-AC-001` | Replay fails before output when structured-input-derived policy refs are omitted from `VersionManifest` or when validation is stale for the exact snapshot. |
+| `080-STRUCTURED-INPUT-REPLAY-AC-004` | Missing tool invocation ref, stale producer CI, publication manifest mismatch, sync-only replay attempt, and repository-authored predicate row omission from `VersionManifest` fail before replay output. |
 
 ## Definition of Done
 

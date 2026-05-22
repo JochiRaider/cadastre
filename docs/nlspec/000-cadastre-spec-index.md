@@ -199,6 +199,8 @@ The required validation rows for this gate are `val-000-activation-catalog-closu
 | Gate | Blocking condition |
 | --- | --- |
 | structured input repository closure | When structured-input repository workflow is in implementation scope, promotion fails if any repository profile ref, snapshot ref, exact tree or file checksum, validation run ref, redaction validation ref, materialization result ref, package release ref, package-set ref, access policy ref, error registry row, audit fixture, `VersionManifest` ref, fixture checksum, expected output checksum, or expected error is missing, failed, stale, checksum-mismatched, `TODO`, `blocked`, or `not_run`. |
+| structured input maintenance workflow closure | When structured-input repositories are enabled, promotion fails if any required maintenance tool contract ref, tool invocation ref, repository template contract ref, producer CI contract ref, exact-snapshot CI evidence ref, publication manifest policy ref, publication manifest ref, candidate sync policy ref, candidate sync record ref, repository group ref, package-set ref, fixture checksum, expected-output checksum, mutation-prohibition proof, or `030.VersionManifest` ref is missing, failed, stale, checksum-mismatched, package-set-mismatched, `TODO`, `blocked`, or `not_run`. |
+| structured input workflow closure pack | `StructuredInputWorkflowClosurePack` is promotion-time evidence only. It may prove that every structured-input workflow family has active owner refs or deterministic block refs; it must not substitute for any owner row, package release, package set, validation output, publication manifest, sync record, or `VersionManifest` ref. |
 
 ## SpecSetVersion Record
 
@@ -223,10 +225,16 @@ The required validation rows for this gate are `val-000-activation-catalog-closu
 
 `SpecSetVersion.validation_matrix_refs` must include `120-SOURCE-DATASET-CATALOG-*` and `120-VERSION-MANIFEST-SOURCE-DATASET-*` whenever any active feed profile, source-authority row, mapping row, graph/analysis handoff, package-supplied row catalog, API filter, or validation fixture references `source_dataset`.
 
+`SpecSetVersion.validation_matrix_refs` must include `val-000-structured-input-workflow-closure-complete`, `val-000-structured-input-workflow-member-manifested`, `val-000-structured-input-workflow-block-row-no-mutation`, and `val-000-structured-input-workflow-todo-blocks-promotion` before authoritative promotion when structured-input repository workflow is in implementation scope.
+
 | `implementation_scope` | array | Yes | empty | Contracts, interfaces, algorithms, errors, defaults, and mappings covered. |
 | `feedback_rule` | string | Yes | `spec_change_required` | Implementation discoveries that affect behavior must create a spec change before or alongside code. |
 
 When structured-input repositories are enabled, `activation_artifact_registry_refs` must include active structured-input repository profile row sets, repository access policy row sets, repository redaction policy row sets, materialization validation refs, and deterministic block refs for any structured-input family intentionally out of scope. These refs must also appear in owner `VersionManifest` records whenever repository-authored artifacts affect output.
+
+When structured-input repositories are enabled, `activation_artifact_registry_refs` must also include active or exact deterministic-block refs for `030.StructuredInputRepositoryTemplateContract`, `030.StructuredInputRepositoryCIContract`, `030.StructuredInputMaintenanceToolContract`, `100.StructuredInputPublicationManifest` import policy, `030.StructuredInputCandidateSyncPolicy`, and `030.StructuredInputRepositoryGroup`. Missing rows must not be interpreted as `not_applicable`; they block promotion unless an owner-local deterministic block row excludes the workflow family from implementation scope.
+
+`SpecSetVersion.validation_matrix_refs` must include `120-STRUCTURED-INPUT-TEMPLATE-*`, `120-STRUCTURED-INPUT-TOOL-*`, `120-STRUCTURED-INPUT-CI-*`, `120-STRUCTURED-INPUT-PUBLICATION-*`, `120-STRUCTURED-INPUT-SYNC-*`, and `120-STRUCTURED-INPUT-MULTIREPO-*` whenever structured-input repository workflow is in implementation scope.
 
 When any output-affecting behavior references a `source_dataset` token, `activation_artifact_registry_refs` must include active `020.SourceDatasetCatalogRowSet` refs, selected row refs/checksums or exact deterministic source-dataset block refs, source-dataset validation refs, package-set refs when package-supplied, and owner `VersionManifest` inclusion requirements. Missing or mismatched refs block promotion with the most specific closure state from `MVPActivationCatalogClosurePack`.
 
@@ -419,6 +427,15 @@ Structured-input repository artifacts must have exactly one owner and one volati
 | `StructuredInputMaterializationResult` | `100` | `runtime_state_record` | `120-STRUCTURED-INPUT-MATERIALIZATION-*` |
 | `StructuredInputRepositoryAccessPolicy` | `110` | stable interface plus `activation_controlled_artifact` policy rows | `120-STRUCTURED-INPUT-AUTH-*` |
 | `StructuredInputRepositoryRedactionPolicy` | `110` | stable interface plus `activation_controlled_artifact` policy rows | `120-STRUCTURED-INPUT-REDACTION-*` |
+| `StructuredInputMaintenanceToolContract` | `030` | stable interface plus activation-controlled concrete tool rows when tool behavior affects output | `120-STRUCTURED-INPUT-TOOL-*` |
+| `StructuredInputMaintenanceToolInvocation` | `030` | `runtime_state_record` or `validation_artifact` according to invocation mode | `120-STRUCTURED-INPUT-TOOL-*` |
+| `StructuredInputRepositoryTemplateContract` | `030` | `activation_controlled_artifact` | `120-STRUCTURED-INPUT-TEMPLATE-*` |
+| `StructuredInputRepositoryCIContract` | `030` with validation evidence owned by `120` | `activation_controlled_artifact` plus validation artifact rows | `120-STRUCTURED-INPUT-CI-*` |
+| `StructuredInputPublicationManifest` | `100` | `runtime_state_record` or package evidence record according to import mode | `120-STRUCTURED-INPUT-PUBLICATION-*` |
+| `StructuredInputCandidateSyncPolicy` | `030` | `activation_controlled_artifact` | `120-STRUCTURED-INPUT-SYNC-*` |
+| `StructuredInputCandidateSyncRecord` | `030` | `runtime_state_record` | `120-STRUCTURED-INPUT-SYNC-*` |
+| `StructuredInputRepositoryGroup` | `030` | `activation_controlled_artifact` | `120-STRUCTURED-INPUT-MULTIREPO-*` |
+| `StructuredInputWorkflowClosurePack` | `000` | promotion-time closure evidence only | `120-STRUCTURED-INPUT-WORKFLOW-CLOSURE-*` |
 
 A repository branch, tag, pull request, hook result, repository URL, or commit timestamp is not a volatility class and must not satisfy any activation-controlled artifact, runtime state record, validation artifact, package release, package-set, or `VersionManifest` requirement.
 
@@ -616,6 +633,13 @@ Owner-local closure states are closed values: `closed_local`, `blocked_owner_tod
 | StructuredInputMaterializationResult | `100` | `030`, `040`, `050`, `060`, `070`, `080`, `090`, `110`, `120`, `130`, `140` | runtime_activation | `runtime_state_record` | 120 | blocked_validation | materialization, package release handoff, direct Git rejection, rollback, and manifest fixtures required |
 | StructuredInputRepositoryAccessPolicy | `110` | `010`, `030`, `100`, `120`, `140` | runtime_api_security | stable interface plus `activation_controlled_artifact` policy rows | 120 | blocked_validation | authorization, no-existence-leak, audit, and endpoint outcome fixtures required |
 | StructuredInputRepositoryRedactionPolicy | `110` | `010`, `030`, `040`, `100`, `120`, `140` | runtime_api_security | stable interface plus `activation_controlled_artifact` policy rows | 120 | blocked_validation | validation-diagnostic, file-path, commit, payload, private-route, and telemetry redaction fixtures required |
+| StructuredInputMaintenanceToolContract | `030` | `040`, `050`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, `140` | runtime_orchestration | stable interface plus activation-controlled concrete rows | 120 | blocked_validation | tool contract, invocation checksum, deterministic output, redaction, and non-authority fixtures required |
+| StructuredInputRepositoryTemplateContract | `030` | `020`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130` | runtime_orchestration | `activation_controlled_artifact` | 120 | blocked_validation | valid layout, invalid layout, generated-output root, path escape, and non-authority fixtures required |
+| StructuredInputRepositoryCIContract | `030` with validation evidence in `120` | `020`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130` | validation | `activation_controlled_artifact` plus validation artifact rows | 120 | blocked_validation | exact-snapshot CI, stale CI, private-leak, and non-authority fixtures required |
+| StructuredInputPublicationManifest | `100` | `030`, `040`, `050`, `060`, `070`, `080`, `090`, `110`, `120`, `130`, `140` | runtime_activation | `runtime_state_record` or package evidence record | 120 | blocked_validation | digest, size, media type, package type, compatibility-claim, redaction, and package handoff fixtures required |
+| StructuredInputCandidateSyncRecord | `030` | `100`, `110`, `120`, `140` | runtime_orchestration | `runtime_state_record` | 120 | blocked_validation | candidate discovery, stale sync, sync-only activation failure, rollback mutable-ref rejection, audit, and telemetry fixtures required |
+| StructuredInputRepositoryGroup | `030` | `050`, `060`, `070`, `080`, `090`, `100`, `120`, `130` | runtime_orchestration | `activation_controlled_artifact` | 120 | blocked_validation | coherent group success, group mismatch, partial activation rejection, and manifest fixtures required |
+| StructuredInputWorkflowClosurePack | `000` | `030`, `100`, `120`, `domain` | validation | promotion-time closure evidence only | 120 | blocked_validation | closure complete, member manifested, block-row no-mutation, and TODO-blocking rows required |
 
 ## Dependency Rule
 

@@ -275,6 +275,10 @@ A repository-authored mapping bundle must include `structured_input_repository_s
 
 `CanonicalValidationOutput` for repository-authored mapping validation must include snapshot ref, selected path manifest checksum, mapping project checksum, compiler pipeline checksum, external schema artifact refs, validation row refs, and normalized diagnostics. Pull request approval, branch update, merge, hook success, or current working tree validation must not satisfy `CanonicalValidationOutput`.
 
+Repository-authored mapping validation must also validate `030.StructuredInputRepositoryTemplateContract` when the repository profile requires a template, `030.StructuredInputMaintenanceToolContract` and `030.StructuredInputMaintenanceToolInvocation` when mapping artifacts are generated, `030.StructuredInputRepositoryCIContract` when producer CI evidence is accepted, `100.StructuredInputPublicationManifest` when remote publication is consumed, `030.StructuredInputCandidateSyncRecord` when manifest sync imported the candidate, and `030.StructuredInputRepositoryGroup` when mappings depend on artifacts from another repository.
+
+Template conformance, SDK/CLI diagnostics, generated artifact existence, producer CI success, publication manifest claims, and sync records must not select an OCSF mapping row, authorize a source-extension field, satisfy `CanonicalValidationOutput`, or activate a mapping bundle by themselves.
+
 ### MappingProjectManifest schema
 
 `MappingProjectManifest` is the stable mapping-authoring project interface. Concrete manifest rows are activation-controlled artifacts and may be repository-authored only through `030.StructuredInputRepositorySnapshot`.
@@ -284,6 +288,16 @@ A repository-authored mapping bundle must include `structured_input_repository_s
 | `mapping_project_manifest_id` | Yes | none | Stable ID over canonical project bytes, snapshot refs, compiler options, dependency refs, plugin refs, and validation refs. |
 | `project_root_ref` | Yes | none | Normalized selected path ref inside the validated repository snapshot or immutable package artifact. |
 | `structured_input_repository_snapshot_ref` | Required when repository-authored | null only when the manifest is not repository-authored | Must match exact snapshot used for validation and materialization. |
+| `repository_template_contract_ref` | Required when repository-authored and template required | null only when no template is required | Exact `030.StructuredInputRepositoryTemplateContract` ref. |
+| `maintenance_tool_contract_refs` | Required when tool output affects mapping artifacts | `[]` only when no tool output affects validation or generated artifacts | Exact `030.StructuredInputMaintenanceToolContract` refs. |
+| `maintenance_tool_invocation_refs` | Required when generated outputs are consumed | `[]` only when no generated output is consumed | Invocation refs must match tool contract, snapshot, input checksum, generated output checksum, and materialization result. |
+| `generated_artifact_manifest_checksum` | Required when generated outputs exist | null only when no generated output exists | SHA-256 over canonical generated artifact manifest bytes. |
+| `publication_manifest_ref` | Required when published by a remote maintenance repository | null otherwise | Exact `100.StructuredInputPublicationManifest` ref verified by `100`. |
+| `candidate_sync_record_ref` | Required when imported by manifest sync | null otherwise | Sync ref is discovery/audit evidence only. |
+| `declared_generated_output_roots` | No | `[]` | Generated outputs outside declared roots fail validation. |
+| `generated_output_checksum` | Required when generated outputs exist | null otherwise | Byte-stable for the same snapshot, tool contract, compiler options, and dependency locks. |
+| `template_validation_refs` | Required when template required | `[]` otherwise | Non-empty refs to template validation rows. |
+| `producer_ci_validation_refs` | Required when producer CI evidence is accepted | `[]` otherwise | Non-empty refs bound to exact snapshot and file manifest checksum. |
 | `source_roots` | Yes | none | Non-empty normalized paths under `project_root_ref`; undeclared source roots and path escapes fail. |
 | `dependency_lock_refs` | Required when dependencies affect output or validation | `[]` only when no dependencies affect output or validation | Mutable dependency refs are forbidden. |
 | `plugin_refs` | No | `[]` | Plugins must be package-supplied or activation-controlled and validation-covered. |
@@ -297,6 +311,8 @@ A repository-authored mapping bundle must include `structured_input_repository_s
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
 `ValidateMappingBundle` must run repository snapshot validation before compiling. It must reject branch names, tags, uncommitted working copies, mutable refs, user-local configuration, undeclared source roots, duplicate normalized paths, path escapes, core overrides, undeclared source-extension fields, ambiguous rows, missing rows, forbidden OCSF fields, and enum ambiguity before silver output.
+
+Generated outputs must appear only under `declared_generated_output_roots`. For the same repository snapshot, tool contract, compiler options, dependency locks, and input checksums, generated mapping artifact bytes and `generated_output_checksum` must be byte-identical. SDK/CLI diagnostics must not substitute for `CanonicalValidationOutput`. Publication manifest claims must be verified by `100` before package release handoff or activation.
 
 | Error code | Required use |
 | --- | --- |
@@ -844,6 +860,16 @@ A mapping bundle must fail before silver output when any selected `050` row fami
 | `050-GOLD-OBJECT-BOUNDARY-AC-003` | Observables, enrichments, source-extension fields, and endpoint fields are not `GoldFact.subject_ref` or `GoldFact.object_value` references by mapping-side inference. |
 | `050-GOLD-OBJECT-BOUNDARY-AC-004` | A mapping attempt to set `GoldFact.object_value`, `GoldFact.subject_ref`, `object_kind`, source authority, absence outcome, correction output, graph output, or watermark output fails before silver output or emits the most specific owner diagnostic. |
 
+### Structured input mapping repository errors
+
+| Error code | Required use |
+| --- | --- |
+| `MAPPING_REPOSITORY_TEMPLATE_MISMATCH` | Mapping project layout, source roots, generated output roots, or artifact class outputs do not match the active repository template contract. |
+| `MAPPING_REPOSITORY_TOOL_OUTPUT_MISMATCH` | Generated artifact bytes, generated artifact manifest checksum, tool invocation checksum, or canonical validation output checksum does not match the tool contract. |
+| `MAPPING_REPOSITORY_CI_STALE` | Producer CI validation is stale or not exact-snapshot-bound. |
+| `MAPPING_REPOSITORY_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest digest, package type, validation refs, materialization refs, or compatibility claims do not match mapping artifacts. |
+| `MAPPING_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used to activate or select mapping behavior. |
+
 ### Structured input mapping acceptance criteria
 
 | ID | Criterion |
@@ -851,6 +877,8 @@ A mapping bundle must fail before silver output when any selected `050` row fami
 | `050-STRUCTURED-INPUT-MAPPING-AC-001` | Valid repository-authored mapping emits deterministic `CanonicalValidationOutput` containing exact snapshot refs, selected path manifest checksum, mapping project checksum, compiler pipeline checksum, external schema refs, validation refs, and output checksum. |
 | `050-STRUCTURED-INPUT-MAPPING-AC-002` | Merge, PR approval, branch update, hook success, or validation over current working tree emits no production silver output without materialized package-set activation when package-supplied. |
 | `050-STRUCTURED-INPUT-MAPPING-AC-003` | Branch, tag, current working tree, stale validation, missing snapshot ref, and path escape fail before silver output with the most specific mapping or structured-input error. |
+| `050-STRUCTURED-INPUT-MAPPING-AC-004` | Undeclared generated output roots, generated artifact drift, stale producer CI, publication manifest mismatch, branch-tip validation substitution, and template-only mapping selection fail before silver output. |
+| `050-STRUCTURED-INPUT-MAPPING-AC-005` | CLI-generated mapping output is accepted only when tool contract, invocation checksum, generated output checksum, materialization refs, package refs when supplied, and `VersionManifest` refs match. |
 
 ## Definition of Done
 

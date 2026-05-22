@@ -646,6 +646,13 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `StructuredInputMaterialization` | `structured_input.materialize` | Not applicable. | Deny without exposing artifact payload paths. | Audit materialization result refs and package release refs. |
 | `StructuredInputPromotion` | `package.promote` plus owner-specific structured-input permission | Not applicable. | Use package no-existence-leak and redaction rules. | Audit package-set candidate and source materialization refs. |
 | `StructuredInputRollback` | existing package rollback permission only | Not applicable. | Mutable Git rollback target fails before existence leak. | Audit immutable package-set target or mutable-ref rejection. |
+| `StructuredInputTemplateValidate` | `structured_input.template.validate` | Not applicable. | Deny without exposing private repository layout, raw paths, or private route values. | Audit template contract ref, snapshot ref, and validation refs. |
+| `StructuredInputProducerCIValidate` | `structured_input.producer_ci.validate` | Not applicable. | Deny without exposing raw CI logs, branch names, or private path values. | Audit CI contract ref, snapshot ref, toolchain refs, and staleness result. |
+| `StructuredInputMaintenanceToolValidate` | `structured_input.tool.validate` | Not applicable. | Deny without exposing raw tool logs or generated artifact bytes. | Audit tool contract ref, invocation ref, output checksum, and redaction summary. |
+| `StructuredInputPublicationManifestImport` | `structured_input.publication.import` | Not applicable. | Deny without exposing artifact payload paths or private repository routes. | Audit publication manifest refs and package release candidate refs. |
+| `StructuredInputCandidateSync` | `structured_input.candidate.sync` | Not applicable. | Deny without revealing inaccessible repository or publication manifest existence. | Audit sync policy ref, sync record ref, candidate refs, and rejection reason. |
+| `StructuredInputRepositoryGroupStatus` | `structured_input.repository_group.read` | Not applicable. | Deny without exposing private member repository identity. | Audit group ref, member refs, and coherence status. |
+| `StructuredInputPackageSetCandidateStage` | `package.stage_candidate` plus owner-specific structured-input permission | Not applicable. | Use package no-existence-leak and redaction rules. | Audit package release candidate refs and package-set candidate refs. |
 
 ### AuthorizationDecision schema
 
@@ -695,6 +702,12 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `private_repository_route` | Forbidden in public output. | No public display permission. | Redacted ref/checksum only. | Fail with `STRUCTURED_INPUT_PRIVATE_BINDING_LEAK` or `PRIVATE_BINDING_LEAK` if unredacted. |
 | `private_repository_secret` | Forbidden. | No display permission. | Redacted secret class only. | Fail before response, audit export, telemetry export, package report, or validation report. |
 | `private_structured_input_payload` | Forbidden. | Secure private validation context only outside public artifacts. | Hash and byte count only when permitted. | Raw structured input bytes must not be exposed in public API, audit, telemetry, errors, or package reports. |
+| `structured_input_tool_log` | Forbidden. | No public display permission. | Redacted diagnostic class, checksum, and byte count only. | Raw SDK/CLI logs must not appear in API, audit, telemetry, validation, or package reports. |
+| `structured_input_ci_log` | Forbidden. | No public display permission. | Redacted diagnostic class, checksum, and byte count only. | Raw CI logs and CI environment values must not appear in public outputs. |
+| `structured_input_generated_artifact_bytes` | Forbidden. | Secure private validation context only outside public artifacts. | Hash, byte count, artifact class, and materialization ref. | Raw generated artifact bytes must not be inlined. |
+| `structured_input_publication_manifest_ref` | Visible as ref/checksum when artifact evidence visibility permits. | Package/admin permission by evidence class. | Visible as ref/checksum. | Manifest bytes are referenced, not inlined, unless owner secure diagnostics permit. |
+| `structured_input_candidate_sync_record_ref` | Visible as ref/checksum when repository visibility permits. | Operator/admin diagnostic policy. | Visible as ref/checksum. | Sync status must not imply activation. |
+| `structured_input_repository_group_ref` | Visible as ref/checksum when repository group visibility permits. | Operator/admin diagnostic policy. | Visible as ref/checksum. | Must not expose private member routes or raw repository URLs. |
 
 `RedactionPolicy` must apply this matrix after owner result materialization and before checksum-visible response output. Redaction must not change owner state labels, error codes, or version-manifest refs; it may only remove or replace fields whose data class requires hiding.
 
@@ -708,6 +721,32 @@ Structured-input repository operations must use `CommonApiResponseEnvelope`. Pub
 
 Endpoint outcomes for structured-input operations must include success, empty, unauthorized, redaction-only, stale validation, private leak, mutable ref, materialization failure, package activation failure, and audit-only diagnostic outcomes.
 
+`StructuredInputRepositoryRequest.operation` is a closed token. The allowed tokens are:
+
+```text
+repository_read
+repository_write
+change_review
+change_merge
+snapshot_resolve
+template_validate
+producer_ci_validate
+maintenance_tool_validate
+maintenance_tool_materialize
+publication_manifest_import
+candidate_sync
+package_release_handoff
+package_set_candidate_stage
+promote
+rollback
+```
+
+Any other operation token fails with `API_BOUNDS_INVALID` before owner execution.
+
+`StructuredInputRepositoryResponse` must include these fields when the owning operation evaluates them: `template_validation_status`, `producer_ci_status`, `maintenance_tool_invocation_refs`, `publication_manifest_refs`, `candidate_sync_record_refs`, `repository_group_refs`, `package_release_candidate_refs`, and `package_set_candidate_refs`. Omitted fields default to null or `[]` only when the operation did not evaluate that owner surface.
+
+Structured-input request and response schemas must forbid raw tool logs, raw CI logs, raw repository URLs, raw branch names, raw file paths, raw generated artifact bytes, commit messages containing private data, private route values, tenant inventories, account identifiers, host identifiers, and credential values.
+
 | Request or response | Required fields | Forbidden fields |
 | --- | --- | --- |
 | `StructuredInputRepositoryRequest` | operation token, repository profile ref, optional snapshot ref, selected artifact class, request checksum, authorization scope | raw credentials, raw private route, raw file bytes |
@@ -716,6 +755,18 @@ Endpoint outcomes for structured-input operations must include success, empty, u
 | `StructuredInputValidationRequest` | exact snapshot ref, validation matrix refs, selected path refs, redaction policy ref | branch tip, tag, PR ref, repository URL as validation target |
 
 `AuditEvent.operation` must include `structured_input.repository.read`, `structured_input.repository.write`, `structured_input.change.review`, `structured_input.change.merge`, `structured_input.validation.run`, `structured_input.materialize`, `structured_input.promote`, and `structured_input.rollback`. Audit records must include authorization decision ref, redaction context ref, repository profile ref, snapshot ref when present, validation refs when present, materialization refs when present, package-set refs when present, and no raw repository content.
+
+Structured-input endpoint outcomes must include the following owner-visible states and must render each through `CommonApiResponseEnvelope` plus generated `ErrorCodeRegistryRow` entries:
+
+| Outcome | Required behavior |
+| --- | --- |
+| stale producer CI | Return owner error with redacted CI refs; no package handoff or activation. |
+| template mismatch | Return owner error with template ref and redacted path summary; no owner artifact activation. |
+| publication manifest mismatch | Return owner error with manifest ref and mismatched checksum class; no release candidate activation. |
+| sync candidate rejected | Return sync record ref and rejection reason; no active package-set mutation. |
+| multi-repository group mismatch | Return group ref and redacted member status; no partial group activation. |
+| redaction-only diagnostic | Return redaction summary and no raw bytes, logs, paths, branch names, or private routes. |
+| no-existence-leak denial | Return authorization error without confirming inaccessible repository, manifest, package, or group existence. |
 
 ## API, UX, Health, Error, and Security Contract Details
 
@@ -1505,6 +1556,9 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-STRUCTURED-INPUT-REDACTION-AC-001` | Structured-input API, audit, telemetry, package report, and validation output reject or redact raw file bytes, private routes, credentials, raw paths, private schema payloads, and private fixture bytes. |
 | `110-STRUCTURED-INPUT-AUDIT-AC-001` | Structured-input repository read, write, review, merge, validation, materialization, promotion, and rollback operations emit audit events with authorization refs, redaction refs, snapshot refs where present, and no raw repository content. |
 | `110-STRUCTURED-INPUT-ERROR-AC-001` | Every structured-input error from `010`, `030`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140` is rendered through generated error registry rows with owner context and redaction. |
+| `110-STRUCTURED-INPUT-OPERATION-AC-001` | Every structured-input operation token has allow, deny, no-existence-leak, redaction-only, stale-validation, audit, and generated-error registry coverage. |
+| `110-STRUCTURED-INPUT-PUBLICATION-AC-001` | Publication manifest import responses expose refs/checksums/status only and never imply active package status. |
+| `110-STRUCTURED-INPUT-SYNC-AC-001` | Candidate sync responses expose discovery/audit status only and cannot mutate active state. |
 
 ## Definition of Done
 

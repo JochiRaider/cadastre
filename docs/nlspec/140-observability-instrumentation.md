@@ -191,6 +191,12 @@ Default metric rows:
 | `cadastre.structured_input.materialization.completed` | counter | `{materialization}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
 | `cadastre.structured_input.materialization.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
 | `cadastre.structured_input.private_binding.rejected` | counter | `{rejection}` | `repository_profile_ref`, `structured_input_operation`, `artifact_class`, `owner_spec`, `owner_error_code` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-*` |
+| `cadastre.structured_input.template.validation.completed` | counter | `{validation}` | `repository_profile_ref`, `structured_input_operation`, `template_contract_ref`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-TEMPLATE-*` |
+| `cadastre.structured_input.producer_ci.validation.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `producer_ci_contract_ref`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-CI-*` |
+| `cadastre.structured_input.publication.import.completed` | counter | `{import}` | `repository_profile_ref`, `structured_input_operation`, `publication_manifest_ref`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-PUBLICATION-*` |
+| `cadastre.structured_input.publication.import.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `publication_manifest_ref`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-PUBLICATION-*` |
+| `cadastre.structured_input.sync.candidate.discovered` | counter | `{candidate}` | `repository_profile_ref`, `structured_input_operation`, `candidate_sync_record_ref`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-SYNC-*` |
+| `cadastre.structured_input.repository_group.validation.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `repository_group_ref`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-MULTIREPO-*` |
 | `cadastre.run_lock.acquired` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
 | `cadastre.run_lock.heartbeat` | counter | `{heartbeat}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
 | `cadastre.run_lock.recovery_attempt` | counter | `{attempt}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
@@ -229,7 +235,7 @@ Default allowed attribute keys:
 | Attribute key | Allowed value class | Maximum distinct values per run | Rule |
 | --- | --- | ---: | --- |
 | `repository_profile_ref` | Structured input repository profile ref | 64 | Ref and checksum only; no repository URL or private route. |
-| `structured_input_operation` | Closed operation token | 64 | One of `snapshot`, `validate`, `materialize`, `promote`, `rollback`, `private_binding_reject`; raw branch names are forbidden. |
+| `structured_input_operation` | Closed operation token | 64 | One of `snapshot`, `validate`, `template_validate`, `producer_ci_validate`, `tool_invoke`, `materialize`, `publication_import`, `candidate_sync`, `repository_group_validate`, `package_release_handoff`, `package_set_candidate_stage`, `promote`, `rollback`, `private_binding_reject`; raw branch names are forbidden. |
 | `artifact_class` | Closed `030.ActivationControlledArtifactRef.artifact_class` token | 256 | Token only; no file path or package filename. |
 | `owner_spec` | Owner spec token | 32 | One of registered owner spec IDs. |
 | `validation_status` | Closed validation status token | 16 | One of `pass`, `fail`, `blocked`, `not_run`, `stale`; must not include diagnostic text. |
@@ -239,6 +245,12 @@ Default allowed attribute keys:
 | `version_manifest_ref` | `030.VersionManifest` ref | 1024 | Ref only; no manifest bytes. |
 | `package_set_ref` | `100.ProductionPackageSetManifest` ref | 1024 | Ref only; no package payload bytes. |
 | `activation_artifact_ref` | `030.ActivationControlledArtifactRef` ref | 4096 | Ref and checksum only. |
+| `publication_manifest_ref` | Ref/checksum only | 1024 | No manifest bytes or artifact payload bytes. |
+| `candidate_sync_record_ref` | Ref/checksum only | 1024 | Sync telemetry is diagnostic only and must not imply activation. |
+| `repository_group_ref` | Ref/checksum only | 1024 | No private member repository route or URL. |
+| `template_contract_ref` | Ref/checksum only | 1024 | Template conformance telemetry is diagnostic only. |
+| `producer_ci_contract_ref` | Ref/checksum only | 1024 | No raw CI logs or branch names. |
+| `maintenance_tool_contract_ref` | Ref/checksum only | 1024 | No raw tool logs, command lines with private values, or generated bytes. |
 | `owner_error_code` | Owner error code | 256 | Error code only; no raw owner context. |
 | `lifecycle_transition_evidence_ref` | `030.LifecycleTransitionEvidence` ref | 4096 | Ref and checksum only. |
 | `validation_row_ref` | `120.ValidationMatrix` row ref | 4096 | Row ref only. |
@@ -262,6 +274,8 @@ Forbidden values include raw payload bytes, raw payload hashes when not authoriz
 A forbidden key or value must fail before export with the most specific telemetry error code.
 
 Structured-input telemetry must not contain raw branch names unless redacted to a bounded class, raw file paths unless hashed or redacted, raw schema bytes, private routes, credentials, source-native identifiers, tenant inventories, raw fixture bytes, raw structured input bytes, or commit messages containing private data. Commit SHA may be emitted only as a checksum-like diagnostic when `110.StructuredInputRepositoryRedactionPolicy` and `TelemetryAttributePolicy` permit it; it must not become replay evidence, audit persistence evidence, activation authority, rollback authority, or source-authority evidence.
+
+Structured-input telemetry for template validation, producer CI validation, tool invocation, publication import, candidate sync, repository group validation, package release handoff, and package-set candidate staging is diagnostic material only. It must not prove validation, activation, audit persistence, replay equivalence, package activation, source authority, graph output, or domain output.
 
 ## Telemetry Redaction Policy
 
@@ -524,6 +538,9 @@ Telemetry validation, export, health mapping, or replay exclusion must fail befo
 | `140-STRUCTURED-INPUT-TELEMETRY-AC-001` | Structured-input telemetry cannot affect validation, package activation, audit persistence, replay equivalence, source authority, graph output, or domain output. |
 | `140-STRUCTURED-INPUT-REDACTION-AC-001` | Private repository values, raw file paths, raw schema bytes, raw fixture bytes, raw structured input bytes, credentials, private routes, and tenant inventories are rejected or redacted before telemetry export. |
 | `140-STRUCTURED-INPUT-CARDINALITY-AC-001` | File path, branch-name, commit-message, repository URL, source-native identifier, and private-route cardinality cannot become metric labels. |
+| `140-STRUCTURED-INPUT-TOKEN-CLOSURE-AC-001` | Template validation, producer CI validation, tool invocation, publication import, candidate sync, repository group validation, package release handoff, and package-set candidate staging use only closed operation tokens. |
+| `140-STRUCTURED-INPUT-PUBLICATION-NONAUTH-AC-001` | Publication import telemetry does not prove package release candidacy or package activation. |
+| `140-STRUCTURED-INPUT-SYNC-NONAUTH-AC-001` | Candidate sync telemetry does not mutate active state, prove validation, or authorize rollback. |
 
 ## Definition of Done
 

@@ -83,6 +83,17 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `StructuredInputRepositoryProfile`
 - `StructuredInputRepositorySnapshot`
 - `StructuredInputChangeProposal`
+- `StructuredInputMaintenanceToolContract`
+- `StructuredInputMaintenanceToolInvocation`
+- `StructuredInputRepositoryTemplateContract`
+- `StructuredInputRepositoryCIContract`
+- `StructuredInputCandidateSyncPolicy`
+- `StructuredInputCandidateSyncRecord`
+- `StructuredInputRepositoryGroup`
+- `ValidateStructuredInputMaintenanceWorkflow`
+- `ValidateStructuredInputRepositoryTemplate`
+- `ValidateStructuredInputProducerCI`
+- `SyncStructuredInputCandidate`
 - `StructuredInputChangeProposalLifecycleMachine`
 - `ResolveStructuredInputRepositorySnapshot`
 - `ValidateStructuredInputRepositorySnapshot`
@@ -967,6 +978,11 @@ threat_intel_artifact_ref_policy
 lineage_facet_mapping_policy
 artifact_class_policy_row_set
 evidence_artifact_class_row_set
+structured_input_maintenance_tool_contract
+structured_input_repository_template_contract
+structured_input_repository_ci_contract
+structured_input_candidate_sync_policy
+structured_input_repository_group
 registry_governance_artifact
 registry_custom_property_schema
 registry_classification_policy
@@ -1017,6 +1033,11 @@ The canonical `artifact_class` token is the value in the closed registry above. 
 | `020.CrossTableCommitProfile` | `cross_table_commit_profile` | Required when a production run, replay, rebuild, validation, or promotion needs coherent multi-table state. |
 | `020.CatalogBranchPromotionPolicy` | `catalog_branch_promotion_policy` | Required when catalog branch, tag, merge, or commit promotion controls production visibility. |
 | `100.ProductionPackageSetManifest` | `production_package_set` | Package-set manifest fields must not substitute for `VersionManifest.included_refs`. |
+| `030.StructuredInputMaintenanceToolContract` | `structured_input_maintenance_tool_contract` | Tool contracts are activation-controlled when tool behavior affects validation, generation, materialization, or publication output. |
+| `030.StructuredInputRepositoryTemplateContract` | `structured_input_repository_template_contract` | Template conformance is validation evidence only and never owner-row or package activation authority. |
+| `030.StructuredInputRepositoryCIContract` | `structured_input_repository_ci_contract` | CI evidence must bind exact snapshot, selected paths, manifest checksum, toolchain refs, and validation matrix refs. |
+| `030.StructuredInputCandidateSyncPolicy` | `structured_input_candidate_sync_policy` | Sync policy controls candidate discovery only and cannot mutate active package state. |
+| `030.StructuredInputRepositoryGroup` | `structured_input_repository_group` | Group refs are required when cross-repository artifacts must validate or activate coherently. |
 
 ### ValidateActivationControlledArtifactRef
 
@@ -1177,6 +1198,15 @@ The generic activation-row error set is closed. Owner specs may define more spec
 | `review_requirement_ref` | Yes | none | Required before proposal merge. Omission blocks merge and materialization. |
 | `public_private_classification` | Yes | none | Closed enum: `public_authoring`, `private_authoring`, `mixed_requires_redaction`. |
 | `snapshot_selection_policy` | Yes | none | Defines selected refs and path filters; output must resolve to exact commit SHA and tree hash. |
+| `maintenance_tool_contract_refs` | No | `[]` | Required to be non-empty when tool output affects validation, generation, materialization, publication, or canonical validation output. |
+| `repository_template_contract_ref` | Required when `template_required = true` | null only when `template_required = false` | Ref must have `artifact_class = structured_input_repository_template_contract`. |
+| `template_required` | No | `true` for production-affecting remote repositories | `false` is allowed only for explicitly local, validation-only, or deterministic-block profiles. |
+| `producer_ci_contract_ref` | No | null only when producer CI evidence is not accepted | When non-null, CI evidence must be exact-snapshot-bound before validation or materialization can pass. |
+| `producer_ci_evidence_policy` | No | `diagnostic_only` | Closed enum: `diagnostic_only`, `exact_snapshot_required`; only `exact_snapshot_required` permits CI evidence to satisfy validation evidence. |
+| `publication_required` | No | `true` when repository outputs are consumed by package or artifact release | `false` is valid only when no remote publication manifest is consumed. |
+| `candidate_sync_policy_ref` | Required when main project polls or imports candidate manifests | null otherwise | Sync policy governs discovery only and must not mutate active state. |
+| `repository_group_ref` | No | null | Required when cross-repository artifacts must resolve, validate, materialize, or activate coherently. |
+| `multi_repository_activation_policy` | No | `independent` | Closed enum: `independent`, `coherent_group_required`; `coherent_group_required` blocks partial group activation. |
 | `force_push_policy` | Yes | `invalidate_unless_exact_commit_tree_remains_selected` | Prior validation is invalid when a ref rewrite changes selected commit or tree. |
 | `path_normalization_policy` | Yes | `strict_repo_relative_regular_files_only` | Applies the rejection list in this contract. |
 | `validation_matrix_refs` | Yes | none | Non-empty refs to `120.StructuredInputRepositoryValidationMatrix` rows. |
@@ -1254,11 +1284,101 @@ ValidateStructuredInputRepositorySnapshot(snapshot, profile, validation_runs, ex
 7. Require materialization refs before package release handoff and package-set refs before production activation when package-supplied artifacts affect output.
 ```
 
+### Structured input external maintenance contracts
+
+`StructuredInputMaintenanceToolContract`, `StructuredInputRepositoryTemplateContract`, `StructuredInputRepositoryCIContract`, `StructuredInputCandidateSyncPolicy`, and `StructuredInputRepositoryGroup` are stable interfaces owned by `030`. Concrete rows are activation-controlled artifacts unless this section states that the record is runtime state. None of these contracts grants source authority, validation acceptance by itself, package activation, production approval, rollback eligibility, graph authority, or system-of-record state.
+
+#### StructuredInputMaintenanceToolContract schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `tool_contract_id` | Yes | none | Stable ID scoped to `030`. |
+| `tool_kind` | Yes | none | Closed token: `sdk`, `cli`, `ci_embedded_tool`. |
+| `tool_version_ref` | Yes | none | Immutable tool version or package ref; mutable local executable paths are forbidden. |
+| `allowed_operations` | Yes | none | Subset of `validate`, `generate`, `materialize_input`, `publish_manifest`. |
+| `input_checksum_policy` | Yes | none | Names all input bytes, selected paths, compiler options, dependency locks, and environment-independent defaults that affect output. |
+| `output_checksum_policy` | Yes | none | Names every output class and canonical checksum basis. |
+| `dependency_lock_refs` | Required when dependencies affect output | `[]` only when no dependency can affect output | Mutable dependency resolution is forbidden. |
+| `redaction_refs` | Yes | none | Non-empty refs proving logs, diagnostics, paths, and generated artifacts do not leak forbidden private values. |
+| `validation_refs` | Yes | none | Non-empty `120-STRUCTURED-INPUT-TOOL-*` refs. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`StructuredInputMaintenanceToolInvocation` is runtime or validation state. It must include tool contract ref, repository snapshot ref, selected path refs, input checksum, output checksum, diagnostic checksum, generated artifact manifest checksum when generated artifacts exist, redaction summary, validation refs, and `VersionManifest` ref when output-affecting. Raw tool logs and raw generated bytes must not be inlined.
+
+#### StructuredInputRepositoryTemplateContract schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `template_contract_id` | Yes | none | Stable ID scoped to `030`. |
+| `layout_version` | Yes | none | Immutable template version. |
+| `required_path_roots` | Yes | none | Canonically sorted normalized repository-relative roots. |
+| `declared_generated_output_roots` | No | `[]` | Generated output outside these roots fails validation. |
+| `allowed_artifact_classes` | Yes | none | Non-empty subset of closed `030.artifact_class` tokens. |
+| `forbidden_path_patterns` | No | `[]` | Path escape, private route, credential, and raw private fixture patterns fail before validation output. |
+| `producer_ci_contract_refs` | No | `[]` | CI contracts associated with this template. |
+| `validation_refs` | Yes | none | Non-empty `120-STRUCTURED-INPUT-TEMPLATE-*` refs. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+#### StructuredInputRepositoryCIContract schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `producer_ci_contract_id` | Yes | none | Stable ID scoped to `030`. |
+| `accepted_evidence_policy` | Yes | `exact_snapshot_required` | CI evidence accepted for validation must be exact-snapshot-bound. |
+| `required_binding_fields` | Yes | none | Must include commit SHA, tree hash, selected paths, file manifest checksum, toolchain refs, validation matrix refs, and output checksums. |
+| `staleness_behavior` | Yes | `reject` | Ref rewrite, force push, selected-path change, toolchain change, or matrix change invalidates CI evidence. |
+| `redaction_refs` | Yes | none | Raw CI logs, branch names, routes, private paths, and secrets must be rejected or redacted. |
+| `validation_refs` | Yes | none | Non-empty `120-STRUCTURED-INPUT-CI-*` refs. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+`ValidateStructuredInputProducerCI` must reject CI evidence before owner validation when any required binding field is missing, stale, checksum-mismatched, private-leaking, or bound to a mutable branch, tag, PR ref, repository URL, or hook result.
+
+#### StructuredInputCandidateSyncPolicy and record schema
+
+`StructuredInputCandidateSyncPolicy` governs discovery only. `StructuredInputCandidateSyncRecord` is runtime state and must include sync policy ref, imported publication manifest refs, repository profile refs, snapshot refs when known, candidate package release refs when staged, redaction summary, audit event ref, lifecycle status, and a sync checksum. Sync records must not mutate active package sets, owner rows, watermarks, graph state, source authority, or rollback targets.
+
+#### StructuredInputRepositoryGroup schema
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `repository_group_id` | Yes | none | Stable ID scoped to `030`. |
+| `member_repository_profile_refs` | Yes | none | Non-empty canonically sorted refs. |
+| `dependency_edges` | No | `[]` | Each edge names producer repo, consumer repo, artifact class, and required checksum. |
+| `coherence_policy` | Yes | `all_required_members_same_validation_window` | Closed enum: `all_required_members_same_validation_window`, `explicit_dependency_edges_only`. |
+| `partial_activation_behavior` | Yes | `reject` | Partial group activation must reject before package-set candidate activation. |
+| `validation_refs` | Yes | none | Non-empty `120-STRUCTURED-INPUT-MULTIREPO-*` refs. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+
+### ValidateStructuredInputMaintenanceWorkflow
+
+```text
+ValidateStructuredInputMaintenanceWorkflow(profile, selected_ref, selected_paths, workflow_inputs, version_manifest):
+1. Resolve the repository profile and validate lifecycle, activation scope, path roots, allowed artifact classes, public/private classification, template settings, CI policy, publication policy, sync policy, and repository group refs.
+2. Resolve the exact repository snapshot through `ResolveStructuredInputRepositorySnapshot`.
+3. Validate `StructuredInputRepositoryTemplateContract` when `template_required = true`.
+4. Validate each `StructuredInputMaintenanceToolContract` and `StructuredInputMaintenanceToolInvocation` when tool output affects generated artifacts, validation output, materialization input, or publication manifests.
+5. Validate producer CI evidence through `ValidateStructuredInputProducerCI` when CI evidence is accepted; diagnostic-only CI never satisfies validation evidence.
+6. Validate public/private classification and redaction before API, audit, telemetry, package report, validation output, materialization, or publication output.
+7. Validate materialization handoff refs when package or activation artifact bytes are produced.
+8. Validate `100.StructuredInputPublicationManifest` when remote publication is imported; mark publication absent only when `publication_required = false`.
+9. Validate `StructuredInputCandidateSyncRecord` as non-authoritative candidate discovery and audit evidence only.
+10. Validate `StructuredInputRepositoryGroup` coherence when `multi_repository_activation_policy = coherent_group_required`.
+11. Emit deterministic validation output containing all output-affecting refs, checksums, non-authority decisions, owner error codes, and `VersionManifest` inclusion requirements.
+```
+
+The same profile ref, exact snapshot, selected paths, template contract, tool contract, tool invocation inputs, producer CI evidence, publication manifest, sync record, repository group refs, and validation matrix refs must produce byte-identical maintenance workflow validation output.
+
 ### Structured input repository manifest completeness
 
 `VersionManifestCompletenessMatrix` requires these refs whenever repository-authored structured inputs affect output: repository profile ref, snapshot ref, file manifest checksum, validation run ref, materialization result ref when packaged, package release ref when created, package-set ref when activated, access policy ref when API-visible, redaction policy ref when any repository value is exposed, and validation matrix refs.
 
 `VersionManifest.structured_input_refs` is required when structured-input snapshots affect output. Entries must also appear in `included_refs`; the field is not a parallel manifest mechanism.
+
+When external maintenance workflow contracts affect output, `VersionManifestCompletenessMatrix` also requires repository template contract refs, maintenance tool contract refs, maintenance tool invocation refs, producer CI contract refs, producer CI validation refs, publication manifest refs, candidate sync policy refs, candidate sync record refs, repository group refs, generated artifact manifest checksums, and deterministic validation output checksums.
 
 | Error code | Required use |
 | --- | --- |
@@ -1268,6 +1388,12 @@ ValidateStructuredInputRepositorySnapshot(snapshot, profile, validation_runs, ex
 | `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` | Mutable branch, tag, PR ref, repository URL, or rebuilt tip is used as activation, rollback, or manifest target. |
 | `STRUCTURED_INPUT_SNAPSHOT_MISMATCH` | Validation, materialization, or manifest refs do not match exact commit, tree, file manifest, or snapshot checksum. |
 | `STRUCTURED_INPUT_VALIDATION_STALE` | Validation run is not for the exact current snapshot or was invalidated by ref rewrite. |
+| `STRUCTURED_INPUT_TEMPLATE_MISMATCH` | Repository layout, generated output roots, artifact classes, or path roots do not match the selected template contract. |
+| `STRUCTURED_INPUT_TOOL_OUTPUT_MISMATCH` | Tool invocation output checksum, generated artifact manifest checksum, or materialization input checksum does not match the active tool contract. |
+| `STRUCTURED_INPUT_PRODUCER_CI_STALE` | Producer CI evidence is missing, stale, or not bound to exact snapshot, selected paths, manifest checksum, toolchain refs, validation refs, and output checksums. |
+| `STRUCTURED_INPUT_PUBLICATION_REQUIRED` | Repository profile requires publication evidence but no verified publication manifest is present. |
+| `STRUCTURED_INPUT_SYNC_RECORD_NONAUTHORITY` | Candidate sync record is used as authority, activation, rollback, source, graph, or system-of-record state. |
+| `STRUCTURED_INPUT_REPOSITORY_GROUP_MISMATCH` | Required repository group members, dependency edges, validation windows, artifact checksums, or package-set refs do not cohere. |
 | `STRUCTURED_INPUT_REVALIDATION_REQUIRED` | Merge commit, force-push, or ref rewrite requires exact snapshot revalidation before materialization or activation. |
 
 ## Declared Subset Contract
@@ -1747,6 +1873,12 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-STRUCTURED-INPUT-MUTABLE-REF-AC-001` | Branch, tag, pull request ref, repository URL, or default branch cannot satisfy production activation, rollback, or `VersionManifest` completeness. |
 | `030-STRUCTURED-INPUT-FORCE-PUSH-AC-001` | Ref rewrite invalidates prior validation unless exact validated commit SHA and tree hash remain selected. |
 | `030-STRUCTURED-INPUT-VM-AC-001` | Output derived from repository-authored artifacts fails with `VERSION_MANIFEST_INCOMPLETE` when snapshot, validation, materialization, package, access, redaction, or validation refs required by the matrix are omitted. |
+| `030-STRUCTURED-INPUT-WORKFLOW-AC-001` | Same snapshot, selected paths, template, tool contract, tool invocation inputs, CI evidence, publication manifest, sync record, group refs, and validation matrix refs produce byte-identical workflow validation output. |
+| `030-STRUCTURED-INPUT-TEMPLATE-AC-001` | Template conformance alone cannot activate or select owner artifacts. |
+| `030-STRUCTURED-INPUT-TOOL-AC-001` | SDK/CLI invocation output is deterministic, checksummed, redacted, and non-authoritative until owner materialization and package gates pass. |
+| `030-STRUCTURED-INPUT-CI-AC-001` | Producer CI success is rejected when stale or not exact-snapshot-bound. |
+| `030-STRUCTURED-INPUT-SYNC-AC-001` | Sync records cannot change the active package set, rollback target, owner rows, watermarks, graph state, or source authority. |
+| `030-STRUCTURED-INPUT-MULTIREPO-AC-001` | Multi-repository group mismatch blocks coherent group activation before package-set candidate activation. |
 
 ## Definition of Done
 

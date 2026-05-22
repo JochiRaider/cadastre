@@ -360,9 +360,18 @@ The MVP predicate catalog owned by `080` must not add subject or object shapes b
 | `structured_input_repository_snapshot` | `cadastre_record_ref` or `external_artifact_ref` | `030` | Persisted Cadastre snapshot record checksum or immutable external repository metadata bytes. |
 | `structured_input_validation_run` | `cadastre_record_ref` or `external_artifact_ref` | `120` | Persisted validation record checksum or immutable validation output bytes for the exact snapshot. |
 | `structured_input_materialization_result` | `cadastre_record_ref` | `100` | Persisted materialization result checksum. |
+| `structured_input_maintenance_tool_contract` | `activation_artifact_ref` | `030` | Canonical tool contract bytes. |
+| `structured_input_maintenance_tool_invocation` | `cadastre_record_ref` or `external_artifact_ref` | `030` | Persisted invocation result checksum or immutable external invocation metadata bytes. |
+| `structured_input_repository_template_contract` | `activation_artifact_ref` | `030` | Canonical template contract bytes. |
+| `structured_input_repository_ci_contract` | `activation_artifact_ref` | `030` | Canonical CI contract bytes. |
+| `structured_input_publication_manifest` | `cadastre_record_ref` or `external_artifact_ref` | `100` | Persisted imported publication manifest checksum or immutable external manifest bytes. |
+| `structured_input_candidate_sync_record` | `cadastre_record_ref` | `030` | Persisted sync record checksum. |
+| `structured_input_repository_group` | `activation_artifact_ref` | `030` | Canonical group contract bytes. |
 | External standards, reports, source-native artifacts, compiled schemas, package repository metadata, provenance, and SBOM artifacts | `external_artifact_ref` | Owner spec that imports the artifact | Immutable external bytes or owner-declared canonical metadata bytes. |
 
 A new artifact class may be activated through the owning spec only when it maps to one existing `artifact_id.kind`, declares checksum basis, declares redaction owner, declares `VersionManifest` requirements, and has passing validation refs. `EvidenceRef.artifact_class` and `EvidenceRef.artifact_id.kind` mismatch fails with `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` before `evidence_ref_id` computation.
+
+Tool logs, CI logs, repository URLs, raw branch names, raw file paths, raw generated artifact bytes, hook payloads, commit messages containing private data, and raw structured-input file bytes must not be inlined in `EvidenceRef`. They may appear only as redacted refs, checksums, byte counts, or owner-declared canonical metadata bytes when `010`, `110`, and the artifact owner permit that exposure.
 
 Branch names, tags, repository URLs, pull request numbers, hook logs, merge event labels, and commit timestamps must not be `artifact_checksum` inputs unless they are serialized as owner-declared canonical metadata bytes and are not used as production authority. Raw repository file bytes and raw structured input payload bytes must not be inlined in `EvidenceRef`.
 
@@ -1009,6 +1018,8 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | ID | Criterion |
 | --- | --- |
 | `040-STRUCTURED-INPUT-EVIDENCE-AC-001` | Structured-input evidence uses only existing `EvidenceRef.artifact_id.kind` values, rejects raw payload bytes, rejects mutable labels as checksums, validates class/kind pairing, and requires `VersionManifest` inclusion for output-affecting evidence. |
+| `040-STRUCTURED-INPUT-EVIDENCE-AC-002` | Maintenance tool contracts, tool invocations, template contracts, CI contracts, publication manifests, sync records, and repository groups validate only through allowed artifact-class/kind pairs and checksums. |
+| `040-STRUCTURED-INPUT-EVIDENCE-AC-003` | Tool logs, CI logs, repository URLs, branch names, raw paths, hook payloads, generated artifact bytes, and raw structured-input bytes are rejected when inlined in `EvidenceRef`. |
 
 ## Definition of Done
 

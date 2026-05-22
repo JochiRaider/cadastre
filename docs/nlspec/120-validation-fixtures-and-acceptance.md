@@ -81,7 +81,7 @@ Every active domain spec must include at least one negative validation case for 
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis finding, metric, risk acceptance, threat-intel enrichment, lineage facet, registry governance, registry custom property, registry classification, or derived-edge rule attempts forbidden authority or mutation and fails before the forbidden effect. |
 | Observability | Telemetry span, metric, structured log, baggage, exporter success, exporter failure, Collector state, sampling decision, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
-| Structured input repository | Branch, tag, pull request, repository URL, or hook success used as activation target; stale branch-tip validation; exact tree mismatch; invalid path; private binding leak; unmaterialized Git snapshot activation; package release missing materialization refs; missing `VersionManifest` refs; rollback to branch or tag; and hook success as activation evidence fail before forbidden mutation. |
+| Structured input repository | Branch, tag, pull request, repository URL, hook success, SDK/CLI success, template conformance, producer CI success, publication manifest existence, candidate sync success, repository group partial validation, stale branch-tip validation, exact tree mismatch, invalid path, private binding leak, unmaterialized Git snapshot activation, package release missing materialization refs, missing `VersionManifest` refs, rollback to branch or tag, and hook success as activation evidence fail before forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 | Scope selector closure | Selector normalization, exact match, subset allowed, subset disallowed, duplicate dimension, duplicate value, unknown field, unsupported dimension, under-scoped request, private leak, ambiguity, no row-order tiebreak, owner error mapping, redaction, and manifest inclusion are covered for every active scoped owner family. |
 | Activation-controlled row schema precision | Production-affecting activation-controlled row families with prose-only schemas, missing `030.ActivationControlledRowField` tables, missing null/omit/default/bounds columns, missing array semantics, missing duplicate policy, bare string row refs, checksum mismatch, extension redefinition, manifest omission, package-set omission, or owner error omission fail before promotion or owner output. |
@@ -998,6 +998,24 @@ This matrix imports the MVP category set from `020.LakehouseFeedCategoryClosureR
 
 ### StructuredInputRepositoryValidationMatrix
 
+The structured-input repository validation matrix is partitioned into required workflow families. A row may pass only when fixture checksum, input artifact refs, expected output or error, expected output checksum, mutation-prohibition proof, package-set requirement, `VersionManifest` requirement, and acceptance criterion ID are concrete and non-`TODO`.
+
+| Family | Required rows |
+| --- | --- |
+| `120-STRUCTURED-INPUT-PROFILE-*` | profile schema, allowed artifact classes, path roots, public/private classification, repository role, multi-repo group membership |
+| `120-STRUCTURED-INPUT-TEMPLATE-*` | valid layout, invalid layout, undeclared generated output, path escape, template conformance non-authority |
+| `120-STRUCTURED-INPUT-TOOL-*` | SDK/CLI deterministic invocation, tool-version mismatch, generated output drift, tool success non-authority |
+| `120-STRUCTURED-INPUT-CI-*` | exact-snapshot CI pass, stale CI after ref rewrite, CI success non-authority, CI private leak |
+| `120-STRUCTURED-INPUT-SNAPSHOT-*` | deterministic snapshot, mutable ref rejection, path normalization, force-push invalidation |
+| `120-STRUCTURED-INPUT-MATERIALIZATION-*` | artifact digest, media type, release input checksum, redaction refs |
+| `120-STRUCTURED-INPUT-PUBLICATION-*` | publication manifest import, digest mismatch, package type mismatch, compatibility claim mismatch |
+| `120-STRUCTURED-INPUT-SYNC-*` | candidate discovery, stale sync record, sync-only activation failure, rollback mutable-ref rejection |
+| `120-STRUCTURED-INPUT-MULTIREPO-*` | coherent repository group success, group mismatch, partial group activation rejection |
+| `120-STRUCTURED-INPUT-API-*` | no-existence leak, redacted diagnostics, audit operation completeness |
+| `120-STRUCTURED-INPUT-TELEMETRY-*` | bounded labels, private-route rejection, no authority |
+
+Every row in these families must expose `fixture_id`, `fixture_checksum`, `input_artifact_refs`, `expected_output_or_error`, `expected_output_checksum`, `mutation_prohibition`, `package_set_requirement`, `version_manifest_requirement`, `acceptance_criterion`, and `blocking_status`. Because concrete fixture bytes were not supplied in the uploaded material, new rows introduced by this patch use `TODO:` checksums and remain `blocked` until product governance supplies fixture bytes and canonical expected outputs.
+
 Rows in this matrix validate behavior owned by `010`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`. Because fixture bytes and expected output checksums are absent, checksum cells are explicit blockers until populated by validation artifacts. `AcceptanceReport` must fail while any row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or `TODO`.
 
 | validation_row_id | owner_spec | fixture_id | fixture_checksum | required_refs | expected_error_or_output | expected_output_checksum | mutation_prohibition | acceptance_criterion | blocking_status |
@@ -1019,6 +1037,19 @@ Rows in this matrix validate behavior owned by `010`, `030`, `040`, `050`, `060`
 | `val-structured-input-telemetry-redaction` | `140`, `110` | `fixture-structured-input-telemetry` | TODO | telemetry profile, attribute policy, redaction policy | redacted telemetry or rejection | TODO | no domain mutation and no private leak | `140-STRUCTURED-INPUT-REDACTION-AC-001` | blocked |
 
 ### Structured input validation coverage rows
+
+Structured-input maintenance workflow rows must include the following blockers until concrete fixture bytes and canonical expected outputs are supplied.
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | package_set_requirement | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
+| `120-STRUCTURED-INPUT-TEMPLATE-VALID` | `030` | valid layout under declared path roots and generated-output roots | `TODO: product governance must supply fixture checksum` | closed validation evidence only | `TODO: product governance must supply expected output checksum` | no activation or authority mutation | package-set not required unless package-supplied | template contract and snapshot refs included | `120-STRUCTURED-INPUT-TEMPLATE-AC-001` |
+| `120-STRUCTURED-INPUT-TOOL-DETERMINISTIC` | `030` | same tool invocation inputs produce byte-identical output checksum | `TODO: product governance must supply fixture checksum` | byte-identical invocation output | `TODO: product governance must supply expected output checksum` | no activation or authority mutation | package-set required when tool-supplied package affects output | tool contract, invocation, snapshot, and generated checksum refs included | `120-STRUCTURED-INPUT-TOOL-AC-001` |
+| `120-STRUCTURED-INPUT-CI-STALE` | `030` | producer CI success after ref rewrite | `TODO: product governance must supply fixture checksum` | `STRUCTURED_INPUT_PRODUCER_CI_STALE` | `TODO: product governance must supply expected error checksum` | no activation or authority mutation | no package-set mutation | CI contract, stale evidence, and snapshot refs included | `120-STRUCTURED-INPUT-CI-AC-001` |
+| `120-STRUCTURED-INPUT-PUBLICATION-DIGEST-MISMATCH` | `100` | publication manifest digest differs from immutable artifact bytes | `TODO: product governance must supply fixture checksum` | `STRUCTURED_INPUT_PUBLISHED_ARTIFACT_DIGEST_MISMATCH` | `TODO: product governance must supply expected error checksum` | current active package set preserved | package-set candidate not activated | publication, materialization, release candidate, and manifest refs included | `120-STRUCTURED-INPUT-PUBLICATION-AC-001` |
+| `120-STRUCTURED-INPUT-SYNC-NONAUTHORITY` | `030`, `100` | sync record attempts package activation or rollback | `TODO: product governance must supply fixture checksum` | `STRUCTURED_INPUT_SYNC_RECORD_NONAUTHORITY` | `TODO: product governance must supply expected error checksum` | no active package-set mutation | package-set unchanged | sync policy, sync record, audit, and manifest refs included | `120-STRUCTURED-INPUT-SYNC-AC-001` |
+| `120-STRUCTURED-INPUT-MULTIREPO-MISMATCH` | `030`, `100` | repository group dependency checksum mismatch | `TODO: product governance must supply fixture checksum` | `STRUCTURED_INPUT_REPOSITORY_GROUP_MISMATCH` | `TODO: product governance must supply expected error checksum` | no partial group activation | package-set candidate not activated | group, member snapshot, dependency, and manifest refs included | `120-STRUCTURED-INPUT-MULTIREPO-AC-001` |
+| `120-REACHABILITY-STRUCTURED-INPUT-DEFERRED-NONAUTHORITY` | `200` | SDK/CLI, template, CI, publication, sync, package release, and package-set evidence attempt reachability output while `200` is inactive | `TODO: product governance must supply fixture checksum` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or no-op | `TODO: product governance must supply expected output checksum` | no reachability fact, edge, graph property, API output, package activation effect, or user-facing reachability claim | package-set inclusion remains inactive evidence only | deferred doc status and active prohibition refs included | `200-STRUCTURED-INPUT-DEFERRED-AC-002` |
 
 | Owner spec | Required structured-input coverage |
 | --- | --- |
@@ -1800,6 +1831,13 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-STRUCTURED-INPUT-AC-002` | Exact same repository snapshot inputs produce byte-identical validation output. |
 | `120-STRUCTURED-INPUT-AC-003` | Merge to repository alone produces no production mutation. |
 | `120-STRUCTURED-INPUT-AC-004` | Materialized package activation requires allowed repository form, materialization refs, package release refs, package-set refs, and `VersionManifest` refs. |
+| `120-STRUCTURED-INPUT-TEMPLATE-AC-001` | Template conformance positive and negative rows prove layout validation and template non-authority. |
+| `120-STRUCTURED-INPUT-TOOL-AC-001` | SDK/CLI rows prove deterministic invocation, version mismatch rejection, generated output drift rejection, and tool success non-authority. |
+| `120-STRUCTURED-INPUT-CI-AC-001` | Producer CI rows prove exact-snapshot binding, stale-CI rejection, CI success non-authority, and CI private leak rejection. |
+| `120-STRUCTURED-INPUT-PUBLICATION-AC-001` | Publication rows prove import success, digest mismatch rejection, package type mismatch rejection, and compatibility claim mismatch rejection. |
+| `120-STRUCTURED-INPUT-SYNC-AC-001` | Sync rows prove candidate discovery, stale sync rejection, sync-only activation failure, and rollback mutable-ref rejection. |
+| `120-STRUCTURED-INPUT-MULTIREPO-AC-001` | Multi-repository rows prove coherent group success, group mismatch rejection, and partial group activation rejection. |
+| `120-STRUCTURED-INPUT-WORKFLOW-CLOSURE-AC-001` | `AcceptanceReport.result = pass` remains impossible while any structured-input workflow row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, or `TODO`-bearing. |
 
 ## Definition of Done
 

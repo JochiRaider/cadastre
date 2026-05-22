@@ -270,12 +270,17 @@ Repository-authored feed profile validation order is:
 ```text
 ValidateRepositoryAuthoredFeedProfile(candidate_profile, repository_snapshot, version_manifest):
 1. Validate `030.StructuredInputRepositorySnapshot` and selected path refs.
-2. Validate `030.StructuredInputValidationRun` for the exact snapshot and selected paths.
-3. Validate private-binding redaction through `010` and `110` before materialization.
-4. Validate `LakehouseFeedProfileSchema`.
-5. Resolve feed category closure rows and lakehouse read policy refs.
-6. Run `LakehouseFeedAvailabilityCheck` only after steps 1 through 5 pass.
-7. Require materialized activation refs and `030.VersionManifest` inclusion before production feed read or raw import.
+2. Validate `030.StructuredInputRepositoryTemplateContract` when the repository profile declares `template_required = true`.
+3. Validate `030.StructuredInputRepositoryCIContract` for the exact snapshot when producer CI evidence is supplied or accepted by the repository profile.
+4. Validate `030.StructuredInputValidationRun` for the exact snapshot, selected paths, file manifest checksum, template refs, CI refs, and validation matrix refs.
+5. Validate private-binding redaction through `010` and `110` before materialization.
+6. Validate `LakehouseFeedProfileSchema`.
+7. Resolve feed category closure rows and lakehouse read policy refs.
+8. Validate `100.StructuredInputPublicationManifest` when feed profile artifacts or source-dataset row catalogs were published by a remote repository.
+9. Validate `030.StructuredInputCandidateSyncRecord` only as candidate discovery or audit evidence; sync evidence must not activate feed behavior.
+10. Require package release and package-set refs when the feed profile or source-dataset row catalog is package-supplied.
+11. Run `LakehouseFeedAvailabilityCheck` only after steps 1 through 10 pass.
+12. Require materialized activation refs and `030.VersionManifest` inclusion before production feed read or raw import.
 ```
 
 Repository-authored feed profiles must still use vendor-neutral `source_category` and `source_dataset`. They must not encode concrete private routes, credentials, tenant IDs, private inventories, scanner site names, directory tenant inventories, cloud account lists, host lists, private source names, or raw private fixture bytes.
@@ -287,6 +292,10 @@ A repository merge, pull request approval, branch update, validation run, or hoo
 | `FEED_PROFILE_REPOSITORY_SNAPSHOT_MISSING` | Repository-authored feed profile validation lacks an exact `030.StructuredInputRepositorySnapshot` ref or selected path manifest checksum. |
 | `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored feed profile or validation output exposes a private binding or raw private fixture value. |
 | `FEED_PROFILE_REPOSITORY_ACTIVATION_MISSING` | Repository-authored feed profile exists only in Git or validation output and lacks materialized activation refs, package-set refs when package-supplied, or `VersionManifest` refs. |
+| `FEED_PROFILE_REPOSITORY_TEMPLATE_MISMATCH` | Repository-authored feed profile layout, generated-output roots, or declared artifact classes do not match the selected `030.StructuredInputRepositoryTemplateContract`. |
+| `FEED_PROFILE_REPOSITORY_CI_STALE` | Producer CI evidence is missing, stale, or not bound to the exact commit, tree, selected paths, file manifest checksum, toolchain refs, and validation matrix refs. |
+| `FEED_PROFILE_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest digest, size, media type, package type, materialization ref, validation ref, redaction ref, or release input checksum does not match feed profile artifacts. |
+| `FEED_PROFILE_SYNC_RECORD_NONAUTHORITY` | A candidate sync record is used as feed activation, feed read permission, absence authorization, cleanup permission, graph-expiry permission, retraction permission, or watermark authority. |
 
 ### LakehouseFeedCategoryClosureRow
 
@@ -1371,6 +1380,8 @@ A production feed read, raw import, completeness evaluation, absence-sensitive e
 | `020-STRUCTURED-INPUT-FEED-AC-001` | Repository-authored feed profile changes produce no feed read, raw import, absence evaluation, cleanup, graph expiry, retraction, or watermark advancement until the profile is materialized, activated, and manifest-included. |
 | `020-STRUCTURED-INPUT-FEED-AC-002` | `StructuredInputRepositorySnapshot` cannot satisfy `read_target_kind`, `LakehouseSnapshotRef`, `DatasetVersionRef`, `RawFeedManifest`, feed category closure, or lakehouse read policy refs. |
 | `020-STRUCTURED-INPUT-FEED-AC-003` | Repository-authored feed profiles that leak private bindings fail with `FEED_PROFILE_REPOSITORY_PRIVATE_BINDING_LEAK` or imported `PRIVATE_BINDING_LEAK` before publication or validation-report materialization. |
+| `020-STRUCTURED-INPUT-FEED-AC-004` | Template-only or sync-only feed profile candidates create no feed read, raw import, absence evaluation, cleanup, graph expiry, retraction, or watermark advancement. |
+| `020-STRUCTURED-INPUT-FEED-AC-005` | Stale producer CI, publication manifest mismatch, or missing package-set refs block repository-authored feed profile activation before lakehouse availability checks and before read/import. |
 | `020-SOURCE-DATASET-CATALOG-AC-001` | Every active `LakehouseFeedProfile.source_dataset` resolves to exactly one active `SourceDatasetCatalogRow` or one exact deterministic source-dataset block row before feed activation or read/import. |
 | `020-SOURCE-DATASET-CATALOG-AC-002` | Public source-dataset catalog rows that contain private route names, tenant IDs, scanner sites, account lists, host lists, raw sample bytes, source-native secret values, or private schema payloads fail with `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK`. |
 | `020-SOURCE-DATASET-CATALOG-AC-003` | `030.VersionManifest` includes selected source-dataset row refs/checksums, row-set refs/checksums, selector checksums, validation refs, and package-set refs when package-supplied. |

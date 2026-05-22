@@ -281,11 +281,27 @@ Repository approval metadata is governance metadata only. It must not become pro
 
 `ArtifactClassPolicy` must reject a repository snapshot, validation report, governance approval, branch name, tag, hook result, pull request approval, or merge event as a substitute for package release, source evidence, validation acceptance, source completeness, graph rebuild evidence, owner row set, or production approval.
 
+Repository-authored analysis and registry activation must also include repository template contract refs when required, producer CI exact-snapshot validation refs when accepted, maintenance tool invocation refs when artifacts are generated, publication manifest refs when remote publication is consumed, candidate sync record refs when imported by sync, and repository group refs when cross-repository analysis artifacts depend on graph, resolver, source-authority, mapping, or registry artifacts.
+
+The following signals have no production effect by themselves:
+
+| Signal | Required no-effect behavior |
+| --- | --- |
+| governance approval metadata as production approval | No package activation, owner row activation, source authority, graph authority, or finding authority. |
+| template conformance as registry activation | No registry artifact becomes selectable. |
+| sync record as analysis execution permission | No analysis rule, enrichment rule, lineage row, registry row, derived edge, finding, or metric executes. |
+| publication manifest as finding authority | No finding, metric, risk acceptance, fact, graph delta, or registry authority is emitted. |
+
 | Error code | Required use |
 | --- | --- |
 | `REGISTRY_REPOSITORY_ARTIFACT_INACTIVE` | Repository-authored registry or analysis artifact lacks active materialized owner refs, validation refs, package-set refs when package-supplied, or manifest refs. |
 | `REGISTRY_REPOSITORY_AUTHORITY_FORBIDDEN` | Repository approval metadata, branch state, validation report, or governance label attempts to become fact, source, graph, completeness, evidence, package, or production approval authority. |
 | `REGISTRY_REPOSITORY_SUBSTITUTION_FORBIDDEN` | Repository artifact attempts to substitute for package artifact, validation acceptance, source evidence, owner row set, graph rebuild evidence, or production approval. |
+| `REGISTRY_REPOSITORY_TEMPLATE_MISMATCH` | Repository-authored registry or analysis artifact layout, generated output roots, or artifact classes do not match the selected template contract. |
+| `REGISTRY_REPOSITORY_CI_STALE` | Producer CI evidence is stale or not exact-snapshot-bound. |
+| `REGISTRY_REPOSITORY_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest does not match registry or analysis artifact digest, materialization refs, validation refs, package type, or release refs. |
+| `REGISTRY_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used as registry activation, analysis execution permission, finding authority, package activation, or production approval. |
+| `REGISTRY_REPOSITORY_GROUP_MISMATCH` | Cross-repository dependency coherence fails for analysis or registry artifacts. |
 
 ### RegistryArtifactGovernance schema
 
@@ -681,6 +697,7 @@ Analysis, enrichment, lineage, registry activation, or derived-edge routing must
 | --- | --- |
 | `130-STRUCTURED-INPUT-REGISTRY-AC-001` | Repository-authored registry label, approval metadata, or governance artifact cannot create fact authority, source authority, graph authority, source completeness, evidence authority, package activation, or production approval. |
 | `130-STRUCTURED-INPUT-REGISTRY-AC-002` | Repository-authored analysis rule or registry artifact cannot run or activate unless active bundle refs, compatibility rows, validation refs, materialization refs when packaged, package-set refs when package-supplied, and manifest refs pass. |
+| `130-STRUCTURED-INPUT-REGISTRY-AC-004` | Git-only registry candidates, template-only activation, stale CI, publication mismatch, sync-only analysis execution, and private leak attempts fail before analysis, registry, derived-edge, package, source-authority, graph, or fact mutation. |
 
 ## Definition of Done
 

@@ -151,6 +151,10 @@ Repository snapshot refs may appear in `ResolverActivationReport` as provenance 
 
 Resolver activation for repository-authored artifacts must include exact repository snapshot refs, file manifest checksums, materialization refs, package release refs when created, package-set refs when package-supplied, scenario-gated validation refs, hard-blocker precedence fixtures, weak-evidence rejection fixtures, and manifest refs.
 
+Repository-authored resolver activation must also include repository template contract refs when required, producer CI exact-snapshot validation refs when accepted, maintenance tool contract and invocation refs when resolver artifacts are generated, publication manifest refs when remote publication is consumed, candidate sync record refs when imported by sync, and repository group refs when resolver artifacts depend on mapping or source-authority artifacts from another repository.
+
+A maintenance tool may generate resolver rows only when the tool contract is active, the invocation is checksummed, redaction validation passes, and generated row-set bytes match the materialization result. Template conformance, producer CI success, generated diagnostics, publication manifest existence, and sync status must not create, attach, merge, split, reject, score, or review identity.
+
 Private source bindings in resolver row catalogs fail under `010` and `110` redaction rules before activation, API output, audit output, package reports, telemetry export, or validation-report materialization.
 
 | Error code | Required use |
@@ -158,6 +162,10 @@ Private source bindings in resolver row catalogs fail under `010` and `110` reda
 | `RESOLVER_REPOSITORY_ARTIFACT_INACTIVE` | Repository-authored resolver artifact lacks active materialized artifact refs, package-set refs when package-supplied, or manifest refs. |
 | `RESOLVER_REPOSITORY_VALIDATION_STALE` | Resolver validation run does not match exact repository snapshot, file manifest checksum, resolver artifact checksum, hard-blocker row set, or scenario output checksum. |
 | `RESOLVER_REPOSITORY_PRIVATE_BINDING_LEAK` | Repository-authored resolver artifact or validation output leaks private source binding values or raw private fixture bytes. |
+| `RESOLVER_REPOSITORY_TEMPLATE_MISMATCH` | Repository-authored resolver artifact layout, generated output roots, or artifact classes do not match the selected template contract. |
+| `RESOLVER_REPOSITORY_CI_STALE` | Producer CI evidence is stale or not exact-snapshot-bound. |
+| `RESOLVER_REPOSITORY_TOOL_OUTPUT_MISMATCH` | Tool-generated resolver row-set bytes, invocation checksum, or materialization result checksum do not match. |
+| `RESOLVER_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used to create, attach, merge, split, reject, score, or review identity. |
 
 ### ResolverProfileRow schema
 
@@ -943,6 +951,8 @@ A resolver run must fail before mutation when any selected `070` row family rema
 | `070-STRUCTURED-INPUT-RESOLVER-AC-001` | Repository-authored resolver profile missing activation refs, materialization refs, package-set refs when package-supplied, scenario validation refs, or manifest refs fails before identity output. |
 | `070-STRUCTURED-INPUT-RESOLVER-AC-002` | Repository-authored resolver profile that weakens hard-blocker precedence, weak-evidence defaults, review terminality, split policy, or selector safety fails before activation and before identity mutation. |
 | `070-STRUCTURED-INPUT-RESOLVER-AC-003` | Change proposal, merge, branch update, PR approval, validation run, and hook success produce no identity mutation by themselves. |
+| `070-STRUCTURED-INPUT-RESOLVER-AC-004` | Stale CI cannot activate resolver rows; tool-generated weakening of hard blockers fails before identity mutation; sync-only resolver candidates create no identity mutation. |
+| `070-STRUCTURED-INPUT-RESOLVER-AC-005` | Private resolver bindings are rejected before API, audit, telemetry, package report, or validation output. |
 
 ## Definition of Done
 

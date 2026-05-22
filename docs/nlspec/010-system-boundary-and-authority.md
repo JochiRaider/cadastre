@@ -48,6 +48,11 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 | Object-store raw batch | Allowed | Must be named by `RawFeedManifest` imported from `020`. |
 | Supplier-provided metadata | Allowed | Must be interpreted only through active authority, completeness, temporal, and mapping policies. |
 | Structured input authoring repository snapshot | Allowed for authoring, validation, and provenance only | Must be named by `030.StructuredInputRepositorySnapshot`; must not satisfy raw evidence, source completeness, source authority, package activation, graph authority, production approval, or rollback eligibility. |
+| Maintenance SDK/CLI output | Validation or materialization evidence only | Must be bound to exact repository snapshot, selected paths, tool contract, input checksum, output checksum, redaction refs, and validation refs; must not satisfy activation, authority, production approval, or rollback. |
+| Repository template conformance | Validation evidence only | Must not substitute for owner row refs, package release refs, package-set activation, source authority, graph authority, or `VersionManifest` completeness. |
+| Producer CI status | Validation evidence only | Valid only for the exact commit, tree, selected paths, file manifest checksum, toolchain refs, validation matrix refs, and output checksums named by `030.StructuredInputRepositoryCIContract`. |
+| Producer publication manifest | Candidate package evidence only | Must be imported and verified by `100.ImportStructuredInputPublicationManifest` against immutable artifact bytes, digest, size, media type, package type, validation refs, redaction refs, and release manifest fields. |
+| Manifest-driven sync record | Candidate discovery and audit only | Must not mutate active package set, owner rows, watermarks, graph state, source authority, source completeness, rollback targets, or system-of-record state. |
 | Enterprise source API call | Forbidden | Must fail with `DIRECT_SOURCE_CALL_FORBIDDEN`. |
 | Source scanner poll, source syslog receive, source CDC connector operation | Forbidden | Must be performed by an external supplier, not by Cadastre production. |
 | Validation-only source exploration | Allowed only when explicitly declared | Must emit only `SourceExplorationResult` or `ProbeDiagnosticRecord`; it must not satisfy production evidence. |
@@ -63,6 +68,8 @@ Cadastre must be a lakehouse-fed interpretation, normalization, identity, fact, 
 | `inactive_future_domain` | Preserved candidate material with no MVP effect. | Future reachability. |
 
 Structured-input repository snapshots default to `supporting_evidence` or `runtime_state_record` as routed by the owner spec. They must never be classified as `system_of_record` and must not become source, identity, graph, package, or production approval authority by existence.
+
+A maintenance tool, repository template, CI status, publication manifest, or sync record must fail with `STRUCTURED_INPUT_AUTHORITY_VIOLATION` when used as source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, rollback eligibility, validation acceptance by itself, or system-of-record state.
 
 ## Projection Authority Rule
 
@@ -360,6 +367,11 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `010-STRUCTURED-INPUT-BOUNDARY-AC-001` | Git commit, branch, tag, pull request, merge, repository URL, hook result, or commit timestamp cannot satisfy source authority, source completeness, identity authority, fact authority, graph authority, package activation, production approval, or rollback eligibility. |
 | `010-STRUCTURED-INPUT-BOUNDARY-AC-002` | Public structured-input repository artifacts reject or redact private routes, credentials, tenant inventories, source-native secrets, raw fixture bytes, and raw structured input bytes before persistence or output. |
 | `010-STRUCTURED-INPUT-BOUNDARY-AC-003` | Mutable Git refs fail with `STRUCTURED_INPUT_MUTABLE_REF_FORBIDDEN` before activation, rollback, or `VersionManifest` satisfaction. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-004` | Maintenance SDK/CLI success does not activate output and cannot satisfy source authority, validation acceptance, package activation, production approval, rollback eligibility, or system-of-record state. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-005` | Repository template conformance does not activate feed, mapping, source-authority, resolver, temporal, graph, registry, or package output. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-006` | Producer CI success is stale and rejected unless bound to the exact commit, tree, selected paths, file manifest checksum, toolchain refs, and validation matrix refs. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-007` | Publication manifest digest, size, media type, package type, validation, redaction, or materialization mismatch blocks package release handoff before activation. |
+| `010-STRUCTURED-INPUT-BOUNDARY-AC-008` | Candidate sync records cannot activate, roll back, mutate, or authorize production state. |
 
 ## Definition of Done
 

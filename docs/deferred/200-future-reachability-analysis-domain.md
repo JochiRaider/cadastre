@@ -29,6 +29,8 @@ Future reachability structured inputs may be authored in a repository only as in
 
 Repository merge, validation, materialization, package release creation, or package-set inclusion must not activate reachability while this document remains `inactive_deferred`.
 
+Maintenance SDK/CLI output, repository-template conformance, producer CI success, publication manifests, candidate sync records, repository group validation, package release creation, and package-set inclusion remain inactive future-domain evidence only and must not activate reachability while this document remains `inactive_deferred`.
+
 Future activation must update `docs/nlspec/000-cadastre-spec-index.md`, assign active owner specs, classify volatility, add active owner contracts, add package and manifest gates when package-supplied, and add passing `120` fixtures before any reachability fact, graph edge, graph property, API output, package activation effect, or user-facing reachability claim can execute.
 
 ### FutureReachabilitySourceDatasetBlockHandoff
@@ -149,6 +151,7 @@ This document must not define production solver behavior, source authority, grap
 | ID | Criterion |
 | --- | --- |
 | `200-STRUCTURED-INPUT-DEFERRED-AC-001` | Repository-authored reachability artifacts produce no MVP fact, graph edge, graph property, package activation effect, solver selection, or unqualified reachability claim while this document remains `inactive_deferred`. |
+| `200-STRUCTURED-INPUT-DEFERRED-AC-002` | Maintenance SDK/CLI output, template conformance, producer CI success, publication manifests, candidate sync records, repository group validation, package release creation, and package-set inclusion cannot emit reachability facts, graph edges, graph properties, API output, package activation effect, or user-facing reachability claims while this document remains `inactive_deferred`. |
 
 ## Definition of Done for Future Activation
 

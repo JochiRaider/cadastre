@@ -653,6 +653,10 @@ Graph backend selection defaults must not be derived from repository filenames, 
 
 `GraphBackendPreflightResult` must include repository snapshot refs, file manifest checksums, validation refs, materialization refs, package release refs when created, package-set refs when package-supplied, and `VersionManifest` refs when the active graph backend, query profile, schema profile, taxonomy mapping, capability matrix, edge semantics, or projection profile was repository-authored.
 
+`GraphBackendPreflightResult` for repository-authored graph artifacts must also include `030.StructuredInputRepositoryTemplateContract` refs when required, `030.StructuredInputRepositoryCIContract` validation refs when accepted, maintenance tool contract and invocation refs when graph profiles or query translations are generated, `100.StructuredInputPublicationManifest` refs when remote publication is consumed, `030.StructuredInputCandidateSyncRecord` refs when manifest sync imported the candidate, and `030.StructuredInputRepositoryGroup` refs when graph artifacts depend on resolver, source-authority, mapping, or registry artifacts from another repository.
+
+Template status or sync status must not enable graph serving. Generated provider-native query text remains validation-only unless mapped through an active `GraphQueryTranslationProfile` and read-only validation passes. Publication manifest mismatch blocks graph profile activation and graph backend preflight. Multi-repository group mismatch blocks package-set activation for graph-affecting artifacts.
+
 Provider-native query text committed in Git remains validation-only unless mapped through an active `GraphQueryTranslationProfile`. A committed Gremlin, Cypher, AQL, SQL, or provider query string must not bypass query translation, authorization, redaction, deterministic ordering, page-token rules, or mutation prohibition.
 
 | Error code | Required use |
@@ -660,6 +664,11 @@ Provider-native query text committed in Git remains validation-only unless mappe
 | `GRAPH_REPOSITORY_PROFILE_INACTIVE` | Repository-authored graph profile exists but lacks active materialized refs, package-set refs when package-supplied, or manifest refs. |
 | `GRAPH_REPOSITORY_VALIDATION_STALE` | Graph validation or preflight does not match exact repository snapshot, file manifest checksum, graph artifact checksum, backend profile checksum, or package-set ref. |
 | `GRAPH_REPOSITORY_QUERY_TEXT_FORBIDDEN` | Provider-native query text from repository content attempts to execute without active translation profile and read-only validation. |
+| `GRAPH_REPOSITORY_TEMPLATE_MISMATCH` | Repository-authored graph artifact layout, generated output roots, or artifact classes do not match the selected template contract. |
+| `GRAPH_REPOSITORY_CI_STALE` | Producer CI evidence for graph profile, query translation, backend matrix, or edge semantics is stale or not exact-snapshot-bound. |
+| `GRAPH_REPOSITORY_PUBLICATION_MANIFEST_MISMATCH` | Publication manifest does not match graph artifact digest, size, media type, package type, materialization refs, validation refs, or package release refs. |
+| `GRAPH_REPOSITORY_SYNC_NONAUTHORITY` | Candidate sync record is used as graph activation, backend default selection, query serving, rebuild promotion, drift repair, or graph mutation authority. |
+| `GRAPH_REPOSITORY_GROUP_MISMATCH` | Required repository group coherence for graph-affecting artifacts fails. |
 
 ## Graph Delta Identity
 
@@ -1347,6 +1356,7 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-STRUCTURED-INPUT-GRAPH-AC-001` | Repository-authored graph profile omitted from materialization, package-set, validation, or manifest refs fails backend preflight before graph serving, graph apply, query, rebuild promotion, or mutation. |
 | `090-STRUCTURED-INPUT-GRAPH-AC-002` | Git-only backend profile cannot serve queries, mutate graph, advance derived view, create schema, or promote rebuild output. |
 | `090-STRUCTURED-INPUT-GRAPH-AC-003` | Provider query text committed in Git cannot bypass `GraphQueryTranslationProfile`, authorization, redaction, deterministic ordering, page-token rules, or mutation prohibition. |
+| `090-STRUCTURED-INPUT-GRAPH-AC-004` | Template-only graph profile activation, stale CI for query translation, publication manifest mismatch, sync-only backend default selection, generated query text bypass, and repository group mismatch fail before graph mutation or query serving. |
 
 ## Definition of Done
 
