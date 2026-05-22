@@ -40,6 +40,9 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `030.ActivationControlledRowField`
 - `030.ActivationControlledRowRef`
 - `030.ActivationControlledRowSetSchema`
+- `060.CoverageDomainToken`
+- `060.ValidateCoverageDomainTokenArray`
+- `060.CoverageDomainCatalog`
 
 ## Exports
 
@@ -96,7 +99,7 @@ A production feed read must validate the profile against `LakehouseFeedProfileSc
 | `read_target_kind` | Yes | none | One of `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, or `manifest_list`; omission fails with `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE`. |
 | `read_policy_ref` | Yes | none | Active `030.ActivationControlledArtifactRef` with `artifact_class = lakehouse_read_policy`. |
 | `scope_key_schema` | Yes | none | Declares the feed-owned dimensions used to materialize `020.LakehouseFeedScopeSelectorContext`. Empty scope key schema is forbidden for production feeds. |
-| `absence_sensitive_domains` | No | `[]` | Canonically sorted domain tokens. Empty means the feed may preserve positive observations but must not support absence-sensitive effects. |
+| `absence_sensitive_domains` | No | `[]` | Array of `060.CoverageDomainToken` values. Omission defaults to `[]`. Values must validate through `060.ValidateCoverageDomainTokenArray`, reject duplicates, sort lexically before checksum computation, and must not include display labels or aliases. Empty means the feed may preserve positive observations but must not support absence-sensitive effects. |
 | `partial_read_policy` | No | `positive_records_only` | Closed enum: `reject_read`, `positive_records_only`, `declared_subset_required`. The default permits positive raw import from known partial reads only and forbids absence-sensitive effects. |
 | `empty_scope_policy` | No | `not_authoritative_for_absence` | Closed enum: `not_authoritative_for_absence`, `empty_complete_requires_060`, `reject_empty_scope`. |
 | `availability_check_required` | No | `true` | `false` is allowed only for validation fixtures and must not be used for production reads. |
@@ -169,9 +172,9 @@ A repository merge, pull request approval, branch update, validation run, or hoo
 | `category_activation_state` | Yes | none | Closed enum: `active_for_effects`, `active_positive_only`, `deterministically_blocked`. |
 | `feed_category` | Yes | none | Must be one category from `LakehouseFeedCategoryClosureRequirementTable`. |
 | `allowed_read_target_kinds` | Yes | none | Non-empty array of closed read target kinds unless `deterministic_block_code` blocks the category. |
-| `absence_sensitive_domains` | No | `[]` | Domains whose negative or not-observed outputs require `060` completeness, authority, coverage, and staleness gates. |
+| `absence_sensitive_domains` | No | `[]` | Array of `060.CoverageDomainToken` values whose negative or not-observed outputs require `060` completeness, authority, coverage, and staleness gates. Omission defaults to `[]`. Values must validate through `060.ValidateCoverageDomainTokenArray`. |
 | `required_upstream_evidence_classes` | No | `[]` | Supplier evidence classes that must be present before `060` may evaluate effects. |
-| `required_coverage_domains` | No | `[]` | `060.CoverageDimensionProfile` domains required for effects. |
+| `required_coverage_domains` | No | `[]` | Array of `060.CoverageDomainToken` values required for effects. Omission defaults to `[]`. Values must be a subset of `FeedCategoryToCoverageDomainTokenMapping` unless the category is `configuration_inventory` and the active row explicitly declares the affected domain. Unsupported values fail with `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY`. |
 | `required_authority_refs` | No | `[]` | Exact `060.SourceAuthorityProfileRow` refs or row-set refs required by the category. |
 | `required_staleness_refs` | No | `[]` | Exact `060.SourceStalenessPolicy` refs required by the category. |
 | `allowed_effects` | No | `[]` | Closed effect tokens imported from `060`: `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`. Empty means positive observations only. |
@@ -469,17 +472,38 @@ This table defines the MVP feed-category closure catalog. It does not activate a
 | Feed category | Allowed read target kinds in active row | Absence-sensitive uses | Required upstream evidence classes | Required `060` coverage domains | Default missing-row behavior | MVP result |
 | --- | --- | --- | --- | --- | --- | --- |
 | `endpoint_inventory` | Any closed read target kind when the active row permits it. | Endpoint non-observation, cleanup, graph expiry, watermark. | scope enumeration, permission visibility, collection window, failed-scope evidence. | endpoint | `not_authoritative_for_absence` | Requires active closure row. |
-| `configuration_inventory` | Any closed read target kind when the active row permits it. | Configuration absence, stale configuration, cleanup, watermark. | configuration scope, collection window, failed-item evidence, source permission state. | endpoint, cloud inventory, or control as row declares | `not_authoritative_for_absence` | Requires active closure row. |
+| `configuration_inventory` | Any closed read target kind when the active row permits it. | Configuration absence, stale configuration, cleanup, watermark. | configuration scope, collection window, failed-item evidence, source permission state. | Active row declares one or more `CoverageDomainToken` values. | `not_authoritative_for_absence` | Requires active closure row. |
 | `vulnerability_scan` | Any closed read target kind when the active row permits it. | Vulnerability absence, fixed-state absence, scan watermark. | scanner target scope, credential/auth status, plugin/check set, scan window, failed-target and exclusion evidence. | vulnerability | `not_authoritative_for_absence` | Requires active closure row. |
 | `control_evaluation` | Any closed read target kind when the active row permits it. | Control pass, fail, unknown, not checked, not applicable, watermark. | benchmark/check scope, applicability evidence, evaluation status, result mapping refs. | control | `not_authoritative_for_absence` | Requires active closure row. |
 | `directory_inventory` | Any closed read target kind when the active row permits it. | Principal, group, device, and directory-object absence. | tenant/domain scope, page or delta completion, hidden-object permission state, failed-scope evidence. | directory | `not_authoritative_for_absence` | Requires active closure row. |
 | `directory_membership` | Any closed read target kind when the active row permits it. | Group non-membership, user non-membership, membership cleanup, watermark. | tenant/domain, group, member type, direct/transitive mode, hidden-membership permission, page/delta completion, AD primary-group evidence. | directory | `not_authoritative_for_absence` | Requires active closure row. |
-| `dns_record_set` | Any closed read target kind when the active row permits it. | DNS absence and stale DNS state. | zone/source scope, authoritative source evidence, TTL basis, collection window. | DNS | `not_authoritative_for_absence` | Requires active closure row. |
-| `dhcp_ipam_assignment` | Any closed read target kind when the active row permits it. | Lease absence, assignment absence, host cleanup, watermark. | DHCP/IPAM scope, lease window, authoritative-system evidence, failed-scope evidence. | DHCP/IPAM | `not_authoritative_for_absence` | Requires active closure row. |
+| `dns_record_set` | Any closed read target kind when the active row permits it. | DNS absence and stale DNS state. | zone/source scope, authoritative source evidence, TTL basis, collection window. | `dns` | `not_authoritative_for_absence` | Requires active closure row. |
+| `dhcp_ipam_assignment` | Any closed read target kind when the active row permits it. | Lease absence, assignment absence, host cleanup, watermark. | DHCP/IPAM scope, lease window, authoritative-system evidence, failed-scope evidence. | `dhcp_ipam` | `not_authoritative_for_absence` | Requires active closure row. |
 | `network_flow` | Any closed read target kind when the active row permits it. | Positive observed-flow evidence only by default. | sensor scope, collection point, time window, role evidence, packet/flow field completeness. | flow | `unknown`; missing flow must not imply no flow. | Requires active closure row; absence effects default blocked. |
-| `cloud_asset_inventory` | Any closed read target kind when the active row permits it. | Cloud resource absence, deletion inference, graph expiry, watermark. | account/project/subscription, region, resource type, permission visibility, source-history evidence when required. | cloud inventory | `not_authoritative_for_absence` | Requires active closure row. |
-| `source_history` | Any closed read target kind when the active row permits it. | No-change proof only within supported source-native history window. | history window, retention profile, query scope, outside-window evidence. | source history | `unknown`; outside-window no-result is not proof. | Requires active closure row. |
-| `future_reachability` | none | none in MVP. | inactive deferred reachability evidence only. | deferred reachability | deterministic no-op/block. | Blocked for MVP with `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or owner no-op. |
+| `cloud_asset_inventory` | Any closed read target kind when the active row permits it. | Cloud resource absence, deletion inference, graph expiry, watermark. | account/project/subscription, region, resource type, permission visibility, source-history evidence when required. | `cloud_inventory`; `source_history` when source-history evidence is consulted. | `not_authoritative_for_absence` | Requires active closure row. |
+| `source_history` | Any closed read target kind when the active row permits it. | No-change proof only within supported source-native history window. | history window, retention profile, query scope, outside-window evidence. | `source_history` | `unknown`; outside-window no-result is not proof. | Requires active closure row. |
+| `future_reachability` | none | none in MVP. | inactive deferred reachability evidence only. | `reachability` with deterministic block. | deterministic no-op/block. | Blocked for MVP with `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or owner no-op. |
+
+### FeedCategoryToCoverageDomainTokenMapping
+
+This table maps feed-category tokens to imported `060.CoverageDomainToken` values. `020` owns the feed-category side of the mapping and does not define token grammar, aliases, token catalog membership, or coverage-domain error precedence. Unsupported category/token pairs fail before feed activation, raw import, completeness evaluation, absence-sensitive effects, package activation, and validation acceptance.
+
+| Feed category | Required `060.CoverageDomainToken` values | Mapping rule |
+| --- | --- | --- |
+| `endpoint_inventory` | `endpoint` | Exact. |
+| `configuration_inventory` | One or more tokens from `060.CoverageDomainCatalog` as declared by the active row. | No implicit default. Active row must identify the affected fact or predicate domain. |
+| `vulnerability_scan` | `vulnerability` | Exact. |
+| `control_evaluation` | `control` | Exact. |
+| `directory_inventory` | `directory` | Exact. |
+| `directory_membership` | `directory` | Exact. |
+| `dns_record_set` | `dns` | Exact. |
+| `dhcp_ipam_assignment` | `dhcp_ipam` | Exact. |
+| `network_flow` | `flow` | Exact. |
+| `cloud_asset_inventory` | `cloud_inventory`; `source_history` only when source-history evidence is consulted. | History token is conditional, not automatic. |
+| `source_history` | `source_history` | Exact. |
+| `future_reachability` | `reachability` | Deterministic block only while `200` remains inactive deferred. |
+
+`future_reachability` remains a feed-category token only. It must not be accepted as a coverage-domain token. Feed-category validation must call `060.ValidateCoverageDomainTokenArray` before read/import and must fail with `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` when an otherwise valid token is not permitted by this table.
 
 ### FeedCategoryToSourceAuthorityClosureRequirements
 
@@ -496,7 +520,7 @@ This table maps every feed category in `LakehouseFeedCategoryClosureRequirementT
 | `dns_record_set` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | TTL expiry maps to stale or unknown unless exact rows authorize a narrower effect. |
 | `dhcp_ipam_assignment` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | Lease expiry maps to stale or expired assignment state, not host absence, unless exact rows authorize. |
 | `network_flow` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | Missing flow defaults to `unknown`; `watermark` may be allowed only by exact rows, and absence effects remain blocked unless exact rows authorize a future narrower effect. |
-| `cloud_asset_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SupplierCollectionVisibilityProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | `SourceHistoryRetentionProfile` is required when source-history no-change or disappearance is consulted. |
+| `cloud_asset_inventory` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SupplierCollectionVisibilityProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | `cloud_inventory` is required; `source_history` and `SourceHistoryRetentionProfile` are required when source-history no-change or disappearance is consulted. |
 | `source_history` | `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfile`, `SourceStalenessPolicy`, `SourceHistoryRetentionProfile`, `ProgressSignalInterpretationPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy` | `120-SOURCE-CLOSURE-*` | Outside-window no-result must not become no-change proof; no-change proof requires source-history coverage plus retention. |
 | `future_reachability` | deterministic block row only | `120-SOURCE-CLOSURE-*` deterministic block row only | MVP behavior is deterministic no-op or deferred reachability error; activation of any read target or absence-sensitive effect is prohibited. |
 
@@ -765,6 +789,10 @@ A production feed read, raw import, completeness evaluation, absence-sensitive e
 | `020-SOURCE-CLOSURE-AC-006` | `source_history` rows require `CoverageDimensionProfile` plus `SourceHistoryRetentionProfile` before no-change proof. |
 | `020-SOURCE-CLOSURE-AC-007` | `future_reachability` resolves to a deterministic block row and emits no MVP runtime effect. |
 | `020-SOURCE-CLOSURE-HANDOFF-AC-001` | Every active feed category that names an absence-sensitive domain has exact `060` closure refs and `120` validation refs, or a deterministic block row. Missing, ambiguous, inactive, or checksum-mismatched refs fail before read/import output can authorize absence-sensitive effects. |
+| `020-COVERAGE-DOMAIN-FEED-MAP-AC-001` | Every feed category in `LakehouseFeedCategoryClosureRequirementTable` maps to canonical coverage-domain tokens or deterministic block behavior. |
+| `020-COVERAGE-DOMAIN-FEED-MAP-AC-002` | `configuration_inventory` has no implicit default coverage domain. |
+| `020-COVERAGE-DOMAIN-FEED-MAP-AC-003` | `cloud_asset_inventory` requires `source_history` only when source-history evidence is consulted. |
+| `020-COVERAGE-DOMAIN-FEED-MAP-AC-004` | `future_reachability` maps to `reachability` only for deterministic no-op/block behavior while `200` is inactive deferred. |
 | `020-EVIDENCE-LAKEHOUSE-AC-001` | `LakehouseSnapshotRef`, `DatasetVersionRef`, `LakehouseCommitRef`, `LakehouseReadCompletenessReceipt`, and `UpstreamCompletenessEvidence` evidence use `cadastre_record_ref` with referenced record checksum. |
 | `020-EVIDENCE-LAKEHOUSE-AC-002` | Raw object, manifest, and partition evidence use `lakehouse_artifact_ref` with immutable bytes or owner-declared canonical metadata bytes. |
 | `020-EVIDENCE-LAKEHOUSE-AC-003` | Missing artifact checksum, mutable `latest` refs, branch-only refs, unresolved prefixes, and raw payload bytes fail before `EvidenceRef` ID computation. |

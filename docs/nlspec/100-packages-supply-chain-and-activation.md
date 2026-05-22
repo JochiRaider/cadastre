@@ -402,10 +402,10 @@ These rows are package type policies for declarative source-closure row-catalog 
 
 | Package type | Public API boundary | Runtime protocol | Allowed stage classes | Allowed output record classes | Required policy fields |
 | --- | --- | --- | --- | --- | --- |
-| `lakehouse_feed_category_closure_row_set` | `020.LakehouseFeedCategoryClosureRow` | `none` | `[]` | `[]` | trust required; attestation required unless declarative-only exception; SBOM `not_applicable_declarative_only` only for pure declarative rows; `120-SOURCE-CLOSURE-*` and private-binding leak fixtures required. |
+| `lakehouse_feed_category_closure_row_set` | `020.LakehouseFeedCategoryClosureRow` | `none` | `[]` | `[]` | trust required; attestation required unless declarative-only exception; SBOM `not_applicable_declarative_only` only for pure declarative rows; required coverage-domain fields must use `060.CoverageDomainToken` and must pass feed-category-to-coverage-domain validation; `120-SOURCE-CLOSURE-*`, `120-COVERAGE-DOMAIN-*`, and private-binding leak fixtures required. |
 | `source_authority_row_set` | `060.SourceAuthorityProfileRow` | `none` | `[]` | `[]` | trust, validation, checksum replay, mutation-prohibition, and owner schema compatibility required. |
 | `source_authority_closure_matrix_row_set` | `060.SourceAuthorityClosureMatrix` | `none` | `[]` | `[]` | validation view only; underlying row-set refs remain required. |
-| `coverage_dimension_profile_row_set` | `060.CoverageDimensionProfile` | `none` | `[]` | `[]` | required for coverage-sensitive output. |
+| `coverage_dimension_profile_row_set` | `060.CoverageDimensionProfile` | `none` | `[]` | `[]` | required for coverage-sensitive output; every row must validate `coverage_domain` through `060.ValidateCoverageDomainToken`; package-supplied catalogs must not define new coverage-domain tokens, runtime aliases, display-label aliases, or package-local token mappings; `120-COVERAGE-DOMAIN-*` and `120-SOURCE-CLOSURE-*` fixtures required. |
 | `source_staleness_policy_row_set` | `060.SourceStalenessPolicy` | `none` | `[]` | `[]` | required when stale state can affect output. |
 | `progress_signal_policy_row_set` | `060.ProgressSignalInterpretationPolicy` | `none` | `[]` | `[]` | weak-signal and telemetry non-authority fixtures required. |
 | `supplier_collection_visibility_profile_row_set` | `060.SupplierCollectionVisibilityProfile` | `none` | `[]` | `[]` | private-binding leak and permission-limited fixtures required. |
@@ -943,6 +943,7 @@ Git commit timestamp, branch name, tag name, repository URL, or tree hash must n
 | `graph_read_model_schema_profile_version` | Required when graph serving schema can change. |
 | `graph_apply_profile_version` | Required when graph apply can change. |
 | `external_schema_profile_version` | Required when external schema validation can change. |
+| `coverage_domain_catalog_compatibility` | Required for `lakehouse_feed_category_closure_row_set`, `coverage_dimension_profile_row_set`, `source_authority_closure_matrix_row_set`, and `absence_derivation_policy_row_set` when coverage-sensitive effects are allowed. The compatibility decision must prove that package-supplied rows use only `060.CoverageDomainToken` values and do not define aliases or package-local mappings. |
 | `trust_policy_version` | Always required. |
 | `attestation_policy_version` | Required when attestation is required. |
 | `sbom_policy_version` | Required when SBOM is required. |
@@ -1253,6 +1254,9 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
 | `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for row-specific package types and fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate output. |
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
+| `100-COVERAGE-DOMAIN-PACKAGE-AC-001` | Package activation fails for package-supplied coverage row catalogs containing `DNS`, `DHCP/IPAM`, `cloud inventory`, `source history`, `deferred reachability`, or unknown lower-snake-case coverage-domain tokens. |
+| `100-COVERAGE-DOMAIN-PACKAGE-AC-002` | The current active package set remains active when candidate activation fails because of coverage-domain token validation. |
+| `100-COVERAGE-DOMAIN-PACKAGE-AC-003` | Package error registry parity rows include the coverage-domain token validation failure cases. |
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | Every required `PackageReleaseManifest` field omission, null-forbidden value, checksum mismatch, inactive ref, failed ref, or out-of-scope ref fails before activation. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package-set ID, package release refs, release checksums, selected package type policy row-set refs, selected package type policy refs, deprecation refs, repository refs, supply-chain policy/evidence refs, cohesion groups, `target_environment`, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, lifecycle evidence refs, approval refs, and checksum. |

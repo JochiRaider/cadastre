@@ -61,6 +61,12 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `AbsenceDerivationResult`
 - `CoverageDimensionProfile`
 - `CoverageAssertion`
+- `CoverageDomainToken`
+- `CoverageDomainCatalog`
+- `CoverageDomainAliasRejectionTable`
+- `ValidateCoverageDomainToken`
+- `ValidateCoverageDomainTokenArray`
+- `CoverageDomainErrorCodeSet`
 - `LakehouseFeedCompletenessProfile`
 - `LakehouseFeedCompletenessProfileRow`
 - `ProgressSignalInterpretationPolicy`
@@ -307,7 +313,7 @@ Two or more progress, liveness, lineage, freshness, acknowledgment, queue, CDC, 
 
 Coverage-sensitive facts require `CoverageDimensionProfile` and a current `CoverageAssertion` before absence, pass/fail/unknown, no-change, or negative claims may be emitted.
 
-Coverage dimensions must be explicit for vulnerability, control, endpoint, directory, DNS, DHCP/IPAM, flow, cloud inventory, source history, and future reachability domains. The coverage catalog in this document supplies default dimensions. Concrete active source-specific row instances are activation-controlled and validation-blocked until present; missing rows fail closed through `SourceAuthorityClosureMatrix` and `120` validation rows.
+Coverage dimensions must use `CoverageDomainToken` values for `vulnerability`, `control`, `endpoint`, `directory`, `dns`, `dhcp_ipam`, `flow`, `cloud_inventory`, `source_history`, and inactive deferred `reachability`. Display labels such as `DNS`, `DHCP/IPAM`, `cloud inventory`, and `source history` are not runtime tokens. The coverage catalog in this document supplies default dimensions. Concrete active source-specific row instances are activation-controlled and validation-blocked until present; missing rows fail closed through `SourceAuthorityClosureMatrix` and `120` validation rows.
 
 ## Source authority artifact activation boundary
 
@@ -323,6 +329,9 @@ Coverage dimensions must be explicit for vulnerability, control, endpoint, direc
 | `ControlResultMappingRow` | `activation_controlled_artifact` | Must be active before control-state output. |
 | `SourceHistoryRetentionProfile` | `activation_controlled_artifact` | Must be active before source-history interpretation. |
 | `AbsenceDerivationPolicy` | `activation_controlled_artifact` | Must be active before absence/no-op/stale result selection. |
+| `CoverageDomainToken` | `stable_core_contract` | Sole runtime token space for coverage domains; non-owners may import by exact name only. |
+| `CoverageDomainCatalog` | `stable_core_contract` | Closed catalog of canonical coverage-domain tokens, display labels, default row IDs, and domain status. |
+| `CoverageDomainAliasRejectionTable` | `stable_core_contract` | Known display and legacy spellings are rejected at runtime, not accepted as aliases. |
 | `CoverageDimensionProfile` | stable catalog plus activation-controlled source-specific rows | Source-specific rows must be active before coverage-sensitive output. |
 | `CoverageAssertion` | `runtime_state_record` | Evidence record consumed only through active profiles. |
 | `LakehouseFeedCompletenessProfile` and `LakehouseFeedCompletenessProfileRow` row sets | `activation_controlled_artifact` | Must evaluate feed-read and upstream evidence before absence effects and must declare allowed effects explicitly. |
@@ -610,6 +619,14 @@ Every `060` result or blocking reason consumed by `110` must carry structured st
 | `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `SourceAuthorityClosureMatrix` finds more than one equally specific validated row chain. |
 | `COVERAGE_ASSERTION_REQUIRED` | Coverage-sensitive output lacks a current coverage assertion. |
 | `COVERAGE_DIMENSION_UNRESOLVED` | Required coverage dimension has no active source-specific row. |
+| `COVERAGE_DOMAIN_REQUIRED` | Required coverage-domain token field is omitted or null. |
+| `COVERAGE_DOMAIN_TOKEN_INVALID` | Coverage-domain value is not a valid lower-snake-case token string. |
+| `COVERAGE_DOMAIN_ALIAS_REJECTED` | Coverage-domain value is a known display or legacy spelling. |
+| `COVERAGE_DOMAIN_UNKNOWN` | Coverage-domain value is syntactically valid but absent from `CoverageDomainCatalog`. |
+| `COVERAGE_DOMAIN_DUPLICATE` | Coverage-domain token array contains duplicate canonical tokens. |
+| `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` | `020` feed category names a token not permitted by the feed-category mapping. |
+| `COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT` | Absence-sensitive effect lacks required coverage-domain tokens. |
+| `COVERAGE_DOMAIN_INACTIVE_DEFERRED` | `reachability` is used outside the inactive deferred deterministic-block path. |
 | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | Progress/liveness/freshness/lineage signal is used without an active policy row granting the effect. |
 | `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | Completeness decision is partial, unavailable, permission-limited, not attempted, not authoritative, or otherwise unsafe. |
 | `SOURCE_AUTHORITY_ARTIFACT_MISSING` | A required source authority, staleness, coverage, completeness, progress, control-result, or absence policy artifact ref is missing. |
@@ -650,6 +667,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `SOURCE_AUTHORITY_CLOSURE_AMBIGUOUS` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-authority-closure-ambiguous` |
 | `COVERAGE_ASSERTION_REQUIRED` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-assertion-required` |
 | `COVERAGE_DIMENSION_UNRESOLVED` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-dimension-unresolved` |
+| `COVERAGE_DOMAIN_REQUIRED` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-required` |
+| `COVERAGE_DOMAIN_TOKEN_INVALID` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-token-invalid` |
+| `COVERAGE_DOMAIN_ALIAS_REJECTED` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-alias-rejected` |
+| `COVERAGE_DOMAIN_UNKNOWN` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-unknown` |
+| `COVERAGE_DOMAIN_DUPLICATE` | `060` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-duplicate` |
+| `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-feed-category-unsupported` |
+| `COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-required-for-effect` |
+| `COVERAGE_DOMAIN_INACTIVE_DEFERRED` | `060` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-coverage-domain-reachability-deferred` |
 | `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `060` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-weak-progress-signal-no-authority` |
 | `COMPLETENESS_DECISION_UNSAFE_FOR_ABSENCE` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-completeness-decision-unsafe-for-absence` |
 | `SOURCE_AUTHORITY_ARTIFACT_MISSING` | `060` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `060.SourceAuthorityErrorContext` | `error-registry-060-source-authority-artifact-missing` |
@@ -690,7 +715,7 @@ Lock loss, heartbeat uncertainty, stale recovery failure, active lock conflict, 
 | `context_schema_version` | Yes | Immutable `060` context schema version. |
 | `owner_spec` | Yes | Must be `060`. |
 | `error_code` | Yes | Must match the generated registry row. |
-| `failure_class` | Yes | Closed token: `authority`, `completeness`, `coverage`, `staleness`, `control_result`, `progress_signal`, `source_history`, `visibility`, `absence`, `watermark`, `external_schema_non_authority`, or `cdc_tombstone`. |
+| `failure_class` | Yes | Closed token: `authority`, `completeness`, `coverage`, `coverage_domain`, `staleness`, `control_result`, `progress_signal`, `source_history`, `visibility`, `absence`, `watermark`, `external_schema_non_authority`, or `cdc_tombstone`. |
 | `operation` | Yes | Authority resolution, completeness evaluation, absence derivation, coverage validation, source staleness evaluation, control result mapping, watermark decision, or correction authority handoff. |
 | `affected_record_type` | Yes | Authority row, completeness profile row, coverage assertion, staleness policy, progress policy, control mapping, absence result, watermark record, or gold fact candidate. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
@@ -769,6 +794,86 @@ Deterministic error handling for external-schema authority signal resolution is:
 
 ## Source Authority Contract Details
 
+### CoverageDomainToken
+
+`CoverageDomainToken` is the only valid runtime token space for coverage domains. A runtime coverage-domain value must be exactly one canonical token from `CoverageDomainCatalog` after validation by `ValidateCoverageDomainToken`.
+
+Token grammar is `^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$`. Maximum token length is 64 Unicode scalar values. Tokens are case-sensitive. Implementations must not trim, lowercase, uppercase, Unicode-normalize, slash-replace, hyphen-replace, or space-replace token input before validation.
+
+Non-ASCII letters, whitespace, `/`, `-`, punctuation, empty strings, and null are invalid unless the owning schema explicitly allows omission. Unknown lower-snake-case tokens fail with `COVERAGE_DOMAIN_UNKNOWN`. Known display or legacy spellings fail with `COVERAGE_DOMAIN_ALIAS_REJECTED`. Runtime aliases are forbidden. Optional arrays default to `[]` only where the owning schema explicitly says so. Domain arrays must reject duplicates and sort accepted canonical tokens lexically before checksum computation.
+
+`reachability` is an inactive deferred coverage-domain token. It may validate only when `context.coverage_domain_context = inactive_deferred_deterministic_block`; every other use fails with `COVERAGE_DOMAIN_INACTIVE_DEFERRED` until `200` is promoted through the active-spec promotion path.
+
+#### CoverageDomainCatalog
+
+| Canonical token | Display label | Default row ID | Domain status |
+| --- | --- | --- | --- |
+| `vulnerability` | Vulnerability | `cov-vulnerability-default` | `active_requires_source_specific_row` |
+| `control` | Control | `cov-control-default` | `active_requires_source_specific_row` |
+| `endpoint` | Endpoint | `cov-endpoint-default` | `active_requires_source_specific_row` |
+| `directory` | Directory | `cov-directory-default` | `active_requires_source_specific_row` |
+| `dns` | DNS | `cov-dns-default` | `active_requires_source_specific_row` |
+| `dhcp_ipam` | DHCP/IPAM | `cov-dhcp-ipam-default` | `active_requires_source_specific_row` |
+| `flow` | Flow | `cov-flow-default` | `active_requires_source_specific_row` |
+| `cloud_inventory` | Cloud inventory | `cov-cloud-inventory-default` | `active_requires_source_specific_row` |
+| `source_history` | Source history | `cov-source-history-default` | `active_requires_source_specific_row` |
+| `reachability` | Deferred reachability | `cov-reachability-deferred` | `inactive_deferred` |
+
+`CoverageDomainCatalog` is closed for this spec version. Adding, removing, or renaming a canonical token requires a `060` spec change, `000` volatility and define-once updates, `020` feed-category mapping updates when applicable, generated `110` error-registry parity, and concrete `120-COVERAGE-DOMAIN-*` validation rows.
+
+#### CoverageDomainAliasRejectionTable
+
+This table is a runtime rejection table, not an alias table. The canonical-token column exists only to explain the rejected value and must not be used for conversion.
+
+| Rejected value | Canonical token | Required runtime result |
+| --- | --- | --- |
+| `DNS` | `dns` | `COVERAGE_DOMAIN_ALIAS_REJECTED` |
+| `DHCP/IPAM` | `dhcp_ipam` | `COVERAGE_DOMAIN_ALIAS_REJECTED` |
+| `cloud inventory` | `cloud_inventory` | `COVERAGE_DOMAIN_ALIAS_REJECTED` |
+| `source history` | `source_history` | `COVERAGE_DOMAIN_ALIAS_REJECTED` |
+| `deferred reachability` | `reachability` | `COVERAGE_DOMAIN_ALIAS_REJECTED` |
+| `future_reachability` | `reachability` | `COVERAGE_DOMAIN_ALIAS_REJECTED` when used as a coverage-domain value; remains valid only as a `020` feed-category token. |
+
+#### ValidateCoverageDomainToken
+
+```text
+ValidateCoverageDomainToken(value, context):
+1. If value is omitted or null:
+   a. If context requires a token, return COVERAGE_DOMAIN_REQUIRED.
+   b. If context is an optional token array, materialize [] and return the materialized array to the caller.
+2. If value is not a JSON string, return COVERAGE_DOMAIN_TOKEN_INVALID.
+3. If value exactly matches a row in CoverageDomainAliasRejectionTable, return COVERAGE_DOMAIN_ALIAS_REJECTED.
+4. If value does not match ^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$, return COVERAGE_DOMAIN_TOKEN_INVALID.
+5. If value is not in CoverageDomainCatalog, return COVERAGE_DOMAIN_UNKNOWN.
+6. If value = reachability and context.coverage_domain_context is not inactive_deferred_deterministic_block, return COVERAGE_DOMAIN_INACTIVE_DEFERRED.
+7. Return value unchanged.
+```
+
+#### ValidateCoverageDomainTokenArray
+
+```text
+ValidateCoverageDomainTokenArray(values, context):
+1. If values is omitted, materialize [] only where the owning field default is [].
+2. Validate each element with ValidateCoverageDomainToken.
+3. Reject duplicates with COVERAGE_DOMAIN_DUPLICATE.
+4. Sort accepted tokens lexically before row checksum computation.
+5. If the array is empty and the row allows an absence-sensitive effect, reject with COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT unless the selected SourceAuthorityClosureMatrix row declares coverage not applicable for that exact effect.
+6. Return the sorted array unchanged by any aliasing, display-label conversion, case conversion, or Unicode normalization.
+```
+
+#### CoverageDomainErrorCodeSet
+
+| Error code | Required use |
+| --- | --- |
+| `COVERAGE_DOMAIN_REQUIRED` | Required token field is omitted or null. |
+| `COVERAGE_DOMAIN_TOKEN_INVALID` | Value is not a valid lower-snake-case token string. |
+| `COVERAGE_DOMAIN_ALIAS_REJECTED` | Value is a known display or legacy spelling. |
+| `COVERAGE_DOMAIN_UNKNOWN` | Value is syntactically valid but absent from the catalog. |
+| `COVERAGE_DOMAIN_DUPLICATE` | Token array contains duplicate canonical tokens. |
+| `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` | `020` feed category names a token not permitted by the feed-category mapping. |
+| `COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT` | Absence-sensitive effect lacks required coverage-domain tokens. |
+| `COVERAGE_DOMAIN_INACTIVE_DEFERRED` | `reachability` is used outside the deferred deterministic-block path. |
+
 ### CoverageDimensionProfile catalog
 
 `CoverageDimensionProfile` rows are stable at the schema level and activation-controlled at the source-specific row level.
@@ -776,7 +881,7 @@ Deterministic error handling for external-schema authority signal resolution is:
 | Field | Required | Default or omission behavior | Rule |
 | --- | ---: | --- | --- |
 | `coverage_profile_row_id` | Yes | none | Stable row ID scoped to the row set. |
-| `coverage_domain` | Yes | none | One of the domains declared in the catalog below or a deferred domain with explicit inactive status. |
+| `coverage_domain` | Yes | none | Required `CoverageDomainToken` validated by `ValidateCoverageDomainToken`; display labels, legacy spellings, aliases, null, empty string, and unknown tokens fail with `CoverageDomainErrorCodeSet` owner errors. |
 | `source_category` | Yes | none | Vendor-neutral source category. |
 | `source_dataset` | Yes | none | Vendor-neutral source dataset. |
 | `fact_type` | Yes | none | Exact fact type. |
@@ -799,12 +904,12 @@ Deterministic error handling for external-schema authority signal resolution is:
 | `cov-control-default` | control | benchmark/check scope, applicability, evaluation status | `ControlResultMappingRow` and coverage assertion | owner row | not checked/unknown | unknown | stale | unknown | `requires_source_specific_row` |
 | `cov-endpoint-default` | endpoint | asset scope, enrollment visibility, collection window | feed completeness plus authority row | owner row | blocks absence | unknown | stale | unknown | `requires_source_specific_row` |
 | `cov-directory-default` | directory | tenant/domain, group/member scope, hidden membership visibility | directory completeness evidence | owner row | blocks nonmembership | unknown | stale | unknown | `requires_source_specific_row` |
-| `cov-dns-default` | DNS | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
-| `cov-dhcp-ipam-default` | DHCP/IPAM | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-dns-default` | dns | zone/source scope, TTL, authoritative source | DNS feed evidence | TTL-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
+| `cov-dhcp-ipam-default` | dhcp_ipam | scope, lease window, authoritative system | lease/IPAM evidence | lease-aware policy | unknown | unknown | stale | unknown | `requires_source_specific_row` |
 | `cov-flow-default` | flow | sensor scope, collection point, time window, role evidence | flow feed evidence | window policy | unknown | partial | stale | unknown | `requires_source_specific_row` |
-| `cov-cloud-inventory-default` | cloud inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown | `requires_source_specific_row` |
-| `cov-source-history-default` | source history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown | `requires_source_specific_row` |
-| `cov-reachability-deferred` | deferred reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op | `inactive_deferred` |
+| `cov-cloud-inventory-default` | cloud_inventory | account/project/subscription, region, resource type | inventory feed and source history | source-specific | permission_limited | partial | stale | unknown | `requires_source_specific_row` |
+| `cov-source-history-default` | source_history | source-native history window, retention | history retention profile | history-window policy | unknown | unknown | outside window no proof | unknown | `requires_source_specific_row` |
+| `cov-reachability-deferred` | reachability | topology, route, policy, NAT, workload, identity context | inactive `200` placeholders | inactive | no MVP claim | no MVP claim | no MVP claim | no-op | `inactive_deferred` |
 
 `CoverageClosureStatus` is a closed enum: `closed_default`, `requires_source_specific_row`, and `inactive_deferred`. Source-specific absence-sensitive outputs remain blocked until a `requires_source_specific_row` domain has a matching active source-specific coverage row.
 
@@ -816,11 +921,11 @@ Deterministic error handling for external-schema authority signal resolution is:
 | control | control pass, fail, unknown, not-checked, and not-applicable facts. |
 | endpoint | endpoint disappearance, non-observation, and cleanup. |
 | directory | group non-membership, user non-membership, hidden-membership absence. |
-| DNS | DNS absence, host deletion from TTL expiry, negative DNS fact. |
-| DHCP/IPAM | DHCP lease absence, IPAM absence, host deletion from lease expiry. |
+| dns | DNS absence, host deletion from TTL expiry, negative DNS fact. |
+| dhcp_ipam | DHCP lease absence, IPAM absence, host deletion from lease expiry. |
 | flow | flow non-observation and observed-connection absence. |
-| cloud inventory | missing cloud resource and resource deletion inference. |
-| source history | no-change proof outside supported history window. |
+| cloud_inventory | missing cloud resource and resource deletion inference. |
+| source_history | no-change proof outside supported history window. |
 
 ### FeedCategoryCoverageEffectMatrix
 
@@ -1057,6 +1162,10 @@ Missing row and ambiguous row errors must remain distinct and owner-specific. So
 | `060-EXTERNAL-SCHEMA-AUTHORITY-AC-002` | Missing, inactive, checksum-mismatched, or out-of-scope external-schema authority signal row sets block authority effects and do not reinterpret normalized metadata as source authority. |
 | `060-EXTERNAL-SCHEMA-AUTHORITY-AC-003` | Ambiguous external-schema authority signal rows emit `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_AMBIGUOUS` and no authority, absence, cleanup, graph expiry, control-state, or watermark effect. |
 | `060-ERROR-REGISTRY-CLOSURE-AC-001` | All `060` source-closure owner errors generate complete `110.ErrorCodeRegistryRow` rows with no `TODO` values. |
+| `060-COVERAGE-DOMAIN-TOKEN-AC-001` | The catalog contains exactly the ten canonical tokens `vulnerability`, `control`, `endpoint`, `directory`, `dns`, `dhcp_ipam`, `flow`, `cloud_inventory`, `source_history`, and `reachability`, with no mixed-case, slash-containing, or spaced runtime values. |
+| `060-COVERAGE-DOMAIN-TOKEN-AC-002` | `CoverageDimensionProfile.coverage_domain` rejects `DNS`, `DHCP/IPAM`, `cloud inventory`, `source history`, `future_reachability`, and `deferred reachability` with owner-specific coverage-domain errors. |
+| `060-COVERAGE-DOMAIN-TOKEN-AC-003` | Domain arrays reject duplicates, sort lexically before checksum computation, and reject empty arrays when an absence-sensitive effect requires coverage. |
+| `060-COVERAGE-DOMAIN-REACHABILITY-AC-001` | `reachability` is accepted only for inactive deferred deterministic-block behavior until `200` is promoted. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-001` | A source-authority row cannot widen `080.allowed_subject_ref_kinds` or `080.allowed_object_value_kinds`; widening attempts fail before authority selection. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-002` | A source-authority row cannot permit `null_value` when the selected predicate contract forbids it. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-003` | External schema field presence or absence remains non-authoritative without exact `050`, `060`, and `080` handoff rows. |

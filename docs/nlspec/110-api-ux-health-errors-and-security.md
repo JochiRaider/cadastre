@@ -282,6 +282,8 @@ Default mapping:
 | `include_evidence` | No | `false` | Evidence metadata only unless authorization permits more. |
 | `include_raw_payload` | No | `false` | Raw payload returned only with raw-evidence permission. |
 
+Coverage-domain API filters are not part of the current `GraphQueryRequest` schema. If an API request or filter field named `coverage_domain` or `coverage_domain_filters` is added by a later owner spec, each value must be a `060.CoverageDomainToken`. Display labels and aliases are rejected with `060` owner errors, not accepted as user-friendly synonyms. UI display labels may be rendered separately and must not be sent as runtime tokens.
+
 ### GraphQueryResponse graph profile context
 
 Every graph response must include or reference the profile and state context that determined observable output.
@@ -344,6 +346,14 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 | `SOURCE_AUTHORITY_ROW_AMBIGUOUS` | `ambiguous` | No | not pass and not fail | no absence edge, no expiry | error | matching row refs when authorized |
 | `COVERAGE_DIMENSION_ROW_MISSING` | `unknown` or `partial_unknown_gap` by owner mapping | No | not pass and not fail | no absence edge, no expiry | blocked | coverage domain and redacted refs |
 | `COVERAGE_ASSERTION_REQUIRED` | `unknown` | No | not pass and not fail | no absence edge, no expiry | blocked | coverage assertion refs |
+| `COVERAGE_DOMAIN_REQUIRED` | `error` | No | error | no graph effect | error | token field path and owner context |
+| `COVERAGE_DOMAIN_TOKEN_INVALID` | `error` | No | error | no graph effect | error | field path; invalid token redacted unless public display label |
+| `COVERAGE_DOMAIN_ALIAS_REJECTED` | `error` | No | error | no graph effect | error | alias value visible only when non-private display label |
+| `COVERAGE_DOMAIN_UNKNOWN` | `unknown` | No | not pass and not fail | no graph effect | blocked | token visible when public |
+| `COVERAGE_DOMAIN_DUPLICATE` | `error` | No | error | no graph effect | error | duplicate token visible when public |
+| `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` | `unknown` | No | not pass and not fail | no graph effect | blocked | feed category and token visible when public |
+| `COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT` | `unknown` | No | not pass and not fail | no graph effect | blocked | effect and coverage-domain owner context |
+| `COVERAGE_DOMAIN_INACTIVE_DEFERRED` | `unknown` with owner diagnostic | No | not pass and not fail | no reachability output | blocked or diagnostic by context | token visible |
 | `SOURCE_STALENESS_POLICY_ROW_MISSING` | `source_stale` or `unknown` by `060` blocking reason | No | stale or unknown, not pass/fail | no absence edge, no expiry | blocked | time basis and policy refs |
 | `permission_limited` state | `permission_limited` | No | not pass and not fail | no absence edge, no expiry | blocked | visibility row refs |
 | `partial_known_gap` | `partial_known_gap` | No | not pass and not fail | no absence edge, no expiry | blocked | known-gap refs |
@@ -889,6 +899,14 @@ The generated `ErrorCodeRegistry` must include every `060` source-authority clos
 | `SOURCE_STALENESS_POLICY_ROW_AMBIGUOUS` | `060` | error | no, until policy rows change | matching rows redacted | `staleness-policy-ambiguous` |
 | `COVERAGE_DIMENSION_ROW_MISSING` | `060` | blocked | no, until coverage row activates | coverage selector redacted | `coverage-dimension-missing-source-specific` |
 | `COVERAGE_DIMENSION_ROW_AMBIGUOUS` | `060` | error | no, until coverage rows change | matching rows redacted | `coverage-dimension-ambiguous` |
+| `COVERAGE_DOMAIN_REQUIRED` | `060` | error | no, until request or row changes | token field path visible; private refs redacted | `coverage-domain-required` |
+| `COVERAGE_DOMAIN_TOKEN_INVALID` | `060` | error | no, until request or row changes | invalid token redacted unless value is public display label | `coverage-domain-token-invalid` |
+| `COVERAGE_DOMAIN_ALIAS_REJECTED` | `060` | error | no, until row changes | alias value visible only when non-private display label | `coverage-domain-alias-rejected` |
+| `COVERAGE_DOMAIN_UNKNOWN` | `060` | blocked | no, until catalog changes | token visible when public | `coverage-domain-unknown` |
+| `COVERAGE_DOMAIN_DUPLICATE` | `060` | error | no, until row changes | duplicate token visible when public | `coverage-domain-duplicate` |
+| `COVERAGE_DOMAIN_UNSUPPORTED_FOR_FEED_CATEGORY` | `060` | blocked | no, until feed-category row changes | feed category and token visible when public | `coverage-domain-feed-category-unsupported` |
+| `COVERAGE_DOMAIN_REQUIRED_FOR_EFFECT` | `060` | blocked | no, until row changes | effect visible; private scope redacted | `coverage-domain-required-for-effect` |
+| `COVERAGE_DOMAIN_INACTIVE_DEFERRED` | `060` | diagnostic or blocked by context | no, until `200` promotion | token visible | `coverage-domain-reachability-deferred` |
 | `CONTROL_RESULT_MAPPING_ROW_MISSING` | `060` | error | no, until mapping row activates | external state visible; private refs redacted | `control-result-mapping-unmapped` |
 | `CONTROL_RESULT_MAPPING_ROW_AMBIGUOUS` | `060` | error | no, until mapping rows change | matching rows redacted | `control-result-mapping-ambiguous` |
 | `PROGRESS_SIGNAL_POLICY_ROW_MISSING` | `060` | blocked | no, until policy activates | signal refs redacted | `progress-signal-weak-combination-blocked` |
@@ -1051,6 +1069,8 @@ Public API, graph query, health, audit, compliance, and analysis responses must 
 All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
 
 `source_stale`, `derived_view_stale`, `unknown`, `not_applicable`, `permission_limited`, `source_unavailable`, `scope_unavailable`, `partial_known_gap`, `partial_unknown_gap`, `conflicted`, and `ambiguous` must remain distinct in `state_summary`, evidence drillback, compliance export, and audit export.
+
+Coverage-domain token failures must route to generated `060` owner-specific `ErrorRecord` rows. They must not be rendered as authorized negative facts, compliance pass/fail, graph expiry, cleanup, retraction, reachability output, or watermark advancement.
 
 ### GraphBackendOperationalHealthComponents
 
