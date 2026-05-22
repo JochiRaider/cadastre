@@ -2,7 +2,7 @@
 doc_id: RES-015
 project: Cadastre
 title: JanusGraph Repository Research Report
-status: research-report
+status: Archive
 inspection_date: 2026-05-18
 related_cadastre_specs:
   - docs/nlspec/090-graph-projection-serving-and-backends.md

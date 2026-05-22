@@ -43,9 +43,11 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/reference/research/RES-009-identity-resolution-governance.md` |
 | `docs/reference/research/RES-010-theoretical-reachability-network-context.md` |
 | `docs/reference/research/RES-011-temporal-semantics.md` |
-| `docs/reference/research/RES-012-graph-backend-comparison.md` |
 | `docs/reference/research/RES-013-extension-package-supply-chain.md` |
 | `docs/reference/research/RES-014-source-authority-staleness-coverage-absence.md` |
-| `docs/reference/research/RES-015-janusgraph.md` |
 | `docs/reference/research/RES-016-batfish.md` |
+| `docs/reference/research/RES-017-postgresql-apache-age.md` |
+| `docs/reference/research/RES-018-postgresql-apache-age-implementation.md` |
 | `docs/archive/PRD-Cadastre.revised-draft.md` |
+| `docs/archive/RES-015-janusgraph.md` |
+| `docs/archive/RES-012-graph-backend-comparison.md` |

@@ -2,7 +2,7 @@
 doc_id: RES-012
 project: Cadastre
 title: Graph Backend Comparison for Cadastre
-status: research-report
+status: Archive
 inspection_date: 2026-05-16
 ---
 
