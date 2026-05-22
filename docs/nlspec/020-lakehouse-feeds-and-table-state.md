@@ -703,6 +703,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `LAKEHOUSE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH` | `020` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-activation-artifact-checksum-mismatch` |
 | `LAKEHOUSE_FEED_PROFILE_SCHEMA_INCOMPLETE` | `020` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-feed-profile-schema-incomplete` |
 | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-feed-category-row-missing` |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_AMBIGUOUS` | `020` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-feed-category-row-ambiguous` |
 | `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-profile-branch-unresolved` |
 | `LAKEHOUSE_DECLARED_SUBSET_REQUIRED` | `020` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-lakehouse-declared-subset-required` |
 | `UPSTREAM_COMPLETENESS_EVIDENCE_REQUIRED` | `020` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-upstream-completeness-evidence-required` |
@@ -723,13 +724,14 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `operation` | Yes | Feed read, manifest validation, raw import, declared-subset validation, or table-state operation. |
 | `affected_record_type` | Yes | Feed profile, manifest, table-state ref, raw import run, or completeness receipt type. |
 | `field_path` | Yes | Exact field path when applicable; null only for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to the selected feed profile, feed category closure row set, read policy, fixture, manifest, snapshot, dataset version, object batch, partition set, raw import run, or table-state artifact consulted by the error; empty only when no artifact was consulted. |
 | `feed_profile_ref` | No | Redacted feed profile ref when consulted. |
 | `read_target_kind` | No | Closed read target token when known. |
 | `source_dataset` | No | Vendor-neutral dataset token only. |
 | `scope_selector_checksum` | No | Checksum of the scope selector; raw selector values are forbidden when private. |
 | `manifest_refs` | No | Canonically sorted manifest, snapshot, dataset, or object refs. |
 | `required_upstream_evidence_classes` | No | Closed evidence-class tokens required by the category row. |
-| `blocking_reason` | Yes | Bounded reason that explains blocked or diagnostic output. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason that explains blocked output; otherwise null or omitted. Diagnostic rows may include a bounded reason only when it changes caller or audit interpretation. |
 | `validation_refs` | Yes | Exact `120` fixture refs. |
 | `redaction_classes` | Yes | Private routes, credentials, host lists, raw payload bytes, and source-native IDs must map to `always_forbidden`. |
 

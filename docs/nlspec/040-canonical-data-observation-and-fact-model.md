@@ -773,6 +773,29 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 `CORE_ONE_OF_INVALID` fixture coverage must include subject-ref, object-value, and evidence artifact failures. It must distinguish unknown kind, missing member, extra member, forbidden null, omitted field, object-kind mismatch, raw payload, backend ID, and artifact-class/kind mismatch.
 
+### CoreRecordErrorContext
+
+`CoreRecordErrorContext` is the owner context schema for `040` core record validation, canonical serialization, ID, checksum, one-of, evidence-ref, and graph-delta-shape registry rows. It satisfies `110.OwnerErrorContextMinimumSchema` and must not include raw payload bytes, private bindings, credentials, backend-generated IDs, source-native identity values, or artifact payload bytes in caller-visible context.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `040` context schema version. |
+| `owner_spec` | Yes | Must be `040`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `core_schema`, `canonical_json`, `scalar`, `enum`, `one_of`, `record_id`, `record_checksum`, `evidence_ref`, `graph_delta_shape`, `raw_payload_boundary`, `backend_id_boundary`, or `runtime_override`. |
+| `operation` | Yes | Core record validation, canonical serialization, ID computation, checksum computation, one-of validation, evidence-ref validation, or graph-delta shape validation. |
+| `affected_record_type` | Yes | Core record type, evidence ref, graph node delta shape, graph edge delta shape, scalar field, enum field, one-of member, or checksum artifact. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to core schema registry rows, scalar policy rows, one-of registry rows, evidence artifact registry rows, validation fixtures, input record refs, or version manifest refs consulted by the error; empty only when no artifact was consulted. |
+| `validation_refs` | Yes | Exact `120` core record validation fixture refs. |
+| `redaction_classes` | Yes | Map every nested owner-context field to one `110.ErrorRedactionClassMatrix` class. Raw payload bytes, private bindings, credentials, backend IDs, source-native identity values, raw artifact payloads, and raw graph backend values must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+| `record_id` | No | Required when a persisted or candidate record ID was evaluated and the caller is authorized for the ref. |
+| `schema_version` | No | Required for schema-version failures. |
+| `expected_checksum_ref` | No | Required when a checksum mismatch was evaluated and the checksum ref is authorized. |
+| `observed_checksum_ref` | No | Required when a checksum mismatch was evaluated and the checksum ref is authorized. |
+| `one_of_kind` | No | Required for one-of validation failures. |
+
 ### CorePrivateBindingLeakHandoff
 
 `040` no longer owns a generated `PRIVATE_BINDING_LEAK` registry row. Core validation may detect concrete private vendor/source bindings, credentials, route names, tenant host lists, or environment-specific inventories in core-shaped public artifacts, but the emitted owner error must be imported `010.PRIVATE_BINDING_LEAK` with `010.BoundaryErrorContext`.

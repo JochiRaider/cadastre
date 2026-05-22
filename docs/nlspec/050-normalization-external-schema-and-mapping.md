@@ -717,12 +717,20 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `operation` | Yes | Parser, normalization, mapping resolution, source-extension validation, enum mapping, or mapping-bundle validation operation. |
 | `affected_record_type` | Yes | Mapping artifact, observation, mapping row, source-extension rule, enum rule, or validation output type. |
 | `field_path` | Yes | Exact normalized field, source-extension path, OCSF path, enum path, or null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to mapping artifacts, external schema profiles, compiled schema artifacts, profile-resolution manifests, enum rule sets, base-event policy sets, source-extension rule sets, validation outputs, mapping row sets, fixtures, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `mapping_artifact_ref` | No | Required when a mapping artifact was consulted. |
 | `external_schema_profile_ref` | No | Required for OCSF or external schema failures. |
 | `source_extension_rule_ref` | No | Required for source-extension failures. |
 | `raw_value_ref` | No | Redacted ref or checksum only; raw source values must not be stored in caller context. |
 | `validation_refs` | Yes | Exact `120` mapping fixture refs. |
 | `redaction_classes` | Yes | Raw payload bytes, raw source values, credentials, private bindings, source-native identity values, and raw OCSF payload bytes must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+
+### MappingErrorNameCanonicalization
+
+`050` is the sole owner for mapping and external-schema registry codes. The canonical codes are `MAP_OCSF_ROW_MISSING`, `MAP_OCSF_ROW_AMBIGUOUS`, and `OCSF_ARTIFACT_MISMATCH`. The aliases `OCSF_MAPPING_ROW_MISSING`, `OCSF_MAPPING_ROW_AMBIGUOUS`, and `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` are invalid input to `110.GenerateErrorCodeRegistry` and must fail validation before API, export, health, audit, or validation-visible output.
+
+A mapping implementation must not emit both a canonical code and an alias for the same failure. Alias rejection uses `110.SharedRegistryAliasRejectionTable` and the validation rows in `120.ErrorCodeRegistryValidationMatrix`.
 
 ### ActivationControlledRowSchemaPrecisionHandoff
 

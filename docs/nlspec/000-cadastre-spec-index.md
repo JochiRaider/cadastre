@@ -46,6 +46,8 @@ Define the self-contained Cadastre documentation set, source-of-truth ownership,
 - `VolatilityClassificationRow`
 - `VolatilityRegistryConsistencyRule`
 - `DefineOnceClosureInventory`
+- `GovernanceErrorContext`
+- `GovernanceErrorRegistryFragment`
 
 ## Document Status Vocabulary
 
@@ -109,6 +111,7 @@ Additional promotion gates:
 | scope selector closure | Promotion fails if any active scoped owner family restates selector schema, equality, coverage, subset matching, specificity, ambiguity, or tie-breaking instead of importing the exact `030` selector contracts, or if required `120-SCOPE-SELECTOR-CLOSURE-*` fixtures are missing, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
 | activation-controlled-row-schema-precision | Promotion fails if any output-affecting activation-controlled row family lacks a complete `030.ActivationControlledRowField` table and row-set validation contract; uses prose-only row schema; lacks type, null, omit, default, or bounds columns; lacks array semantics or duplicate policy; uses bare string row refs where `030.ActivationControlledRowRef` is required; lacks row checksum or row-set checksum rules; lacks extension policy; lacks owner missing or invalid error mapping; lacks `030.VersionManifest` row/ref requirements; or contains `TODO:` in field type, bounds, checksum, fixture checksum, expected output, or expected error. |
 | coverage-domain token closure | Promotion fails when any active feed profile, feed-category closure row, source-authority row, coverage dimension row, source-authority closure matrix row, package-supplied row catalog, API filter, or validation fixture uses a coverage-domain value that is not a `060.CoverageDomainToken`. |
+| generated error registry totality | Promotion fails when any API-, export-, health-, audit-, telemetry-, package-, validation-, or acceptance-visible error token lacks exactly one generated `110.ErrorCodeRegistryRow`, lacks an owner context schema satisfying `110.OwnerErrorContextMinimumSchema`, uses a non-closed severity or retry class, uses a legacy caller field, uses a wildcard fixture ref, contains `TODO:`, or omits the generated registry checksum from `030.VersionManifest` when visible diagnostics can be emitted. |
 
 ### MVP Activation Catalog Closure Gate
 
@@ -123,6 +126,7 @@ Additional promotion gates:
 | `graph_active_profile_closure` | `090.GraphActiveProfileClosure`, `GraphEdgeSemantics` row set, `GraphObjectOutputEligibilityRowSet`, active graph profile refs, and deterministic inactive/block rows for out-of-scope edge types. |
 | `graph_backend_selection_closure` | `090.GraphBackendSelectionDefaultDecision`, backend selection policy refs, graph backend profile refs when supplied, and `GraphBackendActivationBlockerSet` refs for unresolved provider, storage, index, schema, fixture, and package gates. |
 | `package_activation_registry_closure` | `100.PackageTypePolicyRowSet`, package deprecation window policy row set, compatibility rows, trust/provenance/SBOM policy rows, package release manifests, and production package-set manifests. |
+| `error_registry_closure` | Generated `110.ErrorCodeRegistry` rows, every owner error fragment from active owner specs, shared `110` rows, owner context schemas, exact fixture refs, validation row refs, and `030.VersionManifest.generated_error_registry_checksum`. |
 
 Closed closure result states are:
 
@@ -680,6 +684,79 @@ Promotion must also fail when any output-affecting owner row family is represent
 
 Required validation row families are `120-ACTIVATION-ROW-SCHEMA-*`, `120-ACTIVATION-ROW-SCHEMA-OWNER-IMPORT-*`, `120-ACTIVATION-ROW-SCHEMA-NO-RESTATEMENT-*`, `120-ACTIVATION-ROW-SCHEMA-MANIFEST-*`, and `120-ERROR-REGISTRY-ACTIVATION-ROW-*`.
 
+### Error registry define-once closure
+
+`DefineOnceClosureInventory` must include the row family `error_registry_closure` before promotion.
+
+| Contract | Sole runtime owner | Required validation row |
+| --- | --- | --- |
+| `ErrorCodeRegistryRow` | `110` | `120-ERROR-REGISTRY-TOTAL-AC-001` |
+| `ErrorCodeRegistry` | `110` | `120-ERROR-REGISTRY-TOTAL-AC-001` |
+| `GenerateErrorCodeRegistry` | `110` | `120-ERROR-REGISTRY-DETERMINISM-AC-001` |
+| `StandardErrorCallerFields` | `110` | `120-ERROR-REGISTRY-CALLER-FIELDS-AC-001` |
+| `StandardErrorAuditFields` | `110` | `120-ERROR-REGISTRY-AUDIT-FIELDS-AC-001` |
+| `OwnerErrorContextMinimumSchema` | `110` | `120-ERROR-REGISTRY-CONTEXT-AC-001` |
+| `GovernanceErrorRegistryFragment` | `000` | `120-ERROR-REGISTRY-000-GOVERNANCE-AC-001` |
+| `ProcessingErrorRegistryFragment` | `030` | `120-ERROR-REGISTRY-030-GENERIC-AC-001` |
+| `Shared110ErrorRegistryFragment` | `110` | `120-ERROR-REGISTRY-110-SHARED-AC-001` |
+
+Promotion must fail when a row-like table outside an owner fragment is parsed as final error registry authority. Owner-domain shorthand, rendered catalogs, examples, and observable mapping summaries must route to the owning fragment by exact name and must not define final severity, retry class, caller fields, audit fields, owner context, fixture ref, duplicate-code behavior, or registry checksum behavior.
+
+The following alias tokens are rejected before generated registry output. Implementations must emit the canonical owner code in the right column and must not support both names.
+
+| Rejected alias | Canonical owner code | Owner |
+| --- | --- | --- |
+| `OCSF_MAPPING_ROW_MISSING` | `MAP_OCSF_ROW_MISSING` | `050` |
+| `OCSF_MAPPING_ROW_AMBIGUOUS` | `MAP_OCSF_ROW_AMBIGUOUS` | `050` |
+| `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` | `OCSF_ARTIFACT_MISMATCH` | `050` |
+| `FEED_CATEGORY_CLOSURE_ROW_MISSING` | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` |
+| `SOURCE_DATASET_CATALOG_MISSING` | `SOURCE_DATASET_CATALOG_ROW_MISSING` | `060` |
+| `DERIVED_VIEW_LAG_ERROR` owned by `110` | `DERIVED_VIEW_LAG_ERROR` owned only by `090` | `090` |
+
+`ACTIVATION_ARTIFACT_OWNER_MISMATCH` is owned by `030.ProcessingErrorRegistryFragment`. `000` must route to the `030` row when activation-artifact owner mismatch is visible and must not define a duplicate governance row.
+
+### GovernanceErrorContext
+
+`GovernanceErrorContext` is the owner context schema for `000` documentation-governance, define-once, registry, volatility, and document-status error rows. It satisfies `110.OwnerErrorContextMinimumSchema` and must not expose private paths, private repository URLs, raw fixture bytes, private bindings, credentials, package payload bytes, or source-native values to callers.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `000` context schema version. |
+| `owner_spec` | Yes | Must be `000`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `define_once`, `owner_export`, `owner_contradiction`, `document_status`, `manifest_path`, `volatility`, `runtime_restatement`, or `activation_artifact_route`. |
+| `operation` | Yes | Spec-set validation, define-once inventory generation, document registry validation, volatility registry validation, or promotion-gate validation. |
+| `affected_record_type` | Yes | Governance record type, owner export, document registry row, manifest path row, volatility classification row, or define-once inventory row. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to spec files, registry rows, validation rows, inventory rows, volatility rows, manifest rows, or acceptance reports consulted by the error; empty only when no artifact was consulted. |
+| `validation_refs` | Yes | Exact `120` validation fixture refs for the governance failure. |
+| `redaction_classes` | Yes | Map every owner-context field path to one `110.ErrorRedactionClassMatrix` class. Private paths, private binding values, raw fixture bytes, credentials, source-native identity values, backend IDs, package payload bytes, and raw repository content must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+| `contract_name` | No | Required for define-once, unexported-contract, duplicate-owner, and owner-contradiction failures. |
+| `owner_spec_ref` | No | Required when a specific owner spec caused the failure. |
+| `referring_spec_ref` | No | Required when an import, validation row, or domain row refers to a contract. |
+| `manifest_path` | No | Required for manifest-path mismatches; public output may include only canonical repository-relative paths. |
+| `volatility_class` | No | Required for volatility missing or conflict failures when known. |
+
+### GovernanceErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. It owns governance-visible failure causes only. It does not define product runtime behavior.
+
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DOMAIN_OWNER_STATUS_CONTRADICTION` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-domain-owner-status-contradiction` |
+| `DOMAIN_RUNTIME_RESTATEMENT` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-domain-runtime-restatement` |
+| `OWNER_SPEC_CONTRADICTION` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-owner-spec-contradiction` |
+| `DOMAIN_LEDGER_OWNER_DUPLICATE` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-domain-ledger-owner-duplicate` |
+| `OWNER_CONTRACT_REF_UNEXPORTED` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-owner-contract-ref-unexported` |
+| `DUPLICATE_OWNER_EXPORT` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-duplicate-owner-export` |
+| `ADR_STATUS_UNREGISTERED` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-adr-status-unregistered` |
+| `REGISTRY_MANIFEST_PATH_MISMATCH` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-registry-manifest-path-mismatch` |
+| `VOLATILITY_CLASS_MISSING` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-volatility-class-missing` |
+| `VOLATILITY_CLASS_CONFLICT` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-volatility-class-conflict` |
+| `VOLATILE_ROW_IN_STABLE_CORE` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-volatile-row-in-stable-core` |
+| `ACTIVATION_ARTIFACT_RUNTIME_RESTATEMENT` | `000` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `000.GovernanceErrorContext` | `error-registry-000-activation-artifact-runtime-restatement` |
+
 ### OwnerLocalStatusConsistencyRule
 
 `ValidateSpecSet` must evaluate owner-local closure state independently from document authority status. The following failure codes are closed for this rule.
@@ -815,6 +892,8 @@ Archived documents are historical reference only and never implementation author
 | `000-PACKAGE-CLOSURE-AC-001` | Promotion fails when any required package activation validation group is absent, blocked, not run, failed, or contains `TODO` checksums. |
 | `000-PACKAGE-VOLATILITY-AC-001` | Every package activation contract, row set, policy, runtime state record, and release evidence class has exactly one volatility class. |
 | `000-PACKAGE-REGISTRY-REFS-AC-001` | Promotion fails when package activation is in scope and `SpecSetVersion.activation_artifact_registry_refs` lacks required package activation registry refs or explicit owner TODO blockers that prevent promotion. |
+| `000-ERROR-REGISTRY-CLOSURE-AC-001` | Promotion fails when any visible error token in an active spec lacks exactly one owner fragment row or explicit non-error classification. |
+| `000-ERROR-REGISTRY-CLOSURE-AC-002` | Promotion fails when `000`, `030`, `110`, and `120` disagree on generated registry checksum ownership, governance error ownership, or activation-artifact mismatch routing. |
 | `000-PACKAGE-ENUM-STATUS-AC-001` | `ValidateSpecSet` fails if any owner spec marks `PackageType` unresolved while `000` marks it `closed_local`, or marks package-set activation closed while required package validation rows remain blocked. |
 | `000-CORE-ONEOF-CLOSURE-AC-001` | Promotion fails when `040.CoreOneOfRegistry` contains unresolved rows or when any `120` core one-of closure validation row is absent, blocked, not run, failed, stale, checksum-mismatched, or `TODO`-bearing. |
 | `000-CORE-EVIDENCE-ARTIFACT-CLOSURE-AC-001` | Promotion fails when `EvidenceRef` artifact class/kind pairing rows are missing, ambiguous, inactive, checksum-mismatched, out of scope, or lack validation refs. |

@@ -428,6 +428,7 @@ A generated row whose caller-visible field list contains `code`, omits `error_co
 | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `060` | External-schema signal authority attempts must emit imported `060.EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` with `060.SourceAuthorityErrorContext`. | `050` |
 | `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` | `060` | Tombstone-driven retraction attempts must call `060.DeriveAbsenceOrUnknown` and emit `060.CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED` when authorization fails. | `080` |
 | `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED` | `090` | Graph projection endpoint blockers must emit `090.GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`; identity resolver code must not own this registry row. | `070` |
+| `DERIVED_VIEW_LAG_ERROR` | `090` | Derived-view lag failures must emit `090.DERIVED_VIEW_LAG_ERROR`; `110` renders the generated row but must not co-own it. | `110` |
 
 ### OwnerErrorContextMinimumSchema
 
@@ -508,6 +509,7 @@ policy_change_required
 | `owner_context_schema_ref` | Yes | None. | Ref to owner context shape; `TODO:` blocks promotion. |
 | `fixture_ref` | Yes | None. | Exact `120` validation fixture ref proving the row. Legacy `fixture_family` input is accepted only as a transition alias and must normalize to exact `fixture_ref` rows before promotion. Wildcard-only fixture refs are forbidden. |
 | `shared_110_override_ref` | No | null. | May narrow presentation only; must not change owner cause semantics. |
+| `generated_row_checksum` | Generated | none | SHA-256 over the canonical expanded row bytes; owner fragments must not supply or override this field. |
 
 ### GenerateErrorCodeRegistry(owner_fragments, shared_110_rows)
 
@@ -532,6 +534,41 @@ If any owner spec emits an error code that lacks exactly one generated `ErrorCod
 
 Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
 
+### OwnerDomainRegistrySourceRule
+
+`110.GenerateErrorCodeRegistry` is the only final registry algorithm. Owner-domain shorthand tables in this document are non-authoritative rendering examples unless they explicitly name `Shared110ErrorRegistryFragment`. Such tables must not be parsed as registry fragments, must not define final severity or retry class, and must not supply owner context, fixture refs, or registry checksums.
+
+The generated registry must use the canonical owner fragments below.
+
+| Failure family | Required registry source |
+| --- | --- |
+| Documentation governance and define-once failures | `000.GovernanceErrorRegistryFragment` |
+| Lakehouse feed and table-state failures | `020.LakehouseErrorRegistryFragment` |
+| Scope selector, activation-row, processing, lifecycle, run-lock, and manifest failures | `030.ProcessingErrorRegistryFragment` |
+| Core record failures | `040.CoreRecordErrorRegistryFragment` |
+| Mapping and external-schema failures | `050.MappingErrorRegistryFragment` |
+| Source authority, coverage, completeness, absence, and watermark failures | `060.SourceAuthorityErrorRegistryFragment` |
+| Identity resolver and target selector failures | `070.IdentityErrorRegistryFragment` |
+| Temporal, correction, replay, and gold derivation failures | `080.TemporalErrorRegistryFragment` |
+| Graph projection, query, backend, derived-view lag, and active MVP reachability-boundary failures | `090.GraphErrorRegistryFragment` |
+| Package, package-set activation, rollback, quarantine, trust, and package parity failures | `100.PackageErrorRegistryFragment` |
+| Shared API, security, page-token, lineage, raw-payload permission, registry-generation, and API wording failures | `110.Shared110ErrorRegistryFragment` |
+| Validation-harness failures not owned by documentation governance | `120.ValidationErrorRegistryFragment` |
+| Analysis, enrichment, lineage, and registry-governance failures | `130.AnalysisErrorRegistryFragment` |
+| Telemetry failures | `140.TelemetryErrorRegistryFragment` |
+
+### SharedRegistryAliasRejectionTable
+
+These aliases are invalid registry input. `GenerateErrorCodeRegistry` must reject them before canonical row generation.
+
+| Rejected alias | Canonical code | Owner |
+| --- | --- | --- |
+| `OCSF_MAPPING_ROW_MISSING` | `MAP_OCSF_ROW_MISSING` | `050` |
+| `OCSF_MAPPING_ROW_AMBIGUOUS` | `MAP_OCSF_ROW_AMBIGUOUS` | `050` |
+| `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` | `OCSF_ARTIFACT_MISMATCH` | `050` |
+| `FEED_CATEGORY_CLOSURE_ROW_MISSING` | `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `020` |
+| `SOURCE_DATASET_CATALOG_MISSING` | `SOURCE_DATASET_CATALOG_ROW_MISSING` | `060` |
+
 ### OwnerErrorFragmentCompletionRequirement
 
 Owner fragments are incomplete unless every exported owner error code can generate one `ErrorCodeRegistryRow` through the schema above.
@@ -539,6 +576,7 @@ Owner fragments are incomplete unless every exported owner error code can genera
 | owner_spec | fragment_required | required_fields | TODO_behavior | failure_code |
 | --- | --- | --- | --- | --- |
 | `010` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `000` | true when governance errors are visible in validation, promotion, acceptance, API, health, audit, or telemetry diagnostics | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, wildcard-only fixture ref, or duplicate with `030.ACTIVATION_ARTIFACT_OWNER_MISMATCH` fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `020` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `030` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `040` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
@@ -548,6 +586,7 @@ Owner fragments are incomplete unless every exported owner error code can genera
 | `080` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `090` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `100` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
+| `110` | true for shared API/security rows | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, wildcard-only fixture ref, or owner-domain code in `Shared110ErrorRegistryFragment` fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `120` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, or generic substitute fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `130` | true when owner exports error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
 | `140` | true when owner exports telemetry-visible error codes | severity, retry class, caller-visible fields, audit fields, redaction rule, validation fixture refs | Any `TODO`, blank required field, duplicate code, generic substitute, legacy `code` caller field, or wildcard-only fixture ref fails registry generation. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` |
@@ -1047,24 +1086,47 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `GRAPH_INDEX_FRESHNESS_REQUIRED` | `090` | blocked | yes after refresh | affected query classes blocked | index consistency ref |
 | `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | `090` | error | yes with narrower query or index policy | query rejected before backend traversal | query class, translation profile ref |
 | `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | no, until adapter/profile changes | backend profile activation blocked | adapter ref, provider ref |
-| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `200`, observable handling by `110` | error | no until wording or policy changes | output wording rejected | output checksum and owner policy refs |
+| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `110` | error | `policy_change_required` | output wording rejected | output checksum and owner policy refs |
 
 ### ReachabilityWordingGuard
 
 Public API, graph query, health, audit, compliance, and analysis responses must not emit unqualified `reachable`, `not reachable`, `reachability`, `service access`, or `lateral movement path` wording for MVP graph output. Any such wording must fail with `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` unless a future active reachability owner spec permits the exact claim kind.
 
-### Shared error codes
+### Shared110ErrorContext
 
-| Error code | Owner | Emitted when |
-| --- | --- | --- |
-| `AUTHORIZATION_ERROR` | `110` | Caller lacks permission and the response must not reveal existence. |
-| `LINEAGE_ERROR` | `110` | Required lineage or evidence drillback refs are absent or invalid. |
-| `PAGE_TOKEN_INVALID` | `110` | Page token is malformed, uses backend cursor identity, or authorization context mismatches. |
-| `PAGE_TOKEN_EXPIRED` | `110` | Page token expiration has passed. |
-| `API_BOUNDS_INVALID` | `110` | API field exceeds bounds or violates required shape. |
-| `RAW_PAYLOAD_PERMISSION_REQUIRED` | `110` | Raw payload was requested and metadata-only redaction is not permitted for the endpoint. |
-| `DERIVED_VIEW_LAG_ERROR` | `090`, `110` | Query class requires current graph-derived state and derived view is stale. |
-| `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` | `110` | An owner error fragment has a `TODO`, blank required field, duplicate code, or generic substitute. |
+`Shared110ErrorContext` is the owner context schema for shared `110` API, authorization, page-token, lineage, raw-payload permission, registry-generation, API-bounds, and MVP wording guard registry rows. It satisfies `110.OwnerErrorContextMinimumSchema`.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `110` context schema version. |
+| `owner_spec` | Yes | Must be `110`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `authorization`, `lineage`, `page_token`, `api_bounds`, `raw_payload_permission`, `registry_generation`, or `reachability_wording`. |
+| `operation` | Yes | API request validation, authorization, page-token validation, evidence drillback, raw-payload permission check, registry generation, or response wording validation. |
+| `affected_record_type` | Yes | API request, API response, page token, authorization decision, evidence chain, raw payload ref, owner fragment row, generated registry, or wording output. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to authorization decisions, redaction policies, page-token policies, evidence refs, owner fragments, generated registry artifacts, validation fixtures, response checksums, or version manifests consulted by the error; empty only when no artifact was consulted. |
+| `validation_refs` | Yes | Exact `120` API, security, page-token, registry, or wording fixture refs; empty only for runtime authorization denials where `120` explicitly exempts the row. |
+| `redaction_classes` | Yes | Map every nested owner-context field path to one `110.ErrorRedactionClassMatrix` class. Raw payload bytes, credentials, private bindings, backend IDs, provider-native query text, source-native values, and raw fixture bytes must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+| `endpoint_name` | No | Required for endpoint-specific API bounds, authorization, or raw-payload failures. |
+| `page_token_context_ref` | No | Required for page-token failures; raw token bytes are forbidden. |
+| `owner_fragment_ref` | No | Required for registry-generation failures. |
+
+### Shared110ErrorRegistryFragment
+
+This owner fragment feeds `110.GenerateErrorCodeRegistry`. It contains only shared API/security rows owned by `110`. Owner-domain rows must remain in their owner fragments.
+
+| error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `AUTHORIZATION_ERROR` | `110` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `110.Shared110ErrorContext` | `error-registry-110-authorization-error` |
+| `LINEAGE_ERROR` | `110` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `110.Shared110ErrorContext` | `error-registry-110-lineage-error` |
+| `PAGE_TOKEN_INVALID` | `110` | `security_error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `110.Shared110ErrorContext` | `error-registry-110-page-token-invalid` |
+| `PAGE_TOKEN_EXPIRED` | `110` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `110.Shared110ErrorContext` | `error-registry-110-page-token-expired` |
+| `API_BOUNDS_INVALID` | `110` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `110.Shared110ErrorContext` | `error-registry-110-api-bounds-invalid` |
+| `RAW_PAYLOAD_PERMISSION_REQUIRED` | `110` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `110.Shared110ErrorContext` | `error-registry-110-raw-payload-permission-required` |
+| `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` | `110` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `110.Shared110ErrorContext` | `error-registry-110-error-registry-owner-fragment-incomplete` |
+| `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` | `110` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `110.Shared110ErrorContext` | `error-registry-110-reachability-unqualified-claim-forbidden` |
 
 All owner-specific errors must appear in the generated registry before promotion. A generic shared code must not be selected when an owner-specific code precisely covers the failure.
 
@@ -1325,6 +1387,8 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
 | `110-RUNLOCK-STATE-AC-001` | A graph query, health response, API response, export, or audit output affected by `RUN_LOCK_LOST`, `RUN_LOCK_CONFLICT`, `RUN_LOCK_HEARTBEAT_UNCERTAIN`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_IDEMPOTENCY_CONFLICT` renders a blocked, degraded, or error operational state with owner context and no authorized negative interpretation. |
 | `110-RUNLOCK-ERROR-REGISTRY-AC-001` | Every new `030` run-lock error appears in the generated error registry with exact fixture refs, redaction behavior, owner context, and no generic substitute. |
+| `110-ERROR-REGISTRY-SHARED-AC-001` | `Shared110ErrorRegistryFragment` contains only `110` shared rows, uses closed severity and retry classes, has exact fixture refs, and does not co-own owner-domain rows such as `DERIVED_VIEW_LAG_ERROR`. |
+| `110-ERROR-REGISTRY-ALIAS-AC-001` | Rejected alias codes fail before registry generation and cannot appear in API, export, health, audit, validation, telemetry, or package-visible diagnostics. |
 
 ### Structured input API and security acceptance criteria
 

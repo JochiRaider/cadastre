@@ -1000,6 +1000,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `GRAPH_TRAVERSAL_CLASS_REQUIRED` | `090` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-traversal-class-required` |
 | `GRAPH_QUERY_TIMEOUT` | `090` | `error` | `transient_retryable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-query-timeout` |
 | `GRAPH_QUERY_TRANSLATION_ERROR` | `090` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-query-translation-error` |
+| `DERIVED_VIEW_LAG_ERROR` | `090` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-derived-view-lag-error` |
 | `GRAPH_DELTA_IDEMPOTENCY_CONFLICT` | `090` | `error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-delta-idempotency-conflict` |
 | `GRAPH_BACKEND_PROFILE_MISSING` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-backend-profile-missing` |
 | `GRAPH_SCHEMA_FINGERPRINT_STALE` | `090` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-schema-fingerprint-stale` |
@@ -1008,6 +1009,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `GRAPH_APPLY_RESUME_UNSAFE` | `090` | `blocked` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-apply-resume-unsafe` |
 | `GRAPH_REBUILD_EQUIVALENCE_FAILED` | `090` | `blocked` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-rebuild-equivalence-failed` |
 | `THEORETICAL_REACHABILITY_SCOPE_ERROR` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-theoretical-reachability-scope-error` |
+| `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-reachability-deferred-output-forbidden` |
 | `GRAPH_BACKEND_CONFIG_INCOMPLETE` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-backend-config-incomplete` |
 | `GRAPH_BACKEND_DEFAULT_UNRESOLVED` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-backend-default-unresolved` |
 | `GRAPH_PROVIDER_CAPABILITY_MISSING` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-provider-capability-missing` |
@@ -1034,6 +1036,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `operation` | Yes | Graph projection, query translation, query execution, graph apply, rebuild, backend preflight, drift check, or derived-view serving operation. |
 | `affected_record_type` | Yes | Graph profile, graph delta, graph edge, graph query, apply result, backend profile, derived view, or endpoint handoff type. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to graph profiles, graph deltas, edge semantics rows, traversal classes, output eligibility rows, query translation profiles, apply profiles, derived-view lag policies, backend profiles, provider capability rows, schema fingerprints, graph apply results, graph rebuild manifests, index consistency checks, validation fixtures, package-set refs, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `graph_operation` | Yes | Closed operation token. |
 | `projection_profile_ref` | No | Required when graph projection was consulted. |
 | `edge_type` | No | Required when edge semantics or endpoint identity is involved. |
@@ -1043,6 +1046,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `graph_handoff_effect` | No | Required when a graph handoff effect was evaluated. |
 | `missing_authority_refs` | No | Required when source authority blocks graph expiry or cleanup. |
 | `backend_evidence_refs` | No | Redacted refs only; backend IDs and provider-native query text remain forbidden. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
 | `validation_refs` | Yes | Exact `120` graph fixture refs. |
 | `redaction_classes` | Yes | Backend IDs, provider-native query text, raw graph property values, private bindings, credentials, raw payload bytes, and source-native identity values must map to `always_forbidden`. |
 

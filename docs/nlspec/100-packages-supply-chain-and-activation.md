@@ -1070,6 +1070,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 `110.PackageActivationErrorObservableMapping` must either be generated from this fragment or maintain an exhaustive table whose `error_code` set exactly equals this fragment. `120.PackageErrorRegistryParityValidationMatrix` must fail when a `100` package error is absent from `110`, when a `110` package error lacks this owner fragment, or when severity, retryability, redaction, or fixture refs drift.
 
+`PackageErrorRegistryGenerationHandoff`: `110` must generate package observable rows from `100.PackageErrorRegistryFragment` unless an exhaustive parity-validated mapping is supplied. Parity failure emits `PACKAGE_ERROR_REGISTRY_PARITY_FAILED` before API, health, audit, export, validation, rollback, quarantine, or package report visibility.
+
 | error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `PACKAGE_TYPE_UNKNOWN` | `100` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-type-unknown` |
@@ -1117,6 +1119,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `PACKAGE_DEPRECATION_WINDOW_EXPIRED` | `100` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-deprecation-window-expired` |
 | `EMERGENCY_PACKAGE_BYPASS_FORBIDDEN` | `100` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `100.PackageErrorContext` | `error-registry-100-emergency-package-bypass-forbidden` |
 | `PACKAGE_RETRY_NOT_ALLOWED` | `100` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `100.PackageErrorContext` | `error-registry-100-package-retry-not-allowed` |
+| `PACKAGE_ERROR_REGISTRY_PARITY_FAILED` | `100` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-error-registry-parity-failed` |
 
 ### ProductionPackageSetManifest schema
 
@@ -1197,6 +1200,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | `operation` | Yes | Package type resolution, release validation, package-set activation, trust verification, compatibility check, rollback preflight, quarantine evaluation, LKG marking, or emergency override. |
 | `affected_record_type` | Yes | Package artifact, release manifest, package-set manifest, trust policy, SBOM ref, rollback plan, quarantine record, or activation failure event type. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to package artifacts, release manifests, package-set manifests, package type policies, deprecation policies, trust policies, signature verification results, repository metadata, freshness proofs, anti-rollback state, provenance refs, attestation refs, SBOM refs, compatibility rows, rollback plans, quarantine records, emergency override records, materialization results, validation refs, package-set refs, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `package_type` | No | Required when package type resolution is involved. |
 | `package_release_ref` | No | Required when a release manifest was consulted. |
 | `package_set_ref` | No | Required when package-set activation, rollback, or LKG is involved. |
@@ -1206,6 +1210,7 @@ Source-closure row catalogs included in a production package set must appear in 
 | `quarantine_ref` | No | Required for quarantine blockers. |
 | `validation_refs` | Yes | Exact `120` package fixture refs. |
 | `redaction_classes` | Yes | Raw SBOM bytes, signer secrets, repository credentials, private package payload bytes, private bindings, raw payload bytes, and source-native identity values must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
 
 ### ActivationControlledRowSchemaPrecisionHandoff
 

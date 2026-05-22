@@ -719,15 +719,20 @@ Lock loss, heartbeat uncertainty, stale recovery failure, active lock conflict, 
 | `operation` | Yes | Authority resolution, completeness evaluation, absence derivation, coverage validation, source staleness evaluation, control result mapping, watermark decision, or correction authority handoff. |
 | `affected_record_type` | Yes | Authority row, completeness profile row, coverage assertion, staleness policy, progress policy, control mapping, absence result, watermark record, or gold fact candidate. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to source authority rows, completeness profile rows, coverage dimension rows, coverage assertions, staleness policies, progress-signal policies, control-result mappings, source-history profiles, absence policies, external-schema authority-signal rows, watermark policies, fixtures, closure rows, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `fact_type` | No | Required when a fact or absence candidate was evaluated. |
 | `predicate` | No | Required when a fact or absence candidate was evaluated. |
 | `source_dataset` | No | Vendor-neutral dataset token only. |
 | `subject_scope_checksum` | No | Checksum only; raw scope values remain redacted when private. |
 | `object_scope_checksum` | No | Checksum only; raw scope values remain redacted when private. |
 | `requested_effect` | No | One of `absence`, `cleanup`, `retraction`, `graph_expiry`, or `watermark` when an effect was requested. |
-| `blocking_reason` | Yes | Bounded reason for blocked, diagnostic, ambiguous, or no-mutation output. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason for blocked output; otherwise null or omitted. Diagnostic, ambiguous, or no-mutation output may include a bounded reason only when it changes caller or audit interpretation. |
 | `validation_refs` | Yes | Exact `120` source-authority fixture refs. |
 | `redaction_classes` | Yes | External schema raw values, private bindings, credentials, source-native IDs, raw payload bytes, and supplier-private metadata must map to `always_forbidden`. |
+
+### SourceAuthorityErrorNameCanonicalization
+
+`060` is the sole owner for source-dataset catalog registry codes. The canonical source-dataset catalog codes are `SOURCE_DATASET_CATALOG_ROW_MISSING` and `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS`. The alias `SOURCE_DATASET_CATALOG_MISSING` is invalid input to `110.GenerateErrorCodeRegistry` and must fail validation before API, export, health, audit, or validation-visible output.
 
 ## Authority-to-GoldFact linkage
 

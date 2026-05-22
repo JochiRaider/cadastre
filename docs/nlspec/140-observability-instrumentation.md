@@ -451,6 +451,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 | `operation` | Yes | Telemetry profile validation, telemetry emission, attribute validation, metric emission, export, health mapping, replay validation, or manifest validation. |
 | `affected_record_type` | Yes | Telemetry profile, signal policy, attribute policy, metric row, exporter profile, runtime state, replay exclusion policy, or version manifest type. |
 | `field_path` | Yes | Exact telemetry attribute path, profile field, replay field, or null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to instrumentation profiles, signal policies, metric catalogs, exporter profiles, attribute policies, redaction policies, runtime state refs, health mapping policies, replay exclusion policies, validation fixtures, package-set refs, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `telemetry_profile_ref` | No | Required when profile resolution is involved. |
 | `signal_token` | No | Required for signal-policy failures. |
 | `attribute_path` | No | Required for attribute failures. |
@@ -460,6 +461,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 | `runtime_state_ref` | No | Required when telemetry runtime state affects health/API/audit/validation diagnostics. |
 | `validation_refs` | Yes | Exact `120` observability fixture refs. |
 | `redaction_classes` | Yes | Raw payload bytes, private bindings, credentials, backend IDs, source-native identity values, canonical IDs, hostnames, IPs, usernames, provider-native query text, exporter credentials, and raw queue payloads must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
 
 ## ActivationControlledRowSchemaPrecisionHandoff
 

@@ -716,6 +716,7 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | `operation` | Yes | Resolver profile selection, evidence materialization, candidate generation, blocker evaluation, review transition, split handling, explanation emission, or target selector validation. |
 | `affected_record_type` | Yes | Resolver artifact, identity evidence item, review case, target selector, or identity decision type. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to resolver profiles, evidence class row sets, identifier scope rows, hard blocker row sets, candidate generation profiles, decision matrices, confidence bands, review routing policies, split policies, explanation policies, target selector policies, activation reports, fixtures, package-set refs, or version manifests consulted by the error; empty only when no artifact was consulted. |
 | `entity_type` | No | Required when resolver scope was evaluated. |
 | `source_scope_checksum` | No | Checksum only; raw tenant, directory, scanner, route, or account values are forbidden in caller context. |
 | `evidence_class` | No | Required when the failure is evidence-class-specific. |
@@ -723,6 +724,7 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | `review_case_ref` | No | Required when the failure is review-specific. |
 | `validation_refs` | Yes | Exact `120` identity fixture refs. |
 | `redaction_classes` | Yes | Source-native identity values, telemetry resource values, private bindings, credentials, raw payload bytes, and graph/backend IDs must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
 
 ### CandidateGenerationProfile bounds
 
@@ -839,7 +841,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `RESOLVER_SPLIT_POLICY_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-split-policy-missing` |
 | `RESOLVER_EXPLANATION_INCOMPLETE` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-explanation-incomplete` |
 | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-activation-report-incomplete` |
-| `RESOLVER_ACTIVATION_REPORT_FAILED` | `070` | `blocked` | `retry_after_candidate_changes` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-activation-report-failed` |
+| `RESOLVER_ACTIVATION_REPORT_FAILED` | `070` | `blocked` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-activation-report-failed` |
 | `IDENTITY_REVIEW_TRANSITION_INVALID` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-review-transition-invalid` |
 | `IDENTITY_REVIEW_EVIDENCE_SNAPSHOT_MISMATCH` | `070` | `error` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-review-evidence-snapshot-mismatch` |
 | `IDENTITY_REVIEW_AUTHORITY_MISSING` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-identity-review-authority-missing` |

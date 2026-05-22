@@ -1236,11 +1236,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 
 | error_code | owner_spec | severity | retry_class | caller_visible_fields | audit_visible_fields | redaction_rule | owner_context_schema_ref | fixture_ref |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `DOMAIN_OWNER_STATUS_CONTRADICTION` | `120` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-domain-owner-status-contradiction` |
-| `DOMAIN_RUNTIME_RESTATEMENT` | `120` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-domain-runtime-restatement` |
-| `OWNER_SPEC_CONTRADICTION` | `120` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-owner-spec-contradiction` |
-| `ADR_STATUS_UNREGISTERED` | `120` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-adr-status-unregistered` |
-| `REGISTRY_MANIFEST_PATH_MISMATCH` | `120` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-registry-manifest-path-mismatch` |
+| `VALIDATION_ERROR_REGISTRY_OWNER_ROUTED_TO_000` | `120` | `diagnostic` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `120.ValidationErrorContext` | `error-registry-120-validation-error-registry-owner-routed-to-000` |
 
 ### ValidationErrorContext
 
@@ -1251,21 +1247,46 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 | `context_schema_version` | Yes | Immutable `120` context schema version. |
 | `owner_spec` | Yes | Must be `120`. |
 | `error_code` | Yes | Must match the generated registry row. |
-| `failure_class` | Yes | Closed token: `domain_owner_status`, `runtime_restatement`, `owner_spec_contradiction`, `adr_status`, or `registry_manifest_path`. |
+| `failure_class` | Yes | Closed token: `validation_harness`, `fixture_checksum`, `expected_output_checksum`, `registry_validation`, `package_parity`, `manifest_requirement`, or `governance_owner_routing`. |
 | `operation` | Yes | Spec-set validation, manifest validation, owner-map validation, ADR status validation, or promotion-gate validation. |
 | `affected_record_type` | Yes | Domain row, owner spec row, ADR row, manifest path row, validation report row, or spec registry row. |
 | `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to validation rows, fixture rows, expected output artifacts, owner fragments, generated registry artifacts, manifest refs, package-set refs, acceptance reports, or spec-set inventory artifacts consulted by the error; empty only when no artifact was consulted. |
 | `validation_row_id` | Yes | Exact validation row that detected the failure. |
 | `expected_owner_ref` | No | Required when an owner contradiction was evaluated. |
 | `actual_owner_ref` | No | Required when an owner contradiction was evaluated. |
 | `manifest_path` | No | Required for registry path mismatches. |
-| `blocking_reason` | Yes | Bounded validation blocking reason. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded validation blocking reason; otherwise null or omitted. |
 | `validation_refs` | Yes | Exact validation fixture refs. |
 | `redaction_classes` | Yes | Private paths, private binding values, raw fixture bytes, credentials, source-native identity values, backend IDs, and package payload bytes must map to `always_forbidden`. |
 
 ### ErrorCodeRegistryValidationMatrix
 
 `RunValidationMatrix` must expand this matrix against the owner fragments in `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, shared `110` rows, `120`, `130`, and `140`. The expanded validation set must contain one generated validation case per final owner row after duplicate-owner removal. Validation must use the normalized `error_code`, `severity`, `retry_class`, `caller_visible_fields`, `audit_visible_fields`, `redaction_rule`, `owner_context_schema_ref`, and `fixture_ref` fields emitted by `110.GenerateErrorCodeRegistry`.
+
+#### ErrorCodeRegistryExpandedValidationRowSchema
+
+`RunValidationMatrix` must materialize one expanded validation row for every final generated registry row. Each expanded row must use this schema before `AcceptanceReport.result = pass` is allowed.
+
+| Field | Required behavior |
+| --- | --- |
+| `validation_row_id` | Stable ID in the form `val-error-registry-<owner>-<error-code-kebab>`. |
+| `owner_spec` | Exact owner from the generated row. |
+| `error_code` | Exact generated error code. |
+| `fixture_id` | Exact fixture ID; wildcard-only fixture families are invalid. |
+| `fixture_checksum` | Concrete SHA-256. `TODO` means the validation row is `blocked`. |
+| `expected_output_checksum` | Concrete SHA-256 for the expected generated row bytes or expected rejection bytes. `TODO` means the validation row is `blocked`. |
+| `generated_row_checksum` | SHA-256 over the canonical expanded `ErrorCodeRegistryRow`. |
+| `context_schema_ref` | Exact owner context schema ref satisfying `110.OwnerErrorContextMinimumSchema`. |
+| `redaction_proof` | Required proof that caller and audit fields follow the row redaction rule and nested owner context classes. |
+| `caller_field_proof` | Required proof that caller-visible fields equal `110.StandardErrorCallerFields` and contain no legacy `code` field. |
+| `audit_field_proof` | Required proof that audit-visible fields equal `110.StandardErrorAuditFields`. |
+| `manifest_checksum_proof` | Required proof that visible diagnostic output includes `030.VersionManifest.generated_error_registry_checksum`. |
+| `package_parity_proof` | Required for package-owned rows and null otherwise. |
+| `alias_rejection_proof` | Required for rejected aliases and null otherwise. |
+| `blocking_status` | Closed token: `pass`, `fail`, `blocked`, or `not_run`. |
+
+`AcceptanceReport.result = pass` is forbidden while any expanded registry validation row has `fixture_checksum = TODO`, `expected_output_checksum = TODO`, `blocking_status` other than `pass`, duplicate owner, invalid enum, missing owner context field, generic substitution, alias acceptance, wildcard fixture ref, missing package parity proof, or missing manifest checksum proof.
 
 | Validation row | Scope | Required fixture refs | Required result |
 | --- | --- | --- | --- |
@@ -1281,6 +1302,11 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 | `error-registry-external-schema-authority-owner` | Duplicate-owner decision for `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN`. | `error-registry-060-external-schema-authority-forbidden`, mapping-authority-attempt fixture. | Exactly one generated row exists, owned by `060`; `050` duplicate ownership fails. |
 | `error-registry-cdc-tombstone-owner` | Duplicate-owner decision for `CDC_TOMBSTONE_RETRACTION_UNAUTHORIZED`. | `error-registry-060-cdc-tombstone-retraction-unauthorized`, temporal tombstone fixture. | Exactly one generated row exists, owned by `060`; `080` duplicate ownership fails. |
 | `error-registry-graph-endpoint-owner` | Duplicate-owner decision for `GRAPH_ENDPOINT_IDENTITY_UNRESOLVED`. | `error-registry-090-graph-endpoint-identity-unresolved`, unresolved endpoint fixture. | Exactly one generated row exists, owned by `090`; `070` duplicate ownership fails and no identity mutation occurs. |
+| `error-registry-derived-view-lag-owner` | Duplicate-owner decision for `DERIVED_VIEW_LAG_ERROR`. | `error-registry-090-derived-view-lag-error`, stale derived-view fixture. | Exactly one generated row exists, owned by `090`; `110` duplicate ownership fails. |
+| `error-registry-alias-rejection` | Rejected shorthand and alias code names. | `fixture-120-error-registry-alias-rejection`. | `OCSF_MAPPING_ROW_MISSING`, `OCSF_MAPPING_ROW_AMBIGUOUS`, `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH`, `FEED_CATEGORY_CLOSURE_ROW_MISSING`, and `SOURCE_DATASET_CATALOG_MISSING` fail before generated output. |
+| `error-registry-invalid-retry-class` | Closed retry-class enum. | `fixture-120-error-registry-invalid-retry-class`. | `retry_after_candidate_changes` fails; `RESOLVER_ACTIVATION_REPORT_FAILED` with `retry_after_owner_repair` passes. |
+| `error-registry-000-governance-owner` | Governance code owner routing. | `fixture-120-error-registry-000-governance-owner`. | Governance codes are generated from `000.GovernanceErrorRegistryFragment`; `120` duplicate ownership fails. |
+| `error-registry-reachability-active-owner-routing` | Deferred reachability visible error routing. | `fixture-120-error-registry-reachability-routing`. | `THEORETICAL_REACHABILITY_SCOPE_ERROR` and `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` are active `090` graph errors; `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN` is a shared `110` wording error. |
 
 ### PackageErrorRegistryParityValidationMatrix
 
@@ -1292,6 +1318,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry` for validation-owned f
 | `package-error-registry-severity-retry-parity` | Severity and retryability for package rows. | `fixture-120-package-error-registry-severity-retry` | Fails when `110` severity or retryability conflicts with the generated owner fragment. |
 | `package-error-registry-redaction-parity` | Package sensitive data classes. | private package payload, raw SBOM bytes, signer secret, private repository path, private source binding, unauthorized evidence fixtures | Fails if forbidden data is caller-visible or stored outside approved secure audit refs. |
 | `package-error-registry-fixture-totality` | Fixture refs for package owner rows. | one fixture ref per package error row | Fails when any package error row is unfixtured, wildcard-only, blank, duplicated, or TODO-bearing. |
+| `package-error-registry-parity-failure-row` | Package parity failure visibility. | `error-registry-100-package-error-registry-parity-failed` | `PACKAGE_ERROR_REGISTRY_PARITY_FAILED` is generated from `100.PackageErrorRegistryFragment` and appears in package parity failures. |
 
 ### EndpointOutcomeValidationMatrix
 

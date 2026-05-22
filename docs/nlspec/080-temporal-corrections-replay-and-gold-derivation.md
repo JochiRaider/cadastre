@@ -678,6 +678,29 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `REPLAY_INPUT_INSUFFICIENT` | `080` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-input-insufficient` |
 | `REPLAY_CHECKSUM_MISMATCH` | `080` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-checksum-mismatch` |
 
+### TemporalErrorContext
+
+`TemporalErrorContext` is the owner context schema for `080` temporal, replay, correction, late-arrival, predicate-contract, snapshot-ref, and event-sequence registry rows. It satisfies `110.OwnerErrorContextMinimumSchema` and must not expose raw payload bytes, private bindings, credentials, source-native identity values, raw temporal evidence values, or private fixture bytes to callers.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `080` context schema version. |
+| `owner_spec` | Yes | Must be `080`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `temporal_policy`, `time_resolution`, `knowledge_time`, `late_arrival`, `correction_policy`, `correction_snapshot`, `replay`, `predicate_contract`, `event_sequence`, or `graph_rebuild_handoff`. |
+| `operation` | Yes | Fact-time resolution, known-time import, late-arrival evaluation, gold correction, replay sufficiency check, replay checksum computation, predicate contract resolution, or event-sequence validation. |
+| `affected_record_type` | Yes | Temporal policy, knowledge-time policy, temporal resolution row, late-arrival policy, correction policy, correction snapshot ref, replay policy, predicate contract row, event-sequence corpus, gold fact candidate, or version manifest. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to temporal policy rows, knowledge-time policy rows, late-arrival policy rows, correction policy rows, replay policy rows, correction snapshot refs, event-sequence corpus rows, predicate contract rows, temporal resolution refs, validation fixtures, or version manifests consulted by the error; empty only when no artifact was consulted. |
+| `validation_refs` | Yes | Exact `120` temporal, correction, replay, and event-sequence fixture refs. |
+| `redaction_classes` | Yes | Map every nested owner-context field to one `110.ErrorRedactionClassMatrix` class. Raw payload bytes, private bindings, credentials, source-native identity values, raw temporal values, sensitive evidence refs, and private fixture bytes must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+| `affected_record_ref` | No | Required when a persisted temporal, correction, replay, or gold candidate record was evaluated. |
+| `policy_ref` | No | Required when a policy row was selected, missing, inactive, or checksum-mismatched. |
+| `temporal_input_path` | No | Required for malformed, unauthorized, ambiguous, or missing time-input failures. |
+| `replay_output_class` | No | Required for replay policy or checksum failures. |
+| `snapshot_ref_class` | No | Required for correction snapshot and mutable-ref failures. |
+
 ### ActivationControlledRowSchemaPrecisionHandoff
 
 The following `080` row families can affect fact-time resolution, known-time import, late-arrival routing, correction behavior, snapshot refs, replay equivalence, graph rebuild equivalence, predicate contracts, assertion-state transitions, or event-sequence validation. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.

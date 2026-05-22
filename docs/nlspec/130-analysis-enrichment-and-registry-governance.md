@@ -543,7 +543,24 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 #### AnalysisErrorContext
 
-`AnalysisErrorContext` is the owner context schema for `130` error rows. It must include the specific owner refs, artifact refs, checksums, attempted authority effect, attempted mutation class, validation refs, lifecycle status, activation scope, package-set ref when package-supplied, and redaction class for any raw or private value. It must not expose raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, or backend/query text to callers without the required `110` permission.
+`AnalysisErrorContext` is the owner context schema for `130` analysis, enrichment, lineage, derived-edge, and registry-governance registry rows. It satisfies `110.OwnerErrorContextMinimumSchema` and must not expose raw facet bytes, raw threat-intel values, private activation scope, private source binding values, registry payload bytes, artifact payload bytes, or backend/query text to callers.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `context_schema_version` | Yes | Immutable `130` context schema version. |
+| `owner_spec` | Yes | Must be `130`. |
+| `error_code` | Yes | Must match the generated registry row. |
+| `failure_class` | Yes | Closed token: `registry_artifact`, `volatility_boundary`, `analysis_mutation`, `lineage_facet`, `registry_authority`, `threat_intel`, `custom_property`, `classification`, `derived_edge`, or `replay`. |
+| `operation` | Yes | Analysis execution, analysis query import, derivation-rule routing, derived-edge validation, threat-intel enrichment, lineage facet mapping, artifact-class validation, registry activation, custom-property validation, classification validation, or replay validation. |
+| `affected_record_type` | Yes | Analysis rule bundle, analysis rule, finding, metric, risk acceptance record, derived edge rule, lineage facet policy, threat-intel artifact, registry artifact, custom property schema, classification policy, or version manifest. |
+| `field_path` | Yes | Exact field path when applicable; null for artifact-wide failures. |
+| `artifact_refs` | Yes | Canonically sorted refs to analysis rule bundles, rule compatibility matrices, enrichment profiles, lineage facet mappings, artifact-class policies, registry governance artifacts, graph query refs, mutation-prohibition proofs, validation fixtures, package-set refs, or version manifests consulted by the error; empty only when no artifact was consulted. |
+| `validation_refs` | Yes | Exact `120` analysis, lineage, enrichment, registry, and derived-edge fixture refs. |
+| `redaction_classes` | Yes | Map every nested owner-context field to one `110.ErrorRedactionClassMatrix` class. Raw facet bytes, raw threat-intel values, private bindings, registry payload bytes, artifact payload bytes, backend-native query text, provider-native query text, and raw payload bytes must map to `always_forbidden`. |
+| `blocking_reason` | Yes when generated row severity is `blocked` | Bounded reason; otherwise null or omitted. |
+| `attempted_authority_effect` | No | Required when the error blocks fact, identity, source-authority, package, graph, watermark, or registry authority substitution. |
+| `attempted_mutation_class` | No | Required when an analysis, lineage, enrichment, or registry operation attempted mutation. |
+| `package_set_ref` | No | Required when the failing artifact was package-supplied. |
 
 ### RuleGraphCompatibilityMatrix fixture expectations
 
