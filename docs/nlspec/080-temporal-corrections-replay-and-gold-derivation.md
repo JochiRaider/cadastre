@@ -363,6 +363,35 @@ Production replay must validate required replay policy artifact refs, then run `
 
 `ReplayEquivalencePolicy` defines included fields, excluded volatile fields, hash algorithm, canonical ordering, owner-specific included/excluded field handoff, failure precedence, and shadow-output behavior by output class. Output-specific field selection for `graph_delta`, `graph_apply`, and `graph_rebuild` is imported from `090`; field selection for `api_response` is imported from `110`; field selection for `export_projection` is imported from `050`; field selection for `analysis_output` is imported from `130`. `080` owns checksum algorithm, preflight ordering, and failure precedence.
 
+### LakehouseTableStateReplayInputHandoff
+
+Replay and correction preflight must treat lakehouse table-state refs, retention decisions, and cross-table consistency as first-class replay inputs. The table below is additive to the owner output-class rows in `ReplayEquivalencePolicy` and `030.VersionManifestCompletenessMatrix`.
+
+| Output class | Additional required lakehouse inputs |
+| --- | --- |
+| `raw` | feed profile, read policy, raw supplier profile, raw manifest, object/partition/table refs, schema refs, and read checkpoint refs. |
+| `silver` | raw refs plus read policy, manifest, schema refs, and active external schema refs. |
+| `gold` | temporal refs, authority refs, absence refs, source-dataset refs, and table snapshot refs when the candidate depends on table state. |
+| `gold_correction` | old `LakehouseSnapshotRef`, new `LakehouseSnapshotRef`, old/new `LakehouseCommitRef` when write-affecting, table-set checksum, `ReplayRetentionPolicy`, retention-protection proof, and schema compatibility refs. |
+| `graph_rebuild` | graph rebuild manifest, table snapshot refs, dataset version refs, table-set checksum, retention protection, and schema compatibility refs. |
+| `validation_acceptance` | all owner row refs, expected output checksums, fixture checksums, and package-set refs where applicable. |
+
+Lakehouse replay failure precedence is:
+
+```text
+missing table-state ref
+mutable-only ref
+retention-ineligible
+schema-incompatible
+cross-table checksum mismatch
+authority mismatch
+temporal mismatch
+side-effect mismatch
+generic checksum mismatch
+```
+
+A more specific lakehouse failure must be emitted before `REPLAY_INPUT_INSUFFICIENT` or generic checksum mismatch.
+
 ### TelemetryReplayExclusionHandoff
 
 Telemetry runtime identifiers and exporter state are excluded volatile fields by default. `ComputeReplayEquivalenceChecksum` must exclude trace IDs, span IDs, sampled flags, runtime duration, runtime start time, exporter queue state, exporter delivery result, Collector state, dropped telemetry counts, diagnostic display order, and telemetry backend-generated IDs unless an active `140.TelemetryReplayExclusionPolicy` and owner output-class row explicitly include a bounded telemetry diagnostic field for health, API, audit, or validation output.
@@ -541,6 +570,32 @@ Query service current time is query evaluation context only. It must not be reus
 | `duplicate_no_op` | required comparable prior snapshot | required duplicate candidate snapshot | required | old and new snapshots protected | reject with `MUTABLE_BRANCH_REF_FOR_REPLAY` | active default |
 
 Every correction output must include old and new `LakehouseSnapshotRef` refs, table-set checksum, retention-protection proof, and immutable dataset/version refs in `VersionManifest`. Mutable branch, tag, latest, or workspace-only refs are rejected before correction output.
+
+`CorrectionSnapshotRefPolicy` row precision for lakehouse correction closure is:
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `policy_id` | Yes | none | Stable policy ID. |
+| `policy_version` | Yes | none | Immutable version included in row checksum. |
+| `correction_class` | Yes | none | One correction class from the table above. |
+| `old_snapshot_roles` | Yes | none | Canonical set of required old snapshot roles. |
+| `new_snapshot_roles` | Yes | none | Canonical set of required new snapshot roles. |
+| `required_table_set_checksum` | No | `true` | Corrections affecting table state require old/new table-set checksums. |
+| `old_commit_ref_required` | No | `true` when write-affecting | Missing required old commit ref rejects before output. |
+| `new_commit_ref_required` | No | `true` when write-affecting | Missing required new commit ref rejects before output. |
+| `retention_protection_required` | No | `true` | Missing retention-protection proof rejects before output. |
+| `schema_compatibility_check_required` | No | `true` | Missing or failing compatibility check rejects before output. |
+| `mutable_ref_behavior` | Yes | `reject_mutable_branch_tag_latest` | Mutable branch, tag, latest, or workspace-only refs are forbidden. |
+| `validation_refs` | Yes | none | Non-empty refs covering missing, mutable, retention, schema, and table-set cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Closed `mutable_ref_behavior` value for MVP is:
+
+```text
+reject_mutable_branch_tag_latest
+```
 
 ### LateArrivalPolicy
 
@@ -853,7 +908,7 @@ The following `080` row families can affect fact-time resolution, known-time imp
 | `KnowledgeTimeImportPolicy` | output_affecting | TODO: add full field precision for current import, reconstructed known-time permission, required evidence refs, and missing evidence behavior. |
 | `LateArrivalPolicy` | output_affecting | TODO: add full field precision for route states, authority/completeness/coverage/staleness refs, quarantine refs, watermark refs, and errors. |
 | `GoldFactCorrectionPolicy` | output_affecting | Source-effect correction candidates must carry selected `020.SourceDatasetCatalogRow`, `060.SourceAuthorityClosureMatrixRow`, and `AbsenceDerivationResult` refs before correction. Remaining non-source-effect correction event and assertion-transition precision remains blocked until separately closed. |
-| `CorrectionSnapshotRefPolicy` | output_affecting | TODO: add full field precision for old/new snapshot refs, table-set checksum, retained evidence refs, mutable-ref rejection, and retention refs. |
+| `CorrectionSnapshotRefPolicy` | output_affecting | Closed for lakehouse correction closure by `CorrectionSnapshotRefPolicy` row precision above: old/new snapshot roles, table-set checksum, commit refs, retention protection, schema compatibility, mutable-ref rejection, validation refs, activation scope, lifecycle status, and row checksum are explicit. |
 | `ReplayEquivalencePolicyOutputClassRow` | output_affecting | TODO: add full field precision for included fields, excluded volatile fields, checksum inclusion, failure precedence, and manifest requirements. |
 | `GraphRebuildEquivalencePolicy` | output_affecting when graph rebuild is in scope | TODO: add full field precision for graph-specific included/excluded refs in the `080`/`090` handoff. |
 | `GoldFactPredicateContractRow` | output_affecting | Closed for source-effect handoff by the existing field table for fact type, predicate, subject/object kind sets, null object policy, structured schema refs, source authority refs, checksum inputs, validation refs, activation scope, lifecycle status, and owner errors. Remaining non-source-effect predicate precision work remains blocked until separately closed. |
@@ -922,6 +977,9 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-005` | Gold replay and correction replay fail when the row-set checksum, selected row checksum, selected structured schema checksum, source authority ref, or manifest inclusion differs from the recorded `VersionManifest`. |
 | `080-GOLD-PREDICATE-CATALOG-CLOSURE-AC-006` | Package-supplied predicate row sets and structured schema row sets fail activation when package-set refs or validation refs are missing. |
 | `080-DOMAIN-RESOLVED-ROUTING-AC-001` | Domain rows for `CorrectionSnapshotRefPolicy` and `ReplayEquivalencePolicy` remain resolved only while this file has no owner-local `TODO:` for those stable contracts and the required `120` temporal, correction, and replay validation row families pass. |
+| `080-LAKEHOUSE-REPLAY-INPUT-AC-001` | Replay rejects missing snapshot, commit, retention, schema compatibility, or table-set refs before generic mismatch. |
+| `080-CORRECTION-LAKEHOUSE-REF-AC-001` | Corrections reject mutable-only old/new refs and missing table-set checksum before output. |
+| `080-RETENTION-HANDOFF-AC-001` | Replay and correction preflight consume `ReplayRetentionPolicy` and retention-protection refs when maintenance could remove replay inputs. |
 
 ### Structured input temporal and replay acceptance criteria
 

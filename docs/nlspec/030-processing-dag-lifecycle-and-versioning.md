@@ -882,6 +882,8 @@ declared_dag_subset_profile
 lakehouse_table_profile
 replay_retention_policy
 table_maintenance_policy
+cross_table_commit_profile
+catalog_branch_promotion_policy
 external_schema_profile
 external_schema_artifact
 mapping_bundle
@@ -1012,6 +1014,8 @@ The canonical `artifact_class` token is the value in the closed registry above. 
 | `070.ResolverProfileRowSet` and package type `resolver_profile` | `resolver_profile` | Exact alias; no inferred `resolver_profile_row_set` artifact class is allowed. |
 | `090.GraphEdgeSemantics` and package type `graph_edge_semantics` | `graph_edge_semantics_row_set` | Graph semantics row sets use the canonical row-set artifact class. |
 | `090.GraphBackendActivationBlockerSet` | `graph_backend_activation_blocker_set` | Backend blocker sets are activation-controlled row sets and must appear in `VersionManifest.included_refs` when backend selection, preflight, query, apply, rebuild, or serving output is in scope. |
+| `020.CrossTableCommitProfile` | `cross_table_commit_profile` | Required when a production run, replay, rebuild, validation, or promotion needs coherent multi-table state. |
+| `020.CatalogBranchPromotionPolicy` | `catalog_branch_promotion_policy` | Required when catalog branch, tag, merge, or commit promotion controls production visibility. |
 | `100.ProductionPackageSetManifest` | `production_package_set` | Package-set manifest fields must not substitute for `VersionManifest.included_refs`. |
 
 ### ValidateActivationControlledArtifactRef
@@ -1368,6 +1372,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Scoped row selection | selected scoped row ref, selected row checksum, selected `030.ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, activation artifact ref, and redacted ambiguity diagnostic refs when selection failure affects output. |
 | Activation-controlled row selection | structured `030.ActivationControlledRowRef`, row-set artifact ref, row family, row ID, row schema version, row checksum, row-set checksum, selector checksums when scoped, validation refs, package-set refs when package-supplied, owner missing or invalid error refs for rejected rows, and lifecycle transition evidence when row activation changed state. |
 | `source_dataset_and_feed_category_closure` | source-dataset row-set artifact ref/checksum; selected source-dataset row ref/checksum or deterministic block row ref/checksum for every selected token; feed-category closure row-set ref/checksum; selected category row ref/checksum or deterministic block row ref/checksum for every category; source-authority closure matrix row ref/checksum for every absence-sensitive effect; all underlying `060` row refs/checksums; selector context refs/checksums; validation refs; package release refs and package-set refs when package-supplied; owner error refs for rejected rows. |
+| `lakehouse_table_state_and_maintenance` | `RawSupplierProfile` row-set artifact ref/checksum and selected row refs/checksums; `LakehouseReadPolicy` artifact ref/checksum and selected row refs/checksums; `RawFeedManifest` runtime-state ref/checksum when output-affecting; `LakehouseTableProfile` artifact ref/checksum and selected row refs/checksums; `LakehouseSnapshotRef`, `DatasetVersionRef`, and `LakehouseCommitRef` runtime refs/checksums; schema compatibility refs; `ReplayRetentionPolicy` artifact ref/checksum and selected row refs/checksums; `ReplayRetentionDecision` runtime-state ref/checksum; `TableMaintenancePolicy` artifact ref/checksum and selected row refs/checksums; `CrossTableCommitProfile` artifact ref/checksum when table-set consistency is required; `CatalogBranchPromotionPolicy` artifact ref/checksum when catalog promotion controls production visibility; `030.RunLockCommitGuard` refs for destructive or rewrite maintenance; package release and package-set refs when any artifact is package-supplied; owner error refs for rejected row selections. |
 | `feed_category_closure` | active `020.SourceDatasetCatalogRowSet` ref, selected `020.SourceDatasetCatalogRow` refs/checksums, deterministic source-dataset block row refs when used, source-dataset validation refs, package-set refs when package-supplied, active `020.LakehouseFeedCategoryClosureRowSet` ref, every selected category row ref/checksum, category validation refs, and closure outcome. |
 | `ocsf_mapping_closure` | active `050.ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, `CanonicalValidationOutput`, row checksums, validation refs, and package-set refs when package-supplied. |
 | `source_authority_closure` | active `060.SourceAuthorityClosureMatrixRowSet` or exact deterministic block row ref, selected `020.SourceDatasetCatalogRow` refs/checksums for every `source_dataset`, and all underlying source authority, completeness, coverage, selected `060.CoverageDomainToken` values, canonical token-array checksum, `060.CoverageDomainCatalog` version or spec checksum when coverage-domain selection affects closure, validation, deterministic block behavior, or output, staleness, progress-signal, visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row-set refs consulted by the requested effect. |
@@ -1730,6 +1735,9 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-SCOPE-SELECTOR-AC-004` | Ambiguous or incomparable maximal scoped rows produce the owner mapped ambiguity error and select no row. |
 | `030-SCOPE-SELECTOR-AC-005` | Public selector bytes containing raw private bindings fail before persistence, publication, API output, audit output, telemetry export, package report materialization, or validation report materialization. |
 | `030-SCOPE-SELECTOR-AC-006` | Output-affecting scoped row selection includes selected row refs, row checksums, context refs, selector checksums, and activation artifact refs in `VersionManifest`. |
+| `030-LAKEHOUSE-TABLESTATE-MANIFEST-AC-001` | Every output-affecting lakehouse read, table-state, retention, maintenance, cross-table, and catalog-promotion ref appears in `VersionManifest.included_refs`. |
+| `030-LAKEHOUSE-ARTIFACT-CLASS-AC-001` | Every new `020` activation-controlled artifact class is in the closed registry and invalid class tokens fail before owner output. |
+| `030-LAKEHOUSE-RUNTIME-STATE-AC-001` | `RawFeedManifest`, `ReplayRetentionDecision`, `LakehouseSnapshotRef`, `DatasetVersionRef`, and `LakehouseCommitRef` refs are manifest-included when output-affecting. |
 
 ### Structured input repository acceptance criteria
 

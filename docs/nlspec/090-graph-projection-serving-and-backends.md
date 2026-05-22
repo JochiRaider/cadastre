@@ -984,7 +984,15 @@ Production JanusGraph profiles must block any graph-centric query translation th
 
 | Field | Required | Rule |
 | --- | ---: | --- |
+| `input_dataset_version_refs` | Yes | Required when graph rebuild uses a table-set or logical dataset version. |
+| `input_lakehouse_table_profile_refs` | Yes | Required for every authoritative table read by rebuild. |
 | `input_snapshot_refs` | Yes | Authoritative lakehouse snapshot or dataset refs. |
+| `input_commit_refs` | Yes | Required when rebuild consumes write or commit state. |
+| `table_set_checksum` | Yes | Required when more than one authoritative table participates. |
+| `cross_table_commit_profile_ref` | Yes | Required when table-set consistency is required. |
+| `schema_compatibility_check_refs` | Yes | Required for every input schema affecting graph output. |
+| `protected_input_ref_set_checksum` | Yes | SHA-256 over canonical protected input ref set. |
+| `replay_retention_policy_refs` | Yes | Required when rebuild inputs must be protected from maintenance. |
 | `graph_delta_set_refs` | Yes | Persisted graph delta set refs and checksums. |
 | `projection_profile_ref` | Yes | Active graph projection profile. |
 | `projection_row_set_checksum` | Yes | SHA-256 over active node, edge, and property projection rows. |
@@ -1000,6 +1008,8 @@ Production JanusGraph profiles must block any graph-centric query translation th
 | `output_checksum` | Yes | SHA-256 over canonical rebuilt graph-serving output summary. |
 | `status` | Yes | success, failed, blocked, or not_run. |
 | `errors` | Yes | Default `[]`; owner-specific graph rebuild errors. |
+
+`020.TableMaintenancePolicy` must treat `GraphRebuildManifest.protected_input_ref_set_checksum` and all listed protected refs as deletion or rewrite blockers unless a later active retention policy explicitly permits the candidate and graph rebuild validation passes.
 
 ### GraphObjectOutputEligibilityRow
 
@@ -1269,6 +1279,8 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
 | `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |
 | `090-REBUILD-MANIFEST-AC-001` | Every graph rebuild promotion has a `GraphRebuildManifest` with input refs, profile refs, schema fingerprint, output checksum, status, and errors. |
+| `090-REBUILD-MANIFEST-TABLESTATE-AC-001` | Graph rebuild manifests expose dataset version refs, table profile refs, snapshot refs, commit refs, table-set checksum, cross-table profile refs, schema compatibility refs, protected input checksum, and replay-retention refs when applicable. |
+| `090-REBUILD-RETENTION-PROTECTION-AC-001` | Table maintenance treats protected graph rebuild inputs as deletion/rewrite blockers unless an active retention policy explicitly permits the candidate and rebuild validation passes. |
 | `090-VOLATILITY-AC-001` | Inactive graph projection profile, query translation checksum mismatch, apply profile manifest omission, backend ID exposure, and attempted `has_theoretical_reachability` activation fail before mutation or serving. |
 | `090-VOLATILITY-AC-002` | Graph apply default values, maximums, retry classes, and retry schedule are explicit and no backend default is inherited. |
 | `090-LIFECYCLE-AC-001` | Graph apply lifecycle matrix is total. |

@@ -69,6 +69,7 @@ Every active domain spec must include at least one negative validation case for 
 | Direct source calls | Production package attempts enterprise source API call and fails before output. |
 | Feed completeness | Missing feed row attempts absence and fails. |
 | Feed profile closure | Missing feed profile field, missing source-dataset catalog row, ambiguous source-dataset catalog row, blocked source-dataset catalog row, missing category closure row, unresolved profile branch, invalid empty-scope authorization, or missing subset profile fails before absence-sensitive effects. |
+| Lakehouse table state and maintenance | Raw supplier, read policy, raw manifest runtime state, table profile, replay retention, maintenance, cross-table consistency, catalog promotion, and package-supplied lakehouse table-state catalog failures fail or no-op with mutation-prohibition proof and manifest/package-set requirements. |
 | Source authority | Missing exact authority row, ambiguous authority row, missing source-dataset catalog row, ambiguous source-dataset catalog row, checksum-mismatched source-dataset catalog row, missing source-specific coverage row, missing staleness row, missing control-result mapping row, weak-signal combination, or checksum-mismatched closure row attempts output and fails or no-ops with no forbidden mutation. |
 | Coverage-domain token closure | Alias/display values, unknown tokens, duplicate tokens, unsupported feed-category/token pairs, omitted required token fields, empty arrays for absence-sensitive effects, and inactive `reachability` usage fail before source authority, absence, cleanup, graph expiry, retraction, watermark, package activation, API output, or validation acceptance. |
 | Completeness effect gate | Missing completeness profile row, missing upstream evidence, omitted allowed effect, weak-signal combination, or completeness-blocked watermark fails or no-ops with no absence-sensitive effect. |
@@ -115,6 +116,8 @@ Validation must prove that volatile material cannot redefine stable behavior and
 
 `AcceptanceReport.result = pass` is forbidden when any non-deferred define-once, Section 25, owner-export, duplicate-owner, runtime-restatement, or owner-contradiction validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, or contains a required `TODO` fixture checksum, expected output checksum, expected error, mutation-prohibition proof, activation ref, or manifest ref.
 
+New lakehouse table-state validation rows with `TODO:` fixture checksum, expected checksum, mutation-prohibition proof, activation ref, package-set ref, or manifest ref must report `blocking_status = blocked` and must not contribute to `AcceptanceReport.result = pass`.
+
 ### ScopeSelectorValidationMatrix
 
 This matrix verifies `030.ScopeSelector` behavior and every owner import that uses scoped rows. A row may pass only when fixture checksum, expected output checksum, owner error mapping, redaction proof, mutation-prohibition proof, and `030.VersionManifest` requirements are concrete and non-`TODO`.
@@ -158,6 +161,19 @@ This matrix aggregates closure-pack validation rows. A row may pass only when th
 | `120-COVERAGE-DOMAIN-*` | `060`, with feed-category mapping checks in `020` |
 | `120-IDENTITY-CLOSURE-*` | `070` |
 | `120-GRAPH-PROFILE-CLOSURE-*` | `090` |
+| `120-RAW-SUPPLIER-*` | `020` |
+| `120-LAKEHOUSE-READ-POLICY-*` | `020` |
+| `120-RAW-FEED-MANIFEST-*` | `020` |
+| `120-LAKEHOUSE-TABLE-PROFILE-*` | `020` |
+| `120-REPLAY-RETENTION-*` | `020`, with replay handoff in `080` |
+| `120-TABLE-MAINTENANCE-*` | `020`, with run-lock handoff in `030` |
+| `120-CROSS-TABLE-COMMIT-*` | `020`, with manifest handoff in `030` |
+| `120-CATALOG-PROMOTION-*` | `020`, with package and manifest handoffs in `100` and `030` |
+| `120-LAKEHOUSE-TABLESTATE-PACKAGE-*` | `100`, with owner behavior in `020` |
+| `120-VERSION-MANIFEST-LAKEHOUSE-TABLESTATE-*` | `030`, with owner behavior in `020` |
+| `120-LAKEHOUSE-NONAUTH-*` | `060`, with owner behavior in `020` |
+| `120-GRAPH-REBUILD-LAKEHOUSE-INPUTS-*` | `090`, with retention handoff in `020` |
+| `120-TEMPORAL-CORRECTION-LAKEHOUSE-*` | `080`, with table-state owner refs in `020` |
 | `120-GRAPH-BACKEND-*` | `090`, `100` |
 | `120-PACKAGE-*` | `100` |
 | `120-VERSION-MANIFEST-*` | `030` |
@@ -246,6 +262,113 @@ Benchmark rows are validation blockers until product governance supplies concret
 `AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs. It is also forbidden when any activation-controlled row-schema precision row is blocked, not run, failed, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, owner-error-incomplete, or contains a required `TODO` fixture checksum, expected output checksum, expected error, row checksum, row-set checksum, or mutation-prohibition proof.
 
 ### ActivationControlledRowSchemaValidationMatrix
+
+#### RawSupplierProfileValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-raw-supplier-valid` | `020` | Valid supplier row resolves exactly once. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | no forbidden mutation | selected supplier row and row-set refs included | `020-RAW-SUPPLIER-AC-001` |
+| `val-120-raw-supplier-private-binding-leak` | `020`, `010`, `110` | Public row leaks private binding. | `TODO: product governance must supply fixture checksum` | `PRIVATE_BINDING_LEAK` | `TODO: product governance must supply expected error checksum` | no raw output | error refs included when visible | `020-RAW-SUPPLIER-AC-001` |
+| `val-120-raw-supplier-unsupported-class` | `020` | Supplier class is outside closed enum or public `private_bound_supplier`. | `TODO: product governance must supply fixture checksum` | `RAW_SUPPLIER_PROFILE_UNSUPPORTED_CLASS` | `TODO: product governance must supply expected error checksum` | no raw output | owner error ref included | `020-RAW-SUPPLIER-AC-001` |
+| `val-120-raw-supplier-missing-redacted-hash` | `020` | Required redacted access hash omitted. | `TODO: product governance must supply fixture checksum` | `RAW_SUPPLIER_REDACTED_ACCESS_HASH_MISSING` | `TODO: product governance must supply expected error checksum` | no read output | owner error ref included | `020-RAW-SUPPLIER-AC-001` |
+| `val-120-raw-supplier-missing-validation-ref` | `020` | Validation refs omitted. | `TODO: product governance must supply fixture checksum` | `RAW_SUPPLIER_VALIDATION_REFS_MISSING` | `TODO: product governance must supply expected error checksum` | no activation | validation blocker included | `020-RAW-SUPPLIER-AC-001` |
+
+#### LakehouseReadPolicyValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-lakehouse-read-policy-missing` | `020` | Feed read references no active read policy. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_POLICY_MISSING` | `TODO: product governance must supply expected error checksum` | no read output | rejected refs included when visible | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-policy-inactive` | `020` | Read policy lifecycle is not active for production. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_ACTIVATION_ARTIFACT_INACTIVE` | `TODO: product governance must supply expected error checksum` | no read output | policy ref/checksum included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-timeout` | `020` | Whole-read timeout fires. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_TIMEOUT` | `TODO: product governance must supply expected error checksum` | no absence-sensitive effect | timeout and policy refs included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-retry-exhausted` | `020` | Retry attempts exhaust deterministically. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_RETRY_EXHAUSTED` | `TODO: product governance must supply expected error checksum` | no absence-sensitive effect | retry schedule refs included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-checksum-mismatch` | `020` | Object or table checksum mismatches. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_CHECKSUM_MISMATCH` | `TODO: product governance must supply expected error checksum` | no raw import for failed object | checksum refs included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-omitted-object` | `020` | Object omitted by pushdown or manifest gap. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_OMITTED_OBJECT` | `TODO: product governance must supply expected error checksum` | no absence-sensitive effect | omitted object refs included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-order-undetermined` | `020` | No deterministic record ordering key exists. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_READ_ORDER_UNDETERMINED` | `TODO: product governance must supply expected error checksum` | no raw output | ordering diagnostic included | `020-READ-POLICY-AC-001` |
+| `val-120-lakehouse-read-payload-bound-exceeded` | `020` | Payload exceeds `max_payload_byte_length`. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_PAYLOAD_BOUND_EXCEEDED` | `TODO: product governance must supply expected error checksum` | no raw output | policy and payload bound refs included | `020-READ-POLICY-AC-001` |
+
+#### RawFeedManifestRuntimeStateValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-raw-feed-manifest-valid-object-batch` | `020` | Valid object batch manifest. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | no forbidden mutation | runtime manifest ref/checksum included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-valid-partition-set` | `020` | Valid partition set manifest. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | no forbidden mutation | runtime manifest ref/checksum included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-zero-row-allowed` | `020` | Zero-row target allowed by profile. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | no absence by default | profile and manifest refs included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-zero-row-blocked` | `020` | Zero-row target forbidden by bounds. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_EMPTY_TARGET_INVALID` | `TODO: product governance must supply expected error checksum` | no absence-sensitive effect | owner error ref included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-malformed-nested-object` | `020` | Nested object shape invalid. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_INVALID` | `TODO: product governance must supply expected error checksum` | no raw import | manifest error refs included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-duplicate-object-ref` | `020` | Duplicate canonical object ref. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_DUPLICATE_ENTRY` | `TODO: product governance must supply expected error checksum` | no raw import | duplicate key checksum included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-schema-checksum-mismatch` | `020` | Schema checksum mismatches manifest. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_CHECKSUM_MISMATCH` | `TODO: product governance must supply expected error checksum` | no raw import | schema refs included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-object-checksum-mismatch` | `020` | Object checksum mismatches bytes. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_CHECKSUM_MISMATCH` | `TODO: product governance must supply expected error checksum` | no raw import for failed object | object refs included | `020-MANIFEST-AC-002` |
+| `val-120-raw-feed-manifest-id-collision` | `020` | Different canonical bytes collide on manifest ID. | `TODO: product governance must supply fixture checksum` | `RAW_FEED_MANIFEST_ID_COLLISION` | `TODO: product governance must supply expected error checksum` | no manifest commit | collision refs included | `020-MANIFEST-AC-002` |
+
+#### LakehouseTableProfileValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-lakehouse-table-profile-missing` | `020` | Required table profile missing. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_TABLE_PROFILE_MISSING` | `TODO: product governance must supply expected error checksum` | no table read/write | owner error refs included | `020-TABLE-PROFILE-AC-001` |
+| `val-120-lakehouse-table-profile-unsupported-format` | `020` | Table format outside closed enum. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_TABLE_FORMAT_UNSUPPORTED` | `TODO: product governance must supply expected error checksum` | no table output | row refs included | `020-TABLE-PROFILE-AC-001` |
+| `val-120-lakehouse-table-profile-missing-native-snapshot-field` | `020` | Native snapshot field omitted. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_SNAPSHOT_IDENTITY_FIELD_MISSING` | `TODO: product governance must supply expected error checksum` | no read output | snapshot refs included | `020-TABLE-PROFILE-AC-001` |
+| `val-120-lakehouse-table-profile-missing-native-commit-field` | `020` | Native commit field omitted. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_COMMIT_IDENTITY_FIELD_MISSING` | `TODO: product governance must supply expected error checksum` | no write output | commit refs included | `020-TABLE-PROFILE-AC-001` |
+| `val-120-lakehouse-table-profile-schema-incompatible` | `020` | Schema compatibility check fails. | `TODO: product governance must supply fixture checksum` | `LAKEHOUSE_SCHEMA_INCOMPATIBLE` | `TODO: product governance must supply expected error checksum` | no replay/correction output | schema check refs included | `020-TABLE-PROFILE-AC-001` |
+| `val-120-lakehouse-table-profile-opaque-replay-forbidden` | `020` | Opaque table used for replay. | `TODO: product governance must supply fixture checksum` | `OPAQUE_TABLE_REPLAY_FORBIDDEN` | `TODO: product governance must supply expected error checksum` | no replay output | table profile refs included | `020-TABLE-PROFILE-AC-001` |
+
+#### ReplayRetentionValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-replay-retention-version-manifest-protected` | `020` | Candidate deletes protected `VersionManifest` input. | `TODO: product governance must supply fixture checksum` | `REPLAY_RETENTION_PROTECTED_REF_REFUSED` | `TODO: product governance must supply expected error checksum` | no deletion/rewrite | retention decision ref included | `020-RETENTION-AC-001` |
+| `val-120-replay-retention-graph-rebuild-protected` | `020`, `090` | Candidate deletes graph rebuild input. | `TODO: product governance must supply fixture checksum` | `REPLAY_RETENTION_GRAPH_REBUILD_PROTECTED` | `TODO: product governance must supply expected error checksum` | no deletion/rewrite | graph rebuild and retention refs included | `090-REBUILD-RETENTION-PROTECTION-AC-001` |
+| `val-120-replay-retention-legal-hold` | `020` | Candidate is under legal hold. | `TODO: product governance must supply fixture checksum` | `REPLAY_RETENTION_LEGAL_HOLD_PROTECTED` | `TODO: product governance must supply expected error checksum` | no deletion/rewrite | legal hold ref included | `020-RETENTION-AC-001` |
+| `val-120-replay-retention-window-protected` | `020` | Candidate is inside retention window. | `TODO: product governance must supply fixture checksum` | `REPLAY_RETENTION_WINDOW_PROTECTED` | `TODO: product governance must supply expected error checksum` | no deletion/rewrite | window refs included | `020-RETENTION-AC-001` |
+| `val-120-replay-retention-candidate-eligible` | `020` | Candidate has no blockers. | `TODO: product governance must supply fixture checksum` | `eligible` | `TODO: product governance must supply expected output checksum` | mutation allowed only after commit guards | decision and candidate refs included | `020-RETENTION-AC-001` |
+
+#### TableMaintenanceValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-table-maintenance-default-blocked` | `020` | Default policy has no allowed actions. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_ACTION_NOT_ALLOWED` | `TODO: product governance must supply expected error checksum` | no table mutation | policy refs included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-run-lock-missing` | `020`, `030` | Destructive action omits run-lock guard. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_RUN_LOCK_GUARD_MISSING` | `TODO: product governance must supply expected error checksum` | no table mutation | guard omission diagnostic included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-candidate-checksum-mismatch` | `020` | Candidate set checksum mismatches. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_CANDIDATE_CHECKSUM_MISMATCH` | `TODO: product governance must supply expected error checksum` | no table mutation | candidate checksum refs included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-partial-eligibility-disabled` | `020` | One candidate refused under whole-set refusal. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_PARTIAL_ELIGIBILITY_REFUSED` | `TODO: product governance must supply expected error checksum` | no table mutation | refused decision refs included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-timeout` | `020` | Maintenance timeout fires. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_TIMEOUT` | `TODO: product governance must supply expected error checksum` | no commit unless eligible decision already committed | timeout refs included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-no-candidate-no-op` | `020` | No candidates under default no-op. | `TODO: product governance must supply fixture checksum` | `no_op` | `TODO: product governance must supply expected output checksum` | no table mutation | no-op decision ref included | `020-MAINTENANCE-AC-001` |
+| `val-120-table-maintenance-commit-ref-missing` | `020` | Eligible decision omits commit ref. | `TODO: product governance must supply fixture checksum` | `TABLE_MAINTENANCE_COMMIT_REF_MISSING` | `TODO: product governance must supply expected error checksum` | no externally visible mutation | commit ref diagnostic included | `020-MAINTENANCE-AC-001` |
+
+#### CrossTableCommitValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-cross-table-missing-table` | `020` | Required table missing from snapshot set. | `TODO: product governance must supply fixture checksum` | `CROSS_TABLE_MISSING_TABLE` | `TODO: product governance must supply expected error checksum` | no table-set output | cross-table profile refs included | `020-CROSS-TABLE-AC-001` |
+| `val-120-cross-table-mixed-snapshot-rejected` | `020` | Mixed snapshots without manifested checksum. | `TODO: product governance must supply fixture checksum` | `CROSS_TABLE_MIXED_SNAPSHOT_REJECTED` | `TODO: product governance must supply expected error checksum` | no table-set output | snapshot refs included | `020-CROSS-TABLE-AC-001` |
+| `val-120-cross-table-set-checksum-mismatch` | `020` | Table-set checksum mismatches. | `TODO: product governance must supply fixture checksum` | `CROSS_TABLE_SET_CHECKSUM_MISMATCH` | `TODO: product governance must supply expected error checksum` | no table-set output | checksum refs included | `020-CROSS-TABLE-AC-001` |
+| `val-120-cross-table-coherent-snapshot-accepted` | `020` | Coherent snapshot set validates. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | no forbidden mutation | all selected refs included | `020-CROSS-TABLE-AC-001` |
+
+#### CatalogBranchPromotionValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-catalog-promotion-branch-only-rejected` | `020` | Promotion source is mutable branch only. | `TODO: product governance must supply fixture checksum` | `CATALOG_PROMOTION_MUTABLE_REF_FORBIDDEN` | `TODO: product governance must supply expected error checksum` | no visibility change | promotion refs included | `020-CATALOG-PROMOTION-AC-001` |
+| `val-120-catalog-promotion-tag-only-rollback-rejected` | `020` | Rollback target is mutable tag only. | `TODO: product governance must supply fixture checksum` | `CATALOG_ROLLBACK_MUTABLE_TARGET_FORBIDDEN` | `TODO: product governance must supply expected error checksum` | no visibility change | rollback refs included | `020-CATALOG-PROMOTION-AC-001` |
+| `val-120-catalog-promotion-source-commit-accepted` | `020` | Immutable source commit has validation and approval refs. | `TODO: product governance must supply fixture checksum` | `closed_active` | `TODO: product governance must supply expected output checksum` | visibility changes only after verification | validation, approval, and commit refs included | `020-CATALOG-PROMOTION-AC-001` |
+| `val-120-catalog-promotion-target-advanced-preserves-production` | `020` | Target advanced during candidate promotion. | `TODO: product governance must supply fixture checksum` | `CATALOG_PROMOTION_TARGET_ADVANCED` | `TODO: product governance must supply expected error checksum` | current production visibility preserved | failure refs included | `020-CATALOG-PROMOTION-AC-001` |
+
+#### LakehouseTableStatePackageValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | package_set_requirement | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-lakehouse-tablestate-package-set-missing` | `100` | Package-supplied table-state row catalog omits package-set refs. | `TODO: product governance must supply fixture checksum` | `STRUCTURED_INPUT_PACKAGESET_REF_MISSING` | `TODO: product governance must supply expected error checksum` | no owner output | required and missing | package omission ref included | `100-LAKEHOUSE-PACKAGE-SET-AC-001` |
+| `val-120-lakehouse-tablestate-package-type-unknown` | `100` | Package type token unknown. | `TODO: product governance must supply fixture checksum` | `PACKAGE_TYPE_UNKNOWN` | `TODO: product governance must supply expected error checksum` | no activation | candidate package set preserved | package diagnostic included | `100-LAKEHOUSE-TABLESTATE-PACKAGE-TYPE-AC-001` |
+| `val-120-lakehouse-tablestate-policy-row-missing` | `100` | Known lakehouse table-state type has no policy row. | `TODO: product governance must supply fixture checksum` | `PACKAGE_TYPE_POLICY_MISSING` | `TODO: product governance must supply expected error checksum` | no activation | candidate package set preserved | policy diagnostic included | `100-LAKEHOUSE-TABLESTATE-PACKAGE-TYPE-AC-001` |
+| `val-120-lakehouse-tablestate-policy-bundle-substitution` | `100` | `policy_bundle` substitutes for row-specific lakehouse package type. | `TODO: product governance must supply fixture checksum` | `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` | `TODO: product governance must supply expected error checksum` | no activation | candidate package set preserved | substitution diagnostic included | `100-LAKEHOUSE-POLICY-BUNDLE-SUBSTITUTION-AC-001` |
+| `val-120-lakehouse-tablestate-mutable-ref-substitution` | `100`, `020` | Branch, tag, or mutable ref substitutes for immutable package or catalog ref. | `TODO: product governance must supply fixture checksum` | owner-specific mutable-ref error | `TODO: product governance must supply expected error checksum` | no activation or visibility change | candidate package set preserved | mutable ref diagnostic included | `100-LAKEHOUSE-PACKAGE-SET-AC-001` |
+
+#### LakehouseNonAuthorityValidationRows
+
+| validation_row_id | owner_spec | scenario | fixture_checksum | expected output or error | expected_output_checksum | mutation_prohibition | version_manifest_requirement | acceptance_criterion |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `val-120-lakehouse-nonauth-manifest-valid` | `060` | Valid manifest attempts to authorize absence. | `TODO: product governance must supply fixture checksum` | diagnostic-only or `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `TODO: product governance must supply expected output checksum` | no absence, cleanup, graph expiry, retraction, or watermark | manifest and non-authority refs included | `060-LAKEHOUSE-TABLESTATE-NONAUTH-AC-001` |
+| `val-120-lakehouse-nonauth-table-commit` | `060` | Table commit success attempts source cleanup permission. | `TODO: product governance must supply fixture checksum` | diagnostic-only or `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `TODO: product governance must supply expected output checksum` | no cleanup | commit and non-authority refs included | `060-LAKEHOUSE-PROGRESS-SIGNAL-AC-001` |
+| `val-120-lakehouse-nonauth-maintenance` | `060` | Maintenance success attempts source absence or cleanup. | `TODO: product governance must supply fixture checksum` | diagnostic-only or `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `TODO: product governance must supply expected output checksum` | no absence or cleanup | maintenance refs included | `060-LAKEHOUSE-TABLESTATE-NONAUTH-AC-001` |
+| `val-120-lakehouse-nonauth-catalog-promotion` | `060` | Catalog promotion success attempts source authority. | `TODO: product governance must supply fixture checksum` | diagnostic-only or `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` | `TODO: product governance must supply expected output checksum` | no source authority effect | promotion refs included | `060-LAKEHOUSE-TABLESTATE-NONAUTH-AC-001` |
 
 ### SourceDatasetCatalogValidationMatrix
 

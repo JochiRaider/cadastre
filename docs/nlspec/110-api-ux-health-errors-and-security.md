@@ -933,6 +933,24 @@ The generated `ErrorCodeRegistry` must include the following owner-specific rows
 | `EMPTY_SCOPE_NOT_AUTHORIZED_FOR_ABSENCE` | `060` | blocked | no, until profile row changes | scope redacted | `feed-category-empty-complete-*` |
 | `WATERMARK_ADVANCEMENT_COMPLETENESS_BLOCKED` | `060` | blocked | owner-defined | watermark target redacted | `feed-category-watermark-blocked-*` |
 
+### LakehouseTableStateErrorRegistryRows
+
+The generated `ErrorCodeRegistry` must include exactly one owner-specific row for every new `020`, `030`, and `100` lakehouse table-state error. Each row must use the owner context schema, redaction rule, severity, retry class, fixture ref, and no generic substitute required by `GenerateErrorCodeRegistry`.
+
+| Error group | Required codes or code families |
+| --- | --- |
+| Raw supplier | missing, inactive, unsupported class, private-binding leak, missing redacted hash, and missing validation refs. |
+| Read policy | missing policy, timeout, retry exhaustion, checksum mismatch, omitted object, deterministic ordering failure, and payload bound exceeded. |
+| Raw feed manifest | invalid manifest, duplicate entry, checksum mismatch, bounds exceeded, invalid empty target, ID collision, and runtime-state manifest omission. |
+| Table profile | missing profile, unsupported format, missing native snapshot field, missing native commit field, schema incompatibility, and opaque table used for replay. |
+| Retention | policy missing, protected ref deletion refused, legal hold protected, retention window protected, and graph rebuild ref protected. |
+| Maintenance | policy missing, action not allowed, run-lock guard missing, candidate checksum mismatch, partial eligibility refused, timeout, and commit ref missing. |
+| Cross-table | profile missing, missing table, mixed snapshot rejected, and table-set checksum mismatch. |
+| Catalog promotion | mutable branch-only promotion, mutable rollback target, missing approval, missing validation, target advanced, and post-promotion checksum mismatch. |
+| Package handoff | missing package type, policy row missing, package-set omission, and policy-bundle substitution. |
+
+Generic `VERSION_MANIFEST_INCOMPLETE`, `API_BOUNDS_INVALID`, `AUTHORIZATION_ERROR`, or activation-artifact errors must not substitute for these owner-specific errors when the owner-specific condition is known.
+
 ### SourceAuthorityClosureErrorRegistryRows
 
 The generated `ErrorCodeRegistry` must include every `060` source-authority closure code with owner, severity, retryability, redaction, and fixture ID. These rows extend the feed closure rows and must be selected before generic activation, validation, or unknown-state codes.
@@ -1419,6 +1437,7 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, wildcard-fixtured, legacy `code` caller-field, generic-substitute, or unfixtured owner error rows. |
 | `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
 | `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
+| `110-LAKEHOUSE-TABLESTATE-ERROR-AC-001` | Every new `020`, `030`, and `100` lakehouse table-state error appears in the generated registry with exact fixture refs, owner context schema, redaction rule, severity, retry class, and no generic substitute. |
 | `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |
 | `110-REDACTION-MATRIX-AC-001` | Every data class in `RedactionDataClassMatrix` has caller-visible, audit-visible, and forbidden-output fixture coverage. |
 | `110-ENDPOINT-OUTCOME-TOTAL-AC-001` | Every endpoint row in `EndpointOutcomeMatrix` has deterministic success, empty, unauthorized, stale, partial, conflicted, ambiguous, pagination, redaction, and error-precedence behavior. |

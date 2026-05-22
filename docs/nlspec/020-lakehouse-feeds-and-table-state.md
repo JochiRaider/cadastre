@@ -73,6 +73,9 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `ReplayRetentionDecision`
 - `CrossTableCommitProfile`
 - `CatalogBranchPromotionPolicy`
+- `DecideTableMaintenance`
+- `RawFeedManifestRuntimeStateSchema`
+- `LakehouseTableStateErrorRegistryFragment`
 - `FeedStageLifecycleEventDerivation`
 
 ## Feed Read Contract
@@ -569,6 +572,30 @@ Feed-related `030.ProcessingStageLifecycleResult` usage must add `feed_receipt_s
 | `validation_fixture_supplier` | public redacted class | fixture ID, source category, redaction summary, checksum | raw private payload unless redacted fixture permits | Validation-only, no production evidence. |
 | `private_bound_supplier` | private implementation artifact only | none in public docs | all concrete bindings | Public artifact must fail if present. |
 
+### RawSupplierProfileRow schema
+
+`RawSupplierProfile` is an activation-controlled row family. Concrete rows instantiate the supplier boundary only; they do not grant source authority, source completeness, identity authority, graph authority, or package activation authority by existence.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version included in `row_checksum`. |
+| `supplier_profile_id` | Yes | none | Stable public ID; must not encode vendor, route, tenant, host list, credential, or private inventory. |
+| `supplier_class` | Yes | none | Closed enum: `external_transport_supplier`, `lakehouse_export_supplier`, `validation_fixture_supplier`. Public use of `private_bound_supplier` fails with `PRIVATE_BINDING_LEAK`. |
+| `allowed_feed_categories` | Yes | none | Canonical non-empty set of `LakehouseFeedCategoryClosureRequirementTable` tokens; duplicates fail; values sort lexically before checksum computation. |
+| `allowed_read_target_kinds` | Yes | none | Canonical set over `table_snapshot`, `dataset_version`, `object_batch`, `partition_set`, and `manifest_list`. |
+| `allowed_metadata_fields` | No | `[]` | Canonical set of public supplier metadata paths. Private route, credential, and raw payload paths are forbidden. |
+| `prohibited_metadata_classes` | No | `private_route`, `credential`, `tenant_inventory`, `host_list`, `raw_payload_bytes`, `source_native_secret` | Canonical set; an active row may add classes but must not remove a default class. |
+| `redacted_access_ref_hash_required` | No | `true` | Production feed reads must fail when a required redacted access reference hash is absent. |
+| `upstream_completeness_evidence_classes` | No | `[]` | Canonical set of supplier evidence classes. Presence is evidence only and grants no authority by itself. |
+| `availability_evidence_required` | No | `true` for production, `false` for validation-only fixtures | Production reads must validate lakehouse availability evidence before output. |
+| `validation_refs` | Yes | none | Non-empty refs proving supplier class, private-binding rejection, redacted-hash behavior, metadata allowlist behavior, and manifest requirements. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; private binding values are forbidden. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Owner errors for this row family are `RAW_SUPPLIER_PROFILE_MISSING`, `RAW_SUPPLIER_PROFILE_INACTIVE`, `RAW_SUPPLIER_PROFILE_UNSUPPORTED_CLASS`, `PRIVATE_BINDING_LEAK`, `RAW_SUPPLIER_REDACTED_ACCESS_HASH_MISSING`, and `RAW_SUPPLIER_VALIDATION_REFS_MISSING`. A feed read that selects a missing, inactive, unsupported, private-leaking, checksum-mismatched, unvalidated, or unmanifested supplier profile must emit no raw output.
+
 ### ReadTargetBranchPolicy
 
 The read target branch table is total for production feed reads. A branch not covered by this table must fail with `LAKEHOUSE_PROFILE_BRANCH_UNRESOLVED` before read, import, completeness evaluation, absence evaluation, cleanup, retraction, graph expiry, or watermark advancement.
@@ -678,6 +705,69 @@ This table is total for every feed category in `LakehouseFeedCategoryClosureRequ
 
 Raw payload bytes remain in raw/bronze lakehouse storage. `RawRecord` persists bounded metadata, refs, byte lengths, checksums, visibility state, and lineage only.
 
+### LakehouseReadPolicyRow schema
+
+`LakehouseReadPolicy` is an activation-controlled row family. A production read must resolve exactly one active row before reading a table snapshot, dataset version, object batch, partition set, or manifest list.
+
+| Field | Required | Default | Bounds or rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `read_policy_id` | Yes | none | Stable public policy ID. |
+| `max_payload_byte_length` | No | `104857600` | Integer range `1..1073741824`; feed profile may only narrow. |
+| `raw_byte_canonicalization_mode` | No | `none` | Closed enum: `none` for MVP. |
+| `metadata_timeout_seconds` | No | `30` | Integer range `1..300`. |
+| `read_operation_timeout_seconds` | No | `300` | Integer range `1..3600`. |
+| `whole_read_timeout_seconds` | No | `3600` | Integer range `1..86400`. |
+| `max_retry_attempts` | No | `3` | Integer range `1..10`. |
+| `retry_schedule` | No | `exponential_no_jitter` | Deterministic; jitter is forbidden unless a future policy records side-effect inputs. |
+| `initial_retry_delay_ms` | No | `1000` | Integer range `0..60000`. |
+| `max_retry_delay_ms` | No | `30000` | Integer range `1000..600000`; must be greater than or equal to `initial_retry_delay_ms`. |
+| `projection_pushdown_policy` | No | `forbidden_for_raw_import` | Pushdown omission must not authorize absence. |
+| `read_checkpoint_required` | No | derived | Materializes to `true` for production or replay-affecting reads. |
+| `target_ref_requirements` | Yes | none | Total map over every read target kind in the table below. |
+| `object_gap_behavior_by_target_kind` | Yes | none | Total map in the object-gap table below. |
+| `retryable_error_classes` | Yes | default table below | Total map from error class to retryability. |
+| `checksum_behavior` | Yes | default table below | Total map from checksum state to read result. |
+| `failed_object_behavior` | Yes | default table below | Total map from failed-object state to receipt/result. |
+| `omitted_object_behavior` | Yes | default table below | Total map from omitted-object state to receipt/result. |
+| `deterministic_ordering_rule` | Yes | default table below | Defines row/object ordering before checksum and import output. |
+| `validation_refs` | Yes | none | Non-empty refs for target kinds, bounds, retries, checksums, omitted object handling, and ordering. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+#### LakehouseReadPolicy target_ref_requirements
+
+| Read target kind | Required refs |
+| --- | --- |
+| `table_snapshot` | `LakehouseSnapshotRef`, active `LakehouseTableProfile` ref/checksum, and schema ref/checksum. |
+| `dataset_version` | `DatasetVersionRef`, table-set checksum, schema refs/checksums, and active `CrossTableCommitProfile` when consistency is required. |
+| `object_batch` | `RawFeedManifest.object_refs[]` with object checksums, byte counts, media type, compression boundary, and schema refs. |
+| `partition_set` | `RawFeedManifest.partition_refs[]` with partition bounds, schema refs, row counts, byte counts, and checksums. |
+| `manifest_list` | `RawFeedManifest` ref/checksum and manifest validation result. |
+
+#### LakehouseReadPolicy object gap and retry maps
+
+| Map | Key | Required value |
+| --- | --- | --- |
+| `object_gap_behavior_by_target_kind` | each closed read target kind | `known_gap_to_partial_known`, `unknown_gap_to_partial_unknown`, or `gap_forbidden`. |
+| `retryable_error_classes` | `transient_metadata_unavailable` | retryable until `max_retry_attempts` or timeout. |
+| `retryable_error_classes` | `transient_object_unavailable` | retryable until `max_retry_attempts` or timeout. |
+| `retryable_error_classes` | `checksum_mismatch` | nonretryable. |
+| `retryable_error_classes` | `schema_unavailable` | nonretryable unless an active schema refresh policy is named. |
+| `checksum_behavior` | `checksum_match` | continue. |
+| `checksum_behavior` | `checksum_mismatch` | fail with `LAKEHOUSE_READ_CHECKSUM_MISMATCH`; no absence-sensitive effects. |
+| `checksum_behavior` | `checksum_missing_required` | fail before output. |
+| `failed_object_behavior` | `known_failed_object` | emit `read_partial_known_gap` and preserve positive raw output only when profile permits. |
+| `failed_object_behavior` | `unknown_failed_object` | emit `read_partial_unknown_gap`; no absence-sensitive effects. |
+| `omitted_object_behavior` | `object_not_listed_in_manifest` | fail with `LAKEHOUSE_READ_OMITTED_OBJECT`; no implicit absence. |
+| `omitted_object_behavior` | `projection_pushdown_omitted_object` | forbidden for raw import. |
+
+#### LakehouseReadPolicy deterministic ordering
+
+Records must sort by the first available key in this order: `object_ref_id`, canonical `partition_key`, stable row ordinal, byte offset, and declared source row key. If no deterministic order exists, the read must fail before output with `LAKEHOUSE_READ_ORDER_UNDETERMINED`.
+
 ### RawFeedManifest schema
 
 | Field | Type | Required | Default | Rule |
@@ -769,6 +859,306 @@ ComputeRawFeedManifestId(manifest):
 
 `manifest_checksum` must be SHA-256 lowercase hex over `040.CanonicalJSON` bytes for the materialized manifest excluding only `manifest_checksum`. `manifest_id` is included in `manifest_checksum`.
 
+### RawFeedManifestRuntimeStateSchema
+
+`RawFeedManifest` is a `020` runtime-state record. It must not be represented as an activation-controlled row. Manifest validation policy may be activation-controlled, but each manifest instance is runtime evidence from a feed read.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `manifest_schema_version` | Yes | none | Immutable runtime manifest schema version. |
+| `source_dataset_catalog_row_ref` | Yes | none | Selected `020.SourceDatasetCatalogRow` or deterministic block row ref. |
+| `source_dataset_catalog_row_checksum` | Yes | none | Must match selected row bytes after defaults. |
+| `feed_category_row_ref` | Yes | none | Selected `LakehouseFeedCategoryClosureRow` ref. |
+| `feed_category_row_checksum` | Yes | none | Must match selected category row. |
+| `read_policy_ref` | Yes | none | Selected `LakehouseReadPolicy` activation artifact ref. |
+| `read_policy_checksum` | Yes | none | Must match selected policy row or artifact checksum. |
+| `table_profile_refs` | Required for table-backed reads | `[]` for object-only manifest lists | Canonical set of `LakehouseTableProfile` row refs/checksums. |
+| `snapshot_ref` | Required for `table_snapshot` | null otherwise | Table-format-native snapshot ref/checksum. |
+| `dataset_version_ref` | Required for `dataset_version` or coherent table sets | null otherwise | Dataset version ref/checksum. |
+| `manifest_source_kind` | Yes | none | Closed enum below. |
+| `manifest_entry_bounds` | Yes | none | Counts, byte totals, target count bounds, and allowed zero-row policy. |
+| `canonical_array_semantics` | Yes | none | Must equal the array semantics table below. |
+| `duplicate_entry_policy` | Yes | `reject` | Duplicate canonical keys fail with `RAW_FEED_MANIFEST_DUPLICATE_ENTRY`. |
+| `manifest_validation_result` | Yes | none | Closed enum below. |
+| `raw_import_allowed` | Yes | `false` unless validation result is `valid` and target permits import | Validation-only manifests must not import raw records. |
+| `replay_materialization_refs` | Yes | `[]` | Canonical set of refs needed to recreate manifest reads. |
+| `record_checksum` | Yes | none | SHA-256 over canonical runtime-state bytes excluding `record_checksum`. |
+| `version_manifest_ref` | Required when output-affecting | none | Must be included in `030.VersionManifest` before raw import or replay-affecting output. |
+
+Closed `manifest_source_kind` values are:
+
+```text
+supplier_manifest
+cadastre_materialized_manifest
+validation_fixture_manifest
+```
+
+Closed `manifest_validation_result` values are:
+
+```text
+valid
+manifest_invalid
+checksum_mismatch
+schema_unavailable
+private_binding_leak
+bounds_exceeded
+```
+
+| Array | Semantics | Duplicate policy | Sort key |
+| --- | --- | --- | --- |
+| `object_refs[]` | `canonical_set` | `reject` | `object_ref_id` |
+| `partition_refs[]` | `canonical_set` | `reject` | canonical `partition_key`, then `schema_ref_id` |
+| `schema_refs[]` | `canonical_set` | `reject` | `schema_ref_id` |
+| `upstream_completeness_refs[]` | `canonical_set` | `reject` | referenced record ID |
+
+### LakehouseTableProfileRow schema
+
+`LakehouseTableProfile` is the activation-controlled row family for authoritative table governance. A production read or write of an authoritative table must resolve exactly one active table profile before output.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `table_profile_id` | Yes | none | Stable public table profile ID. |
+| `logical_table_role` | Yes | none | Closed enum below. |
+| `table_format` | Yes | none | Closed enum below. |
+| `table_format_version` | Yes | none | Exact table-format version or protocol version. |
+| `catalog_binding_ref` | Yes | none | Redacted catalog binding ref; mutable branch labels alone are forbidden. |
+| `catalog_binding_checksum` | Yes | none | SHA-256 over canonical catalog binding descriptor. |
+| `table_native_identity_hash` | Yes | none | Hash over table-format-native table identity. |
+| `table_location_hash` | Yes | none | Hash over redacted table location; raw private paths are forbidden. |
+| `required_snapshot_identity_fields` | Yes | none | Canonical set from `TableFormatNativeIdentityMatrix`. |
+| `required_commit_identity_fields` | Yes | none | Canonical set from `TableFormatNativeIdentityMatrix`. |
+| `schema_compatibility_policy_ref` | Yes | none | Active schema compatibility policy or check ref. |
+| `replay_required` | No | `true` for authoritative tables | `false` is allowed only for validation-only or non-authoritative tables. |
+| `replay_retention_policy_ref` | Yes | none | Active `ReplayRetentionPolicy` row ref. |
+| `maintenance_policy_ref` | Yes | none | Active `TableMaintenancePolicy` row ref. |
+| `write_mode` | Yes | none | Closed owner token for append, replace, correction, maintenance, or validation-only write mode. |
+| `delete_or_rewrite_guard_required` | No | `true` | Must be `true` for destructive or rewrite-capable maintenance. |
+| `validation_refs` | Yes | none | Non-empty refs for format identity, schema compatibility, replay, retention, maintenance, and private-binding tests. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Closed `logical_table_role` values are:
+
+```text
+raw_bronze
+silver
+identity
+gold
+graph_delta
+graph_apply
+registry
+health
+validation
+audit
+```
+
+Closed `table_format` values are:
+
+```text
+iceberg
+delta
+hudi
+opaque_manifested_table
+```
+
+`opaque_manifested_table` may support positive raw import only. It must not satisfy replay, graph rebuild, destructive maintenance, authoritative gold correction, or table-set promotion until a future active profile defines full native identity.
+
+### TableFormatNativeIdentityMatrix
+
+| Format | Snapshot ref must include | Commit ref must include |
+| --- | --- | --- |
+| `iceberg` | snapshot ID, metadata file URI hash, metadata file checksum, manifest-list URI hash, manifest-list checksum, schema ID, partition spec ID, sort order ID, delete-file set checksum, catalog ref/checksum. | previous metadata pointer checksum, new metadata file checksum, commit operation, manifest-list checksum, catalog compare-and-swap evidence. |
+| `delta` | table version, log range, checkpoint ref/checksum when used, protocol min reader/writer versions, table features, schema checksum, deletion-vector set checksum when used, catalog ref/checksum. | committed log version, action-set checksum, app transaction ref when present, protocol feature refs, checkpoint effect when present. |
+| `hudi` | instant time, instant action, completed-state proof, timeline checksum, table config checksum, base-file set checksum, log-file set checksum, savepoint ref when protected. | instant time, action, prior timeline checksum, completed-state proof, rollback/restore refs when applicable. |
+| `opaque_manifested_table` | manifest ref/checksum and schema checksum. | manifest write ref/checksum only; positive-read-only for MVP. |
+
+### ReplayRetentionPolicyRow schema
+
+`ReplayRetentionPolicy` is an activation-controlled row family. Until product governance supplies an active production retention duration, the default retention mode is `deterministic_block_all_maintenance`.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `retention_policy_id` | Yes | none | Stable public policy ID. |
+| `protected_artifact_classes` | Yes | none | Canonical set of manifest, snapshot, commit, schema, graph rebuild, and replay input classes protected by the policy. |
+| `protected_run_classes` | Yes | none | Canonical set of run classes protected by the policy. |
+| `retention_mode` | Yes | `deterministic_block_all_maintenance` | Closed enum below. |
+| `duration_days` | Required when `retention_mode = duration_window` | null otherwise | Positive integer; omitted duration in duration mode blocks activation. |
+| `legal_hold_refs` | No | `[]` | Canonical set; any present legal hold blocks destructive candidates. |
+| `graph_rebuild_protection` | No | `true` | When `true`, graph rebuild input refs are deletion/rewrite blockers. |
+| `partial_candidate_behavior` | No | `refuse_candidate_set` | Split eligibility must be explicit. |
+| `outside_window_behavior` | No | `refuse_until_policy_active` | Outside-window candidates remain blocked until policy rows define eligibility. |
+| `deletion_eligibility_rule` | Yes | none | Candidate is eligible only under the rule below. |
+| `validation_refs` | Yes | none | Non-empty refs for legal hold, protected manifest, graph rebuild, replay window, and eligible-candidate cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Closed `retention_mode` values are:
+
+```text
+protect_all_manifested_refs
+duration_window
+legal_hold_only
+deterministic_block_all_maintenance
+```
+
+A maintenance candidate is eligible only when it is not referenced by protected manifests, replay windows, graph rebuilds, legal holds, schema compatibility, table-state checksums, or active retention rules.
+
+### TableMaintenancePolicyRow schema
+
+`TableMaintenancePolicy` is an activation-controlled row family for destructive and rewrite-capable maintenance preflight.
+
+| Field | Required | Default | Bounds or rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `maintenance_policy_id` | Yes | none | Stable public policy ID. |
+| `allowed_actions` | No | `[]` | Canonical set from the closed enum below. Empty blocks all maintenance. |
+| `candidate_enumeration_rule` | Yes | none | Deterministic rule that enumerates candidate refs before decision. |
+| `candidate_set_checksum` | Yes | none | SHA-256 over canonical candidate set. |
+| `replay_retention_policy_ref` | Yes | none | Active `ReplayRetentionPolicy` row ref. |
+| `run_lock_required` | No | `true` | Destructive and rewrite-capable actions must require `030.RunLockCommitGuard`. |
+| `commit_guard_ref_required` | No | `true` | Missing guard fails before mutation. |
+| `max_candidates_per_decision` | No | `100000` | Integer range `1..1000000`. |
+| `maintenance_timeout_seconds` | No | `3600` | Integer range `1..86400`. |
+| `partial_eligibility_mode` | No | `refuse_whole_candidate_set` | Split eligibility must be explicit. |
+| `idempotency_key_inputs` | Yes | none | Exact ordered inputs used to identify retries. |
+| `no_candidate_behavior` | No | `emit_no_op_decision` | No candidates must not mutate table state. |
+| `commit_preconditions` | Yes | none | Exact preconditions for mutation, including commit ref and run-lock guard. |
+| `validation_refs` | Yes | none | Non-empty refs for default block, run lock, candidate checksum, partial eligibility, timeout, no-op, and commit-ref cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Closed `allowed_actions` values are:
+
+```text
+snapshot_expiration
+vacuum
+cleaner
+orphan_delete
+checkpoint_log_cleanup
+object_gc
+restore
+rollback
+compaction_rewrite
+catalog_gc
+```
+
+### DecideTableMaintenance
+
+```text
+DecideTableMaintenance(request, table_profiles, retention_policy, maintenance_policy, candidate_set, run_lock_guard):
+1. Validate active `LakehouseTableProfile`, `ReplayRetentionPolicy`, and `TableMaintenancePolicy` refs and checksums.
+2. Validate requested action appears in `maintenance_policy.allowed_actions`.
+3. Canonicalize the candidate set and verify `candidate_set_checksum`.
+4. Validate `030.RunLockCommitGuard` for destructive or rewrite-capable actions.
+5. Sort candidates by `table_profile_id`, `ref_kind`, `ref_id`, and `object_path_hash`.
+6. Evaluate blockers in this order: legal hold, protected `VersionManifest`, protected graph rebuild input, replay retention, table-state checksum invalidation, schema compatibility, policy-specific blockers.
+7. If any candidate is refused and `partial_eligibility_mode = refuse_whole_candidate_set`, emit `ReplayRetentionDecision(decision = refuse)` and perform no mutation.
+8. If split eligibility is allowed, emit separate eligible and refused candidate sets and checksums.
+9. Commit maintenance only after an eligible decision, valid run-lock guard, and valid `LakehouseCommitRef`.
+10. Include policy refs, candidate checksum, retention decision, run-lock guard, commit ref, and package-set refs in `VersionManifest`.
+```
+
+### ReplayRetentionDecision schema
+
+`ReplayRetentionDecision` is a runtime-state record. It must not be represented as an activation-controlled row.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `decision_id` | Yes | Deterministic ID over policy refs, table refs, candidate set checksum, blocker summary, and decision. |
+| `retention_policy_ref` | Yes | Selected `ReplayRetentionPolicy` ref/checksum. |
+| `maintenance_policy_ref` | Yes | Selected `TableMaintenancePolicy` ref/checksum. |
+| `table_profile_refs` | Yes | Canonical set of selected `LakehouseTableProfile` refs/checksums. |
+| `candidate_set_checksum` | Yes | SHA-256 over sorted candidates. |
+| `eligible_candidate_refs` | Yes | Canonical set; empty unless `decision` permits mutation or no candidates exist. |
+| `refused_candidate_refs` | Yes | Canonical set with refusal reasons. |
+| `refusal_reasons` | Yes | Canonical map from refused candidate ref to ordered blocker reasons. |
+| `decision` | Yes | Closed enum below. |
+| `mutation_prohibition_refs` | Required for `refuse` and `no_op` | Proof that no mutation occurred. |
+| `checksum` | Yes | SHA-256 over canonical decision bytes excluding `checksum`. |
+| `version_manifest_ref` | Required when output-affecting | Must include decision and every consulted ref. |
+
+Closed `decision` values are:
+
+```text
+eligible
+refuse
+eligible_partial
+no_op
+```
+
+### CrossTableCommitProfileRow schema
+
+`CrossTableCommitProfile` is an activation-controlled profile required whenever a production run, replay, rebuild, validation, or promotion requires coherent multi-table state.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `cross_table_profile_id` | Yes | none | Stable public profile ID. |
+| `required_table_profile_refs` | Yes | none | Canonical non-empty set of `LakehouseTableProfile` refs/checksums. |
+| `consistency_mode` | Yes | none | Closed enum in table below. |
+| `atomicity_requirement` | Yes | none | Closed enum in table below. |
+| `catalog_semantics` | Yes | `none` | Closed enum in table below. |
+| `table_set_checksum_algorithm` | No | `sha256` | Only `sha256` is active for MVP. |
+| `snapshot_set_sort_key` | No | `table_profile_id` | Duplicates rejected. |
+| `missing_table_behavior` | No | `fail_before_output` | Missing required tables must fail before output. |
+| `mixed_snapshot_behavior` | No | `fail_before_output` unless `manifested_snapshot_set` and checksum match | Mixed snapshots fail before output unless explicitly manifested. |
+| `dataset_version_ref_required` | No | `true` | Production table sets require dataset version refs. |
+| `validation_refs` | Yes | none | Non-empty refs for missing table, mixed snapshot, checksum mismatch, and coherent accepted cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+| Field | Values |
+| --- | --- |
+| `consistency_mode` | `single_catalog_commit`, `manifested_snapshot_set`, `same_catalog_branch_commit`, `opaque_dataset_version` |
+| `atomicity_requirement` | `atomic_required`, `consistent_snapshot_set_required`, `validation_only`; production table-set output cannot use `validation_only`. |
+| `catalog_semantics` | `none`, `branch_commit`, `tag_commit`, `transaction_id`, `dataset_version_manifest` |
+
+### CatalogBranchPromotionPolicyRow schema
+
+`CatalogBranchPromotionPolicy` is an activation-controlled row family. It governs visibility transitions only when catalog versioning controls production visibility.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `row_id` | Yes | none | Stable row ID scoped to the row set. |
+| `row_version` | Yes | none | Immutable schema/content version. |
+| `promotion_policy_id` | Yes | none | Stable public policy ID. |
+| `catalog_profile_ref` | Yes | none | Redacted catalog profile ref/checksum. |
+| `promotion_source_ref_kind` | Yes | none | Closed enum below. |
+| `source_commit_ref` | Yes | none | Immutable commit ref; mutable branch or tag alone is forbidden. |
+| `target_visibility_ref` | Yes | none | Ref for production visibility target. |
+| `cross_table_commit_profile_ref` | Required when table-set consistency is required | null otherwise | Selected `CrossTableCommitProfile` row ref/checksum. |
+| `required_validation_refs` | Yes | none | Non-empty validation refs that must pass before promotion. |
+| `approval_refs` | Yes | none | Non-empty for production visibility changes. |
+| `rollback_target_requirement` | Yes | none | Rollback target must be immutable and checksum-valid. |
+| `target_advanced_behavior` | No | `preserve_current_production_visibility` | If target advanced unexpectedly, preserve current production visibility and fail candidate promotion. |
+| `post_promotion_verification` | Yes | none | Required post-promotion checksum and visibility verification refs. |
+| `promotion_lock_required` | No | `true` | Production promotion requires a lock/guard. |
+| `failure_behavior` | No | `preserve_current_production_visibility` | Candidate failure must not advance target visibility. |
+| `validation_refs` | Yes | none | Non-empty refs for immutable ref, approval, rollback, target advanced, and preserve-current cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production selection requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize. |
+
+Closed `promotion_source_ref_kind` values are:
+
+```text
+commit
+tag_resolved_to_commit
+branch_resolved_to_commit
+```
+
+Mutable branch or tag alone is forbidden. A catalog promotion success changes visibility only through the refs required by this row and by `030.VersionManifest`; it does not create source authority.
+
 ### RawRecord identity import
 
 `020` imports `040.RawRecordSchema`, `040.ComputeRawRecordId`, and `040.CoreRecordValidationAlgorithm`. The former `020` raw ID input-order table is consolidated into `040.CoreRecordIdPolicy`. Raw import fixtures in `120` must compute expected raw IDs through `040.ComputeRawRecordId`.
@@ -855,6 +1245,23 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `RAW_FEED_MANIFEST_INVALID` | `020` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-raw-feed-manifest-invalid` |
 | `RAW_FEED_MANIFEST_ID_COLLISION` | `020` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `020.LakehouseErrorContext` | `error-registry-020-raw-feed-manifest-id-collision` |
 
+### LakehouseTableStateErrorRegistryFragment
+
+This owner fragment extends `LakehouseErrorRegistryFragment` for read-policy, supplier, manifest runtime-state, table profile, retention, maintenance, cross-table, and catalog-promotion failures. Every row must be generated into `110.ErrorCodeRegistryRow` before caller-visible diagnostics may be emitted.
+
+| Error group | Required codes or code families |
+| --- | --- |
+| Raw supplier | `RAW_SUPPLIER_PROFILE_MISSING`, `RAW_SUPPLIER_PROFILE_INACTIVE`, `RAW_SUPPLIER_PROFILE_UNSUPPORTED_CLASS`, `PRIVATE_BINDING_LEAK`, `RAW_SUPPLIER_REDACTED_ACCESS_HASH_MISSING`, `RAW_SUPPLIER_VALIDATION_REFS_MISSING`. |
+| Read policy | `LAKEHOUSE_READ_POLICY_MISSING`, `LAKEHOUSE_READ_TIMEOUT`, `LAKEHOUSE_READ_RETRY_EXHAUSTED`, `LAKEHOUSE_READ_CHECKSUM_MISMATCH`, `LAKEHOUSE_READ_OMITTED_OBJECT`, `LAKEHOUSE_READ_ORDER_UNDETERMINED`, `LAKEHOUSE_PAYLOAD_BOUND_EXCEEDED`. |
+| Raw feed manifest | `RAW_FEED_MANIFEST_INVALID`, `RAW_FEED_MANIFEST_DUPLICATE_ENTRY`, `RAW_FEED_MANIFEST_CHECKSUM_MISMATCH`, `RAW_FEED_MANIFEST_BOUNDS_EXCEEDED`, `RAW_FEED_MANIFEST_EMPTY_TARGET_INVALID`, `RAW_FEED_MANIFEST_ID_COLLISION`, `RAW_FEED_MANIFEST_RUNTIME_STATE_OMITTED`. |
+| Table profile | `LAKEHOUSE_TABLE_PROFILE_MISSING`, `LAKEHOUSE_TABLE_FORMAT_UNSUPPORTED`, `LAKEHOUSE_SNAPSHOT_IDENTITY_FIELD_MISSING`, `LAKEHOUSE_COMMIT_IDENTITY_FIELD_MISSING`, `LAKEHOUSE_SCHEMA_INCOMPATIBLE`, `OPAQUE_TABLE_REPLAY_FORBIDDEN`. |
+| Retention | `REPLAY_RETENTION_POLICY_MISSING`, `REPLAY_RETENTION_PROTECTED_REF_REFUSED`, `REPLAY_RETENTION_LEGAL_HOLD_PROTECTED`, `REPLAY_RETENTION_WINDOW_PROTECTED`, `REPLAY_RETENTION_GRAPH_REBUILD_PROTECTED`. |
+| Maintenance | `TABLE_MAINTENANCE_POLICY_MISSING`, `TABLE_MAINTENANCE_ACTION_NOT_ALLOWED`, `TABLE_MAINTENANCE_RUN_LOCK_GUARD_MISSING`, `TABLE_MAINTENANCE_CANDIDATE_CHECKSUM_MISMATCH`, `TABLE_MAINTENANCE_PARTIAL_ELIGIBILITY_REFUSED`, `TABLE_MAINTENANCE_TIMEOUT`, `TABLE_MAINTENANCE_COMMIT_REF_MISSING`. |
+| Cross-table | `CROSS_TABLE_PROFILE_MISSING`, `CROSS_TABLE_MISSING_TABLE`, `CROSS_TABLE_MIXED_SNAPSHOT_REJECTED`, `CROSS_TABLE_SET_CHECKSUM_MISMATCH`. |
+| Catalog promotion | `CATALOG_PROMOTION_MUTABLE_REF_FORBIDDEN`, `CATALOG_ROLLBACK_MUTABLE_TARGET_FORBIDDEN`, `CATALOG_PROMOTION_APPROVAL_MISSING`, `CATALOG_PROMOTION_VALIDATION_MISSING`, `CATALOG_PROMOTION_TARGET_ADVANCED`, `CATALOG_PROMOTION_POST_CHECKSUM_MISMATCH`. |
+
+Generic activation, bounds, authorization, or manifest errors must not substitute for a more specific code in this fragment.
+
 ### LakehouseErrorContext
 
 `LakehouseErrorContext` is the owner context schema for `020` feed, manifest, table-state, and upstream-completeness error rows.
@@ -891,14 +1298,14 @@ The following `020` row families can affect feed activation, feed read, raw impo
 | --- | --- | --- |
 | `LakehouseFeedProfileSchema` | output_affecting | Closed for source-effect selection by the field table above plus required `source_dataset_catalog_row_ref`, row checksum, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. Remaining non-source-effect precision work in this table still blocks unrelated production feed behavior. |
 | `LakehouseFeedCategoryClosureRow` | output_affecting | Closed for source-effect selection by the field table above, structured `source_dataset_allowlist_ref`, total `effect_closure_requirements`, deterministic block refs, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. Remaining non-source-effect precision work in this table still blocks unrelated production feed behavior. |
-| `RawSupplierProfile` | output_affecting when referenced by feed profile | TODO: declare as a closed enum plus full row schema or as an explicit non-row classification table that cannot be referenced as an activation row. |
-| `LakehouseReadPolicy` | output_affecting | TODO: add full field precision for read target refs, payload limits, retries, timeouts, failed-object behavior, omitted-object behavior, checksum behavior, and replay behavior. |
-| `LakehouseTableProfile` | output_affecting | TODO: add full field precision for table identity, table format, catalog binding, replay requirement, maintenance policy, schema compatibility policy, and checksum behavior. |
-| `ReplayRetentionPolicy` | output_affecting | TODO: add full field precision for protected replay windows, manifest classes, legal hold, and deletion eligibility. |
-| `TableMaintenancePolicy` | output_affecting | TODO: add full field precision for destructive and rewrite maintenance preflight, refusal, idempotence, timeout, and decision refs. |
-| `CrossTableCommitProfile` | output_affecting when table-set consistency is required | TODO: add full field precision for required table groups, atomicity requirement, catalog semantics, and table-set checksum. |
-| `CatalogBranchPromotionPolicy` | output_affecting when catalog versioning controls production visibility | TODO: add full field precision for branch, tag, commit, validation, promotion, approval, and rollback requirements. |
-| `RawFeedManifest` | unresolved runtime-state handoff | TODO: owner decision required: either keep as runtime-state record with `040.CoreRecordFieldRow`-equivalent ID, checksum, validation, and replay precision, or convert to `030.ActivationControlledRowField` precision when replay-affecting manifest rows are activation selected. |
+| `RawSupplierProfile` | output_affecting when referenced by feed profile | Closed by `RawSupplierProfileRow schema`; production selection requires structured refs/checksums, active lifecycle, validation refs, private-binding rejection, and `VersionManifest` inclusion. |
+| `LakehouseReadPolicy` | output_affecting | Closed by `LakehouseReadPolicyRow schema`; target refs, payload bounds, retries, timeouts, checksum behavior, object gap behavior, omitted-object behavior, and deterministic ordering are explicit. |
+| `LakehouseTableProfile` | output_affecting | Closed by `LakehouseTableProfileRow schema` and `TableFormatNativeIdentityMatrix`; table identity, format, catalog binding, replay, maintenance, schema compatibility, and checksum behavior are explicit. |
+| `ReplayRetentionPolicy` | output_affecting | Closed by `ReplayRetentionPolicyRow schema`; protected artifacts, legal hold, graph rebuild protection, retention mode, and deletion eligibility are explicit. |
+| `TableMaintenancePolicy` | output_affecting | Closed by `TableMaintenancePolicyRow schema` and `DecideTableMaintenance`; destructive and rewrite maintenance preflight, refusal, idempotence, timeout, candidate checksum, and decision refs are explicit. |
+| `CrossTableCommitProfile` | output_affecting when table-set consistency is required | Closed by `CrossTableCommitProfileRow schema`; required table groups, consistency mode, atomicity requirement, catalog semantics, and table-set checksum behavior are explicit. |
+| `CatalogBranchPromotionPolicy` | output_affecting when catalog versioning controls production visibility | Closed by `CatalogBranchPromotionPolicyRow schema`; immutable source commit, validation, approval, rollback, failure behavior, and post-promotion verification are explicit. |
+| `RawFeedManifest` | runtime_state_record | Closed as `RawFeedManifestRuntimeStateSchema`; it remains runtime evidence and must not be modeled as an activation-controlled row. |
 
 Ref arrays including `object_refs`, `partition_refs`, `schema_refs`, `coverage_profile_refs`, `source_authority_profile_refs`, and `source_staleness_policy_refs` must declare `canonical_set` or `ordered_sequence`, duplicate policy, canonical sort key, and checksum participation. `blocked_effects` and `effect_closure_requirements` must be typed maps with total key coverage over declared effect tokens.
 
@@ -946,6 +1353,16 @@ A production feed read, raw import, completeness evaluation, absence-sensitive e
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
 | `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |
 | `020-RUNLOCK-MAINTENANCE-AC-001` | Destructive maintenance fails before mutation when the required `030.RunLockCommitGuard` is missing, stale, or fenced; successful maintenance includes the guard ref in `VersionManifest`. |
+| `020-LAKEHOUSE-ROW-PRECISION-AC-001` | Every selected `020` activation-controlled row family has complete field precision, row checksum behavior, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. |
+| `020-RAW-SUPPLIER-AC-001` | Missing, inactive, unsupported, private-leaking, unredacted, or unvalidated supplier profile emits no raw output. |
+| `020-READ-POLICY-AC-001` | Read policy defaults and bounds materialize deterministically, and out-of-bound timeout, retry, payload, or checksum behavior fails before read output. |
+| `020-MANIFEST-AC-002` | `RawFeedManifest` remains runtime state, enforces canonical array semantics, rejects duplicates, validates bounds, and appears in `VersionManifest` when output-affecting. |
+| `020-TABLE-PROFILE-AC-001` | Table profiles require table-format-native snapshot and commit identity fields before production read, replay, rebuild, correction, or maintenance. |
+| `020-RETENTION-AC-001` | Retention preflight refuses any candidate protected by manifests, replay windows, graph rebuild inputs, legal holds, schema compatibility, table-state checksums, or active retention rules. |
+| `020-MAINTENANCE-AC-001` | Destructive or rewrite-capable maintenance mutates no table state unless retention decision, candidate checksum, run-lock guard, commit ref, and manifest refs all validate. |
+| `020-CROSS-TABLE-AC-001` | Missing table, mixed snapshot, and table-set checksum mismatch fail before coherent table-set output. |
+| `020-CATALOG-PROMOTION-AC-001` | Catalog promotion rejects mutable branch/tag-only refs, missing validation, missing approval, mutable rollback targets, target-advanced candidates, and post-promotion checksum mismatch before visibility changes. |
+| `020-NONAUTHORITY-AC-001` | Manifest validity, table commit success, maintenance success, and catalog promotion success remain operational evidence only and do not authorize source absence or cleanup by themselves. |
 
 ### Structured input feed acceptance criteria
 

@@ -302,6 +302,21 @@ For every active absence-sensitive feed profile, source dataset, scope selector,
 | `not_authoritative_for_absence` | Forbidden. | Forbidden. |
 | `not_applicable` | No absence claim; may emit not-applicable state when profile permits. | Forbidden. |
 
+### LakehouseTableStateSignalNonAuthorityHandoff
+
+Lakehouse table-state and maintenance success signals are operational evidence only unless exact active `060` rows grant a narrower effect.
+
+| Signal | Required non-authority behavior |
+| --- | --- |
+| `RawFeedManifest.manifest_validation_result = valid` | Manifest-shape evidence only; it is not source completeness. |
+| `LakehouseReadCompletenessReceipt.receipt_state = read_complete` | Necessary but not sufficient for absence-sensitive effects. |
+| `LakehouseCommitRef.status = success` | Table-write evidence only. |
+| `ReplayRetentionDecision(decision = eligible)` | Permits maintenance preflight only; it does not authorize absence, cleanup, graph expiry, retraction, or watermark advancement. |
+| `TableMaintenancePolicy` success | Operational table-state evidence only. |
+| `CatalogBranchPromotionPolicy` success | Visibility transition evidence only through `020` and `030` refs; it does not create source authority. |
+
+`020` maintenance and catalog promotion must not depend on any `060` row family that remains `TODO:` for absence-sensitive effects. Missing exact active `060` authority, completeness, coverage, staleness, absence, progress-signal, visibility, control-result, history, or watermark rows keep table-state signals at `diagnostic_only`.
+
 ## Progress Signal Interpretation
 
 Progress, liveness, lineage, freshness, acknowledgment, queue, CDC, graph-derived, source-history, destination-cleanup, live-probe, and run-lock signals are non-authoritative by default. They may affect output only through an active `ProgressSignalInterpretationPolicy` row.
@@ -1072,6 +1087,12 @@ This table aligns to `020.LakehouseFeedCategoryClosureRequirementTable` without 
 | `destination_cleanup` | `diagnostic_only` | `[]` | Non-authoritative cleanup signal only. |
 | `source_history_no_result` | `diagnostic_only` | `[]` | No-change proof forbidden without exact source-history and coverage rows. |
 | `live_source_probe_zero_rows` | `diagnostic_only` | `[]` | Validation/exploration only. |
+| `lakehouse_read_complete` | `diagnostic_only` | `[]` | Feed-read evidence only; no absence by default. |
+| `raw_feed_manifest_valid` | `diagnostic_only` | `[]` | Manifest-shape evidence only. |
+| `table_snapshot_available` | `diagnostic_only` | `[]` | Table-state availability only. |
+| `table_commit_success` | `diagnostic_only` | `[]` | Table-write evidence only. |
+| `table_maintenance_success` | `diagnostic_only` | `[]` | Maintenance evidence only; no source cleanup permission. |
+| `catalog_promotion_success` | `diagnostic_only` | `[]` | Visibility transition evidence only. |
 | `telemetry_metric` | `diagnostic_only` | `[]` | Operational health input only through `140` and `110`. |
 
 Two or more weak progress signals must not combine into stronger authority unless exactly one active `ProgressSignalInterpretationPolicy` row grants the exact combined signal set and requested effect. Missing signal-family rows default to diagnostic-only and must not authorize absence, cleanup, retraction, graph expiry, watermark, pass/fail, or no-change proof.
@@ -1277,6 +1298,8 @@ Missing row and ambiguous row errors must remain distinct and owner-specific. So
 | `060-GOLD-SHAPE-AUTHORITY-AC-003` | External schema field presence or absence remains non-authoritative without exact `050`, `060`, and `080` handoff rows. |
 | `060-GOLD-SHAPE-AUTHORITY-AC-004` | Missing, inactive, checksum-mismatched, or out-of-scope predicate contract refs block source authority before gold output. |
 | `060-GOLD-SHAPE-AUTHORITY-REPLAY-AC-001` | Authority checksum changes and predicate-contract checksum changes are replay-affecting for gold output. |
+| `060-LAKEHOUSE-TABLESTATE-NONAUTH-AC-001` | Manifest validity, read completeness, table commit success, maintenance success, and catalog promotion success cannot authorize absence-sensitive effects without exact active `060` rows. |
+| `060-LAKEHOUSE-PROGRESS-SIGNAL-AC-001` | All new lakehouse table-state signals default to `diagnostic_only` and `allowed_effects = []`. |
 
 ### Structured input source authority acceptance criteria
 

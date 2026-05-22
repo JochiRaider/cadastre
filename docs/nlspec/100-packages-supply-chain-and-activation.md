@@ -132,6 +132,12 @@ ocsf_base_event_field_policy_set
 source_extension_field_rule_set
 observation_type_external_mapping_validation_matrix
 lakehouse_read_policy
+raw_supplier_profile
+lakehouse_table_profile
+replay_retention_policy
+table_maintenance_policy
+cross_table_commit_profile
+catalog_branch_promotion_policy
 lakehouse_feed_completeness_profile
 lakehouse_feed_category_closure_row_set
 source_dataset_catalog_row_set
@@ -198,7 +204,7 @@ projection_loss_policy
 
 ### PackageTypeEnumClosure
 
-`PackageType` is closed for this spec version. The closed enum contains exactly 84 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
+`PackageType` is closed for this spec version. The closed enum contains exactly 90 unique lower-snake-case tokens. The token `rule_graph_compatibility_matrix` appears exactly once. The generic token `deployment_profile` is not a package type.
 
 | Supplied token class | Required behavior |
 | --- | --- |
@@ -293,6 +299,7 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 | Policy family | Owner boundary | Package types covered |
 | --- | --- | --- |
 | `lakehouse/feed/read` | `020`, `030`, `100`, `120` | `lakehouse_feed_package`, `parser_package`, `lakehouse_read_policy`, `lakehouse_feed_completeness_profile`, `lakehouse_feed_category_closure_row_set`, `declared_dag_subset_profile` |
+| `lakehouse/table-state/maintenance` | `020`, `030`, `100`, `120` | `raw_supplier_profile`, `lakehouse_table_profile`, `replay_retention_policy`, `table_maintenance_policy`, `cross_table_commit_profile`, `catalog_branch_promotion_policy` |
 | `mapping/external-schema/toolchain` | `050`, `100`, `120` | `mapping_bundle`, `source_schema_import_profile`, `semantic_overlay_artifact`, `mapping_validation_rule_set`, `mapping_project_manifest`, `mapping_compiler_pipeline`, `canonical_validation_output_schema`, `validation_scenario`, `toolchain_dependency_review`, `external_tool_capability_evidence`, `mapping_toolchain_package`, `external_schema_profile`, `observation_to_ocsf_mapping_row_set`, `external_schema_artifact_ref`, `profile_resolution_manifest`, `external_enum_mapping_rule_set`, `ocsf_base_event_field_policy_set`, `source_extension_field_rule_set`, `observation_type_external_mapping_validation_matrix`, `cim_projection_profile`, `projection_loss_policy` |
 | `source-authority closure` | `020`, `060`, `100`, `120` | `source_dataset_catalog_row_set`, `source_authority_row_set`, `source_authority_closure_matrix_row_set`, `coverage_dimension_profile_row_set`, `source_staleness_policy_row_set`, `progress_signal_policy_row_set`, `supplier_collection_visibility_profile_row_set`, `control_result_mapping_row_set`, `source_history_retention_profile_row_set`, `absence_derivation_policy_row_set`, `projection_watermark_policy_row_set`, `external_schema_authority_signal_mapping_row_set` |
 | `gold predicate catalog` | `080`, `100`, `120` | `gold_fact_predicate_contract_row_set`, `gold_fact_structured_value_schema_row_set` |
@@ -302,6 +309,19 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 | `graph/backend/projection` | `090`, `100`, `120` | `graph_edge_semantics`, `graph_taxonomy_translation_policy`, `graph_projection_profile`, `graph_read_model_schema_profile`, `graph_apply_profile`, `graph_backend_provider_package`, `graph_provider_adapter_package`, `graph_backend_driver_package`, `graph_storage_backend_adapter_package`, `graph_index_backend_adapter_package`, `graph_backend_runtime_distribution`, `graph_backend_deployment_profile`, `structural_global_node_alias_policy` |
 
 `ValidateSpecSet` and `RunValidationMatrix` must fail when any confirmed token is absent from the matrix, duplicated in the matrix, assigned to more than one policy family, or lacks exactly one active `PackageTypePolicyRow` for the target environment when package activation is in implementation scope. A successful package type policy resolution must record the selected row ref and checksum in `030.VersionManifest.included_refs`.
+
+### Lakehouse table-state package-supplied catalog types
+
+Package-supplied `020` row catalogs must activate only through explicit package types and active package type policies. `policy_bundle` remains a broad label and must not substitute for row-specific package types.
+
+| Package-supplied catalog type | Required package activation evidence | Broad-label substitutes that must fail |
+| --- | --- | --- |
+| `raw_supplier_profile` | Package type policy row, package release manifest, production package-set manifest, selected row refs/checksums, validation refs, compatibility refs, private-binding leak fixtures, and `VersionManifest` refs. | `policy_bundle`, `feed reader`, package name, artifact path, branch, tag. |
+| `lakehouse_table_profile` | Same plus table-format identity fixtures and schema compatibility fixtures. | `policy_bundle`, `storage config`, table path, version string. |
+| `replay_retention_policy` | Same plus retention refusal fixtures and legal-hold/protected-ref fixtures. | `policy_bundle`, `retention bundle`, validation summary. |
+| `table_maintenance_policy` | Same plus run-lock, candidate checksum, no-mutation, timeout, and idempotency fixtures. | `policy_bundle`, `maintenance package`, tool name. |
+| `cross_table_commit_profile` | Same plus table-set checksum and mixed-snapshot rejection fixtures. | `policy_bundle`, catalog label, branch name. |
+| `catalog_branch_promotion_policy` | Same plus immutable-ref, approval, rollback-target, target-advanced, and preserve-current fixtures. | `policy_bundle`, branch, tag, merge result. |
 
 ### MVP Package Activation Registry Closure Requirements
 
@@ -1291,7 +1311,7 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-PACKAGE-TYPE-POLICY-AC-003` | Known package type with no active policy row fails with `PACKAGE_TYPE_POLICY_MISSING`. |
 | `100-PACKAGE-TYPE-POLICY-AC-004` | Ambiguous package type policy resolution fails with `PACKAGE_TYPE_POLICY_AMBIGUOUS`. |
 | `100-PACKAGE-TYPE-POLICY-AC-005` | A known token with one active in-scope policy row succeeds and records the selected row ref and checksum in `030.VersionManifest.included_refs`. |
-| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has exactly 84 unique tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
+| `100-PACKAGE-TYPE-ENUM-AC-001` | The confirmed enum has exactly 90 unique tokens, contains no generic `deployment_profile`, and rejects unknown or legacy broad labels before package release validation. |
 | `100-PACKAGE-TYPE-COVERAGE-AC-001` | Every confirmed token appears exactly once in `PackageTypePolicyRowCoverageMatrix`, and absent, duplicate, or multi-family assignments fail validation. |
 | `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
 | `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for row-specific package types and fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate output. |
@@ -1302,6 +1322,9 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-REPOSITORY-FORM-AC-002` | A candidate release using `git_tree_snapshot` as production repository form fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` and writes no candidate production output. |
 | `100-PACKAGE-RELEASE-MANIFEST-AC-001` | Every required `PackageReleaseManifest` field omission, null-forbidden value, checksum mismatch, inactive ref, failed ref, or out-of-scope ref fails before activation. |
 | `100-PACKAGE-SET-MANIFEST-AC-001` | `ProductionPackageSetManifest` includes package-set ID, package release refs, release checksums, selected package type policy row-set refs, selected package type policy refs, deprecation refs, repository refs, supply-chain policy/evidence refs, cohesion groups, `target_environment`, activation mode, trust refs, validation refs, compatibility refs, rollback refs, quarantine refs, health refs, lifecycle evidence refs, approval refs, and checksum. |
+| `100-LAKEHOUSE-TABLESTATE-PACKAGE-TYPE-AC-001` | Every new `020` package type resolves exactly one active `PackageTypePolicyRow`. |
+| `100-LAKEHOUSE-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for any lakehouse table-state, retention, maintenance, cross-table, or catalog-promotion package type. |
+| `100-LAKEHOUSE-PACKAGE-SET-AC-001` | Package-supplied `020` row catalogs cannot affect output without immutable package-set membership and `030.VersionManifest` inclusion. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing PostgreSQL runtime/distribution, PostgreSQL adapter, PostgreSQL driver, deployment profile, compatibility row, SBOM/provenance where required, provider support evidence, restore/upgrade evidence, package-set membership, or AGE extension package refs when AGE is selected fails graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | PostgreSQL driver protocol mismatch, AGE extension version mismatch, provider support mismatch, schema fingerprint incompatibility, query translation incompatibility, query-plan regression policy failure, restore incompatibility, upgrade incompatibility, role/RLS/search-path incompatibility, or package cohort mismatch fails candidate activation and preserves the current active package set. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes, graph serving promotion, graph apply, or query serving. |
