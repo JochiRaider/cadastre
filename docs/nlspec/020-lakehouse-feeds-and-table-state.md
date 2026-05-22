@@ -184,6 +184,20 @@ ResolveSourceDatasetCatalogRow(request, active_catalog):
 
 The resolver is deterministic. It must not infer a dataset token from a runtime route, table path, package name, source-native product, OCSF class, coverage-domain token, feed category, validation fixture name, or private binding.
 
+### MappingSourceDatasetCatalogHandoff
+
+Any `050.ObservationToOCSFMappingRow`, `050.ExternalSchemaProfile`, `050.SourceExtensionFieldRule`, or OCSF validation fixture that filters, selects, blocks, or validates by `source_dataset` must include the selected `020.SourceDatasetCatalogRow` ref/checksum or the exact deterministic source-dataset block row ref/checksum.
+
+| Mapping source-dataset condition | Required behavior |
+| --- | --- |
+| Selected active source-dataset row | Mapping activation may proceed only when the row ref, row checksum, row-set ref, row-set checksum, selector checksum, validation refs, package-set refs when package-supplied, and `VersionManifest` refs are present. |
+| Missing or ambiguous row | Mapping activation and silver output fail before `ResolveOCSFMapping` emits output. |
+| Inactive, checksum-mismatched, private-leaking, package-set-mismatched, unvalidated, unmanifested, or `TODO:` row | OCSF mapping activation, source-extension activation, and validation acceptance fail with the most specific source-dataset or mapping owner error. |
+| Deterministic block row | Emits no silver output unless the owner validation row expects a deterministic no-op or error and proves mutation prohibition. |
+| Bare `source_dataset` string | Insufficient for row selection, checksum, validation acceptance, package activation, API filtering, graph handoff, or replay. |
+
+OCSF mapping rows must not use private source routes, source-native products, feed profile names, package labels, source table paths, OCSF classes, coverage-domain tokens, or validation fixture names as row-selection authority for `source_dataset`.
+
 #### SourceDatasetDeterministicBlockDefaults
 
 Concrete public source-dataset rows are not supplied by this core spec. Until a selected production scope supplies active catalog rows or exact deterministic block rows, every referenced `source_dataset` resolves to `SOURCE_DATASET_CATALOG_ROW_MISSING` and no absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change proof, graph delta, compliance negative output, or source-effect validation pass may be emitted.

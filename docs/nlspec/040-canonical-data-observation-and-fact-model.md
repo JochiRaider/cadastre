@@ -462,6 +462,19 @@ Every field schema table in this registry uses the following columns and meaning
 | `flow_role_evidence` | `canonical_object` | yes | null unless observation type can carry flow direction evidence | yes | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 | `redaction_summary` | `canonical_object` | yes | `{}` | no | no | scalar default | n/a | no | yes | closed | `110` | `CORE_REQUIRED_FIELD_MISSING` | `CORE_FIELD_TYPE_INVALID` |
 
+### CadastreOnlyCoreValidationHandoff
+
+`040` validates only core record shape for `cadastre_only` silver output. It does not decide whether an observation is `cadastre_only`; that decision is owned by `050.ResolveOCSFMapping` and the selected `050.ObservationToOCSFMappingRow`.
+
+| Core validation condition | Required `040` behavior |
+| --- | --- |
+| `external_schema_profile_id = null` | Valid only when `VersionManifest.included_refs` contains a selected active `050` `cadastre_only` row ref, selected row checksum, row-set ref, row-set checksum, validation refs, package-set refs when package-supplied, and lifecycle transition evidence refs. Missing evidence fails before persistence. |
+| `normalized_fields = {}` | Shape-valid only for `cadastre_only` output. Non-empty normalized fields with null profile fail before persistence unless a later `040` amendment defines a Cadastre-owned normalized field schema. |
+| `normalized_payload_checksum` | Must be present and must validate against the checksum basis declared by `050.CadastreOnlyMappingOutputPolicy` or the active OCSF mapping policy. |
+| Unknown fields | Rejected by `CoreRecordValidationAlgorithm`; `cadastre_only` does not open an extension map. |
+
+A null external profile without selected `050` row evidence must fail with `CORE_FIELD_TYPE_INVALID` or the more specific mapping owner error before persistence. `040` must not infer `cadastre_only` from null profile, empty normalized fields, observation type, source dataset, package label, or validation fixture name.
+
 ### SourceExtensionFieldRuleShape
 
 `SourceExtensionFieldRuleShape` is the `040`-owned primitive shape for a source-extension field rule payload. It defines field names, scalar types, canonical serialization, checksum inclusion, and unknown-field rejection. It does not decide whether a rule is active, whether a path is permitted, or whether a mapping bundle may emit the field; those behaviors are owned by `050`.
@@ -484,6 +497,8 @@ Every field schema table in this registry uses the following columns and meaning
 | `lifecycle_status` | `enum_token` | yes | none | no | no | imported from `030` |
 
 Shape validation materializes required defaults before checksum computation. Unknown fields fail with `CORE_UNKNOWN_FIELD`. Non-canonical ordering fails checksum validation. `040` validates shape and canonical bytes only. `050` validates whether the rule permits a `source_extension_fields` path.
+
+`040` defines primitive bytes, scalar bounds, canonical bytes, and unknown-field behavior only for `SourceExtensionFieldRuleShape`. `050` may narrow string, array, map, object, namespace, redaction, collision, and secret-scan bounds, but it must not widen a `040` primitive scalar bound unless this spec is amended first.
 
 ### CanonicalEntitySchema
 

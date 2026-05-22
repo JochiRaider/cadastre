@@ -93,6 +93,22 @@ Parser output must classify each raw record as exactly one of:
 
 Cadastre-owned fields for omission, lineage, source identity, confidence, temporal semantics, identity inputs, and flow-role evidence must remain outside OCSF `normalized_fields`. OCSF fields must not override `040` omission states, `070` identity evidence, `080` temporal resolution, or `090` graph direction.
 
+### CadastreOnlyMappingOutputPolicy
+
+`cadastre_only` is an explicit row mode, not a fallback. `NormalizeObservation` must emit a null external schema profile only when `ResolveOCSFMapping` selects exactly one active `ObservationToOCSFMappingRow` with `row_mode = cadastre_only` for the normalized request scope and discriminator state.
+
+| Output element | Required behavior for selected `cadastre_only` row |
+| --- | --- |
+| `external_schema_profile_id` | Must be `null`. A non-null value fails before persistence. |
+| OCSF category, class, activity, and type metadata | Must not be emitted in `normalized_fields`, row diagnostics, graph handoff metadata, or authority handoff metadata. |
+| `normalized_fields` | Must be `{}` for MVP. Non-empty values require a later owner patch that defines Cadastre-owned normalized field shape, checksums, and validation rows. |
+| `normalized_payload_checksum` inputs | Must include selected mapping row ref, selected mapping row checksum, `observation_type`, `cadastre_only = true`, and canonical empty `normalized_fields` bytes. |
+| Authority, identity, absence, temporal, graph, cleanup, retraction, and watermark effects | Must be `none`. A `cadastre_only` row does not grant any owner outside `050` an effect. |
+| `source_extension_fields` | Must remain `{}` unless the selected row also references an active `SourceExtensionFieldRuleSet` that permits exact paths. |
+| `VersionManifest` | Must include the selected `cadastre_only` row ref, selected row checksum, row-set ref, row-set checksum, validation refs, package-set refs when package-supplied, and lifecycle transition evidence refs. |
+
+A missing OCSF mapping row must not infer `cadastre_only`. Missing row and selected `cadastre_only` row are observably different states and must produce different owner errors, validation rows, and manifest refs.
+
 ## External Schema Profile Contract
 
 `ExternalSchemaProfile` must pin external schema name, version, source tag, source commit, compiler version, validator version, compiled artifact checksum, class allowlist, profile set, extension set, deprecated-field policy, and enum mapping behavior.
@@ -100,6 +116,23 @@ Cadastre-owned fields for omission, lineage, source identity, confidence, tempor
 MVP OCSF baseline is `OCSF 1.8.0` as a candidate production baseline. The profile must remain non-active until `ExternalSchemaArtifactRef` records the exact source tag, source commit, compiler ID/version/checksum, validator ID/version/checksum, compiled artifact checksum, profile set, extension set, and class allowlist checksum. Use of OCSF `main`, development versions, or main-only fields is forbidden for production output.
 
 Production OCSF profile status must be `active` only after `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `OCSFBaseEventFieldPolicy`, `ExternalEnumMappingRule`, `OCSFProfileUpgradeReport` when applicable, and `ObservationTypeExternalMappingValidationMatrix` pass.
+
+### MVP OCSF Production Baseline Decision
+
+The MVP production candidate baseline is pinned to OCSF `1.8.0`.
+
+| Baseline field | Required value |
+| --- | --- |
+| `schema_name` | `OCSF` |
+| `schema_version` | `1.8.0` |
+| `source_tag` | `1.8.0` |
+| `source_commit` | `6fa6499a0f8c9f449d342816e90e5f687c224b0a` |
+| `development_branch_policy` | OCSF `main`, development versions, and main-only fields are forbidden for production output. |
+| `production_activation_default` | `blocked_validation` until every artifact and checksum below is concrete and non-`TODO`. |
+
+Production OCSF-aligned output must remain inactive until the selected profile has concrete refs and checksums for source tag, source commit, compiler ID/version/checksum, validator ID/version/checksum, compiled artifact checksum, profile set checksum, extension set checksum, class allowlist checksum, `ProfileResolutionManifest` refs, active mapping row refs, validation refs, package-set refs when package-supplied, lifecycle transition evidence, and `030.VersionManifest` inclusion.
+
+A row, fixture, validation report, package label, ADR, research report, branch name, repository path, or source prose that omits any required checksum must fail production activation with `OCSF_CANONICAL_VALIDATION_OUTPUT_INCOMPLETE`, `OCSF_ARTIFACT_MISMATCH`, or the more specific owner error.
 
 ### ExternalSchemaProfile row schema
 
@@ -224,9 +257,15 @@ Absent or ambiguous source direction emits no qualifying `FlowRoleEvidence` item
 | Field | Required | Default or omission behavior | Rule |
 | --- | ---: | --- | --- |
 | `row_id` | Yes | none | Stable unique ID within the row set. |
+| `row_version` | Yes | none | Immutable owner schema version included in row checksum and `VersionManifest`. |
+| `row_mode` | Yes | none | Closed enum: `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked`. Conditional required and forbidden fields are selected by this mode. |
 | `observation_type` | Yes | none | Must match `040.CadastreSilverObservationSchema.observation_type`. |
 | `mapping_discriminator` | Yes | none | Canonical predicate over normalized parse fields, source metadata, and declared mapping-bundle inputs. It must not inspect graph, gold, identity, or API state. |
-| `external_schema_profile_ref` | Required unless `cadastre_only` | null only when the row explicitly sets `cadastre_only = true` | Must reference an active `ExternalSchemaProfile`. |
+| `source_dataset_catalog_row_ref` | Yes when row selection uses `source_dataset` | none | Structured `030.ActivationControlledRowRef` for the selected `020.SourceDatasetCatalogRow` or deterministic source-dataset block row. Bare strings fail. |
+| `source_dataset_catalog_row_checksum` | Yes when row selection uses `source_dataset` | none | SHA-256 of the selected source-dataset row after defaults materialize. |
+| `external_schema_profile_ref` | Required when `row_mode = ocsf_mapped` | null only when `row_mode = cadastre_only` or `deterministically_blocked` | Must reference an active `ExternalSchemaProfile`. |
+| `external_schema_artifact_ref` | Required when `row_mode = ocsf_mapped` | null otherwise | Must reference the compiled OCSF artifact used for validation. |
+| `profile_resolution_manifest_refs` | Required when `row_mode = ocsf_mapped` | `[]` otherwise | Canonical set of `ProfileResolutionManifest` refs for emitted class and object paths. |
 | `ocsf_category_name` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact. |
 | `ocsf_category_uid` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact. |
 | `ocsf_class_name` | Required for OCSF rows | null for `cadastre_only` | Must match the compiled artifact and active class allowlist. |
@@ -243,26 +282,34 @@ Absent or ambiguous source direction emits no qualifying `FlowRoleEvidence` item
 | `cadastre_owned_field_policy_refs` | Yes | `[]` | Refs to owner policies for Cadastre-owned envelope fields used by the row. |
 | `validation_fixture_refs` | Yes | none | Non-empty refs to positive and negative fixtures before activation. |
 | `activation_scope` | Yes | none | `030.ActivationScope`; validated through `050.MappingScopeSelectorContext` before the row may affect output. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize and excluding only `row_checksum`. |
 | `lifecycle_status` | Yes | none | Imported from `030.LifecycleStatus`; production mapping requires `active`. |
 
-Unknown fields in `ObservationToOCSFMappingRow` fail before row-set activation. Row-set canonical bytes sort rows by ascending lexical `row_id`.
+Unknown fields in `ObservationToOCSFMappingRow` fail before row-set activation. Row-set canonical bytes sort rows by ascending lexical `row_id`. Row-set checksum must include every row checksum, row version, discriminator bytes, row mode, selected source-dataset refs, selected external-schema refs, policy refs, validation refs, activation scope, and lifecycle status.
+
+`row_mode = ocsf_mapped` requires non-null OCSF category, class, activity, type, external schema profile, external schema artifact, profile-resolution manifest refs, enum refs when enum paths emit, base-event policy ref, source-extension rule-set ref or explicit empty rule set, validation fixture refs, activation scope, lifecycle status, and row checksum. `row_mode = cadastre_only` requires null external-schema refs, null OCSF category/class/activity/type values, `required_normalized_paths = []`, `forbidden_normalized_paths = []`, `normalized_fields = {}` by `CadastreOnlyMappingOutputPolicy`, validation fixture refs, activation scope, lifecycle status, and row checksum. `row_mode = deterministically_blocked` requires deterministic error or no-op code, mutation-prohibition refs, validation refs, activation scope, lifecycle status, and row checksum; it must emit no silver output.
 
 ### ResolveOCSFMapping algorithm
 
 ```text
 ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
-1. Validate ExternalSchemaProfile, ExternalSchemaArtifactRef, ProfileResolutionManifest, ExternalEnumMappingRuleSet, OCSFBaseEventFieldPolicySet, SourceExtensionFieldRuleSet, and ObservationToOCSFMappingRowSet through 030.ActivationControlledArtifactRef.
+1. Validate ExternalSchemaProfile, ExternalSchemaArtifactRef, ProfileResolutionManifest, ExternalEnumMappingRuleSet, OCSFBaseEventFieldPolicySet, SourceExtensionFieldRuleSet, ObservationToOCSFMappingRowSet, ObservationTypeExternalMappingValidationMatrix, CanonicalValidationOutput, package-set refs when package-supplied, lifecycle transition evidence, and 030.VersionManifest refs through 030.ActivationControlledArtifactRef and 030.ActivationControlledRowRef.
 2. Normalize the request execution scope and reject under-scoped requests before row selection.
-3. Keep only active `ObservationToOCSFMappingRow` and profile rows whose `activation_scope` covers the request through `030.ScopeSelectorCovers`, then load rows whose `observation_type` equals `observation.observation_type`.
-4. Evaluate mapping_discriminator rows in ascending lexical row_id order.
-4. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
-5. If more than one row matches, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
-6. Validate category_uid, class_uid, activity_id, type_uid, and type_name against the compiled OCSF artifact.
-7. Reject any class_uid outside the active class_allowlist with OCSF_CLASS_NOT_ALLOWED.
-8. Validate required_normalized_paths and forbidden_normalized_paths.
-9. Apply ExternalEnumMappingRule rows; unknown enum values must not invent enum IDs.
-10. Validate every source_extension_fields path against exactly one active SourceExtensionFieldRule.
-11. Emit CadastreSilverObservation only after 040.CadastreSilverObservationSchema passes.
+3. Resolve source_dataset through 020.ResolveSourceDatasetCatalogRow before scope-filtered row selection when any candidate row, profile, source-extension rule, or validation fixture filters by source_dataset.
+4. Keep only active ObservationToOCSFMappingRow and profile rows whose activation_scope covers the request through 030.ScopeSelectorCovers, then load rows whose observation_type equals observation.observation_type.
+5. Evaluate mapping_discriminator rows in ascending lexical row_id order only to produce deterministic diagnostics; row order must not break ambiguity.
+6. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
+7. If more than one row matches after discriminator evaluation, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
+8. If the selected row has row_mode = deterministically_blocked, emit the row's deterministic error or no-op, prove mutation prohibition, and emit no silver output.
+9. If the selected row has row_mode = cadastre_only, apply CadastreOnlyMappingOutputPolicy, require selected row refs/checksums in VersionManifest, and emit no OCSF metadata.
+10. If the selected row has row_mode = ocsf_mapped, validate category_uid, class_uid, activity_id, activity_name, type_uid, and type_name against the compiled OCSF artifact and active ProfileResolutionManifest refs.
+11. Reject any class_uid outside the active class_allowlist with OCSF_CLASS_NOT_ALLOWED.
+12. Validate required_normalized_paths and forbidden_normalized_paths.
+13. Apply ExternalEnumMappingRule rows; unknown enum values must not invent enum IDs, Other requires compiled support plus active permission, deprecated enum values reject by default, and ID/name sibling mismatch rejects.
+14. Apply OCSFBaseEventFieldPolicy rows; disabled base-event fields reject before output and non-authoritative metadata fields must not alter Cadastre authority, identity, temporal, graph, or absence state.
+15. Validate every source_extension_fields path against exactly one active SourceExtensionFieldRule; missing, wildcard, reserved-name, missing redaction, secret-scan, or collision failures reject before output.
+16. Reject artifact checksum mismatch, profile-set checksum mismatch, extension-set checksum mismatch, class-allowlist checksum mismatch, package-set omission, row-family TODO, validation fixture TODO, and VersionManifest omission before silver output.
+17. Emit CadastreSilverObservation only after 040.CadastreSilverObservationSchema passes.
 ```
 
 Missing discriminator inputs fail before output. Authentication rows must emit `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` when activity cannot be resolved to one compiled activity. Source-action or enum values not present in the compiled artifact must be preserved through declared diagnostics or declared source-extension fields; they must not create OCSF enum IDs.
@@ -334,18 +381,19 @@ MVP OCSF-aligned silver output requires a supporting catalog closure. The closur
 | validation bytes | Concrete non-`TODO` fixture checksums and expected output or expected error checksums for every active row. |
 | authority handoff | No external schema authority effect is allowed without `060.ExternalSchemaAuthoritySignalMappingRowSet`. |
 
-The required mapping closure status for each MVP observation family is exhaustive:
+The required mapping closure status for each MVP observation family is exhaustive. The table declares the only row mode that may become active for each discriminator state; rows with `TODO:` fixture bytes or expected checksums remain blocked.
 
-| Observation family | Allowed closure state | Required validation and checksum behavior |
-| --- | --- | --- |
-| `inventory_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `software_inventory_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `vulnerability_finding_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `authentication_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `dns_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `dhcp_ipam_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| `network_activity_observation` | `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
-| every other MVP observation family | `cadastre_only` or `deterministically_blocked` unless an active row set promotes it | TODO: materialize validation refs and expected-output/error checksums in supporting catalog rows. |
+| Observation family and discriminator state | Required closure state | Required external target or block behavior | Production status until concrete refs exist |
+| --- | --- | --- | --- |
+| `inventory_observation` | `ocsf_mapped` | OCSF Device Inventory Info `5001`. | blocked until mapping row, compiled artifact, validation refs, and expected output checksum exist. |
+| `software_inventory_observation` | `ocsf_mapped` | OCSF Software Inventory Info `5020`. | blocked until mapping row, profile-resolution refs, validation refs, and expected output checksum exist. |
+| `vulnerability_finding_observation` | `ocsf_mapped` | OCSF Vulnerability Finding `2002`. | blocked until source lifecycle discriminator rows and validation refs exist. |
+| `authentication_observation` with exact compiled activity discriminator | `ocsf_mapped` | OCSF Authentication `3002` with no default activity. | blocked for any missing or ambiguous activity discriminator. |
+| `dns_observation` | `ocsf_mapped` | OCSF DNS Activity `4003`. | blocked until endpoint-order non-authority fixtures exist. |
+| `dhcp_ipam_observation` where `assignment_source = dhcp` | `ocsf_mapped` | OCSF DHCP Activity `4004`. | blocked until DHCP discriminator fixtures exist. |
+| `dhcp_ipam_observation` where `assignment_source = ipam` | `cadastre_only` or `deterministically_blocked` | Must not map to OCSF DHCP Activity. | blocked unless an explicit `cadastre_only` row or block row exists. |
+| `network_activity_observation` | `ocsf_mapped` | OCSF Network Activity `4001`. | blocked until flow-role handoff and endpoint-order rejection fixtures exist. |
+| every other MVP observation family | `cadastre_only` or `deterministically_blocked` | No OCSF class by inference. | blocked unless an explicit row exists. |
 
 A row with a `TODO` checksum, missing validation ref, ambiguous row match, invalid activity discriminator, unknown enum without a permitted rule, undeclared source-extension field, forbidden base-event field authority, or compiled artifact checksum mismatch remains `blocked_validation` and must not affect production silver output.
 
@@ -788,29 +836,66 @@ A mapping implementation must not emit both a canonical code and an alias for th
 
 ### ActivationControlledRowSchemaPrecisionHandoff
 
-The following `050` row families can affect parsing, normalization, external schema validation, OCSF row selection, source-extension output, mapping validation, compiler output, projection loss, or canonical validation output. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+The following `050` row families can affect parsing, normalization, external schema validation, OCSF row selection, source-extension output, mapping validation, compiler output, projection loss, or canonical validation output. Each production-affecting row family must instantiate `030.ActivationControlledRowField` columns exactly. A selected row family with a missing concrete row, missing checksum, missing package-set ref when package-supplied, missing validation ref, missing `VersionManifest` ref, or `TODO:` fixture value is `blocked_validation` and must not emit production silver output.
 
-| row_family | production classification | required precision status |
+#### OCSFClosureActivationControlledRowFieldTable
+
+The table below is the closed `030.ActivationControlledRowField` table for OCSF and mapping closure members introduced by this patch. `field_path` prefixes name the row family. Owner-local row tables above may provide additional prose, but the behavior below governs missing, null, omission, checksum, and manifest handling for production activation.
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `*.row_id` | `040.ScalarType.string` | yes | none | no | no | 1..256 Unicode scalar values | n/a | reject | n/a | ordered:1 | yes | closed | `110` | selected row ref and row checksum | `ACTIVATION_ROW_REQUIRED_FIELD_MISSING` | `ACTIVATION_ROW_FIELD_TYPE_INVALID` |
+| `*.row_version` | `040.ScalarType.string` | yes | none | no | no | 1..64 Unicode scalar values | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row schema version | `ACTIVATION_ROW_REQUIRED_FIELD_MISSING` | `ACTIVATION_ROW_FIELD_TYPE_INVALID` |
+| `*.validation_refs` | `array<030.ActivationControlledRowRef>` | yes | none | no | no | 1..1024 refs for production rows | canonical_set | reject | `row_family,row_id` | no | yes | closed | `110` | every validation ref | `ACTIVATION_ROW_REQUIRED_FIELD_MISSING` | `ACTIVATION_ROW_REF_INVALID` |
+| `*.activation_scope` | `030.ActivationScope` | yes | none | no | no | scope context declared by `050.MappingScopeSelectorContext` | n/a | reject | n/a | no | yes | closed | `110` | selector context and selector checksum | `ACTIVATION_ROW_REQUIRED_FIELD_MISSING` | `SCOPE_SELECTOR_INVALID` |
+| `*.lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle transition evidence refs | `ACTIVATION_ROW_REQUIRED_FIELD_MISSING` | `ACTIVATION_ROW_LIFECYCLE_INVALID` |
+| `*.row_checksum` | `040.ScalarType.sha256_hex` | yes | derived:`040.CanonicalJSON` | no | no | SHA-256 hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `ACTIVATION_ROW_CHECKSUM_MISSING` | `ACTIVATION_ROW_CHECKSUM_MISMATCH` |
+| `ExternalSchemaProfile.schema_artifact_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact_class `external_schema_artifact_ref` | n/a | reject | n/a | ordered:3 | yes | closed | `110` | artifact ref and checksum | `OCSF_COMPILED_ARTIFACT_REF_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ExternalSchemaProfile.profile_resolution_manifest_refs` | `array<030.ActivationControlledArtifactRef>` | yes | none | no | no | 1..1024 refs for OCSF rows | canonical_set | reject | artifact ref | no | yes | closed | `110` | every manifest ref and checksum | `PROFILE_RESOLUTION_MANIFEST_MISSING` | `PROFILE_RESOLUTION_MANIFEST_INVALID` |
+| `ExternalSchemaProfile.class_allowlist_checksum` | `040.ScalarType.sha256_hex` | yes | none | no | no | SHA-256 hex | n/a | reject | n/a | no | yes | closed | `110` | class allowlist checksum | `OCSF_CLASS_ALLOWLIST_CHECKSUM_MISSING` | `OCSF_CLASS_NOT_ALLOWED` |
+| `ExternalSchemaArtifactRef.source_tag` | `040.ScalarType.string` | yes | `1.8.0` for MVP candidate rows | no | no | exact `1.8.0` for production MVP | n/a | reject | n/a | ordered:3 | yes | closed | `110` | artifact ref | `OCSF_SOURCE_TAG_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ExternalSchemaArtifactRef.source_commit` | `040.ScalarType.string` | yes | `6fa6499a0f8c9f449d342816e90e5f687c224b0a` for MVP candidate rows | no | no | 40 lowercase hex chars | n/a | reject | n/a | ordered:4 | yes | closed | `110` | artifact ref | `OCSF_SOURCE_COMMIT_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ExternalSchemaArtifactRef.compiled_artifact_checksum` | `040.ScalarType.sha256_hex` | yes | none | no | no | concrete non-`TODO` SHA-256 | n/a | reject | n/a | ordered:5 | yes | closed | `110` | compiled artifact checksum | `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ExternalSchemaArtifactRef.compiler_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | compiler ID/version/checksum concrete | n/a | reject | n/a | no | yes | closed | `110` | compiler ref and checksum | `OCSF_COMPILER_REF_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ExternalSchemaArtifactRef.validator_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | validator ID/version/checksum concrete | n/a | reject | n/a | no | yes | closed | `110` | validator ref and checksum | `OCSF_VALIDATOR_REF_MISSING` | `OCSF_ARTIFACT_MISMATCH` |
+| `ProfileResolutionManifest.required_field_set` | `array<040.ScalarType.field_path>` | yes | none | no | no | 0..4096 paths, exact compiled paths | canonical_set | reject | field path | no | yes | closed | `110` | manifest ref and checksum | `PROFILE_RESOLUTION_MANIFEST_MISSING` | `PROFILE_RESOLUTION_MANIFEST_INVALID` |
+| `ObservationToOCSFMappingRow.row_mode` | owner enum | yes | none | no | no | `ocsf_mapped`, `cadastre_only`, `deterministically_blocked` | n/a | reject | n/a | ordered:3 | yes | closed | `110` | selected row ref and checksum | `MAP_OCSF_ROW_MISSING` | `MAP_OCSF_ROW_INVALID` |
+| `ObservationToOCSFMappingRow.mapping_discriminator` | owner predicate bytes | yes | none | no | no | canonical predicate, max 65536 bytes | n/a | reject | n/a | ordered:4 | yes | closed | `110` | selected row ref and checksum | `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` | `MAP_OCSF_ROW_INVALID` |
+| `ObservationToOCSFMappingRow.ocsf_class_uid` | `040.ScalarType.uint64` | conditional:`row_mode = ocsf_mapped` | null otherwise | yes only when non-OCSF row mode | no | must be in active allowlist | n/a | reject | n/a | ordered:5 | yes | closed | `110` | selected row ref and class allowlist checksum | `MAP_OCSF_ROW_MISSING` | `OCSF_CLASS_NOT_ALLOWED` |
+| `ObservationToOCSFMappingRow.required_normalized_paths` | `array<040.ScalarType.field_path>` | yes | `[]` for `cadastre_only` | no | no | 0..4096 exact paths | canonical_set | reject | field path | no | yes | closed | `110` | selected row ref and checksum | `MAP_REQUIRED_PATHS_MISSING` | `MAP_REQUIRED_PATH_INVALID` |
+| `ObservationToOCSFMappingRow.forbidden_normalized_paths` | `array<040.ScalarType.field_path>` | no | `[]` | no | no | 0..4096 exact paths | canonical_set | reject | field path | no | yes | closed | `110` | selected row ref and checksum | none | `MAP_FORBIDDEN_PATH_EMITTED` |
+| `ExternalEnumMappingRule.unknown_value_behavior` | owner enum | yes | `reject` | no | no | `reject`, `emit_other_with_raw_preservation`, `cadastre_only` | n/a | reject | n/a | no | yes | closed | `110` | enum rule ref and checksum | `EXTERNAL_ENUM_RULE_MISSING` | `EXTERNAL_ENUM_UNKNOWN` |
+| `ExternalEnumMappingRule.known_value_map` | `map<string,canonical_object>` | yes | none | no | no | 0..4096 entries; total for claimed source values | canonical_set | reject | key lexical | no | yes | closed | `110` | enum rule ref and checksum | `EXTERNAL_ENUM_RULE_MISSING` | `EXTERNAL_ENUM_SIBLING_MISMATCH` |
+| `OCSFBaseEventFieldPolicy.field_path` | `040.ScalarType.field_path` | yes | none | no | no | exact OCSF base-event path | n/a | reject | n/a | ordered:3 | yes | closed | `110` | policy row ref and checksum | `OCSF_BASE_FIELD_POLICY_MISSING` | `OCSF_BASE_FIELD_FORBIDDEN` |
+| `OCSFBaseEventFieldPolicy.policy_class` | owner enum | yes | none | no | no | `disabled`, `non_authoritative_metadata`, `allowed_metadata_bounded`, `rejected_deprecated`, `waived_deprecated` | n/a | reject | n/a | ordered:4 | yes | closed | `110` | policy row ref and checksum | `OCSF_BASE_FIELD_POLICY_MISSING` | `OCSF_BASE_FIELD_FORBIDDEN` |
+| `SourceExtensionFieldRule.field_path` | `040.ScalarType.field_path` | yes | none | no | no | `source.<source_category>.<field_name>`, max 512 | n/a | reject | n/a | ordered:3 | yes | closed | `110` | source-extension row ref and checksum | `SOURCE_EXTENSION_FIELD_UNDECLARED` | `SOURCE_EXTENSION_NAMESPACE_INVALID` |
+| `SourceExtensionFieldRule.bounds` | `040.ScalarType.canonical_object` | yes | none | no | no | string 4096 chars, arrays 1024 elements, maps 4096 entries, object 65536 bytes unless narrowed | n/a | reject | n/a | no | yes | closed | `110` | source-extension row ref and checksum | `SOURCE_EXTENSION_RULE_INCOMPLETE` | `SOURCE_EXTENSION_BOUNDS_INVALID` |
+| `ObservationTypeExternalMappingValidationMatrix.validation_row_id` | `040.ScalarType.string` | yes | none | no | no | exact row ID from `120` | n/a | reject | n/a | ordered:3 | yes | closed | `110` | validation row ref and checksum | `OCSF_VALIDATION_ROW_MISSING` | `OCSF_VALIDATION_ROW_INVALID` |
+| `CanonicalValidationOutput.normalized_validation_output_checksum` | `040.ScalarType.sha256_hex` | yes | none | no | no | concrete non-`TODO` SHA-256 | n/a | reject | n/a | ordered:3 | yes | closed | `110` | validation output checksum | `OCSF_CANONICAL_VALIDATION_OUTPUT_INCOMPLETE` | `OCSF_CANONICAL_VALIDATION_OUTPUT_MISMATCH` |
+
+#### OCSFClosureRowFamilyStatus
+
+| row_family | production classification | precision status |
 | --- | --- | --- |
-| `ExternalSchemaProfile` | output_affecting | TODO: convert to full `030.ActivationControlledRowField` columns for profile refs, profile sets, extension sets, enum rule refs, base-event policy refs, source-extension refs, upgrade refs, validation refs, activation scope, and lifecycle status. |
-| `ExternalSchemaArtifactRef` | output_affecting | TODO: convert artifact-ref fields to full row precision, including compiled artifact checksum, compiler refs, validator refs, class allowlist checksum, profile set, and extension set. |
-| `ProfileResolutionManifest` | output_affecting | TODO: add array semantics and duplicate policy for resolved profile, inheritance, required-field, recommended-field, constraint, and object-path refs. |
-| `ObservationToOCSFMappingRow` | output_affecting | TODO: add full field precision for discriminators, cadastre-only conditional fields, mapping refs, enum refs, required and forbidden normalized paths, validation refs, activation scope, and lifecycle status. |
-| `ExternalEnumMappingRule` | output_affecting | TODO: express unknown enum behavior as a closed owner enum with missing and invalid errors. |
-| `OCSFBaseEventFieldPolicy` | output_affecting | TODO: add full field precision for disabled, bounded, preserved, non-authoritative, and forbidden base-event field behavior. |
-| `OCSFProfileUpgradeReport` | output_affecting for profile replacement | TODO: add field precision for drift, replay, shadow, class allowlist, enum, deprecated-field, profile, extension, and golden-corpus evidence refs. |
-| `SourceExtensionFieldRule` | output_affecting | TODO: add full field precision for namespace, field path, value type, bounds, redaction, secret-scan, collision, and invalid errors. |
-| `SourceSchemaImportProfile` | output_affecting when importer output affects mapping | TODO: add full field precision for source roots, format, checksum, unsupported constructs, overlay output, diagnostics, and validation refs. |
-| `SemanticOverlayArtifact` | validation or authoring unless activated | TODO: declare validation-only or add full row precision for overlay refs, checksum, non-authority, and diagnostics. |
-| `MappingProjectManifest` | output_affecting for mapping validation | TODO: add full field precision for source roots, dependency locks, plugin refs, compiler options, generated-output policy, and checksum behavior. |
-| `MappingCompilerPipeline` | output_affecting for validation output | TODO: add full field precision for phase ordering, phase failure diagnostics, toolchain refs, and output checksum inputs. |
-| `MappingValidationRule` | output_affecting for promotion and diagnostics | TODO: add full field precision for severity defaults, production demotion, rule result behavior, and owner errors. |
-| `ObservationTypeExternalMappingValidationMatrix` | output_affecting for mapping activation | TODO: add full field precision for positive, negative, malformed, unknown, redaction, permission-limited, and forbidden-inference cases. |
-| `CanonicalValidationOutput` | output_affecting for promotion and replay | TODO: add full field precision for deterministic validation rows, diagnostics, checksums, volatile exclusions, and manifest refs. |
+| `ExternalSchemaProfile` | output_affecting | `full_row_schema` through `ExternalSchemaProfile row schema`, `MVP OCSF Production Baseline Decision`, and `OCSFClosureActivationControlledRowFieldTable`. |
+| `ExternalSchemaArtifactRef` | output_affecting | `full_row_schema`; production remains blocked until concrete compiler, validator, compiled artifact, profile set, extension set, and class allowlist checksums exist. |
+| `ProfileResolutionManifest` | output_affecting | `full_row_schema`; arrays are canonical sets with duplicate rejection and manifest refs. |
+| `ObservationToOCSFMappingRow` | output_affecting | `full_row_schema`; row mode controls conditional required/null/forbidden fields. |
+| `ExternalEnumMappingRule` | output_affecting | `full_row_schema`; unknown enum default is reject, `Other` requires compiled support plus raw preservation, deprecated enum default is reject. |
+| `OCSFBaseEventFieldPolicy` | output_affecting | `full_row_schema`; `raw_data`, `raw_data_hash`, and `unmapped` default disabled; observables, enrichments, severity, status, and confidence remain non-authoritative. |
+| `OCSFProfileUpgradeReport` | output_affecting for profile replacement | `full_row_schema`; replacement requires schema diff, replay, shadow, class allowlist, enum, deprecated-field, profile, extension, and golden-corpus refs. |
+| `SourceExtensionFieldRule` | output_affecting | `full_row_schema`; missing or empty rule set emits no fields. |
+| `SourceSchemaImportProfile` | output_affecting when importer output affects mapping | `blocked_validation` until this owner adds the same `030.ActivationControlledRowField` table for importer-specific fields. |
+| `SemanticOverlayArtifact` | validation or authoring unless activated | `validation_only` unless a later owner patch promotes it with full row precision. |
+| `MappingProjectManifest` | output_affecting for mapping validation | `full_row_schema` through its schema and structured-input repository handoff. |
+| `MappingCompilerPipeline` | output_affecting for validation output | `blocked_validation` until concrete phase-order, diagnostics, toolchain, and checksum rows exist. |
+| `MappingValidationRule` | output_affecting for promotion and diagnostics | `blocked_validation` until concrete rule rows and expected diagnostics exist. |
+| `ObservationTypeExternalMappingValidationMatrix` | output_affecting for mapping activation | `full_row_schema` with blocked validation rows in `120` until fixture bytes are supplied. |
+| `CanonicalValidationOutput` | output_affecting for promotion and replay | `full_row_schema`; `TODO:` checksum values block production. |
 
-`profile_set`, `extension_set`, `profile_resolution_manifest_refs`, `enum_rule_refs`, `required_normalized_paths`, `forbidden_normalized_paths`, and `source_extension_rule_set_ref` must declare array/ref semantics, duplicate handling, canonical sort key, checksum participation, owner error mapping, and `VersionManifest` requirements. `cadastre_only` conditional fields must use exact conditional required, omit, and null rules.
+`profile_set`, `extension_set`, `profile_resolution_manifest_refs`, `enum_rule_refs`, `required_normalized_paths`, `forbidden_normalized_paths`, and `source_extension_rule_set_ref` use `canonical_set`, duplicate rejection, lexical or ref sort keys, checksum participation, owner error mapping, and `VersionManifest` requirements. `time`, diagnostic, and generated validation arrays use `ordered_sequence` only when this spec names the ordering rule.
 
-A mapping bundle must fail before silver output when any selected `050` row family remains `TODO:`, uses a bare string ref, accepts an undeclared extension path, or omits row refs and row checksums from `030.VersionManifest`.
+A mapping bundle must fail before silver output when any selected `050` row family is `blocked_validation`, uses a bare string ref, accepts an undeclared extension path, omits row refs or row checksums from `030.VersionManifest`, or contains `TODO:` in production-affecting field type, bound, checksum, fixture checksum, expected output, expected error, or mutation-prohibition proof.
 
 ### Acceptance Criteria
 

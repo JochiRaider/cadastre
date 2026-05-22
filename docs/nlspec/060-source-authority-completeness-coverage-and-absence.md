@@ -882,31 +882,33 @@ OCSF class, category, activity, type, object paths, observables, enrichments, st
 
 ### ExternalSchemaAuthoritySignalMappingRow schema
 
-`ExternalSchemaAuthoritySignalMappingRow` is the only `060` row that can make a normalized external-schema field visible to source-authority logic. Wildcards are forbidden.
+`ExternalSchemaAuthoritySignalMappingRow` is the only `060` row that can make a normalized external-schema field visible to source-authority logic. Wildcards are forbidden. The row is an activation-controlled row and must satisfy the `030.ActivationControlledRowField` table below before any authority, coverage, staleness, control, absence, cleanup, retraction, graph expiry, or watermark effect may be attempted.
 
-| Field | Required rule |
-| --- | --- |
-| `row_id` | Stable row ID. |
-| `external_schema_profile_ref` | Exact active `050.ExternalSchemaProfile`. |
-| `field_path` | Exact normalized field path. Wildcards are forbidden. |
-| `source_dataset` | Exact vendor-neutral dataset token. |
-| `fact_type` | Exact fact type. |
-| `predicate` | Exact predicate. |
-| `requested_effect` | Exact effect token. |
-| `source_authority_closure_matrix_row_ref` | Exact active closure row or deterministic block row. |
-| `source_authority_row_ref` | Exact active authority row. |
-| `coverage_dimension_profile_ref` | Required when coverage-sensitive. |
-| `source_staleness_policy_ref` | Exact active staleness policy. |
-| `control_result_mapping_ref` | Required for control-state output. |
-| `absence_derivation_policy_ref` | Required for absence-sensitive output. |
-| `projection_watermark_policy_ref` | Required for watermark output. |
-| `validation_refs` | Non-empty. |
-| `activation_scope` | Vendor-neutral scope. |
-| `lifecycle_status` | Production use requires `active`. |
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.string` | yes | none | no | no | 1..256 Unicode scalar values | n/a | reject | n/a | ordered:1 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `row_version` | `040.ScalarType.string` | yes | none | no | no | 1..64 Unicode scalar values | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row schema version | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `external_schema_profile_ref` | `030.ActivationControlledRowRef` or `030.ActivationControlledArtifactRef` | yes | none | no | no | exact active `050.ExternalSchemaProfile` | n/a | reject | n/a | ordered:3 | yes | closed | `110` | external schema profile ref/checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `field_path` | `040.ScalarType.field_path` | yes | none | no | no | exact normalized field path; wildcards forbidden | n/a | reject | n/a | ordered:4 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `source_dataset` | `040.ScalarType.enum_token` | yes | none | no | no | vendor-neutral token only | n/a | reject | n/a | ordered:5 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `source_dataset_catalog_row_ref` | `030.ActivationControlledRowRef` | yes | none | no | no | selected `020.SourceDatasetCatalogRow` or deterministic block row | n/a | reject | n/a | no | yes | closed | `110` | selected source-dataset row ref/checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `SOURCE_DATASET_CATALOG_ROW_CHECKSUM_MISMATCH` |
+| `source_dataset_catalog_row_checksum` | `040.ScalarType.sha256_hex` | yes | none | no | no | SHA-256 hex | n/a | reject | n/a | no | yes | closed | `110` | source-dataset row checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `SOURCE_DATASET_CATALOG_ROW_CHECKSUM_MISMATCH` |
+| `fact_type` | `040.ScalarType.enum_token` | yes | none | no | no | exact fact type | n/a | reject | n/a | ordered:6 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `predicate` | `040.ScalarType.enum_token` | yes | none | no | no | exact predicate | n/a | reject | n/a | ordered:7 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `requested_effect` | owner enum | yes | none | no | no | `absence`, `cleanup`, `retraction`, `graph_expiry`, `watermark`, `control_state`, or `authority_metadata_consult` | n/a | reject | n/a | ordered:8 | yes | closed | `110` | selected row ref and checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `source_authority_closure_matrix_row_ref` | `030.ActivationControlledRowRef` | yes | none | no | no | exact active closure row or deterministic block row | n/a | reject | n/a | no | yes | closed | `110` | closure row ref/checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `SOURCE_AUTHORITY_CLOSURE_CHECKSUM_MISMATCH` |
+| `source_authority_row_ref` | `030.ActivationControlledRowRef` | yes | none | no | no | exact active `SourceAuthorityProfileRow` | n/a | reject | n/a | no | yes | closed | `110` | authority row ref/checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `SOURCE_AUTHORITY_ROW_INVALID` |
+| `coverage_dimension_profile_ref` | `030.ActivationControlledRowRef` | conditional:coverage-sensitive effect | null | yes means not coverage-sensitive | no | exact active row | n/a | reject | n/a | no | yes | closed | `110` | coverage row ref/checksum when coverage-sensitive | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `COVERAGE_DIMENSION_PROFILE_INVALID` |
+| `source_staleness_policy_ref` | `030.ActivationControlledRowRef` | yes | none | no | no | exact active row | n/a | reject | n/a | no | yes | closed | `110` | staleness row ref/checksum | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `SOURCE_STALENESS_POLICY_INVALID` |
+| `control_result_mapping_ref` | `030.ActivationControlledRowRef` | conditional:control output requested | null | yes means no control output requested | no | exact active row | n/a | reject | n/a | no | yes | closed | `110` | control row ref/checksum when control output requested | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `CONTROL_RESULT_MAPPING_INVALID` |
+| `absence_derivation_policy_ref` | `030.ActivationControlledRowRef` | conditional:absence-sensitive output requested | null | yes means no absence-sensitive output requested | no | exact active row | n/a | reject | n/a | no | yes | closed | `110` | absence policy ref/checksum when required | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `ABSENCE_DERIVATION_POLICY_INVALID` |
+| `projection_watermark_policy_ref` | `030.ActivationControlledRowRef` | conditional:watermark requested | null | yes means no watermark requested | no | exact active row | n/a | reject | n/a | no | yes | closed | `110` | watermark row ref/checksum when required | `EXTERNAL_SCHEMA_AUTHORITY_FORBIDDEN` | `PROJECTION_WATERMARK_POLICY_INVALID` |
+| `validation_refs` | `array<030.ActivationControlledRowRef>` | yes | none | no | no | 1..1024 refs | canonical_set | reject | `row_family,row_id` | no | yes | closed | `110` | validation refs | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | `060.SourceAuthorityScopeSelectorContextSet` | n/a | reject | n/a | no | yes | closed | `110` | selector context and selector checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `SCOPE_SELECTOR_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle transition evidence refs | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256_hex` | yes | derived:`040.CanonicalJSON` | no | no | SHA-256 hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` | `SOURCE_AUTHORITY_CLOSURE_CHECKSUM_MISMATCH` |
 
-Missing, ambiguous, inactive, checksum-mismatched, out-of-scope, or unvalidated external-schema authority signal rows leave the external schema signal non-authoritative and block the attempted authority effect.
-
-A `060` row that maps an external-schema signal must name the external schema profile ref, field path, source dataset, fact type, predicate, requested effect, source authority row ref, coverage row ref when applicable, staleness row ref, validation refs, activation scope, and lifecycle status. Omission of any required ref means the external-schema signal remains non-authoritative.
+Missing, ambiguous, inactive, checksum-mismatched, out-of-scope, package-set-mismatched, unvalidated, unmanifested, `TODO:`-bearing, or deterministic-blocked external-schema authority signal rows leave the external schema signal non-authoritative and block the attempted authority effect.
 
 Vulnerability Finding status must not become Cadastre `assertion_state` without a `060` or `080` derivation path. DNS and DHCP field absence must not become absence without exact completeness, coverage, staleness, and authority rows. OCSF endpoint order must not become graph direction authority.
 
@@ -1240,7 +1242,7 @@ The following `060` row families can affect source authority, completeness, stal
 | `SourceAuthorityProfileRow` | output_affecting | Closed for source-effect selection by the existing field table plus required `source_dataset_catalog_row_ref`, row checksum, effect token, fact/predicate, underlying refs, deterministic block refs, package refs when supplied, and manifest requirements. |
 | `LakehouseFeedCompletenessProfileRow` | absence_sensitive | TODO: add full field precision for completeness states, allowed effects, upstream evidence refs, feed-read refs, and blocking behavior. |
 | `SourceAuthorityClosureMatrixRow` | absence_sensitive | Closed for source-effect selection by the `SourceAuthorityClosureMatrixRow schema`, including selected source-dataset catalog row, fact type, predicate, requested effect, closure outcome, underlying structured row refs, deterministic block refs, package refs, row checksum, mutation-prohibition refs, and manifest requirements. |
-| `ExternalSchemaAuthoritySignalMappingRow` | output_affecting when external schema signals are consulted | TODO: require exact `030.ActivationControlledRowRef` objects for authority, coverage, staleness, control, absence, watermark, and closure rows. |
+| `ExternalSchemaAuthoritySignalMappingRow` | output_affecting when external schema signals are consulted | Closed by the full `030.ActivationControlledRowField` table in `ExternalSchemaAuthoritySignalMappingRow schema`; missing, ambiguous, inactive, checksum-mismatched, out-of-scope, unvalidated, unmanifested, package-set-mismatched, deterministic-blocked, or `TODO:` rows produce no authority effect. |
 | `CoverageDimensionProfile` | coverage_sensitive | TODO: add full field precision for coverage dimension, authorized and blocking states, stale behavior, permission behavior, and missing-dimension behavior. |
 | `SourceStalenessPolicy` | output_affecting | TODO: add full field precision for time input precedence, stale effects, expiry behavior, missing input behavior, and manifest refs. |
 | `ControlResultMappingRow` | output_affecting for control facts | Closed for source-effect selection by total mapping requirement over external control result states or explicit blocked omitted states. |

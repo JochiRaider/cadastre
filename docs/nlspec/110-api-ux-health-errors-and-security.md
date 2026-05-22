@@ -535,6 +535,8 @@ If any owner spec emits an error code that lacks exactly one generated `ErrorCod
 
 Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
 
+Mapping closure errors must select owner-specific `050`, `060`, or `090` registry rows when one covers the failure class. Generic API, validation, activation, health, graph, or unknown-state errors are forbidden for the same failure class. The generated registry must reject alias-only `OCSF_MAPPING_ROW_MISSING`, `OCSF_MAPPING_ROW_AMBIGUOUS`, and `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` fragments unless they are byte-identical deprecated aliases mapped to the canonical `050` rows and not emitted as final errors.
+
 ### OwnerDomainRegistrySourceRule
 
 `110.GenerateErrorCodeRegistry` is the only final registry algorithm. Owner-domain shorthand tables in this document are non-authoritative rendering examples unless they explicitly name `Shared110ErrorRegistryFragment`. Such tables must not be parsed as registry fragments, must not define final severity or retry class, and must not supply owner context, fixture refs, or registry checksums.
@@ -923,9 +925,18 @@ The generated `ErrorCodeRegistry` must include owner-specific closure-pack error
 | `SOURCE_DATASET_CATALOG_PRIVATE_BINDING_LEAK` | `020` | security | no | leaked field path only; raw private value forbidden | `fixture-020-source-dataset-private-leak` |
 | `SOURCE_DATASET_UNSUPPORTED_FOR_FEED_CATEGORY` | `020` | blocked | no, until catalog or category row changes | feed category, coverage-domain token when public | `fixture-020-source-dataset-unsupported-category` |
 | `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED` | `020` | blocked | no, until deterministic block is removed by validated row | deterministic block code and block scope | `fixture-020-source-dataset-deterministically-blocked` |
-| `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` | `050` | error | no, until artifact changes | checksum policy-visible | `fixture-050-compiled-artifact-checksum-mismatch` |
-| `OCSF_MAPPING_ROW_MISSING` | `050` | blocked | no, until row set changes | observation type visible | `fixture-050-mapping-row-missing` |
-| `OCSF_MAPPING_ROW_AMBIGUOUS` | `050` | error | no, until row set changes | matching rows redacted | `fixture-050-mapping-row-ambiguous` |
+| `OCSF_ARTIFACT_MISMATCH` | `050` | error | no, until artifact changes | checksum policy-visible | `fixture-050-compiled-artifact-checksum-mismatch` |
+| `OCSF_COMPILED_ARTIFACT_REF_MISSING` | `050` | blocked | no, until artifact refs activate | artifact family visible; refs redacted | `fixture-050-compiled-artifact-ref-missing` |
+| `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISSING` | `050` | blocked | no, until checksum supplied | checksum field visible; refs redacted | `fixture-050-compiled-artifact-checksum-missing` |
+| `OCSF_PROFILE_SET_CHECKSUM_MISSING` | `050` | blocked | no, until checksum supplied | profile set ref redacted | `fixture-050-profile-set-checksum-missing` |
+| `OCSF_EXTENSION_SET_CHECKSUM_MISSING` | `050` | blocked | no, until checksum supplied | extension set ref redacted | `fixture-050-extension-set-checksum-missing` |
+| `OCSF_CLASS_ALLOWLIST_CHECKSUM_MISSING` | `050` | blocked | no, until checksum supplied | class allowlist ref redacted | `fixture-050-class-allowlist-checksum-missing` |
+| `OCSF_CANONICAL_VALIDATION_OUTPUT_INCOMPLETE` | `050`,`120` | blocked_validation | no, until validation output bytes supplied | validation row IDs visible; refs redacted | `fixture-050-canonical-validation-output-incomplete` |
+| `MAP_OCSF_ROW_MISSING` | `050` | blocked | no, until row set changes | observation type visible | `fixture-050-mapping-row-missing` |
+| `MAP_OCSF_ROW_AMBIGUOUS` | `050` | error | no, until row set changes | matching rows redacted | `fixture-050-mapping-row-ambiguous` |
+| `CADASTRE_ONLY_MAPPING_ROW_MISSING` | `050` | blocked | no, until row set changes | observation type visible | `fixture-050-cadastre-only-mapping-row-missing` |
+| `CADASTRE_ONLY_CHECKSUM_MISMATCH` | `050` | error | no, until row or manifest changes | selected row ref, expected checksum, actual checksum | `fixture-050-cadastre-only-checksum-mismatch` |
+| `MAPPING_SOURCE_DATASET_CATALOG_REF_MISSING` | `020`,`050` | blocked | no, until source-dataset row refs activate | dataset token visible when public; refs redacted | `fixture-050-mapping-source-dataset-catalog-ref-missing` |
 | `SOURCE_AUTHORITY_CLOSURE_BLOCKED` | `060` | blocked | owner-defined | closure refs redacted | `fixture-060-closure-blocked` |
 | `RESOLVER_CATALOG_MISSING` | `070` | blocked | no, until artifact activates | artifact class visible | `fixture-070-catalog-missing` |
 | `RESOLVER_CATALOG_AMBIGUOUS` | `070` | error | no, until artifact rows change | matching rows redacted | `fixture-070-catalog-ambiguous` |

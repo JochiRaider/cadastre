@@ -684,6 +684,22 @@ OCSF `src_endpoint`, `dst_endpoint`, `network_endpoint`, DNS endpoint, DHCP endp
 
 OCSF direction rejection must be validated against the active `050.ObservationToOCSFMappingRowSet` for every active `network_activity_observation`, DNS, and DHCP row family that emits endpoint-like OCSF fields. A mapping fixture that emits OCSF endpoint fields and no qualifying `FlowRoleEvidence` must produce no `observed_connection` edge. The graph validation row must reference the selected mapping row, source silver observation checksum, graph projection profile, graph edge semantics row, and `VersionManifest`.
 
+### OCSFDirectionMappingFixtureHandoff
+
+Every endpoint-order rejection validation row must prove direction rejection from an active mapping output, not from graph-only synthetic input.
+
+| Required fixture member | Required behavior |
+| --- | --- |
+| selected mapping row | Exact `050.ObservationToOCSFMappingRow` ref/checksum for `network_activity_observation`, `dns_observation`, or DHCP-discriminated `dhcp_ipam_observation` that emits endpoint-like OCSF fields. |
+| source silver observation | Source `CadastreSilverObservation` checksum and `VersionManifest` ref. |
+| graph profile refs | Active `GraphProjectionProfile` ref, graph edge semantics row ref, and graph object output eligibility row ref when the attempted output would be search-, neighbor-, finding-, metric-, or pathfinding-visible. |
+| expected output | Expected no-edge checksum or expected owner error checksum. |
+| mutation prohibition | Proof that no `observed_connection` edge, graph property, pathfinding input, graph delta, graph apply write, or backend mutation occurred. |
+| package refs | Package release and production package-set refs when any mapping, graph, or validation artifact is package-supplied. |
+| manifest refs | `030.VersionManifest` ref containing selected mapping row refs/checksums, source silver checksum, graph profile refs/checksums, validation refs, and package-set refs when supplied. |
+
+The direction rejection scope includes active `network_activity_observation`, DNS, and DHCP rows that emit endpoint-like OCSF fields. `cadastre_only` rows are graph no-op by default unless they emit qualifying Cadastre-owned `FlowRoleEvidence` accepted by the active graph profile. OCSF `src_endpoint`, `dst_endpoint`, DNS endpoint, DHCP endpoint, and network endpoint ordering must not determine graph direction.
+
 ## Backend Preflight
 
 A `GraphBackendProfile` must be active before graph mutation, query, rebuild import, drift check, or graph-serving promotion. `GraphBackendPreflightResult` must validate backend, driver, dialect, topology, storage mode, feature availability, raw-write bypass controls, schema profile, and query translation readiness.
