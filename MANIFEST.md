@@ -49,5 +49,5 @@ Every path must be repository-relative, normalized, unique, and must not contain
 | `docs/reference/research/RES-017-postgresql-apache-age.md` |
 | `docs/reference/research/RES-018-postgresql-apache-age-implementation.md` |
 | `docs/archive/PRD-Cadastre.revised-draft.md` |
-| `docs/archive/RES-015-janusgraph.md` |
 | `docs/archive/RES-012-graph-backend-comparison.md` |
+| `docs/archive/RES-015-janusgraph.md` |
