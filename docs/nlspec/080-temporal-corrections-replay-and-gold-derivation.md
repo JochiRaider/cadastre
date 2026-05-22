@@ -44,6 +44,10 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -673,6 +677,27 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `REPLAY_POLICY_ARTIFACT_MISSING` | `080` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-policy-artifact-missing` |
 | `REPLAY_INPUT_INSUFFICIENT` | `080` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-input-insufficient` |
 | `REPLAY_CHECKSUM_MISMATCH` | `080` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `080.TemporalErrorContext` | `error-registry-080-replay-checksum-mismatch` |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `080` row families can affect fact-time resolution, known-time import, late-arrival routing, correction behavior, snapshot refs, replay equivalence, graph rebuild equivalence, predicate contracts, assertion-state transitions, or event-sequence validation. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `TemporalSemanticsPolicy` | output_affecting | TODO: add full field precision for valid interval model, valid time input precedence, time quality, fallback behavior, absent/malformed/ambiguous behavior, valid-to rule, validation refs, activation scope, and lifecycle status. |
+| `KnowledgeTimeImportPolicy` | output_affecting | TODO: add full field precision for current import, reconstructed known-time permission, required evidence refs, and missing evidence behavior. |
+| `LateArrivalPolicy` | output_affecting | TODO: add full field precision for route states, authority/completeness/coverage/staleness refs, quarantine refs, watermark refs, and errors. |
+| `GoldFactCorrectionPolicy` | output_affecting | TODO: add full field precision for correction event classes, assertion transitions, no-op behavior, conflict behavior, old/new fact refs, and graph handoff effect. |
+| `CorrectionSnapshotRefPolicy` | output_affecting | TODO: add full field precision for old/new snapshot refs, table-set checksum, retained evidence refs, mutable-ref rejection, and retention refs. |
+| `ReplayEquivalencePolicyOutputClassRow` | output_affecting | TODO: add full field precision for included fields, excluded volatile fields, checksum inclusion, failure precedence, and manifest requirements. |
+| `GraphRebuildEquivalencePolicy` | output_affecting when graph rebuild is in scope | TODO: add full field precision for graph-specific included/excluded refs in the `080`/`090` handoff. |
+| `GoldFactPredicateContractRow` | output_affecting | TODO: add full field precision for fact type, predicate, subject/object kind sets, null object policy, structured schema refs, checksum inputs, and owner errors. |
+| `AssertionStateTransitionRow` | output_affecting | TODO: add total transition table precision over prior assertion state and correction event. |
+| `EventSequenceValidationCorpus` | validation_affecting | TODO: add full field precision for sequence ID, ordered events, expected output/error/no-op, mutation prohibition, and fixture checksums. |
+
+`valid_time_input_precedence` must use `ordered_sequence`. Fallback behavior must be a closed enum or owner union; omitted fallback must map to a deterministic temporal error. Replay included and excluded fields must use declared `ordered_sequence` or `canonical_set` semantics. Correction transition rows must be total over prior assertion state and correction event.
+
+Gold derivation, correction, late-arrival routing, replay output, or graph rebuild handoff must fail before output when any selected `080` row family remains `TODO:`, uses a mutable-only ref, omits row checksum inputs, or omits selected row refs from `030.VersionManifest`.
 
 ### Acceptance Criteria
 

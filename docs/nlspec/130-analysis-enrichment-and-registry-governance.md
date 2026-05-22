@@ -45,6 +45,10 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ScopeSelectorCovers`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -571,6 +575,25 @@ Default graph compatibility rules:
 ### RiskScoringBoundary validation
 
 Numeric scoring is disabled by default. Attempts to emit authoritative numeric risk or exposure scores must fail with `ANALYSIS_MUTATION_FORBIDDEN` or remain `AnalysisMetric` only when `RiskScoringBoundary.numeric_scoring_authority = disabled`.
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `130` row families can affect analysis execution, derived graph edge output, threat-intel enrichment, lineage facet mapping, artifact-class substitution, registry governance, custom property validation, or classification policy. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `DerivedGraphEdgeRule` | output_affecting | TODO: convert existing schema to full `030.ActivationControlledRowField` columns for structured row refs, allowed output effect, unsupported behavior, deterministic ID inputs, validation refs, activation scope, and lifecycle status. |
+| `ThreatIntelEnrichmentProfile` | enrichment_affecting | TODO: add full field precision for permitted formats, indicator normalization, sighting semantics, visibility policy, output restrictions, ref arrays, and validation refs. |
+| `ThreatIntelEnrichmentRecord` | enrichment_runtime_record | TODO: declare runtime-state field precision or full row precision for indicator, sighting, taxonomy, galaxy, object-template, confidence, distribution, and checksum behavior. |
+| `RegistryArtifactGovernance` | output_affecting for registry activation | TODO: add full field precision for owner, domain, classification, glossary, policy, approval, lifecycle, and checksum metadata. |
+| `RegistryCustomPropertySchema` | output_affecting | TODO: add null/omit rules, cardinality, array/map semantics, default value behavior, bounds, redaction owner, extension policy, and invalid errors. |
+| `RegistryClassificationPolicy` | output_affecting for governance metadata | TODO: add full field precision for label vocabularies, non-authority defaults, permitted uses, redaction, and invalid errors. |
+| `LineageFacetMappingRow` | output_affecting when lineage facets are mapped | TODO: add full field precision for immutable schema refs, schema checksum, facet bytes checksum policy, collision behavior, raw facet storage, mapped field sets, authority class, and allowed effects. |
+| `ArtifactClassPolicy` | output_affecting for artifact substitution checks | TODO: add full field precision for artifact class, permitted substitutes, forbidden substitutes, authority class, validation refs, and error mapping. |
+
+`DerivedGraphEdgeRule.required_*_refs` must use structured `030.ActivationControlledRowRef` or `030.ActivationControlledArtifactRef` objects. `allowed_output_effect` and `unsupported_behavior` must be closed owner enums with explicit defaults and checksum inclusion. Threat-intel profile ref arrays must use `canonical_set` semantics and duplicate rejection.
+
+Analysis, enrichment, lineage, registry activation, or derived-edge routing must fail before output or mutation when any selected `130` row family remains `TODO:`, attempts hidden authority grant, uses a bare string row ref, or omits selected row refs from `030.VersionManifest`.
 
 ### Acceptance Criteria
 

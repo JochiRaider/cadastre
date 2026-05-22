@@ -46,6 +46,10 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -1041,6 +1045,27 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `backend_evidence_refs` | No | Redacted refs only; backend IDs and provider-native query text remain forbidden. |
 | `validation_refs` | Yes | Exact `120` graph fixture refs. |
 | `redaction_classes` | Yes | Backend IDs, provider-native query text, raw graph property values, private bindings, credentials, raw payload bytes, and source-native identity values must map to `always_forbidden`. |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `090` row families can affect graph projection, serving, query translation, backend selection, provider capability, edge semantics, output eligibility, schema/apply/query policies, graph rebuild, or derived-view lag. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `GraphBackendProfile` | output_affecting | TODO: add full field precision for backend, driver, dialect, topology, storage mode, edition/license, features, adapter refs, raw-write bypass policy, package-set refs, and checksum. |
+| `GraphProjectionProfile` | output_affecting | TODO: add full field precision for node/edge mappings, structural rules, expiry scopes, no-op outcomes, refs, checksums, and validation refs. |
+| `GraphEdgeSemanticsRegistry` | output_affecting | TODO: add full row precision for traversal class, direction rule, evidence requirements, allowed assertion states, non-implication rules, no-op conditions, and validation refs. |
+| `GraphObjectOutputEligibilityRow` | output_affecting | TODO: convert the matrix into a full row schema for object kind, search, neighbor, pathfinding, analysis, metrics, identity influence, and errors. |
+| `GraphProviderCapabilityMatrix` | output_affecting for provider activation | TODO: add full field precision for supported features, unsupported behavior, partial support, fixture refs, and activation blockers. |
+| `GraphBackendTaxonomyMappingProfile` | output_affecting | TODO: add full field precision for labels, relationship types, collections, properties, reserved fields, selector mappings, and backend-ID prohibition. |
+| `GraphQueryTranslationProfile` | output_affecting | TODO: add typed fields for timeout, candidate limit, page token, redaction, authorization, ordering, stale-read behavior, and query classes. |
+| `GraphReadModelSchemaProfile` | output_affecting | TODO: add full field precision for constraints, indexes, schema fingerprints, missing-schema behavior, and preflight refs. |
+| `GraphApplyProfile` | output_affecting | TODO: add full field precision for apply ordering, batching, retry, transaction boundary, schema readiness, partial apply, and idempotent reapply. |
+| `DerivedViewLagPolicy` | output_affecting for graph serving | TODO: add full field precision for lag states, stale-read labels, refusal behavior, derived-view state refs, and health/API handoff refs. |
+
+Backend refs must be structured artifact refs with package-set requirements. Provider subprofiles must have closed extension maps and must not alter Cadastre graph IDs, output ordering, page-token identity, evidence refs, error categories, authorization, redaction, or replay semantics. Arrays of refs, node types, edge types, properties, labels, traversal classes, and validation refs must declare `canonical_set` or `ordered_sequence` behavior.
+
+Graph projection, graph query, graph apply, graph rebuild, derived-view serving, or backend activation must fail before mutation or serving when any selected `090` row family remains `TODO:`, uses a backend-native ID as a ref, uses a bare string row ref, or omits selected row refs from `030.VersionManifest`.
 
 ### Acceptance Criteria
 

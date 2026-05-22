@@ -36,6 +36,10 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -708,6 +712,27 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 ### LakehouseApiStateLabelGuidance
 
 Profile, category, manifest, table-state, and activation errors render through `110` as `error` or health-blocked states. Partial read, declared-subset, manifest, and empty-scope errors must not render as authorized absence. Upstream completeness insufficiency must map through `060` before any absence-sensitive API, export, graph, or watermark effect.
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `020` row families can affect feed activation, feed read, raw import, absence-sensitive eligibility, replay, retention, maintenance, table-set consistency, or catalog promotion. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `LakehouseFeedProfileSchema` | output_affecting | TODO: replace the existing lightweight field table with a full `030.ActivationControlledRowField` table. |
+| `LakehouseFeedCategoryClosureRow` | output_affecting | TODO: add full field precision for category token, allowed effects, effect closure requirements, authority refs, deterministic block refs, validation refs, activation scope, and lifecycle status. |
+| `RawSupplierProfile` | output_affecting when referenced by feed profile | TODO: declare as a closed enum plus full row schema or as an explicit non-row classification table that cannot be referenced as an activation row. |
+| `LakehouseReadPolicy` | output_affecting | TODO: add full field precision for read target refs, payload limits, retries, timeouts, failed-object behavior, omitted-object behavior, checksum behavior, and replay behavior. |
+| `LakehouseTableProfile` | output_affecting | TODO: add full field precision for table identity, table format, catalog binding, replay requirement, maintenance policy, schema compatibility policy, and checksum behavior. |
+| `ReplayRetentionPolicy` | output_affecting | TODO: add full field precision for protected replay windows, manifest classes, legal hold, and deletion eligibility. |
+| `TableMaintenancePolicy` | output_affecting | TODO: add full field precision for destructive and rewrite maintenance preflight, refusal, idempotence, timeout, and decision refs. |
+| `CrossTableCommitProfile` | output_affecting when table-set consistency is required | TODO: add full field precision for required table groups, atomicity requirement, catalog semantics, and table-set checksum. |
+| `CatalogBranchPromotionPolicy` | output_affecting when catalog versioning controls production visibility | TODO: add full field precision for branch, tag, commit, validation, promotion, approval, and rollback requirements. |
+| `RawFeedManifest` | unresolved runtime-state handoff | TODO: owner decision required: either keep as runtime-state record with `040.CoreRecordFieldRow`-equivalent ID, checksum, validation, and replay precision, or convert to `030.ActivationControlledRowField` precision when replay-affecting manifest rows are activation selected. |
+
+Ref arrays including `object_refs`, `partition_refs`, `schema_refs`, `coverage_profile_refs`, `source_authority_profile_refs`, and `source_staleness_policy_refs` must declare `canonical_set` or `ordered_sequence`, duplicate policy, canonical sort key, and checksum participation. `blocked_effects` and `effect_closure_requirements` must be typed maps with total key coverage over declared effect tokens.
+
+A production feed read, raw import, completeness evaluation, absence-sensitive effect, replay retention decision, destructive maintenance decision, cross-table read, or catalog promotion must fail before output when any selected `020` row family remains `TODO:` or lacks a structured `030.ActivationControlledRowRef`.
 
 ### Acceptance Criteria
 

@@ -82,6 +82,7 @@ Every active domain spec must include at least one negative validation case for 
 | Structured input repository | Branch, tag, pull request, repository URL, or hook success used as activation target; stale branch-tip validation; exact tree mismatch; invalid path; private binding leak; unmaterialized Git snapshot activation; package release missing materialization refs; missing `VersionManifest` refs; rollback to branch or tag; and hook success as activation evidence fail before forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 | Scope selector closure | Selector normalization, exact match, subset allowed, subset disallowed, duplicate dimension, duplicate value, unknown field, unsupported dimension, under-scoped request, private leak, ambiguity, no row-order tiebreak, owner error mapping, redaction, and manifest inclusion are covered for every active scoped owner family. |
+| Activation-controlled row schema precision | Production-affecting activation-controlled row families with prose-only schemas, missing `030.ActivationControlledRowField` tables, missing null/omit/default/bounds columns, missing array semantics, missing duplicate policy, bare string row refs, checksum mismatch, extension redefinition, manifest omission, package-set omission, or owner error omission fail before promotion or owner output. |
 
 ## Required Volatility Boundary Test Classes
 
@@ -191,7 +192,29 @@ Every activation catalog closure validation row must use this interface:
 | `120-ACTIVATION-CATALOG-CLOSURE-AC-008` | Graph backend blockers are resolved or produce deterministic no-op/no-mutation behavior. |
 | `120-ACTIVATION-CATALOG-CLOSURE-AC-009` | Research reports, ADRs, repository snapshots, backend defaults, validation reports, and package labels are never runtime authority. |
 
-`AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs.
+`AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs. It is also forbidden when any activation-controlled row-schema precision row is blocked, not run, failed, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, owner-error-incomplete, or contains a required `TODO` fixture checksum, expected output checksum, expected error, row checksum, row-set checksum, or mutation-prohibition proof.
+
+### ActivationControlledRowSchemaValidationMatrix
+
+This matrix verifies activation-controlled row schema precision for every production-affecting row family in `020`, `050`, `060`, `070`, `080`, `090`, `100`, `130`, and `140`. A row may pass only when fixture checksum, expected output checksum, expected error checksum, row checksum, row-set checksum, package-set refs when package-supplied, owner error registry rows, and `030.VersionManifest` requirements are concrete and non-`TODO`.
+
+| validation_row_id | owner_spec | scenario | expected output or error | required fixture coverage |
+| --- | --- | --- | --- | --- |
+| `120-ACTIVATION-ROW-SCHEMA-AC-001` | all row owners, `030` | Every production-affecting activation row family has a full `030.ActivationControlledRowField` table or an explicit non-production, inactive, validation-only, deferred, or deterministic-block declaration. | pass or `ACTIVATION_ROW_SCHEMA_INCOMPLETE` | owner row-family inventory and field-table presence proof. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-002` | `030` | Identical materialized row bytes produce identical row checksums and identical row-set checksums. | byte-identical checksums | canonical bytes, row checksum, row-set checksum. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-003` | `030` and owner | Checksum-included fields affect checksums; checksum-excluded volatile fields do not. | expected checksum delta or no delta | included-field and excluded-field fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-004` | `030` and owner | Unknown fields fail unless a declared extension map exists. | `ACTIVATION_ROW_UNKNOWN_FIELD` or owner extension error | unknown field and extension-map fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-005` | `030` and owner | Null fails unless `null_allowed = yes`. | `ACTIVATION_ROW_NULL_FORBIDDEN` or owner null error | null and permitted-null fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-006` | `030` and owner | Omission fails for required fields and remains distinct from null. | `ACTIVATION_ROW_OMIT_FORBIDDEN` or owner omit error | omitted required, omitted optional, null required fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-007` | `030` and owner | `canonical_set` arrays sort deterministically and reject duplicates by default. | sorted checksum or `ACTIVATION_ROW_DUPLICATE_FORBIDDEN` | duplicate-after-canonicalization and unordered-input fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-008` | `030` and owner | `ordered_sequence` arrays preserve order and affect checksum in order. | distinct checksums for reordered inputs | ordered sequence fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-009` | `030` and owner | Bare string row refs fail where structured row refs are required. | `ACTIVATION_ROW_REF_INVALID` or owner ref error | bare string, malformed object, and valid row-ref fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-010` | `030` and owner | Selected row refs and row checksums appear in `VersionManifest`. | pass or `ACTIVATION_ROW_VERSION_MANIFEST_INCOMPLETE` | manifest inclusion and omission fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-011` | `030`, `100`, and owner | Package-supplied row catalogs require package-set refs. | pass or package-set owner error | package-supplied row catalog fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-012` | `010`, `030`, and owner | Extension fields cannot redefine stable behavior. | `ACTIVATION_ROW_EXTENSION_FORBIDDEN` or owner extension error | extension-map and stable-redefinition fixtures. |
+| `120-ACTIVATION-ROW-SCHEMA-AC-013` | `000`, `030`, `120` | Missing row schema precision blocks authoritative promotion. | promotion failure | spec-set inventory and blocked promotion fixture. |
+
+`AcceptanceReport.result = pass` is forbidden when any selected production row family lacks non-`TODO` fixtures and expected checksums for these cases. `ValidateSpecSet` must fail before acceptance aggregation when any owner row family is output-affecting and lacks either full row-field precision or an explicit non-production, inactive, validation-only, deferred, or deterministic-block classification.
 
 ### DefineOnceClosureValidationMatrix
 

@@ -49,6 +49,10 @@ Define runtime telemetry signals, trace context propagation, telemetry correlati
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ScopeSelectorCovers`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -456,6 +460,25 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns caller-vis
 | `runtime_state_ref` | No | Required when telemetry runtime state affects health/API/audit/validation diagnostics. |
 | `validation_refs` | Yes | Exact `120` observability fixture refs. |
 | `redaction_classes` | Yes | Raw payload bytes, private bindings, credentials, backend IDs, source-native identity values, canonical IDs, hostnames, IPs, usernames, provider-native query text, exporter credentials, and raw queue payloads must map to `always_forbidden`. |
+
+## ActivationControlledRowSchemaPrecisionHandoff
+
+The following `140` row families can affect telemetry construction, signal export, attribute retention, metric cardinality, exporter behavior, health mapping, replay exclusion, or telemetry redaction. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `ObservabilityInstrumentationProfile` | output_affecting for telemetry behavior | TODO: add full field precision for telemetry standard, protocol, enabled signals, delivery mode, export failure behavior, raw/private/backend ID prohibitions, validation refs, activation scope, and lifecycle status. |
+| `TelemetrySignalPolicy` | output_affecting for telemetry emission | TODO: add full field precision for signal token, stage class, export behavior, non-authority, validation-only exception, and invalid errors. |
+| `MetricInstrumentRow` | output_affecting for metrics | TODO: add typed and bounded fields for metric name, kind, unit, cardinality class, max distinct attribute sets per run, allowed attributes, aggregation, and invalid errors. |
+| `TelemetryAttributePolicy` | output_affecting for telemetry output | TODO: add key/value type, max distinct values, redaction behavior, public/private constraints, checksum inclusion, and invalid errors. |
+| `TelemetryRedactionPolicy` | output_affecting for telemetry output | TODO: add full field precision for data class, signal token, redaction transform, forbidden value classes, and validation refs. |
+| `TelemetryExporterProfile` | output_affecting for export and health | TODO: declare null/omit behavior for `endpoint_ref`, export-disabled state, production-required export, retry policy, backpressure, queue bounds, and invalid errors. |
+| `TelemetryHealthMappingPolicy` | health_affecting | TODO: add full field precision for telemetry condition, health scope, required health effect, forbidden domain effect, and manifest refs. |
+| `TelemetryReplayExclusionPolicy` | replay_affecting | TODO: define exactly which telemetry fields are excluded from domain replay checksums and which validation refs prove exclusion. |
+
+`telemetry_signals`, `allowed_attribute_keys`, enabled signal sets, and validation refs must use `canonical_set` semantics with duplicate rejection unless an owner row declares `ordered_sequence`. `retry_policy` must be a typed nested object or named owner union with bounds for maximum attempts, backoff, queue behavior, and retryable exporter errors. Telemetry rows must remain diagnostic and must not grant source, identity, graph, package, audit, replay, or watermark authority.
+
+Telemetry validation, export, health mapping, or replay exclusion must fail before telemetry-visible output when any selected `140` row family remains `TODO:`, uses an unbounded label, exposes raw/private values, uses a bare string row ref, or omits selected row refs from `030.VersionManifest`.
 
 ## Acceptance Criteria
 

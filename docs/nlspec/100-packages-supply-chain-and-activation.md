@@ -33,6 +33,10 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -1201,6 +1205,32 @@ Source-closure row catalogs included in a production package set must appear in 
 | `quarantine_ref` | No | Required for quarantine blockers. |
 | `validation_refs` | Yes | Exact `120` package fixture refs. |
 | `redaction_classes` | Yes | Raw SBOM bytes, signer secrets, repository credentials, private package payload bytes, private bindings, raw payload bytes, and source-native identity values must map to `always_forbidden`. |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `100` row families can affect package eligibility, release manifests, package-set activation, trust, provenance, SBOM, dependency locks, compatibility, deprecation, rollback, quarantine, emergency behavior, last-known-good status, package stage binding, or package-supplied row catalogs. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `PackageTypePolicyRow` | output_affecting | TODO: convert the existing row schema to full `030.ActivationControlledRowField` columns, including policy refs, emergency effects, validation refs, activation scope, and lifecycle status. |
+| `PackageReleaseManifest` | output_affecting | TODO: add full field precision for release checksum, package type, artifact refs, activation artifact refs, trust refs, provenance refs, SBOM refs, dependency refs, compatibility refs, validation refs, and activation scope. |
+| `ProductionPackageSetManifest` | output_affecting | TODO: add full field precision for package release refs, activation artifact refs, checksums, target environment, activation mode, validation refs, lifecycle state, and manifest refs. |
+| `PackageTrustPolicyRow` | output_affecting | TODO: add full field precision for trust roots, signers, thresholds, repository scopes, transparency requirements, and attestation authorities. |
+| `PackageRepositoryModelRow` | output_affecting | TODO: add full field precision for repository form, metadata refs, snapshot refs, freshness refs, anti-rollback state, and unsupported behavior. |
+| `PackageTransparencyEvidencePolicyRow` | output_affecting | TODO: add full field precision for transparency log refs, inclusion proof requirements, subject matching, and invalid errors. |
+| `PackageProvenancePolicyRow` | output_affecting | TODO: add full field precision for builder/material/product requirements, subject digest matching, and provenance validation refs. |
+| `PackageSBOMPolicyRow` | output_affecting | TODO: add full field precision for SBOM subject, component, dependency, license, vulnerability, and evidence requirements. |
+| `PackageDependencyLockPolicyRow` | output_affecting | TODO: add full field precision for dependency lock refs, checksum rules, live-resolution prohibition, and reproducibility evidence. |
+| `PackageCompatibilityMatrixRow` | output_affecting | TODO: add full field precision for public API, runtime protocol, dependency, validation, schema, graph, trust, attestation, SBOM, and deployment compatibility axes. |
+| `PackageDeprecationWindowPolicyRow` | output_affecting | TODO: add full field precision for package type, status, window, expiry behavior, and activation/selection limits. |
+| `RollbackCompatibilityPolicy` | output_affecting | TODO: add full field precision for immutable rollback targets, replay refs, compatibility refs, and refusal behavior. |
+| `QuarantineScopePolicy` | output_affecting | TODO: add full field precision for quarantine target scope, dependent activation blocking, and release behavior. |
+| `LastKnownGoodHealthGate` | output_affecting | TODO: add full field precision for post-activation health inputs, pass/fail states, and update rules. |
+| `EmergencyPackageOverrideRecord` | output_affecting | TODO: add full field precision for allowed effects, approver refs, expiry, target refs, trust-bypass prohibition, and audit refs. |
+
+`PackageReleaseManifest.activation_artifact_refs` and `ProductionPackageSetManifest.activation_artifact_refs` must reference `030.ActivationControlledRowRef` or `030.ActivationControlledArtifactRef` as appropriate. `package_release_refs`, release manifest checksums, policy refs, evidence refs, compatibility refs, and package-set refs must use `canonical_set` semantics with duplicate rejection. Scalar signature summaries remain derived only and must not authorize activation.
+
+Package activation, rollback, quarantine, emergency override, package stage execution, or package-supplied row catalog selection must fail before active pointer changes or candidate output when any selected `100` row family remains `TODO:`, uses a bare string row ref, omits package-set refs, or omits selected row refs from `030.VersionManifest`.
 
 ### Acceptance Criteria
 

@@ -520,6 +520,8 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure.
 
+Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
+
 ### OwnerErrorFragmentCompletionRequirement
 
 Owner fragments are incomplete unless every exported owner error code can generate one `ErrorCodeRegistryRow` through the schema above.
@@ -831,6 +833,27 @@ The generated `ErrorCodeRegistry` must include owner-specific closure-pack error
 | `ACTIVATION_CATALOG_VALIDATION_BLOCKED` | `120` | blocked_validation | no, until validation passes | validation family visible | `fixture-120-closure-pack-validation-blocked` |
 | `DETERMINISTIC_BLOCK_ROW_MUTATION_ATTEMPTED` | owner spec | security_error | no, until implementation changes | row refs redacted | `fixture-120-block-row-mutation-attempted` |
 | `ACTIVATION_CATALOG_PRIVATE_BINDING_LEAK` | `010` | security_error | none | always forbidden sensitive values | `fixture-010-activation-catalog-private-binding-leak` |
+
+### ActivationControlledRowSchemaErrorRegistryRows
+
+The generated `ErrorCodeRegistry` must include the generic activation-row schema errors and every owner-specific row-schema error. Generic activation-row codes must not collapse owner-specific row-family errors when an owner-specific row exists.
+
+| Error code | Owner | Severity | Retryability | Redaction | Validation fixture |
+| --- | --- | --- | --- | --- | --- |
+| `ACTIVATION_ROW_SCHEMA_INCOMPLETE` | `030` | blocked_validation | no, until owner spec changes | row family visible; row values redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-SCHEMA-INCOMPLETE` |
+| `ACTIVATION_ROW_FIELD_TYPE_INVALID` | `030` | error | no, until row changes | field path visible; value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-FIELD-TYPE-INVALID` |
+| `ACTIVATION_ROW_NULL_FORBIDDEN` | `030` | error | no, until row changes | field path visible; value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-NULL-FORBIDDEN` |
+| `ACTIVATION_ROW_OMIT_FORBIDDEN` | `030` | error | no, until row changes | field path visible | `120-ERROR-REGISTRY-ACTIVATION-ROW-OMIT-FORBIDDEN` |
+| `ACTIVATION_ROW_BOUNDS_INVALID` | `030` | error | no, until row changes | field path and bound visible; value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-BOUNDS-INVALID` |
+| `ACTIVATION_ROW_ARRAY_SEMANTICS_MISSING` | `030` | blocked_validation | no, until owner spec changes | field path visible | `120-ERROR-REGISTRY-ACTIVATION-ROW-ARRAY-SEMANTICS-MISSING` |
+| `ACTIVATION_ROW_DUPLICATE_FORBIDDEN` | `030` | error | no, until row set changes | duplicate key checksum visible; raw value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-DUPLICATE-FORBIDDEN` |
+| `ACTIVATION_ROW_REF_INVALID` | `030` | error | no, until ref changes | ref class visible; private ref values redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-REF-INVALID` |
+| `ACTIVATION_ROW_CHECKSUM_MISMATCH` | `030` | error | no, until row set changes | checksums visible | `120-ERROR-REGISTRY-ACTIVATION-ROW-CHECKSUM-MISMATCH` |
+| `ACTIVATION_ROW_UNKNOWN_FIELD` | `030` | error | no, until row changes | field path visible; value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-UNKNOWN-FIELD` |
+| `ACTIVATION_ROW_EXTENSION_FORBIDDEN` | `030` | security_error | no, until row changes | extension path visible; value redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-EXTENSION-FORBIDDEN` |
+| `ACTIVATION_ROW_VERSION_MANIFEST_INCOMPLETE` | `030` | blocked | no, until manifest changes | missing ref class visible; refs redacted | `120-ERROR-REGISTRY-ACTIVATION-ROW-VERSION-MANIFEST-INCOMPLETE` |
+
+Every owner-specific activation row schema error must generate exactly one `ErrorCodeRegistryRow`. If the generated registry lacks an owner row for a missing or invalid field declared by an owner `030.ActivationControlledRowField` table, registry generation must fail with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`.
 
 ### Feed closure error registry rows
 

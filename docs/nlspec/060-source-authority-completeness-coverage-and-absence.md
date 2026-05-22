@@ -43,6 +43,10 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
 - `030.CompareScopeSpecificity`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -972,6 +976,29 @@ Source-history no-change proof requires both `SourceHistoryRetentionProfile` and
 | `not_attempted` | forbidden | forbidden | forbidden | forbidden | forbidden | not_checked | `060` |
 | `not_authoritative_for_absence` | forbidden | forbidden | forbidden | forbidden | forbidden | unknown | `060` |
 | `not_applicable` | no absence claim | forbidden | forbidden | forbidden | forbidden | not_applicable | `060` |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `060` row families can affect source authority, completeness, staleness, coverage, absence, cleanup, retraction, graph expiry, control result state, supplier visibility, source-history interpretation, progress-signal interpretation, or watermarks. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `SourceAuthorityProfileRow` | output_affecting | TODO: convert the existing row schema to full `030.ActivationControlledRowField` columns, including row ID, row checksum, effect token, source dataset, fact/predicate, underlying refs, deterministic block refs, package refs when supplied, and manifest requirements. |
+| `LakehouseFeedCompletenessProfileRow` | absence_sensitive | TODO: add full field precision for completeness states, allowed effects, upstream evidence refs, feed-read refs, and blocking behavior. |
+| `SourceAuthorityClosureMatrixRow` | absence_sensitive | TODO: add full field precision for source dataset, fact type, predicate, requested effect, closure outcome, underlying row refs, deterministic block refs, package refs, row checksum, and manifest requirements. |
+| `ExternalSchemaAuthoritySignalMappingRow` | output_affecting when external schema signals are consulted | TODO: require exact `030.ActivationControlledRowRef` objects for authority, coverage, staleness, control, absence, watermark, and closure rows. |
+| `CoverageDimensionProfile` | coverage_sensitive | TODO: add full field precision for coverage dimension, authorized and blocking states, stale behavior, permission behavior, and missing-dimension behavior. |
+| `SourceStalenessPolicy` | output_affecting | TODO: add full field precision for time input precedence, stale effects, expiry behavior, missing input behavior, and manifest refs. |
+| `ControlResultMappingRow` | output_affecting for control facts | TODO: add total mapping over external control result states or explicit blocked omitted states. |
+| `SupplierCollectionVisibilityProfile` | absence_sensitive | TODO: add full field precision for method visibility, volatility, permission, cache, expected-count, failed-member, and absence behavior. |
+| `ProgressSignalInterpretationPolicy` | output_affecting when progress signals are consulted | TODO: add total mapping for progress, liveness, lineage, freshness, ack, CDC, graph, source-history, destination-cleanup, and live-probe signals. |
+| `SourceHistoryRetentionProfile` | output_affecting for history/no-change claims | TODO: add full field precision for native history windows, outside-window behavior, source-history refs, and non-authority defaults. |
+| `AbsenceDerivationPolicy` | absence_sensitive | TODO: add full field precision for source-state mapping, requested effects, allowed effects, blocking states, output outcome, and owner errors. |
+| `ProjectionWatermarkPolicy` | watermark_affecting | TODO: add full field precision for time inputs, completeness refs, progress refs, blocking states, commit refs, and no-op behavior. |
+
+`allowed_effects`, `required_*_refs`, `subject_ref_kind_scope`, `object_value_kind_scope`, `authorized_dimension_states`, `blocking_dimension_states`, and `stale_effects` must use `canonical_set` unless this spec declares `ordered_sequence`. `time_input_precedence` must use `ordered_sequence`. State mappings for absence, control results, progress signals, and watermarks must be total over declared input states or explicitly block omitted states.
+
+Missing row and ambiguous row errors must remain distinct and owner-specific. Source-authority evaluation must fail before gold derivation, correction, graph handoff, or watermark advancement when any selected `060` row family remains `TODO:` or lacks a structured `030.ActivationControlledRowRef`.
 
 ### Acceptance Criteria
 

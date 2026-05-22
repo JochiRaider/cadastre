@@ -29,6 +29,8 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 - `030.ScopeSelector`
 - `030.ActivationScope`
 - `030.NormalizeScopeSelector`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
 
 ## Exports
 
@@ -109,6 +111,18 @@ Canonical JSON rules:
 `040` does not define selector schema, selector equality, selector coverage, selector specificity, subset eligibility, owner contexts, row resolution, ambiguity behavior, or selector error mapping. Those behaviors are owned only by `030`.
 
 Any `040`-owned schema row containing `activation_scope` must validate that field as `030.ActivationScope`. Canonical bytes for the field are computed by `040.CanonicalJSON` only after `030.NormalizeScopeSelector` materializes selector defaults, sorts dimensions, sorts dimension values, rejects private bindings, and computes or verifies `selector_checksum`.
+
+### ActivationControlledRowCanonicalizationHandoff
+
+`030.ActivationControlledRowSchema` imports `040.CanonicalJSON` and `040.ScalarType` for activation-controlled row bytes, scalar normalization, row checksums, row-set checksums, selector checksum participation, unknown-field rejection, null behavior, omission behavior, array behavior, map behavior, timestamp behavior, and decimal behavior.
+
+`040` does not own activation-controlled row field schemas, row-set envelopes, row refs, row selection, lifecycle state, package membership, owner algorithms, owner enum values, owner unions, owner missing errors, or owner invalid errors. Those contracts remain owned by `030` for generic mechanics and by the owner spec for domain row semantics.
+
+Any activation-controlled row field table that names a `040.ScalarType` must use the scalar representation, default bound, canonicalization rule, and error behavior defined by this spec. An owner row table may narrow a `040.ScalarType` bound. It must not widen a `040.ScalarType` default bound unless this spec adds the wider bound first.
+
+Activation-controlled row checksums and row-set checksums must use the same `040.CanonicalJSON` behavior for nulls, omissions, arrays, maps, decimals, timestamps, strings, object key order, and unknown fields that core records use. A row schema must not define a second JSON dialect.
+
+Core records remain governed only by `CoreRecordSchema`. Activation-controlled rows must not be promoted into `CoreRecordSchema` unless the row is an actual `040` core record exported by this spec. A row-catalog validator and a core-record validator may share canonical JSON and scalar normalization, but they must remain separate validation surfaces and must emit owner-specific row or core errors.
 
 ## Omission Semantics
 

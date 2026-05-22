@@ -74,6 +74,12 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `ExecuteProcessingStageDAG`
 - `ValidateLifecycleStateMachine`
 - `ActivationControlledArtifactRef`
+- `ActivationControlledRowSchema`
+- `ActivationControlledRowField`
+- `ActivationControlledRowRef`
+- `ActivationControlledRowSetSchema`
+- `ValidateActivationControlledRowSet`
+- `ActivationControlledRowErrorCodeSet`
 - `StructuredInputRepositoryProfile`
 - `StructuredInputRepositorySnapshot`
 - `StructuredInputChangeProposal`
@@ -676,6 +682,8 @@ MarkRunLockLost(run_lock_set, loss_reason):
 
 A production output without a complete immutable `VersionManifest` must fail with `VERSION_MANIFEST_INCOMPLETE`. `activation_artifact_refs` must be present in `VersionManifest.included_refs` for every output-affecting activation-controlled artifact.
 
+When an activation-controlled artifact contains production-affecting rows, `VersionManifest.included_refs` must also contain the selected `ActivationControlledRowRef` objects, selected row checksums, the row-set artifact ref, the row-set checksum, selector checksums when scoped, validation refs, package-set refs when package-supplied, and owner error refs for rejected rows. A row-set manifest summary, package release manifest, repository snapshot, validation report, or owner prose must not substitute for the selected row refs and row checksums.
+
 When a run emits any `040` record, `VersionManifest` must include `core_record_schema_registry_checksum`, `core_record_schema_versions`, `core_record_checksum_policy_version`, `core_record_validation_result_refs`, and `core_record_error_refs` for every rejected record. Canary and shadow records may use null `version_manifest_id` only when this spec declares the execution mode and `040.CommonRecordHeader` permits it.
 
 ### Activation Catalog Closure Manifest Rule
@@ -685,6 +693,14 @@ Activation-catalog closure is a grouped validation concern only. A grouped closu
 For every selected production scope, `VersionManifest.included_refs` must contain every selected row-set ref, row checksum, deterministic block row ref, validation row ref, package release ref, package-set ref, runtime state ref, and closure validation ref that can affect output, replay, visibility, graph mutation, watermark advancement, package activation, or validation acceptance.
 
 Missing underlying row refs fail with `VERSION_MANIFEST_INCOMPLETE` or a more specific owner code before owner output, even when a high-level closure matrix row or acceptance summary says `closed`.
+
+### Activation-Controlled Row Manifest Rule
+
+Activation-controlled row refs are manifest members, not comments on an artifact ref. Every production-affecting row selected from an activation-controlled row set must appear in `VersionManifest.included_refs` as a structured `030.ActivationControlledRowRef`.
+
+For each selected row, `VersionManifest.included_refs` must contain all of the following values: row-set artifact ref, row family, row ID, row schema version, row checksum, row-set checksum, selector context ref when scoped, request selector checksum when scoped, selected row selector checksum when scoped, validation refs, package-set ref when package-supplied, and lifecycle transition evidence when row activation changed state.
+
+A bare string row ID, package-local path, package label, row-set checksum alone, closure-pack summary, or validation report alone must fail manifest completeness before owner output with `ACTIVATION_ROW_VERSION_MANIFEST_INCOMPLETE` or a more specific owner error.
 
 ### EvidenceRefArtifactClassManifestHandoff
 
@@ -1011,6 +1027,131 @@ ValidateActivationControlledArtifactRef(ref, execution_scope, required_owner_spe
 
 Failure precedence is missing ref, owner mismatch, invalid artifact class, checksum mismatch, lifecycle invalid, activation scope mismatch, validation refs missing, package set mismatch, then superseded artifact selected.
 
+## Activation-Controlled Row Schema Contract
+
+`ActivationControlledRowSchema` is the reusable row-schema contract for production-affecting rows whose concrete instances are selected through activation-controlled artifacts. It defines row mechanics only. Owner specs retain the domain semantics, owner enums, owner unions, row-family names, row-specific missing errors, row-specific invalid errors, and row-selection algorithms they export.
+
+A production-affecting row family must satisfy exactly one of these states before promotion:
+
+| Row-family state | Required behavior |
+| --- | --- |
+| `full_row_schema` | Owner spec defines a complete `030.ActivationControlledRowField` table, row-set schema, row-ref requirements, owner error mapping, validation refs, and `VersionManifest` requirements. |
+| `non_production` | Owner spec states the row family cannot affect production output, replay, graph serving, package activation, visibility, watermarks, health, audit, or validation acceptance. |
+| `inactive` | Owner spec states the row family is inactive for the selected scope and provides deterministic no-output validation. |
+| `validation_only` | Owner spec states the row family may affect validation output only and cannot affect production output. |
+| `deferred` | Owner spec routes the family to inactive deferred material and blocks active effects. |
+| `deterministically_blocked` | Owner spec provides an exact block row, mutation-prohibition fixture, expected error or no-op, and manifest refs. |
+
+`TODO:` in a production-affecting row-field type, bound, default, checksum rule, row ref, validation ref, expected fixture checksum, expected output checksum, or expected error must classify the row family as `blocked_validation` before promotion.
+
+### ActivationControlledRowField
+
+Every `ActivationControlledRowField` table must include exactly the columns below, in this order. Owner specs may add owner-local explanatory columns only after these columns and only when the additional columns do not redefine validation behavior.
+
+| Column | Required closure |
+| --- | --- |
+| `field_path` | Canonical row-body path. It must be unique within the row schema after Unicode NFC normalization. |
+| `type` | One of `040.ScalarType`, `030.ActivationControlledArtifactRef`, `030.ActivationControlledRowRef`, `030.ScopeSelector`, `030.ActivationScope`, owner enum, owner union, array, or map. Unknown type tokens fail with `ACTIVATION_ROW_FIELD_TYPE_INVALID`. |
+| `required` | `yes`, `no`, or `conditional:<exact condition>`. The condition must name only fields in the same row or imported owner refs. |
+| `default` | Materialized value, `none`, or `derived:<algorithm>`. Defaults materialize before row ID, row checksum, row-set checksum, validation output checksum, and owner algorithm execution. |
+| `null_allowed` | `yes` or `no`. A `yes` value must define the meaning of null. Null remains distinct from omission. |
+| `omit_allowed` | `yes` or `no`. Omission remains distinct from null and from an empty array, empty object, or defaulted value. |
+| `bounds` | Scalar, byte, length, enum, precision, map, array, or owner-policy bound. Unbounded production fields are forbidden. |
+| `array_semantics` | `n/a`, `ordered_sequence`, or `canonical_set`. Arrays must not omit this column. |
+| `duplicate_policy` | `reject`, `dedupe_after_canonicalization`, or `preserve_ordered_duplicates`. Default is `reject` when the owner omits the column value in an owner-local draft, but authoritative rows must materialize the value. |
+| `canonical_sort_key` | Exact key or `n/a`. Required for `canonical_set` arrays and maps whose deterministic order affects output. |
+| `id_input` | `ordered:<n>`, `derived`, `no`, or owner algorithm ref. Duplicate `ordered:<n>` values in one row schema fail before ID computation. |
+| `checksum_input` | `yes` by default for output-affecting fields. `no` is valid only for declared volatile non-output fields whose exclusion is named by owner row schema and validation refs. |
+| `extension_policy` | `closed` by default or exact owner extension-map policy. Unknown fields fail when the value is `closed`. |
+| `redaction_owner` | Owner spec for exposure and redaction. The value must name `110` or an owner-local redaction handoff imported by `110`. |
+| `version_manifest_requirement` | Exact refs and checksums required in `030.VersionManifest`. Output-affecting refs must be concrete. |
+| `missing_error` | Owner-specific missing-field error or generic activation-row fallback. |
+| `invalid_error` | Owner-specific invalid-field error or generic activation-row fallback. |
+
+### ActivationControlledRowSetSchema
+
+An `ActivationControlledRowSetSchema` is an activation-controlled artifact containing rows for exactly one owner-declared `row_family` unless the owner declares a closed multi-family envelope. Multi-family envelopes must still validate each row family independently.
+
+| Field | Required behavior |
+| --- | --- |
+| `row_set_artifact_ref` | `030.ActivationControlledArtifactRef` for the row-set artifact. |
+| `owner_spec` | Spec that owns the row-family semantics. |
+| `row_family` | Closed owner token for the row family. |
+| `row_schema_version` | Immutable owner schema version. |
+| `row_set_sort_key` | Default `row_id`; owner may declare a narrower deterministic key only when it is unique after canonicalization. |
+| `rows` | Array of row bodies after defaults materialize. |
+| `row_set_checksum` | SHA-256 over `040.CanonicalJSON` bytes of the row-set envelope after defaults materialize and after excluding only `row_set_checksum`. |
+| `validation_refs` | Non-empty refs to row-schema, row-set, fixture, manifest, package-set, and owner behavior validation rows. |
+| `package_set_ref` | Required when any row in the set is package-supplied. |
+
+Rows sort by `row_id` before row-set checksum unless the owner declares a deterministic `row_set_sort_key`. Duplicate `row_id` values fail with `ACTIVATION_ROW_DUPLICATE_FORBIDDEN` before activation, row selection, owner algorithm execution, manifest materialization, or checksum publication.
+
+Unknown row-body fields fail with `ACTIVATION_ROW_UNKNOWN_FIELD` unless the selected row schema declares an extension map. Extension maps must be typed, bounded, checksummed, redaction-owned, and forbidden from redefining stable behavior.
+
+### ActivationControlledRowRef
+
+A production-affecting row reference must be a structured `ActivationControlledRowRef`. Bare strings, package-local filenames, repository paths, unqualified row IDs, and package labels are invalid row refs.
+
+| Field | Required | Rule |
+| --- | ---: | --- |
+| `artifact_ref` | Yes | `030.ActivationControlledArtifactRef` for the containing row set. |
+| `row_family` | Yes | Closed owner row-family token. |
+| `row_id` | Yes | Stable row ID after canonicalization. |
+| `row_checksum` | Yes | SHA-256 over `040.CanonicalJSON` bytes of the row body after defaults materialize and after excluding only `row_checksum`. |
+| `row_schema_version` | Yes | Must match the selected owner row schema. |
+| `row_set_checksum` | Yes | Must match the containing row-set checksum. |
+| `scope_selector_context_ref` | Required when scoped | Exact `030.ScopeSelectorContext.context_ref`. |
+| `request_selector_checksum` | Required when scoped | Normalized request selector checksum. |
+| `selected_row_selector_checksum` | Required when scoped | Normalized selector checksum for the selected row. |
+| `validation_refs` | Yes | Non-empty refs to owner validation rows proving row shape, row selection, checksum, manifest, and owner behavior. |
+| `package_set_ref` | Required when package-supplied | Immutable `100.ProductionPackageSetManifest` ref. |
+
+### Activation row array, map, and duplicate rules
+
+Array fields must declare `array_semantics = ordered_sequence` or `canonical_set` unless `array_semantics = n/a` because the field is not an array. `ordered_sequence` preserves order and duplicate handling exactly as declared. `canonical_set` canonicalizes each element, rejects duplicates unless the field declares `dedupe_after_canonicalization`, sorts by `canonical_sort_key`, and computes IDs and checksums from the sorted order.
+
+Map fields must declare key type, value type, maximum entries, key canonicalization, duplicate-key behavior after normalization, and checksum participation. Unknown map keys are rejected unless the map is the declared extension map for the row family.
+
+### ValidateActivationControlledRowSet
+
+```text
+ValidateActivationControlledRowSet(row_set, owner_schema, execution_scope, version_manifest):
+1. Validate `row_set.row_set_artifact_ref` with `ValidateActivationControlledArtifactRef`.
+2. Validate `row_family`, `row_schema_version`, lifecycle status, package-set membership when required, and validation refs.
+3. For each row, materialize field defaults before ID, checksum, and owner validation.
+4. Reject missing required fields and forbidden omissions before null validation.
+5. Reject null values when `null_allowed = no`.
+6. Validate field type, scalar bounds, map bounds, array bounds, owner enum values, owner union tags, and ref object shapes.
+7. Apply array and map canonicalization rules.
+8. Reject duplicate `row_id` values and duplicate array elements according to field duplicate policies.
+9. Reject unknown fields unless the row schema declares a bounded extension map.
+10. Compute each `row_checksum` over `040.CanonicalJSON` bytes after defaults materialize and after excluding only `row_checksum`.
+11. Sort rows by the owner row-set sort key and compute `row_set_checksum` over `040.CanonicalJSON` bytes after excluding only `row_set_checksum`.
+12. Validate every selected row ref as `030.ActivationControlledRowRef`; bare string refs fail.
+13. Add selected row refs, row checksums, row-set artifact refs, selector checksums, validation refs, package-set refs when required, and lifecycle evidence refs to `VersionManifest.included_refs` before owner output.
+```
+
+Failure precedence is schema incomplete, missing required field, forbidden null, forbidden omission, invalid type, bounds invalid, array semantics missing, duplicate forbidden, invalid ref, checksum mismatch, unknown field, extension forbidden, package-set mismatch, manifest incomplete, then owner algorithm error.
+
+### ActivationControlledRowErrorCodeSet
+
+The generic activation-row error set is closed. Owner specs may define more specific codes, but a generic code must remain available as fallback when the owner does not define a more specific code.
+
+| Error code | Required use |
+| --- | --- |
+| `ACTIVATION_ROW_SCHEMA_INCOMPLETE` | A production-affecting row family lacks a complete `ActivationControlledRowField` table or required row-set contract. |
+| `ACTIVATION_ROW_FIELD_TYPE_INVALID` | Field type token, owner enum value, owner union tag, or ref type is invalid. |
+| `ACTIVATION_ROW_NULL_FORBIDDEN` | Field value is null and the field disallows null. |
+| `ACTIVATION_ROW_OMIT_FORBIDDEN` | Field is omitted and the field disallows omission. |
+| `ACTIVATION_ROW_BOUNDS_INVALID` | Field value violates scalar, byte, length, enum, precision, map, array, or owner-policy bounds. |
+| `ACTIVATION_ROW_ARRAY_SEMANTICS_MISSING` | Array field lacks `ordered_sequence` or `canonical_set` semantics. |
+| `ACTIVATION_ROW_DUPLICATE_FORBIDDEN` | Duplicate row ID, duplicate map key, or duplicate array element appears where rejected. |
+| `ACTIVATION_ROW_REF_INVALID` | Row ref is missing, bare string, malformed, checksum-mismatched, scope-mismatched, or package-set-mismatched. |
+| `ACTIVATION_ROW_CHECKSUM_MISMATCH` | Row checksum or row-set checksum does not match canonical bytes. |
+| `ACTIVATION_ROW_UNKNOWN_FIELD` | Unknown field appears without a declared extension map. |
+| `ACTIVATION_ROW_EXTENSION_FORBIDDEN` | Extension field is present but not allowed, not typed, not bounded, not checksummed, or attempts to redefine stable behavior. |
+| `ACTIVATION_ROW_VERSION_MANIFEST_INCOMPLETE` | Required row refs, row checksums, row-set refs, selector checksums, validation refs, package-set refs, or lifecycle evidence refs are missing from `VersionManifest`. |
+
 ## Structured Input Repository Contract
 
 `StructuredInputRepositoryProfile` defines the stable interface for Git-backed authoring repositories that maintain schema, mapping, profile, row-set, validation, policy, resolver, graph, analysis, registry, telemetry, and other activation-controlled structured inputs. Concrete repository profile rows are activation-controlled artifacts. A repository profile grants authoring scope only; it does not grant source authority, graph authority, package activation, production approval, rollback eligibility, or system-of-record status.
@@ -1221,6 +1362,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | --- | --- |
 | Raw import output | feed profile, feed category closure row set, read policy, raw feed manifest, raw import package, target refs, state records, and feed feasibility assessment ref when activation-sensitive. |
 | Scoped row selection | selected scoped row ref, selected row checksum, selected `030.ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, activation artifact ref, and redacted ambiguity diagnostic refs when selection failure affects output. |
+| Activation-controlled row selection | structured `030.ActivationControlledRowRef`, row-set artifact ref, row family, row ID, row schema version, row checksum, row-set checksum, selector checksums when scoped, validation refs, package-set refs when package-supplied, owner missing or invalid error refs for rejected rows, and lifecycle transition evidence when row activation changed state. |
 | `feed_category_closure` | active `020.LakehouseFeedCategoryClosureRowSet` ref, every selected category row ref/checksum, source-dataset catalog ref or deterministic block row ref, validation refs, package-set refs when package-supplied, and closure outcome. |
 | `ocsf_mapping_closure` | active `050.ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, `CanonicalValidationOutput`, row checksums, validation refs, and package-set refs when package-supplied. |
 | `source_authority_closure` | active `060.SourceAuthorityClosureMatrixRowSet` or exact deterministic block row ref plus all underlying source authority, completeness, coverage, staleness, progress-signal, visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row-set refs consulted by the effect. |

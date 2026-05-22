@@ -34,6 +34,10 @@ Define how parsed raw records become silver observations and how external schema
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ScopeSelectorCovers`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -719,6 +723,32 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `raw_value_ref` | No | Redacted ref or checksum only; raw source values must not be stored in caller context. |
 | `validation_refs` | Yes | Exact `120` mapping fixture refs. |
 | `redaction_classes` | Yes | Raw payload bytes, raw source values, credentials, private bindings, source-native identity values, and raw OCSF payload bytes must map to `always_forbidden`. |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `050` row families can affect parsing, normalization, external schema validation, OCSF row selection, source-extension output, mapping validation, compiler output, projection loss, or canonical validation output. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `ExternalSchemaProfile` | output_affecting | TODO: convert to full `030.ActivationControlledRowField` columns for profile refs, profile sets, extension sets, enum rule refs, base-event policy refs, source-extension refs, upgrade refs, validation refs, activation scope, and lifecycle status. |
+| `ExternalSchemaArtifactRef` | output_affecting | TODO: convert artifact-ref fields to full row precision, including compiled artifact checksum, compiler refs, validator refs, class allowlist checksum, profile set, and extension set. |
+| `ProfileResolutionManifest` | output_affecting | TODO: add array semantics and duplicate policy for resolved profile, inheritance, required-field, recommended-field, constraint, and object-path refs. |
+| `ObservationToOCSFMappingRow` | output_affecting | TODO: add full field precision for discriminators, cadastre-only conditional fields, mapping refs, enum refs, required and forbidden normalized paths, validation refs, activation scope, and lifecycle status. |
+| `ExternalEnumMappingRule` | output_affecting | TODO: express unknown enum behavior as a closed owner enum with missing and invalid errors. |
+| `OCSFBaseEventFieldPolicy` | output_affecting | TODO: add full field precision for disabled, bounded, preserved, non-authoritative, and forbidden base-event field behavior. |
+| `OCSFProfileUpgradeReport` | output_affecting for profile replacement | TODO: add field precision for drift, replay, shadow, class allowlist, enum, deprecated-field, profile, extension, and golden-corpus evidence refs. |
+| `SourceExtensionFieldRule` | output_affecting | TODO: add full field precision for namespace, field path, value type, bounds, redaction, secret-scan, collision, and invalid errors. |
+| `SourceSchemaImportProfile` | output_affecting when importer output affects mapping | TODO: add full field precision for source roots, format, checksum, unsupported constructs, overlay output, diagnostics, and validation refs. |
+| `SemanticOverlayArtifact` | validation or authoring unless activated | TODO: declare validation-only or add full row precision for overlay refs, checksum, non-authority, and diagnostics. |
+| `MappingProjectManifest` | output_affecting for mapping validation | TODO: add full field precision for source roots, dependency locks, plugin refs, compiler options, generated-output policy, and checksum behavior. |
+| `MappingCompilerPipeline` | output_affecting for validation output | TODO: add full field precision for phase ordering, phase failure diagnostics, toolchain refs, and output checksum inputs. |
+| `MappingValidationRule` | output_affecting for promotion and diagnostics | TODO: add full field precision for severity defaults, production demotion, rule result behavior, and owner errors. |
+| `ObservationTypeExternalMappingValidationMatrix` | output_affecting for mapping activation | TODO: add full field precision for positive, negative, malformed, unknown, redaction, permission-limited, and forbidden-inference cases. |
+| `CanonicalValidationOutput` | output_affecting for promotion and replay | TODO: add full field precision for deterministic validation rows, diagnostics, checksums, volatile exclusions, and manifest refs. |
+
+`profile_set`, `extension_set`, `profile_resolution_manifest_refs`, `enum_rule_refs`, `required_normalized_paths`, `forbidden_normalized_paths`, and `source_extension_rule_set_ref` must declare array/ref semantics, duplicate handling, canonical sort key, checksum participation, owner error mapping, and `VersionManifest` requirements. `cadastre_only` conditional fields must use exact conditional required, omit, and null rules.
+
+A mapping bundle must fail before silver output when any selected `050` row family remains `TODO:`, uses a bare string ref, accepts an undeclared extension path, or omits row refs and row checksums from `030.VersionManifest`.
 
 ### Acceptance Criteria
 

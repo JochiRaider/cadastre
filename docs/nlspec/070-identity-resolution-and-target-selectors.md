@@ -45,6 +45,10 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `030.ActivationScope`
 - `030.ScopeSelectorContext`
 - `030.ResolveScopedRow`
+- `030.ActivationControlledRowSchema`
+- `030.ActivationControlledRowField`
+- `030.ActivationControlledRowRef`
+- `030.ActivationControlledRowSetSchema`
 
 ## Exports
 
@@ -842,6 +846,29 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `TARGET_SELECTOR_UNSAFE` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-target-selector-unsafe` |
 | `DEPRECATED_NAME_MATCHING_FORBIDDEN` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-deprecated-name-matching-forbidden` |
 | `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.always_forbidden_sensitive_values` | `070.IdentityErrorContext` | `error-registry-070-telemetry-identity-evidence-forbidden` |
+
+### ActivationControlledRowSchemaPrecisionHandoff
+
+The following `070` row families can affect candidate generation, blocker evaluation, confidence selection, review routing, identity mutation, split behavior, target selector safety, resolver explanations, or graph correction handoff. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+
+| row_family | production classification | required precision status |
+| --- | --- | --- |
+| `ResolverProfileRow` | output_affecting | TODO: convert existing schema to full `030.ActivationControlledRowField` columns, including all artifact refs, allowed decision sets, creation/merge policy, learned artifact policy, validation refs, activation scope, and lifecycle status. |
+| `IdentityHardBlockerRow` | output_affecting | TODO: add type, null/omit, canonical trigger representation, precedence bounds, duplicate coverage, checksum input, and error columns. |
+| `ResolverDecisionMatrix` | output_affecting | TODO: add full field precision for decision class, evidence requirements, blockers, confidence band refs, review route refs, and deterministic tie behavior. |
+| `IdentityConfidenceBand` | output_affecting | TODO: add field precision using `040.DecimalPrecisionPolicy.confidence_0_1`, explicit bounds, duplicate policy, and invalid errors. |
+| `IdentityReviewRoutingPolicy` | output_affecting | TODO: add full field precision for trigger class sets, expiration behavior, reviewer authority, terminal behavior, and validation refs. |
+| `SplitPolicy` | output_affecting | TODO: add full field precision for split partition refs, affected fact selection, retained/new canonical refs, checksum inputs, and handoff requirements. |
+| `GraphCorrectionHandoff` | runtime_state_record affecting graph projection | TODO: declare `040` core-like runtime-state field precision or a new runtime-state field table, including canonical ref sort keys and checksum inputs. |
+| `IdentifierEvidenceClass` | output_affecting | TODO: add full field precision for evidence role, durability, reuse risk, required scope keys, auto-merge authority, and defaults. |
+| `IdentifierScope` | output_affecting | TODO: add full field precision for scope keys, value kinds, hash canonicalization, coverage matching, and uncovered-scope behavior. |
+| `CandidateGenerationProfile` | output_affecting | TODO: add full field precision for blocking keys, candidate caps, overflow behavior, learned-artifact policy, and deterministic pair ordering. |
+| `AssetGenerationBoundary` | output_affecting | TODO: add full field precision for lifecycle boundary types, evidence requirements, generation reset behavior, and invalid errors. |
+| `TargetSelectorSafetyPolicy` | output_affecting | TODO: add full field precision for selector mechanism, maximum resolution state, permitted decision classes, forbidden roles, and safety errors. |
+
+`identifier_scope_row_refs` and all `*_row_set_ref` or `*_policy_ref` fields must use `030.ActivationControlledRowRef` or `030.ActivationControlledArtifactRef`, not strings. `allowed_decision_classes`, `blocked_decision_classes`, `forbidden_evidence_roles`, `permitted_decision_classes`, and trigger class sets must use `canonical_set` semantics with duplicate rejection. Candidate caps must use bounded `uint64` values and overflow errors.
+
+A resolver run must fail before mutation when any selected `070` row family remains `TODO:`, uses a bare string ref, omits row checksum inputs, or omits selected row refs from `030.VersionManifest`.
 
 ### Acceptance Criteria
 
