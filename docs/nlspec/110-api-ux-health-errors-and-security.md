@@ -66,6 +66,9 @@ Define observable API behavior, user-facing states, health, shared error records
 - `SourceStateLabel`
 - `ExportStateLabel`
 - `ErrorRecord`
+- `ErrorRecordSchema`
+- `ObservableErrorSelectionPolicy`
+- `SelectObservableError`
 - `ErrorCodeRegistry`
 - `AuditEvent`
 - `RedactionPolicy`
@@ -405,6 +408,28 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 
 Generic error codes must not be used when a more specific domain code exists.
 
+### ErrorRecordSchema
+
+`ErrorRecordSchema` is the stable schema for every `ErrorRecord` emitted in `CommonApiResponseEnvelope.errors`, health output, export output, audit output, validation output, telemetry-visible diagnostics, package-visible diagnostics, or acceptance-visible diagnostics. An endpoint-specific response must not define a parallel error shape.
+
+| Field | Required | Default or omission behavior | Bounds and canonicalization | Error behavior |
+| --- | ---: | --- | --- | --- |
+| `error_code` | Yes | none | Exact key from the generated `ErrorCodeRegistry`; uppercase token, `3..128` characters, `A..Z`, `0..9`, and `_` only. | Unknown, duplicate, generic-substituted, or ungenerated code fails before response visibility with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` or the most specific registry error. |
+| `message` | Yes | Generated from `ErrorCodeRegistryRow.message_template`; when the template is null or omitted, defaults to `error_code` exactly. | Maximum 1024 Unicode scalar values after normalization. Message bytes are included in response checksum. | A message containing raw payload bytes, credentials, private bindings, backend IDs, provider-native query text, source-native identifiers, or unredacted package evidence is rejected before visibility. |
+| `severity` | Yes | Copied from the generated registry row. | One closed `ErrorCodeRegistryRow.severity` value. | Mismatch with generated registry row fails response materialization. |
+| `retryability` | Yes | Rendered from generated `retry_class`. | One closed retry class rendered using the caller-visible field name `retryability`. | Legacy top-level `retry_class` in caller output is rejected. |
+| `owner_spec` | Yes | Copied from generated registry row. | Exact owner spec token. | Generic `110` ownership is rejected when an owner-specific generated row covers the failure class. |
+| `affected_record_type` | Yes | none | Bounded owner record or artifact class token; not a raw private value. | Missing value fails response materialization. |
+| `field_path` | Yes | null when no field-local failure applies | Canonical dot path, JSON Pointer, or null; raw field values are forbidden. | Private values in path segments fail redaction. |
+| `record_id` | No | null | Ref only; raw record bytes are forbidden. | Omitted from caller output unless `caller_visible_fields` permits it. |
+| `source_artifact_refs` | Yes | `[]` | Canonically sorted refs consulted by the failure. | Missing required artifact refs fail audit materialization; inaccessible refs are redacted for callers. |
+| `error_correlation_id` | Yes | Generated | `err_` plus SHA-256 lowercase hex over endpoint name, request checksum, generated registry checksum, `error_code`, owner context checksum, redaction context ref, field path, and zero-based selected-error ordinal. | Caller-supplied IDs are ignored. A mismatch fails response materialization. |
+| `owner_error_context` | Yes | none | Must satisfy `OwnerErrorContextMinimumSchema` and the generated row's `owner_context_schema_ref`. | Owner-specific values outside this object fail with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
+| `redaction_state` | Yes | `none` when no field was redacted | Closed enum: `none`, `redacted`, `audit_only`, or `forbidden_value_rejected`. | Unknown value fails response materialization. |
+| `caller_visible_fields` | Yes | Generated from registry row after macro expansion. | Exact field set for caller output. | A caller-visible field set containing legacy `code`, missing `error_code`, or owner-specific top-level fields fails registry validation. |
+| `audit_visible_fields` | Yes | Generated from registry row after macro expansion. | Exact field set for audit output. | Missing audit fields fail audit materialization. |
+| `generated_registry_checksum` | Yes | Copied from `VersionManifest.generated_error_registry_checksum`. | SHA-256 lowercase hex. | Missing or mismatched checksum fails with `VERSION_MANIFEST_INCOMPLETE` before visible diagnostics. |
+
 ### StandardErrorFieldSets
 
 `StandardErrorCallerFields` and `StandardErrorAuditFields` are deterministic macros expanded by `GenerateErrorCodeRegistry` before canonical row serialization and checksum computation. Owner fragments may reference the macro names, but generated registry rows must contain the expanded field names.
@@ -521,6 +546,7 @@ policy_change_required
 | `owner_spec` | Yes | None. | Exact owning spec ID. |
 | `severity` | Yes | None. | Must be one closed enum value. Owner input field `default_severity` is accepted only as a transition alias and must normalize to `severity` before checksum computation. |
 | `retry_class` | Yes | None. | Must be one closed enum value. Owner input field `default_retry_class` is accepted only as a transition alias and must normalize to `retry_class` before checksum computation. |
+| `message_template` | No | null | Optional caller-visible message template. When null or omitted, `ErrorRecord.message` defaults to `error_code` exactly. If present, the rendered message must be at most 1024 Unicode scalar values after normalization and must not include owner context values, raw payload bytes, private bindings, credentials, backend IDs, provider-native query text, source-native identifiers, or unredacted package evidence. |
 | `redaction_rule` | Yes | None. | Must map every caller-visible and audit-visible field to a data class. |
 | `caller_visible_fields` | Yes | None. | Must expand to `110.StandardErrorCallerFields`. The legacy field name `code` is forbidden. |
 | `audit_visible_fields` | Yes | None. | Must expand to `110.StandardErrorAuditFields`. Owner-specific details must be nested under `owner_error_context`. |
@@ -553,6 +579,43 @@ If any owner spec emits an error code that lacks exactly one generated `ErrorCod
 Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
 
 Mapping closure errors must select owner-specific `050`, `060`, or `090` registry rows when one covers the failure class. Generic API, validation, activation, health, graph, or unknown-state errors are forbidden for the same failure class. The generated registry must reject alias-only `OCSF_MAPPING_ROW_MISSING`, `OCSF_MAPPING_ROW_AMBIGUOUS`, and `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` fragments unless they are byte-identical deprecated aliases mapped to the canonical `050` rows and not emitted as final errors.
+
+### ObservableErrorSelectionPolicy
+
+`ObservableErrorSelectionPolicy` governs how visible `ErrorRecord` rows are selected when one request or run produces multiple candidate failures. It does not create owner error causes. It selects generated registry rows for caller-visible, audit-visible, validation-visible, package-visible, telemetry-visible, health, and export output.
+
+An implementation must materialize candidate errors only from generated `ErrorCodeRegistryRow` records. A raw exception name, backend error string, package-local code, validation summary, owner prose, or telemetry label must not become an `ErrorRecord.error_code`.
+
+`CommonApiResponseEnvelope.errors` contains at most 128 `ErrorRecord` rows. When more than 128 caller-visible candidates remain after redaction, the implementation must emit the first 128 rows selected by `SelectObservableError`, set `CommonApiResponseEnvelope.partial_result = true`, and record the omitted-count summary in the required audit event.
+
+| Precedence rank | Candidate class | Required condition | Required primary-error behavior |
+| ---: | --- | --- | --- |
+| 1 | `registry_generation_failure` | The generated registry is missing, invalid, duplicate-bearing, `TODO:`-bearing, wildcard-fixtured, checksum-mismatched, or lacks a required owner row. | Primary error is the generated registry error, normally `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`; no owner-specific runtime details are exposed. |
+| 2 | `request_shape_or_page_token` | Request unknown field, bounds failure, checksum mismatch, invalid page token, expired page token, or token context mismatch occurs before owner execution. | Primary error is the exact `110` request or page-token code; owner execution must not run. |
+| 3 | `authorization_denial` | Authorization denies the endpoint, scope, raw payload expansion, evidence chain, graph query, export, package report, or audit request. | Primary error is `AUTHORIZATION_ERROR` or the exact raw-payload permission code; supplemental owner errors are suppressed from caller output to avoid existence leaks. |
+| 4 | `security_boundary` | Direct-source call, private binding leak, raw value leak, backend ID leak, provider-native query leak, package secret leak, or other forbidden sensitive value is detected. | Primary error is the owner-specific security boundary code when caller authorization permits the failure class, otherwise rank 3 controls caller output and rank 4 remains audit-only. |
+| 5 | `manifest_activation_or_package_blocker` | Required `VersionManifest`, package-set, activation row, generated registry checksum, lifecycle, run-lock, provider, or backend preflight ref is absent, stale, checksum-mismatched, unmanifested, package-set-mismatched, or blocked. | Primary error is the most specific owner blocker, not a generic API error. |
+| 6 | `owner_specific_runtime_error` | Owner execution emits an error with an exact generated owner row. | Primary error is the owner-specific row. A shared generic code is forbidden for the same failure class. |
+| 7 | `owner_specific_diagnostic` | Owner execution emits diagnostic-only failure state that is visible for the endpoint. | Primary error is emitted only when endpoint outcome policy permits diagnostic visibility; otherwise it is audit-only. |
+| 8 | `shared_generic_fallback` | No generated owner-specific row covers the failure class and a shared `110` row is explicitly permitted. | Primary error may use the shared row. This row must not hide missing owner registry coverage. |
+
+### SelectObservableError
+
+```text
+SelectObservableError(endpoint, request_checksum, endpoint_outcome_row, authorization_decision, redaction_context, generated_registry, candidate_failures):
+1. Reject response materialization if `generated_registry` is absent or its checksum is absent from `030.VersionManifest` and no generated registry failure row can be emitted.
+2. Convert each candidate failure into a generated registry candidate by exact `error_code`. Reject candidates whose code is unknown, whose owner context does not satisfy the generated row, or whose redaction rule cannot classify every emitted field.
+3. Assign each candidate exactly one precedence rank from `ObservableErrorSelectionPolicy`. If more than one rank matches, choose the lowest numeric rank.
+4. For each candidate, compute `specificity_class`: `owner_specific` when the row owner is the cause owner; `shared` when the row owner is `110`; `generic` when the row is an allowed shared fallback.
+5. Sort candidates by precedence rank ascending, then specificity class in the order `owner_specific`, `shared`, `generic`, then owner spec lexical order, error_code lexical order, field_path lexical order with null last, and source_artifact_refs checksum lexical order.
+6. Select the first candidate as primary.
+7. If the primary candidate has precedence rank 3, suppress all supplemental owner-specific runtime, diagnostic, existence-revealing, graph, identity, package, source, and evidence details from caller output; retain only authorized audit-visible refs.
+8. Otherwise, append supplemental candidates that are caller-visible under the endpoint outcome row and redaction context, preserving the sort order.
+9. Emit at most 128 `ErrorRecord` rows. For each emitted row, compute `error_correlation_id` using `ErrorRecordSchema`.
+10. Return the emitted rows plus the audit-only suppressed-candidate summary.
+```
+
+The same inputs, generated registry bytes, redaction context, endpoint outcome row, and candidate failures must produce byte-identical emitted `ErrorRecord` arrays and audit-only suppressed-candidate summaries.
 
 ### OwnerDomainRegistrySourceRule
 
@@ -1241,7 +1304,6 @@ Artifact payload locations, signer secrets, private repository paths, raw SBOM c
 | `GRAPH_INDEX_FRESHNESS_REQUIRED` | `090` | blocked | yes after refresh | affected query classes blocked | index consistency ref |
 | `GRAPH_QUERY_FULL_SCAN_FORBIDDEN` | `090` | error | yes with narrower query or index policy | query rejected before backend traversal | query class, translation profile ref |
 | `GRAPH_PROVIDER_ADAPTER_UNSUPPORTED` | `090` | blocked | no, until adapter/profile changes | backend profile activation blocked | adapter ref, provider ref |
-
 | `GRAPH_POSTGRES_SCHEMA_FINGERPRINT_STALE` | `090` | blocked | no, until schema evidence refresh | graph backend blocked | backend schema fingerprint ref, schema profile ref |
 | `GRAPH_POSTGRES_DUPLICATE_NODE_ID` | `090` | error | no, until data/profile repair | graph apply/query blocked for affected object | graph node ID checksum, profile ref |
 | `GRAPH_POSTGRES_DUPLICATE_EDGE_ID` | `090` | error | no, until data/profile repair | graph apply/query blocked for affected object | graph edge ID checksum, profile ref |
@@ -1619,6 +1681,8 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-DIAGNOSTIC-CORRELATION-AC-001` | `diagnostic_correlation_ref` is opaque, optional, audit-linked when emitted, excluded from domain replay by default, and not accepted as evidence, identity, graph, completeness, package, or audit authority. |
 | `110-STATE-LABEL-AMBIGUOUS-AC-001` | `ambiguous` never renders as pass, fail, authorized absence, remediation, graph expiry, cleanup, retraction, source watermark, or conflict by default. |
 | `110-ERROR-REGISTRY-TOTAL-AC-001` | `GenerateErrorCodeRegistry` rejects missing, duplicate, TODO, unknown-severity, unknown-retry-class, unredacted, wildcard-fixtured, legacy `code` caller-field, generic-substitute, or unfixtured owner error rows. |
+| `110-ERROR-RECORD-SCHEMA-AC-002` | Every emitted `ErrorRecord` conforms to `ErrorRecordSchema`, uses `error_code` rather than legacy `code`, computes deterministic `error_correlation_id`, nests owner-specific detail in `owner_error_context`, and rejects forbidden sensitive values before visibility. |
+| `110-OBSERVABLE-ERROR-SELECTION-AC-001` | `SelectObservableError` deterministically selects owner-specific rows before generic rows, request/page-token errors before owner execution, authorization denial before existence-revealing owner detail, and sets `partial_result = true` when visible errors exceed 128 rows. |
 | `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
 | `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
 | `110-LAKEHOUSE-TABLESTATE-ERROR-AC-001` | Every new `020`, `030`, and `100` lakehouse table-state error appears in the generated registry with exact fixture refs, owner context schema, redaction rule, severity, retry class, and no generic substitute. |
@@ -1713,3 +1777,8 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 ## Open Questions
 
 Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+
+| ID | Question | Blocking scope | Required owner decision | Default until resolved |
+| --- | --- | --- | --- | --- |
+| `110-TODO-GENERATED-ERROR-REGISTRY-BYTES` | TODO: Provide concrete generated `ErrorCodeRegistry` artifact bytes, registry checksum, owner fragment refs, owner context schema refs, fixture refs, and `030.VersionManifest` refs for every API-, export-, health-, audit-, validation-, telemetry-visible, package-visible, and acceptance-visible diagnostic in implementation scope. | Visible diagnostics, generated registry validation, audit/export visibility, package report visibility, and acceptance output. | Product governance plus owner specs `000`, `010`, `020`, `030`, `040`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140`. | `GenerateErrorCodeRegistry` remains blocked or validation-only; visible diagnostics that lack a concrete generated row fail before response visibility. |
+| `110-TODO-ERROR-SELECTION-FIXTURE-CHECKSUMS` | TODO: Provide fixture checksums, input checksums, expected emitted `ErrorRecord` arrays, expected suppressed-candidate summaries, and expected response checksums for `SelectObservableError` precedence, authorization suppression, page-token pre-execution rejection, owner-specific-before-generic selection, and 128-error cap behavior. | Runtime error selection and endpoint error rendering. | `110` and `120` validation owners. | `120` error-selection rows remain `blocked`; promotion remains forbidden when visible diagnostics are in scope. |
