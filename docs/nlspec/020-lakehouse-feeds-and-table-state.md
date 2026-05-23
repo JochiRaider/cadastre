@@ -374,6 +374,31 @@ The active `LakehouseFeedCategoryClosureRowSet` must contain exactly one row for
 | Missing row for any known category | Must not mean positive-only, absence, cleanup, graph expiry, retraction, or watermark permission. |
 | Deterministic block row selected | Emit no raw-import side effect beyond owner-declared diagnostics and mutation-prohibition evidence for absence-sensitive effects. |
 
+### Concrete Source Dataset and Feed Category Catalog Materialization Plan
+
+Stable source-dataset and feed-category row schemas remain owned by this spec. Concrete active row instances may live only in registered supporting material or package-supplied row catalogs. The public spec must not invent private rows, private source bindings, raw fixture bytes, tenant inventories, scanner sites, account lists, host lists, table paths, or route names.
+
+| Materialization target | Required closure |
+| --- | --- |
+| Every public MVP `source_dataset` token in `MVPSourceDatasetCatalogClosureInventory` | Exactly one active `SourceDatasetCatalogRow` or exactly one exact deterministic source-dataset block row. |
+| Every feed category in `LakehouseFeedCategoryClosureRequirementTable` | Exactly one active `LakehouseFeedCategoryClosureRow` or exactly one exact deterministic category block row. |
+| Every `effect_closure_requirements` map | Total over `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark`; omitted effect keys fail with `LAKEHOUSE_FEED_CATEGORY_EFFECT_MAP_INCOMPLETE`. |
+| Every `requires_060_closure` cell | Exact `060.SourceAuthorityClosureMatrixRow` refs/checksums or exact deterministic block row refs/checksums. A bare effect name, source-dataset token, validation summary, package label, or row-set checksum is not sufficient. |
+| Concrete supporting material path | Registered supporting artifact path. If absent, the row-set must contain `TODO: registered supporting artifact path` and validation must classify the row set as blocked. |
+
+Deterministic block rows must use exact block codes for the blocked scope. The defaults below apply until product governance supplies concrete rows.
+
+| Blocked scope | Required deterministic block code | Required no-effect behavior |
+| --- | --- | --- |
+| `directory_inventory` direct gold output | `DIRECTORY_INVENTORY_GOLD_OUTPUT_BLOCKED` | No membership fact, nonmembership, deletion, absence, cleanup, graph expiry, graph edge removal, or gold output. |
+| `network_flow` absence or non-observation | `FLOW_ABSENCE_BLOCKED_MVP` | No observed-connection absence edge, graph expiry, cleanup, retraction, watermark, or theoretical reachability. |
+| `source_history` no-change proof without exact retention and coverage refs | `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED` | No no-change proof, negative output, cleanup, retraction, graph expiry, watermark, control state, or compliance negative output. |
+| `future_reachability` while `200` is inactive | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` | No read target, fact, graph edge, graph property, API claim, package activation effect, or production validation pass for reachability. |
+
+Production feed activation, read/import, mapping activation, source-authority closure, graph handoff, API filtering, validation acceptance, and replay output must consume selected row refs/checksums. They must not consume token strings, feed profile names, private bindings, table names, package labels, validation summaries, or owner prose as row identity.
+
+`TODO:` materialization tasks are blocking product-governance tasks, not implementation latitude. A selected row catalog with `TODO:` fixture checksums, expected-output checksums, package-set refs, validation refs, row refs, row checksums, mutation-prohibition refs, or registered supporting-artifact paths must fail promotion and emit no absence-sensitive mutation.
+
 ### MVP Feed Category Closure Catalog Requirements
 
 The selected MVP scope must provide one active `LakehouseFeedCategoryClosureRowSet` ref or an exact deterministic block row for every category in `LakehouseFeedCategoryClosureRequirementTable`. This section does not embed private vendor rows; concrete row instances remain activation-controlled supporting material.

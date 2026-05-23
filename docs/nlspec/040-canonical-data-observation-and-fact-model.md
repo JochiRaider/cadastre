@@ -164,6 +164,12 @@ Omission states must be explicit. Optionality, nullable schema declarations, abs
 
 `FactAbsenceOutcome` must not be inferred from `OmissionState`. Parser, normalizer, resolver, graph projection, API, and analysis stages must not set `GoldFact.absence_outcome`. `GoldFact.absence_outcome = null` means no fact-level absence outcome was produced; it must not mean `unknown`.
 
+#### SourceHistoryNoChangeProofBoundary
+
+`no_change_proof`, `unchanged`, `not_changed`, `no_change`, and equivalent labels are not `FactAbsenceOutcome` tokens. `GoldFact.absence_outcome` with any of those values must fail schema validation before persistence.
+
+A source-history no-change proof may become a `GoldFact` only when an active `080.GoldFactPredicateContractRow` defines the exact predicate and an active `060.AbsenceDerivationResult` authorizes the relevant absence outcome for that predicate, source dataset, scope, and requested effect. Otherwise source-history no-result, outside-window, stale-history, permission-limited-history, and unavailable-history states remain `unknown`, diagnostic-only, or owner no-op, and must not create a fact, correction, graph handoff, watermark, compliance negative output, or authorized-negative API label.
+
 ### FactAbsenceOutcomeClosureHandoff
 
 A non-null `GoldFact.absence_outcome` is schema-valid only when the producing run's `VersionManifest` contains the `060.AbsenceDerivationResult` ref and every consulted source-authority closure ref required by `030.VersionManifestCompletenessMatrix`.

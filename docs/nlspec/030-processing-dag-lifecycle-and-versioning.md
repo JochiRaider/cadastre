@@ -1500,6 +1500,7 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 | Scoped row selection | selected scoped row ref, selected row checksum, selected `030.ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, activation artifact ref, and redacted ambiguity diagnostic refs when selection failure affects output. |
 | Activation-controlled row selection | structured `030.ActivationControlledRowRef`, row-set artifact ref, row family, row ID, row schema version, row checksum, row-set checksum, selector checksums when scoped, validation refs, package-set refs when package-supplied, owner missing or invalid error refs for rejected rows, and lifecycle transition evidence when row activation changed state. |
 | `source_dataset_and_feed_category_closure` | source-dataset row-set artifact ref/checksum; selected source-dataset row ref/checksum or deterministic block row ref/checksum for every selected token; feed-category closure row-set ref/checksum; selected category row ref/checksum or deterministic block row ref/checksum for every category; source-authority closure matrix row ref/checksum for every absence-sensitive effect; all underlying `060` row refs/checksums; selector context refs/checksums; validation refs; package release refs and package-set refs when package-supplied; owner error refs for rejected rows. |
+| `source_effect_closure` | Selected `020.SourceDatasetCatalogRowSet`, selected `020.SourceDatasetCatalogRow` or deterministic block row, selected `020.LakehouseFeedCategoryClosureRowSet`, selected feed-category row or deterministic block row, selected `060.SourceAuthorityClosureMatrixRowSet`, selected closure row or deterministic block row, every consulted underlying `060` row ref/checksum, subject and object selector context refs, subject and object selector checksums, requested effect token, validation refs, package release refs, package-set ref when package-supplied, runtime state refs that affect output, and owner error refs. |
 | `lakehouse_table_state_and_maintenance` | `RawSupplierProfile` row-set artifact ref/checksum and selected row refs/checksums; `LakehouseReadPolicy` artifact ref/checksum and selected row refs/checksums; `RawFeedManifest` runtime-state ref/checksum when output-affecting; `LakehouseTableProfile` artifact ref/checksum and selected row refs/checksums; `LakehouseSnapshotRef`, `DatasetVersionRef`, and `LakehouseCommitRef` runtime refs/checksums; schema compatibility refs; `ReplayRetentionPolicy` artifact ref/checksum and selected row refs/checksums; `ReplayRetentionDecision` runtime-state ref/checksum; `TableMaintenancePolicy` artifact ref/checksum and selected row refs/checksums; `CrossTableCommitProfile` artifact ref/checksum when table-set consistency is required; `CatalogBranchPromotionPolicy` artifact ref/checksum when catalog promotion controls production visibility; `030.RunLockCommitGuard` refs for destructive or rewrite maintenance; package release and package-set refs when any artifact is package-supplied; owner error refs for rejected row selections. |
 | `feed_category_closure` | active `020.SourceDatasetCatalogRowSet` ref, selected `020.SourceDatasetCatalogRow` refs/checksums, deterministic source-dataset block row refs when used, source-dataset validation refs, package-set refs when package-supplied, active `020.LakehouseFeedCategoryClosureRowSet` ref, every selected category row ref/checksum, category validation refs, and closure outcome. |
 | `ocsf_mapping_closure` | active `050.ExternalSchemaProfile` ref/checksum; active or exact deterministic-block `ExternalSchemaArtifactRef` ref/checksum; `ProfileResolutionManifest` refs/checksums; `ObservationToOCSFMappingRowSet` ref/checksum; selected mapping row refs/checksums; selected `cadastre_only` row refs/checksums when null external profile is emitted; deterministic block row refs/checksums when a family is intentionally blocked; `ExternalEnumMappingRuleSet` refs/checksums; `OCSFBaseEventFieldPolicySet` refs/checksums; `SourceExtensionFieldRuleSet` ref/checksum or explicit empty rule-set ref/checksum; compiled artifact checksum; profile set checksum; extension set checksum; class allowlist checksum; `ObservationTypeExternalMappingValidationMatrix` refs/checksums; `CanonicalValidationOutput` checksum; validation refs; owner error refs for rejected rows; lifecycle transition evidence refs; package release refs and package-set refs when package-supplied. |
@@ -1539,6 +1540,24 @@ Lifecycle diagrams are representational unless generated from a declared lifecyc
 Package activation refs required by `VersionManifestCompletenessMatrix` must appear in `included_refs`. `PackageReleaseManifest` and `ProductionPackageSetManifest` fields are not substitutes for `VersionManifest.included_refs`; package-specific manifest fields must not create a parallel manifest mechanism unless this spec explicitly adds a field row and defines checksum inclusion behavior.
 
 A `060.SourceAuthorityClosureMatrix` result may be included in `VersionManifest`, but it must not satisfy the underlying row-ref completeness requirement. The manifest must still include every selected `020.SourceDatasetCatalogRow` or deterministic block row and every consulted `060` row ref/checksum that affected the closure result.
+
+### SourceEffectClosureManifestOrdering
+
+`VersionManifest` entries for `source_effect_closure` must sort deterministically by the tuple key below before manifest checksum computation:
+
+```text
+feed_category
+source_dataset
+fact_type
+predicate
+subject_scope_selector_checksum
+object_scope_selector_checksum
+requested_effect
+```
+
+Within one tuple, refs must sort by owner spec, row family, artifact ref, row ID, row checksum, then validation row ID. Deterministic block refs sort in the same position as the owner row they replace and must include mutation-prohibition refs before any API, graph, export, health, or validation-visible no-op is rendered.
+
+A fixture that includes a closure summary but omits any selected underlying `060` row ref from `VersionManifest` must fail before owner output with `VERSION_MANIFEST_INCOMPLETE`. A production-affecting activation row with `TODO:` in field type, default, bounds, null or omit behavior, checksum participation, ref shape, fixture checksum, expected output checksum, or error mapping must fail `ValidateActivationControlledRowSet` with `ACTIVATION_ROW_SCHEMA_INCOMPLETE` before promotion and before runtime output.
 
 ### VersionManifestSchema
 

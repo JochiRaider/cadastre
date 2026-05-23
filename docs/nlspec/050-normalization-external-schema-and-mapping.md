@@ -197,6 +197,21 @@ Missing `060.ExternalSchemaAuthoritySignalMappingRow` means the external schema 
 
 OCSF field absence, OCSF object absence, status, severity, confidence, observables, enrichments, endpoint order, `raw_data`, `unmapped`, external enum values, or source-extension values must not set `040.FactAbsenceOutcome`, cleanup, retraction, graph expiry, control pass/fail, or watermark behavior without an exact active `060.SourceAuthorityClosureMatrixRow` or deterministic block row.
 
+#### ExternalSchemaSignalAuthorityAttemptMatrix
+
+Every attempt to use external-schema material as authority must resolve through this matrix before any authority effect can be requested from `060`.
+
+| Attempt state | Required behavior | Required owner error or state |
+| --- | --- | --- |
+| No matching `060.ExternalSchemaAuthoritySignalMappingRow` | Preserve normalized field only; no authority effect, absence, cleanup, retraction, graph expiry, watermark, control pass/fail, or API authorized-negative output. | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_MISSING` for attempted authority; otherwise no-op metadata. |
+| Matching row inactive | Same as missing row; inactive rows do not weaken the non-authority default. | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_ROW_INACTIVE`. |
+| Matching deterministic block row | Emit no authority effect and require mutation-prohibition refs. | `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_BLOCKED`. |
+| Row checksum, package-set, validation, or manifest mismatch | Reject the authority attempt before effect evaluation. | Most specific `050`, `060`, `100`, or `030` owner error. |
+| External schema signal permitted only as non-authoritative normalized field | Persist only valid normalized observation metadata. | No authority error unless an effect is attempted. |
+| Exact active `060` mapping row and exact closure row chain | Route the effect request to `060`; `050` still grants no authority by itself. | `060` owns the selected result. |
+
+For every non-exact state above, the required output is no authority effect, no absence, no cleanup, no retraction, no graph expiry, no watermark, no control pass/fail, no remediation, and no API authorized-negative output. Mapping and normalization code must not annotate normalized fields as authority. A mapping row that attempts authority without exact `060` closure must emit an owner-specific error rather than a generic mapping diagnostic when such an owner-specific error exists.
+
 Active `ObservationToOCSFMappingRow`, `ExternalSchemaProfile`, and `SourceExtensionFieldRule` selections that use `source_dataset` must include `source_dataset_catalog_row_ref` and `source_dataset_catalog_row_checksum` in their activation-controlled row refs and in `030.VersionManifest` when they affect output.
 
 ### SourceDatasetMappingCatalogHandoff

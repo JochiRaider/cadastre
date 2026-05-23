@@ -173,10 +173,20 @@ When a candidate gold fact depends on missing evidence, stale evidence, source-d
 | DHCP/IPAM lease expiry | Required catalog row or deterministic source-dataset block row | DHCP/IPAM closure row chain | Required when predicate effect is requested | requested predicate effect only | selected `020` row, closure row, lease/staleness refs, and `AbsenceDerivationResult` refs in `VersionManifest` | expired assignment or unknown, not host absence | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*` |
 | Flow non-observation | Required catalog row or deterministic source-dataset block row | Flow closure row chain only if a future active row permits it | Required when future row permits | blocked by default | selected `020` row, closure row, and mutation-prohibition refs in `VersionManifest` | unknown/no edge | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*`; `120-GRAPH-PROFILE-CLOSURE-*` |
 | Cloud disappearance | Required catalog row or deterministic source-dataset block row | Cloud inventory/source-history closure row chain | Required | `absence`, `cleanup`, or `graph_expiry` as row permits | selected `020` row, closure row, source-history refs, and `AbsenceDerivationResult` refs in `VersionManifest` | unknown/no cleanup | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*`; `120-GRAPH-HANDOFF-*` |
-| Source-history no-change | Required catalog row or deterministic source-dataset block row | Source-history retention and coverage closure row chain | Required | no-change proof | selected `020` row, closure row, source-history retention refs, coverage refs, and `AbsenceDerivationResult` refs in `VersionManifest` | unknown/no proof | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*` |
+| Source-history no-change | Required catalog row or deterministic source-dataset block row | Source-history retention and coverage closure row chain plus active predicate contract for the exact no-change predicate | Required | `absence` only when predicate and `060` rows authorize; otherwise diagnostic-only, `unknown`, or no-op | selected `020` row, closure row, predicate row, source-history retention refs, coverage refs, staleness refs, absence policy refs, and `AbsenceDerivationResult` refs in `VersionManifest` | unknown/no proof | No | `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*`; `120-GOLD-PREDICATE-CATALOG-*` |
 | CDC tombstone | Required catalog row or deterministic source-dataset block row | CDC replay state plus exact source closure row | Required | `retraction` or `cleanup` only when row permits | selected `020` row, CDC replay state refs, closure row, and `AbsenceDerivationResult` refs in `VersionManifest` | no retraction/cleanup | No | `120-TEMPORAL-CORRECTION-*`; `120-SOURCE-CLOSURE-*`; `120-SOURCE-DATASET-CATALOG-*` |
 
 Every row in this matrix must validate the selected `020.SourceDatasetCatalogRow` or deterministic source-dataset block row and route through `060.DeriveAbsenceOrUnknown` before fact creation, correction, graph handoff, or watermark-affecting output. Missing, blocked, ambiguous, inactive, checksum-mismatched, unvalidated, or unmanifested source-dataset refs select the default behavior and must not be reinterpreted by `080`.
+
+Correction-specific owner errors are required for the following source-effect closure failures.
+
+| Failure | Required behavior |
+| --- | --- |
+| Missing `060.AbsenceDerivationResult` for an absence-sensitive candidate | Emit `GOLD_DERIVATION_ABSENCE_RESULT_REQUIRED`; no fact, correction, graph handoff, or watermark. |
+| Requested effect mismatch between `080` and `060.AbsenceDerivationResult` | Emit `GOLD_DERIVATION_EFFECT_MISMATCH`; no mutation. |
+| Deterministic source-dataset or source-authority block row selected | Emit exact no-op with mutation-prohibition refs; no mutation. |
+| Source-history outside retention window | Emit `SOURCE_HISTORY_OUTSIDE_WINDOW_NO_PROOF` or owner no-op; no no-change fact. |
+| Stale source state blocks the requested correction | Emit source-stale owner state; no cleanup, retraction, graph expiry, or watermark unless exact `060` row permits. |
 
 #### MVPSourceDatasetGoldBlockCompanionMatrix
 

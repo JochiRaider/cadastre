@@ -1116,11 +1116,15 @@ Drift-control rules:
 
 Section 25 is a closure ledger for root-domain status only. It must not define runtime behavior and must not duplicate owner schemas, algorithms, defaults, failure precedence, activation rows, or validation harness behavior. Each row must resolve to exactly one owner contract or validation row family.
 
-Closed `domain_closure_state` values are `resolved_owner_routed`, `blocked_validation`, `blocked_owner_todo`, `blocked_owner_catalogs`, and `inactive_deferred`.
+Closed `domain_closure_state` values are `resolved_owner_routed`, `closed_local_pending_validation`, `blocked_validation`, `blocked_owner_todo`, `blocked_owner_catalogs`, and `inactive_deferred`.
 
 Closed `domain_behavior_until_closed` values are `owner governs`, `validation fails`, `deferred no-op`, and `not runtime`.
 
 The `owner_contract_scope` column is required for every row. It must distinguish stable owner contract, activation-controlled row set, validation-only family, or inactive deferred material. It must not describe runtime behavior.
+
+Source-history no-change proof is vocabulary-routed only. It is not an effect token. The term routes to `060.SourceHistoryRetentionProfile`, `060.AbsenceDerivationPolicy`, and `080.GoldFactPredicateContractRow` when an exact predicate authorizes it. Otherwise it is diagnostic or no-op. This section defines no no-change schema, default, algorithm, failure precedence, or runtime side effect.
+
+Section 25 closure rows must use one of these states: `blocked_owner_catalogs` when concrete active row catalogs or fixture bytes are missing; `closed_local_pending_validation` only when owner schemas and algorithms are complete but `120` validation is incomplete; and `resolved_owner_routed` only when owner specs and `120` acceptance criteria both pass. The state `closed_local_pending_validation` is permitted only for ledger text and must not be used as a runtime closure state.
 
 ### Owner-routing sentence form
 

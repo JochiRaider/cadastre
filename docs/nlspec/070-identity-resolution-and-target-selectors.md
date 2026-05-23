@@ -122,12 +122,22 @@ A resolver may create or update `CanonicalEntity`, `SourceAsset`, or `Identifier
 
 A `directory_inventory` source-dataset row may produce `IdentityEvidenceItem` candidates only when all of the following hold:
 
-1. The selected `020.SourceDatasetCatalogRow` ref/checksum and row-set ref/checksum are present, checksum-valid, active or exact deterministic block as applicable, and included in `030.VersionManifest`.
+1. The selected `020.SourceDatasetCatalogRow` ref/checksum and row-set ref/checksum are present, checksum-valid, active with `permitted_production_use = resolver_input_only`, and included in `030.VersionManifest`.
 2. The active `ResolverProfileRow` covers the directory scope, entity type, resolver run mode, evidence classes, identifier scopes, lifecycle boundary types, and activation scope.
 3. The selected `IdentifierEvidenceClass` row is active and allows the evidence role produced by the directory inventory observation.
 4. No lifecycle blocker, hard blocker, under-scoped source identity, private-binding leak, validation blocker, package-set blocker, or manifest blocker applies.
 
 `directory_inventory` does not by itself authorize `identity_membership_fact.member_of`, nonmembership, user deletion, group deletion, source absence, cleanup, graph expiry, graph edge removal, canonical merge, or gold output. Directory display names, group names, usernames, labels, hidden-membership hints, permission-limited states, and directory object presence may be evidence only as typed resolver inputs. `directory_membership`, not `directory_inventory`, is the positive membership dataset for `gfp-mvp-identity-member-of-v1`.
+
+Directory inventory admissibility is total over the states below.
+
+| `directory_inventory` catalog state | Identity evidence behavior | Non-resolver effect behavior |
+| --- | --- | --- |
+| Active selected row with `permitted_production_use = resolver_input_only` | May produce `IdentityEvidenceItem` candidates when resolver rows, evidence-class rows, validation refs, package-set refs when package-supplied, and manifest refs all validate. | No direct gold, absence, deletion, cleanup, graph expiry, graph edge removal, or membership output. |
+| Deterministic block row for direct gold, membership absence, deletion, cleanup, graph expiry, or graph edge removal | Must not produce identity evidence unless the block row explicitly names resolver-input allowance. Resolver-input allowance is not defaulted. | May satisfy proof that the blocked non-resolver effect emits no mutation when mutation-prohibition refs validate. |
+| Missing, ambiguous, inactive, checksum-mismatched, unvalidated, package-set-mismatched, unmanifested, private-leaking, or `TODO:` row | Must produce no identity evidence candidate. | Must produce no gold, graph, cleanup, expiry, deletion, absence, or authorized-negative API output. |
+
+`120` must include a directory-inventory direct-gold negative validation row proving that a deterministic block for direct gold output creates no `IdentityEvidenceItem` unless an explicit resolver-input allowance exists.
 
 ### TelemetryIdentityNonAuthorityHandoff
 

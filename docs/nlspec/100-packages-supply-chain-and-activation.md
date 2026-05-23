@@ -370,6 +370,28 @@ Package-supplied production input closure catalogs must activate only through an
 
 A missing package-set ref, policy row, validation ref, compatibility ref, trust/provenance/SBOM evidence required by the active policy, schema compatibility ref, package-set checksum, or `VersionManifest` ref must fail candidate package-set activation, preserve the current active package set, emit `PackageActivationFailureEvent`, and write no candidate production output. Package labels and release names are evidence fields only; they must not become package types or activation authority.
 
+### SourceEffectClosurePackageCatalogActivation
+
+A package-supplied source-effect closure row catalog may affect runtime only when the exact package type below resolves to one active `PackageTypePolicyRow`, the package release is immutable, the release is a member of the active `ProductionPackageSetManifest`, and every selected row ref/checksum appears in `030.VersionManifest`.
+
+| Source-effect package catalog type | Required activation evidence | Forbidden substitute |
+| --- | --- | --- |
+| `source_dataset_catalog_row_set` | Package type policy row, immutable release manifest, production package-set membership, trust verification, compatibility row, validation refs, owner row-set checksum, selected row schema version, owner spec ref, package-set ref, and manifest refs. | package label, feed profile name, row-set checksum alone, validation summary, private binding. |
+| `lakehouse_feed_category_closure_row_set` | Same plus total effect map validation and deterministic block validation. | `feed closure`, `policy_bundle`, broad package label. |
+| `source_authority_closure_matrix_row_set` | Same plus selected closure rows, deterministic block rows, all underlying `060` row refs, mutation-prohibition refs, and source-effect fixture refs. | `source closure`, authority bundle, package version, validation run. |
+| `source_authority_row_set` | Same plus exact fact/predicate/effect row refs and no broad source-category fallback fixtures. | broad policy bundle, module name, owner prose. |
+| `coverage_dimension_profile_row_set` | Same plus coverage-domain token validation, coverage fixture refs, permission/staleness fixture refs, and package-set refs. | coverage label, display token, validation summary. |
+| `source_staleness_policy_row_set` | Same plus time-input, expiry, stale-state, no-current-time fallback, and replay fixture refs. | freshness report, timestamp field, package version. |
+| `progress_signal_policy_row_set` | Same plus weak-signal and combined-signal fixture refs. | ack, queue, CDC, graph, telemetry, or freshness signal package by itself. |
+| `supplier_collection_visibility_profile_row_set` | Same plus permission, hidden, failed-member, cache, partial, and no-negative-output fixture refs. | collector label, supplier health report. |
+| `control_result_mapping_row_set` | Same plus total external result-state mapping fixtures. | compliance framework label, result summary. |
+| `source_history_retention_profile_row_set` | Same plus history-window, outside-window, coverage, and no-change blocked fixture refs. | source-history availability report. |
+| `absence_derivation_policy_row_set` | Same plus source-state mapping, requested effect, allowed effect, blocking precedence, and owner-error fixture refs. | absence policy label, validation report alone. |
+| `projection_watermark_policy_row_set` | Same plus watermark no-op/advance fixtures and commit refs. | watermark label, graph apply result. |
+| `external_schema_authority_signal_mapping_row_set` | Same plus exact external field path, source-dataset row, closure row, and non-authority fixtures. | OCSF status/severity/confidence, endpoint order, field absence, source-extension field. |
+
+Failure precedence for these catalogs is: unknown package type, missing package type policy, inactive or out-of-scope package type policy, trust failure, provenance/SBOM failure when required by policy, compatibility failure, validation failure, package-set omission, then manifest omission. `policy_bundle`, broad labels, module names, package names, version strings, dependency locks, SBOM existence, provenance existence, and validation summaries must fail as substitutes for selected source-effect closure rows.
+
 | Owner boundary | Package policy family | Validation family |
 | --- | --- | --- |
 | `020` feed closure | `lakehouse/feed/read` | `120-FEED-CLOSURE-*`; `120-PACKAGE-*` |

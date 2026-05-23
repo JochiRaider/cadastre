@@ -121,6 +121,56 @@ Promotion must fail when any production feed read, raw import, replay, correctio
 
 `MVPActivationCatalogClosurePack` is a promotion-time set of refs. It is not a runtime authority, a row schema, a package label, a summary report, or a substitute for owner-local activation rows. The pack exists only to prove that every selected production scope has either active validated row-set refs or deterministic block refs for each activation-controlled catalog family that can affect output.
 
+#### SourceEffectClosurePackSchema
+
+`SourceEffectClosurePack` is the governance-only closure-pack schema for selected source/effect tuples. It must not define source-authority runtime behavior. It proves that owner specs expose exact selected evidence for every tuple before promotion can pass.
+
+The source/effect tuple key is exactly the ordered tuple below. No field may be omitted, defaulted from owner prose, inferred from a package label, or replaced by a private binding.
+
+```text
+feed_category
+source_dataset_catalog_row_ref
+fact_type
+predicate
+subject_scope_selector_checksum
+object_scope_selector_checksum
+requested_effect
+```
+
+| Field | Required behavior |
+| --- | --- |
+| `closure_pack_id` | Stable governance ID for one selected MVP production scope. |
+| `selected_mvp_scope_id` | Ref to the exact selected MVP production scope. |
+| `tuple_key` | Object containing exactly the tuple-key fields listed above, serialized through `040.CanonicalJSON`. |
+| `closure_state` | One of `closed_active`, `closed_deterministically_blocked`, `blocked_missing_ref`, `blocked_validation`, `blocked_todo`, `blocked_checksum`, `blocked_package_set`, or `blocked_manifest`. |
+| `selected_020_refs` | Selected `020.SourceDatasetCatalogRowSet`, selected `020.SourceDatasetCatalogRow` or deterministic block row, selected `020.LakehouseFeedCategoryClosureRowSet`, and selected feed-category row refs/checksums. |
+| `selected_060_refs` | Selected `060.SourceAuthorityClosureMatrixRowSet`, selected closure row or deterministic block row, and every consulted underlying `060` row ref/checksum. |
+| `selector_refs` | Subject and object selector context refs plus normalized selector checksums. Raw private selector values are forbidden. |
+| `deterministic_block_refs` | Required when `closure_state = closed_deterministically_blocked`; includes block row ref/checksum and mutation-prohibition proof refs. |
+| `mutation_prohibition_refs` | Required for every blocked, no-op, validation-blocked, and deterministic-block tuple. |
+| `validation_refs` | Exact `120` validation row refs, fixture checksums, expected output or expected error checksums, and acceptance criterion IDs. |
+| `package_release_refs` | Required when any selected row or validation artifact is package-supplied. |
+| `package_set_ref` | Required when any selected row or validation artifact is package-supplied. |
+| `version_manifest_refs` | `030.VersionManifest` refs that include every selected row, row checksum, validation ref, selector checksum, runtime state ref, package release, and package set that can affect output. |
+| `owner_error_refs` | Required for rejected rows, missing rows, deterministic block rows, validation failures, package-set failures, and manifest failures. |
+| `supporting_material_path_ref` | Ref to registered supporting material when concrete row bytes are external to the public spec. If no registered artifact is supplied, the value must be `TODO: registered supporting artifact path` and the tuple closure state must be `blocked_todo`. |
+
+Failure precedence is deterministic and must be applied before promotion acceptance.
+
+| Precedence | Condition | Required closure state |
+| ---: | --- | --- |
+| 1 | Selected source-dataset row or exact deterministic block row is missing. | `blocked_missing_ref` |
+| 2 | More than one equally specific source-dataset row or block row resolves. | `blocked_validation` |
+| 3 | Exact deterministic block row is selected and all block evidence validates. | `closed_deterministically_blocked` |
+| 4 | Any selected owner row, field, fixture checksum, expected checksum, error mapping, or path ref contains `TODO:`. | `blocked_todo` |
+| 5 | Any selected row, row-set, fixture, expected output, package, or manifest checksum mismatches. | `blocked_checksum` |
+| 6 | Any package-supplied row or validation artifact lacks package release refs, package-set membership, trust, compatibility, or package-set checksum required by `100`. | `blocked_package_set` |
+| 7 | Any selected row, selector checksum, validation ref, runtime state ref, package release, or package set is omitted from `030.VersionManifest`. | `blocked_manifest` |
+| 8 | Any owner validation row is missing, stale, failed, blocked, not run, or has no mutation-prohibition proof where required. | `blocked_validation` |
+| 9 | All selected evidence is active, checksum-valid, package-set-valid when applicable, validation-backed, and manifest-included. | `closed_active` |
+
+A closure summary, validation report, package label, row-set checksum, owner prose, health component, private feed binding, repository snapshot, branch, tag, ADR, or research report must not substitute for selected row refs and selected row checksums.
+
 | Catalog family | Required member refs |
 | --- | --- |
 | `feed_category_closure` | `020.SourceDatasetCatalogRowSet` refs, selected `020.SourceDatasetCatalogRow` refs/checksums, deterministic source-dataset block row refs when applicable, `020.LakehouseFeedCategoryClosureRowSet` refs, selected category row refs/checksums, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs. |

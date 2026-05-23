@@ -379,6 +379,17 @@ Each `060` closure outcome or error class must map to exactly one caller-visible
 | `SOURCE_HISTORY_OUTSIDE_WINDOW_NO_PROOF` | `unknown` | No | not pass and not fail | no graph effect | diagnostic | retention window, query scope |
 | `SOURCE_HISTORY_COVERAGE_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | source-history coverage domain |
 | `DETERMINISTIC_BLOCK_ROW_SELECTED` | `unknown` with owner diagnostic | No | no export effect | no graph effect | diagnostic | block row ref and mutation-prohibition proof |
+| `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED` | `unknown` with owner diagnostic | No | not pass and not fail | no graph effect | diagnostic | selected block row ref and mutation-prohibition proof |
+| `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | feed category and requested effect |
+| `LAKEHOUSE_FEED_CATEGORY_DETERMINISTICALLY_BLOCKED` | `unknown` with owner diagnostic | No | not pass and not fail | no graph effect | diagnostic | category block row and mutation-prohibition proof |
+| `SUPPLIER_VISIBILITY_PROFILE_ROW_MISSING` | `permission_limited` or `unknown` by owner mapping | No | not pass and not fail | no graph effect | blocked | visibility scope and requested effect |
+| `SOURCE_HISTORY_RETENTION_PROFILE_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | history kind and scope |
+| `ABSENCE_DERIVATION_POLICY_ROW_MISSING` | `unknown` | No | not pass and not fail | no graph effect | blocked | requested effect and predicate |
+| `PROJECTION_WATERMARK_POLICY_ROW_MISSING` | health diagnostic only | No | no export effect | no graph effect | blocked | watermark target and requested effect |
+| `PACKAGE_SET_MISMATCH` | `blocked` | No | error | no graph effect | blocked | package-set ref and selected owner row ref |
+| `VERSION_MANIFEST_INCOMPLETE` | `blocked` | No | error | no graph effect | blocked | omitted owner refs |
+| `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED` | `unknown` with owner diagnostic | No | not pass and not fail | no graph effect | diagnostic | source-history retention, coverage, and closure refs when present |
+| `EXTERNAL_SCHEMA_AUTHORITY_SIGNAL_BLOCKED` | `error` for attempted authority effect | No | error | no graph effect | blocked | signal row or block row ref |
 
 ## Error Model
 
@@ -1298,6 +1309,7 @@ Graph health output must normalize provider-specific details into Cadastre healt
 ### ActivationCatalogClosureHealthComponents
 
 Activation-catalog closure health is operator-visible status only. It must not authorize absence, pass, fail, remediation, cleanup, retraction, graph expiry, watermark advancement, package activation, or validation acceptance.
+Generic error codes must fail response materialization when an owner-specific error row exists for the same source-effect closure failure. Health components may summarize closure state for operators, but response builders must preserve owner state detail in `state_summary` and must not render `authorized_absent` or `authorized_not_observed` unless `060.AbsenceDerivationResult.absence_authorized = true` and exact owner refs are present.
 
 | Health component | Required state refs | Caller-visible status | Forbidden interpretation |
 | --- | --- | --- | --- |

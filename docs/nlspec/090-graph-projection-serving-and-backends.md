@@ -135,14 +135,23 @@ Graph expiry and cleanup deltas require all of the following:
 
 #### SourceEffectGraphOutcomeMatrix
 
-| `060` closure state | Required `090` behavior |
+| Upstream closure state or blocker | Required `090` behavior |
 | --- | --- |
-| `closed` for `graph_expiry` | May emit expiry delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset and all underlying `060` refs. |
-| `closed` for `cleanup` | May emit cleanup delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset and all underlying `060` refs. |
-| `deterministically_blocked` | Emit graph no-op diagnostic only; no backend mutation. |
-| `blocked_validation` | Reject before delta persistence. |
+| `closed` for `graph_expiry` | May emit expiry delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
+| `closed` for `cleanup` | May emit cleanup delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
+| `closed_active` from `000.SourceAuthorityClosureStateCrosswalk` | Same as matching `060.closure_outcome = closed`; no graph output is allowed unless the requested effect is `graph_expiry` or `cleanup`. |
+| `deterministically_blocked` or `closed_deterministically_blocked` | Emit graph no-op diagnostic only; no `GraphDeltaSet`, no backend mutation, no expiry, no cleanup, no retraction, no absence edge, and no watermark. |
+| `blocked_validation` | Reject before delta persistence with owner validation error. |
+| `blocked_missing_ref` | Reject before delta persistence with missing-ref owner error. |
+| `blocked_checksum` | Reject before delta persistence with checksum error. |
+| `blocked_todo` | Reject before delta persistence and promotion with TODO blocker. |
+| `blocked_package_set` | Reject before delta persistence and candidate package output visibility. |
+| `blocked_manifest` or missing `VersionManifest` refs | Reject with manifest error before delta persistence. |
 | missing source-dataset catalog row | Reject before delta persistence. |
-| missing `VersionManifest` refs | Reject with manifest error before delta persistence. |
+| ambiguous source-dataset catalog row | Reject before delta persistence; no row-order tie break. |
+| inactive, unvalidated, private-leaking, or package-set-mismatched source-dataset row | Reject before delta persistence. |
+
+Source-history no-change proof, graph read-model drift checks, missing backend objects, derived-view stale state, graph apply success, graph backend cleanup, and backend query results must never authorize graph expiry or cleanup. They may affect graph output only when the producing `GoldFactChangeSet` or `060.AbsenceDerivationResult` authorizes `graph_expiry` or `cleanup` for the exact requested effect and the selected closure refs are manifest-included.
 
 ### SourceDatasetGraphClosureHandoff
 
@@ -1319,6 +1328,8 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-SOURCE-CLOSURE-GRAPH-AC-003` | Missing flow evidence emits no absence edge and no expiry. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-004` | Deterministic source-authority block rows emit no graph delta and no backend mutation. |
 | `090-SOURCE-CLOSURE-GRAPH-AC-005` | A graph expiry or cleanup delta missing closure row-set refs, closure validation refs, or underlying `060` row refs fails before graph apply. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-006` | Backend cleanup, missing backend object, graph apply success, graph drift result, derived-view stale state, source-history no-change proof, missing flow evidence, ambiguous `FlowRoleEvidence`, and OCSF endpoint order never authorize graph expiry or cleanup without exact `060` requested-effect authorization. |
+| `090-SOURCE-CLOSURE-GRAPH-AC-007` | Every `000` closure state and upstream block reason in `SourceEffectGraphOutcomeMatrix` maps to exactly one graph behavior with no backend mutation unless `closed` authorizes the exact graph effect. |
 | `090-SOURCE-DATASET-CATALOG-GRAPH-AC-001` | Expiry and cleanup deltas require selected `020.SourceDatasetCatalogRow` refs/checksums in the producing `VersionManifest`. |
 | `090-SOURCE-DATASET-CATALOG-GRAPH-AC-002` | Missing, blocked, ambiguous, inactive, checksum-mismatched, unvalidated, or unmanifested source-dataset catalog rows reject before graph delta persistence and produce no backend mutation. |
 | `090-GRAPH-HANDOFF-AC-001` | `none` handoff emits no graph delta. |

@@ -39,6 +39,8 @@ Any active `020.future_reachability` source-dataset row while this document rema
 
 A `future_reachability` row may appear only as inactive future-domain material or validation-only negative fixture input. Repository merge, materialization, package release creation, package-set inclusion, graph profile activation, API wording, or validation report creation must not convert that row into runtime reachability behavior while this document remains deferred.
 
+The required `020.future_reachability` deterministic block row must appear in the selected `020.SourceDatasetCatalogRowSet`, any referenced `060.SourceAuthorityClosureMatrixRowSet`, `030.VersionManifest`, and `120` reachability prohibition fixtures. Repository merge, materialization, package release creation, package-set inclusion, graph profile activation, API wording, validation report creation, or supporting-material registration must not convert the block into runtime reachability behavior while this file remains `inactive_deferred`.
+
 ## Explicit Non-Scope While Deferred
 
 - MVP graph projection.

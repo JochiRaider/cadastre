@@ -1009,6 +1009,39 @@ Every fixture family in this matrix is required before `SourceAuthorityClosureMa
 
 A validation row in this matrix must include fixture checksum, expected `AbsenceDerivationResult` checksum when applicable, expected `VersionManifest` checksum or expected manifest error, expected output checksum when output is allowed, expected no-op when output is blocked, expected error code when rejected, and mutation-prohibition proof for raw, silver, identity, gold, graph, watermark, compliance export, and API label mutation classes affected by the case.
 
+### SourceEffectClosureValidationMatrix
+
+`SourceEffectClosureValidationMatrix` is generated over every selected `feed_category`, `source_dataset`, `fact_type`, `predicate`, `subject_scope`, `object_scope`, and `requested_effect` tuple. `120` validates owner behavior only; it must not define new source-authority, graph, API, package, or temporal behavior.
+
+Each generated row must use the interface below.
+
+| Field | Required behavior |
+| --- | --- |
+| `validation_row_id` | Stable generated row ID. |
+| `tuple_key` | Exact tuple key used by `000.SourceEffectClosurePackSchema`. |
+| `fixture_ref` | Registered fixture ref. |
+| `fixture_checksum` | Concrete SHA-256; `TODO:` forces `blocking_status = blocked`. |
+| `selected_owner_row_refs` | Selected `020`, `060`, `080`, `090`, `100`, and `110` row refs/checksums required by the tuple. |
+| `expected_output_checksum` | Concrete checksum when output is allowed; `TODO:` forces `blocked`. |
+| `expected_error_or_no_op_checksum` | Concrete checksum for owner error or no-op cases. |
+| `mutation_prohibition_ref` | Required for deterministic block, validation-blocked, no-op, private-binding leak, package-set mismatch, and manifest omission cases. |
+| `package_refs` | Required when any selected row or fixture is package-supplied. |
+| `version_manifest_ref` | Required when any output, no-op visibility, health visibility, API visibility, graph handoff, watermark, or validation acceptance depends on the tuple. |
+| `acceptance_result` | One of `pass`, `fail`, `blocked`, or `not_run`; any `TODO:` field forces `blocked`. |
+
+The matrix must include fixture families for completeness 6-by-8 states, coverage states, staleness states, progress signals and weak-signal combinations, visibility states, control result states, source-history retention and outside-window states, external-schema authority-signal states, watermark no-op and advance states, deterministic block rows, graph expiry handoff, source-history no-change proof, directory inventory resolver-only behavior, network-flow positive-only behavior, and future reachability deterministic block behavior.
+
+| Required generated validation family | Required cases |
+| --- | --- |
+| `source-effect-closure-tuple-*` | closed active, deterministic block, missing selected source-dataset row, ambiguous source-dataset row, missing feed-category row, missing closure row, ambiguous closure row. |
+| `source-effect-closure-checksum-*` | selected row checksum drift, row-set checksum drift, expected output checksum drift, fixture checksum drift. |
+| `source-effect-closure-package-*` | package-set omission, package-set mismatch, inactive package policy, broad `policy_bundle` substitution, trust/compatibility/validation failure. |
+| `source-effect-closure-manifest-*` | omitted selected `020` row, omitted selected `060` row, omitted selector checksum, omitted validation ref, closure summary present without underlying refs. |
+| `source-effect-closure-todo-*` | TODO row ref, TODO fixture checksum, TODO expected output checksum, TODO supporting-material path, TODO owner error. |
+| `source-effect-closure-mutation-prohibition-*` | no raw, silver, identity, gold, graph, watermark, compliance, API authorized-negative, package activation, or validation-pass mutation from blocked tuples. |
+
+Acceptance fails if any selected source-effect tuple lacks exactly one active closure row or deterministic block row; if any required fixture checksum or expected checksum is missing; if any mutation-prohibition proof is absent; if any selected row is stale, `TODO:`-bearing, invalid, checksum-mismatched, package-set-mismatched, or unmanifested; or if two independent implementations produce different canonical outputs for the same closure fixture.
+
 ### SourceClosureCategoryEffectValidationMatrix
 
 This matrix imports the MVP category set from `020.LakehouseFeedCategoryClosureRequirementTable`. Every category must have closure-positive fixtures for its active effects or deterministic-block fixtures for blocked effects.
