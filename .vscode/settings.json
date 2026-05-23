@@ -8,5 +8,5 @@
     "editor.formatOnSave": false,
     "editor.formatOnPaste": false
   },
-  "markdown.extension.tableFormatter.enabled": false
+  //"markdown.extension.tableFormatter.enabled": false
 }
