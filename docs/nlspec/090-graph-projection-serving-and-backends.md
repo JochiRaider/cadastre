@@ -303,6 +303,23 @@ Selection alone must not run backend preflight, open a backend connection, execu
 | `version_manifest_requirement` | `030.VersionManifest` refs include every selected row, checksum, package ref, evidence ref, validation ref, generated error registry checksum, and telemetry ref. | `VERSION_MANIFEST_INCOMPLETE`. |
 
 PostgreSQL relational rows are the current omitted-backend default candidate. AGE rows are optional and validation-only unless every AGE production gate passes.
+
+#### PackageActivationHandoff
+
+Graph backend package blockers consume package eligibility only through `100`. When a graph backend runtime, provider adapter, driver, storage backend adapter, index backend adapter, runtime distribution, deployment profile, schema profile, query translation artifact, apply profile, restore/upgrade artifact, benchmark artifact, or provider support artifact is package-supplied, backend preflight must require all of the following refs before mutation, query serving, rebuild promotion, drift check, health success, or graph-serving output:
+
+| Required package evidence | Required behavior |
+| --- | --- |
+| `100.PackageReleaseManifest` | Each backend package release must be immutable, checksum-valid, trust-verified, compatible, validated, and selected by package type. |
+| `100.ProductionPackageSetManifest` | The active package set must include every selected backend package release and checksum. |
+| selected `100.PackageTypePolicyRow` refs | Each package type token must resolve exactly one active row for the target environment. |
+| selected deprecation rows | Missing or expired rows block backend preflight; no default window may be invented. |
+| selected compatibility rows | Runtime, adapter, driver, schema, query, apply, restore, upgrade, benchmark, trust, SBOM, provenance, dependency, and deployment axes must pass when required. |
+| trust and repository evidence | Signatures, trust roots, signer authorization, transparency, repository metadata, freshness, snapshot, and anti-rollback refs must pass before backend use. |
+| validation refs and package error parity | `120` package rows and `110` package error parity must pass with concrete checksums. |
+| `030.VersionManifest` refs | Every selected package ref class must appear in `VersionManifest.included_refs`. |
+
+`090` must not independently decide package eligibility. A graph backend package gate that relies on backend defaulting, provider labels, package names, broad package labels, module names, version strings, repository refs, or validation summaries without the `100` refs above fails with `GRAPH_BACKEND_PACKAGE_GATE_FAILED` or the most specific package owner error before backend preflight succeeds.
 PostgreSQL relational rows are the current omitted-backend default candidate. AGE rows are optional and validation-only unless every AGE production gate passes.
 
 ### GraphScopeSelectorContextSet
@@ -1371,6 +1388,8 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-SCHEMA-PATCH-AC-003` | Graph properties with undeclared provenance or raw payload leakage fail before graph apply. |
 | `090-SCHEMA-PATCH-AC-004` | MVP graph profiles still cannot emit theoretical reachability output. |
 | `090-GRAPH-TELEMETRY-HANDOFF-AC-001` | Graph telemetry may report graph operation diagnostics but cannot expose backend IDs or provider query text, cannot repair drift, cannot authorize graph mutation, and cannot substitute for graph apply, rebuild, schema, index, or derived-view state records. |
+| `090-GRAPH-BACKEND-PACKAGE-TOKEN-AC-001` | Graph backend package gates consume exact `100.PackageType` tokens and selected `100.PackageTypePolicyRowSet` coverage; broad labels, provider-specific package names, module names, runtime labels, and version strings fail before backend preflight succeeds. |
+| `090-GRAPH-BACKEND-PACKAGE-HANDOFF-AC-001` | When graph backend artifacts are package-supplied, backend mutation, query serving, rebuild promotion, drift check, and health success require `100.PackageReleaseManifest`, `100.ProductionPackageSetManifest`, selected policy/deprecation/compatibility/trust/repository/validation refs, and package `030.VersionManifest` refs. |
 
 | `090-EDGESET-AC-001` | The active MVP graph edge set is exactly `observed_connection`; theoretical reachability remains inactive and prohibited. |
 | `090-GRAPH-ID-COLLISION-AC-001` | Graph node and edge delta ID collisions fail with `GRAPH_NODE_DELTA_ID_COLLISION` or `GRAPH_EDGE_DELTA_ID_COLLISION` before graph apply commits. |

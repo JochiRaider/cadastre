@@ -717,6 +717,60 @@ A bare string row ID, package-local path, package label, row-set checksum alone,
 
 Source-dataset catalog rows and deterministic source-dataset block rows are selected activation-controlled rows. They must appear as structured `030.ActivationControlledRowRef` entries in `included_refs` whenever any feed, mapping, authority, graph, analysis, API, export, package-supplied catalog, or validation output depends on the `source_dataset` token. Closure summaries cannot satisfy source-dataset manifest completeness without selected catalog rows, selected row checksums, row-set refs, validation refs, and package-set refs when package-supplied.
 
+### PackageActivationVersionManifestRefClassTable
+
+Package release manifests and package-set manifests describe package content. They do not replace the universal `VersionManifest.included_refs` completeness contract. The following ref classes are required whenever package activation, package validation, package-supplied artifact selection, rollback, quarantine, emergency action, LKG marking, package-visible diagnostics, or package error output can affect output or visibility.
+
+| Ref class | Required package output classes | Missing behavior |
+| --- | --- | --- |
+| `package_set_manifest_checksum` | package-set activation, rollback, quarantine, emergency, LKG, package diagnostics | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `ProductionPackageSetManifest.package_set_checksum` | package-set activation, current-active preservation, rollback target comparison | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `PackageReleaseManifest.release_checksum` | release validation, package-set membership, rollback compatibility | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `package_release_refs` | every selected release in the package set | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `selected_package_type_policy_row_set_checksum` | package type policy resolution and package type coverage totality | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_TYPE_POLICY_MISSING`. |
+| `selected_package_type_policy_row_refs` | every package release and target environment | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `package_type_coverage_matrix_checksum` | package type totality validation | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `deprecation_policy_row_refs` | package type policy activation, deprecation expiry, rollback selection | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_TYPE_POLICY_MISSING`. |
+| `repository_model_row_refs` | repository form, repository metadata, repository evidence attachment | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
+| `repository_metadata_refs` | repository metadata coherence and expiration | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_REPOSITORY_METADATA_EXPIRED`. |
+| `repository_snapshot_refs` | mix-and-match prevention | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `repository_freshness_proof_refs` | freshness and freeze protection | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_REPOSITORY_METADATA_EXPIRED`. |
+| `repository_anti_rollback_state_refs` | rollback protection | `PACKAGE_VERSION_MANIFEST_INCOMPLETE` or `PACKAGE_REPOSITORY_ROLLBACK_DETECTED`. |
+| `artifact_digest_size_media_type_refs` | artifact identity, descriptor verification, release checksum | `PACKAGE_ACTIVATION_ARTIFACT_CHECKSUM_MISMATCH`. |
+| `subject_digest_refs` | signature, attestation, provenance, and SBOM subject matching | subject mismatch owner error. |
+| `trust_policy_refs` | signer authorization, trust roots, thresholds | trust owner error. |
+| `signature_verification_result_refs` | structured signature verification | signer or threshold owner error. |
+| `transparency_refs` | transparency proof and checkpoint verification | transparency owner error. |
+| `attestation_refs` | attestation subject and policy checks | attestation owner error. |
+| `provenance_refs` | builder/material/product policy checks | provenance owner error. |
+| `sbom_refs` | SBOM component, dependency, license, vulnerability policy checks | SBOM owner error. |
+| `dependency_lock_refs` | dependency reproducibility and live-resolution rejection | dependency owner error. |
+| `compatibility_matrix_refs` | release activation, rollback, graph backend package cohorts, resolver artifacts, mapping artifacts | compatibility owner error. |
+| `developer_contract_refs` | package developer boundary and stage output permissions | activation artifact owner error. |
+| `stage_binding_refs` | executable package stage eligibility | `FORBIDDEN_STAGE_OUTPUT` or package owner error. |
+| `activation_artifact_refs` | package-supplied row catalogs, profiles, schemas, policies, validation artifacts | activation artifact owner error. |
+| `structured_input_materialization_refs` | repository-authored package materialization | structured-input materialization owner error. |
+| `publication_manifest_refs` | imported publication manifests | publication manifest owner error. |
+| `validation_refs` | package activation, release, package-set, rollback, quarantine, emergency, error parity validation | `PACKAGE_VALIDATION_FAILED`. |
+| `promotion_record_refs` | package promotion evidence | `PACKAGE_VALIDATION_FAILED` or owner promotion error. |
+| `deployment_revision_refs` | environment-visible deployment history | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `lkg_health_gate_refs` | LKG marking | `PACKAGE_LKG_HEALTH_GATE_FAILED`. |
+| `lkg_package_set_refs` | LKG rollback and reporting when applicable | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `rollback_policy_plan_result_refs` | rollback preflight and result | rollback owner error. |
+| `quarantine_policy_record_refs` | quarantine scope and dependent activation blocking | quarantine owner error. |
+| `emergency_override_refs` | bounded emergency actions | emergency owner error. |
+| `failure_event_refs` | package activation failure visibility and audit | `PACKAGE_VERSION_MANIFEST_INCOMPLETE`. |
+| `lifecycle_transition_refs` | package lifecycle, activation, rollback, quarantine, emergency, LKG marking | lifecycle owner error. |
+| `approval_refs` | product approval evidence without trust bypass | approval owner error. |
+| `run_lock_refs` | package activation locking and fencing | imported run-lock owner error. |
+| `generated_error_registry_checksum` | package-visible diagnostics, health, audit, export, validation output | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE` or `PACKAGE_ERROR_REGISTRY_PARITY_FAILED`. |
+
+A package-specific manifest omission must use `PACKAGE_VERSION_MANIFEST_INCOMPLETE` when the missing ref class is owned by `100`. Generic manifest omissions outside package activation continue to use `VERSION_MANIFEST_INCOMPLETE`. When both apply, the most specific owner error wins.
+
+### PackageActivationControlledRowSchemaHandoff
+
+`100.PackageActivationRowFamilyClosureTable` is the authoritative package row-family closure table. `030` imports it by name for row-schema completeness checks and must not restate package trust, repository, SBOM, provenance, rollback, quarantine, emergency, or LKG semantics. Every `100` output-affecting row family must be either `full_row_schema`, `non_production`, `validation_only`, `inactive`, `deferred`, or `deterministically_blocked`. A row family in any other state blocks promotion with `activation-controlled-row-schema-precision`.
+
 ### EvidenceRefArtifactClassManifestHandoff
 
 When any output emits `EvidenceRef`, `VersionManifest` must include the active `040.EvidenceArtifactIdKindRegistry` checksum, every consulted `040.EvidenceArtifactClassRegistry` row-set ref, the referenced artifact checksum, and the owner artifact refs required by the referenced artifact class.
@@ -1834,6 +1888,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `030-OBSERVABILITY-ARTIFACT-CLASS-AC-001` | Every telemetry artifact class used by `140` appears in the closed `ActivationControlledArtifactRef.artifact_class` registry and invalid telemetry artifact classes fail before stage execution. |
 | `030-GRAPH-BACKEND-VM-AC-001` | Graph serving, graph query, graph apply, graph rebuild, or graph backend replay fails with `VERSION_MANIFEST_INCOMPLETE` or the most specific owner error when any selected PostgreSQL version ref, AGE extension ref, provider support ref, relational schema fingerprint ref, role/security ref, restore/upgrade/migration ref, package ref, validation ref, or backend blocker-set ref is missing, inactive, checksum-mismatched, unmanifested, or `TODO`-bearing. |
 | `030-GRAPH-BACKEND-BLOCKER-SET-AC-001` | `ValidateSpecSet` fails if a selected backend blocker row lacks an owner, volatility classification, checksum, manifest inclusion rule, validation refs, package-set refs when package-supplied, or exact blocked/closed state. |
+| `030-PACKAGE-VM-AC-001` | Package activation, rollback, quarantine, emergency, LKG, failure-event, and package-visible diagnostic output fails with `PACKAGE_VERSION_MANIFEST_INCOMPLETE` when any ref class in `PackageActivationVersionManifestRefClassTable` is omitted, stale, checksum-mismatched, package-set-mismatched, unmanifested, or `TODO`-bearing. |
+| `030-PACKAGE-POLICY-MANIFEST-AC-001` | Package type policy resolution fails before activation when selected `PackageTypePolicyRowSet` checksum, selected policy row ref/checksum, selector checksum, validation refs, package-set refs when package-supplied, or generated error-registry checksum is absent from `included_refs`. |
 | `030-OBSERVABILITY-MANIFEST-AC-001` | Health/API/audit/validation output that depends on telemetry policy or runtime state includes required telemetry refs in `VersionManifest`; missing refs fail with `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE`. |
 | `030-CLEANUP-AC-001` | No banned reference class remains. |
 | `030-CLEANUP-AC-002` | Stage output permissions remain total for declared stage classes. |

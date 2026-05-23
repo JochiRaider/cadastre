@@ -1152,6 +1152,19 @@ Caller-visible output must not reveal private source bindings, private routes, r
 
 Every package activation, rollback, quarantine, last-known-good, emergency, and package manifest error owned by `100` must appear in `ErrorCodeRegistry`. Package errors must expose caller-visible diagnostics without leaking private package evidence.
 
+`PackageActivationErrorObservableMapping` default mode is `generated_from_owner_fragment`. In this mode, `GenerateErrorCodeRegistry(owner_fragments, shared_110_rows)` must expand `100.PackageErrorRegistryFragment` into exactly one `110.ErrorCodeRegistryRow` per package error code before API, health, audit, export, validation, package report, rollback, quarantine, emergency, or LKG output can expose a package-visible diagnostic. A hand-maintained package observable table is permitted only as a generated-output fixture whose code set, severity, retryability, redaction class, fixture refs, and owner context fields are parity-validated by `120.PackageErrorRegistryParityValidationMatrix`.
+
+The generated registry checksum must appear in `030.VersionManifest.included_refs` whenever package-visible diagnostics can be emitted. If generation cannot prove code-set parity, severity/retry parity, redaction parity, fixture totality, and owner context compatibility, package-visible output must fail with `PACKAGE_ERROR_REGISTRY_PARITY_FAILED` before returning a generic package error.
+
+Package owner context fields are owner-specific fields under `ErrorRecord.owner_error_context`. They must not become top-level caller fields. `100.PackageErrorContext` satisfies `OwnerErrorContextMinimumSchema` only when the context includes owner, package type when known, package release ref when known, package-set ref when known, selected policy row refs when known, trust policy ref when known, SBOM ref when known, rollback target ref when known, quarantine ref when known, validation refs when known, redaction classes, blocking reason, and generated registry checksum.
+
+| Package context field class | Caller visibility | Audit visibility | Required redaction behavior |
+| --- | --- | --- | --- |
+| package type, release ref, package-set ref, policy row refs | visible only as redacted refs or checksums | allowed when authorized | raw private bindings forbidden. |
+| trust policy ref, signer ref, transparency ref, attestation ref, provenance ref, SBOM ref, dependency lock ref | visible only as redacted ref class and blocking reason | allowed when authorized | signer secrets, raw SBOM bytes, unauthorized evidence, and private repository paths forbidden. |
+| rollback target ref, quarantine ref, emergency ref, LKG health gate ref | visible only as redacted refs and owner error code | allowed when authorized | mutable target values and private package paths forbidden. |
+| validation refs and generated error registry checksum | visible as refs/checksums | allowed | fixture bytes are never inlined. |
+
 `PackageActivationErrorObservableMapping` must be generated from `100.PackageErrorRegistryFragment` or must be validated as an exhaustive hand-maintained table whose `Error code` set exactly equals the `100` owner fragment. Missing package codes, extra unowned package codes, severity drift, retryability drift, redaction drift, or missing fixture refs fail before API, export, health, audit, or validation output.
 
 Caller-visible package error fields are `error_code`, owner, severity, retryability, affected package-set checksum or redacted ref class, redaction state, and error correlation ID. Audit-visible fields may include package type policy row refs, package type policy row-set refs, target environment, lifecycle status, activation scope, legacy label class, repository metadata refs, repository snapshot refs, trust refs, signature verification refs, transparency refs, attestation refs, provenance refs, SBOM refs, dependency lock refs, compatibility refs, rollback refs, quarantine refs, emergency refs, manifest refs, lifecycle refs, missing ref classes, and validation refs.
@@ -1381,6 +1394,28 @@ Caller-visible graph backend health mapping is closed as follows.
 
 Backend preflight telemetry, benchmark telemetry, restore telemetry, and upgrade telemetry are diagnostics only. They must not mark the backend healthy and must not substitute for `090` evidence rows or `120` validation rows.
 
+#### PackageActivationHealthOutcomeRows
+
+Operational health for package activation must expose package failure classes without leaking private package evidence and without mutating the current active package set.
+
+| Failure class | Health component state | Required owner context | Current-active-set behavior | Redaction rule |
+| --- | --- | --- | --- | --- |
+| package type policy | `blocked` | selected or missing policy row-set refs, target environment selector checksum | unchanged | no private environment values. |
+| repository form, metadata, freshness, anti-rollback | `blocked` or `error` by owner code | repository model, metadata, snapshot, freshness, anti-rollback refs | unchanged | repository paths and credentials hidden. |
+| trust, signature, signer, transparency | `blocked` or `error` | trust policy, signer ref, signature verification, transparency refs | unchanged | signer secrets and unauthorized evidence hidden. |
+| attestation, provenance, SBOM | `blocked` or `error` | policy refs, subject digest ref, evidence refs | unchanged | raw SBOM/provenance payload hidden. |
+| dependency lock | `blocked` or `error` | dependency lock policy and checksum refs | unchanged | dependency source details redacted when private. |
+| compatibility | `blocked` | failed compatibility axis and row refs | unchanged | private target environment redacted. |
+| validation and manifest | `blocked` | validation row refs, missing manifest ref classes, generated registry checksum | unchanged | fixture bytes hidden. |
+| deprecation | `blocked` | deprecation policy row and expiry evidence | unchanged | approval refs redacted by policy. |
+| LKG | `degraded` or `blocked` | health gate ref and failed health refs | active state may be preserved; LKG not marked | private health payloads hidden. |
+| rollback | `blocked` or `error` | rollback policy, target package-set checksum, replay/schema/graph/trust refs | unchanged | mutable target raw value hidden. |
+| quarantine | `blocked` | quarantine scope policy and quarantine record refs | unchanged | private target details hidden. |
+| emergency | `blocked` or `error` | emergency record, action, approver, expiry, attempted bypass class | unchanged | approver details redacted by policy. |
+| canary or shadow output | `blocked` | canary or shadow package-set ref and attempted output class | current production output unchanged | candidate output hidden. |
+| activation lock loss | `blocked` | imported run-lock operation evidence and fencing refs | unchanged | lock owner context only. |
+| package error parity | `blocked` | generated registry checksum and parity validation refs | unchanged | no unowned error rows exposed. |
+
 ### ActivationCatalogClosureHealthComponents
 
 Activation-catalog closure health is operator-visible status only. It must not authorize absence, pass, fail, remediation, cleanup, retraction, graph expiry, watermark advancement, package activation, or validation acceptance.
@@ -1609,6 +1644,9 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-EVIDENCE-ARTIFACT-ERROR-AC-001` | `EvidenceRef.artifact_class`/`artifact_id.kind` mismatch renders as `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH`, not a generic validation error. |
 | `110-CORE-SPECIFIC-ERROR-AC-001` | Generic codes are rejected when `CORE_ONE_OF_INVALID`, `CORE_NULL_FORBIDDEN`, `EVIDENCE_REF_RAW_PAYLOAD_FORBIDDEN`, `GRAPH_BACKEND_ID_FORBIDDEN`, or `PRIVATE_BINDING_LEAK` specifically covers the failure. |
 | `110-TEMPORAL-ERROR-REGISTRY-AC-001` | Every `080` temporal, correction, late-arrival, snapshot, no-op, and replay error code appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible fields, and validation fixture. |
+| `110-PACKAGE-ERROR-AC-001` | Package-visible errors are generated from `100.PackageErrorRegistryFragment` by default and include exactly one row per package code with no generic substitute when an owner-specific package code exists. |
+| `110-PACKAGE-ERROR-AC-002` | Package error output never reveals private artifact payloads, private source bindings, raw SBOM bytes, unauthorized package evidence, signer secrets, private repository paths, or package registry credentials. |
+| `110-PACKAGE-ERROR-PARITY-AC-001` | `120.PackageErrorRegistryParityValidationMatrix` proves code-set, severity/retry, redaction, fixture, and generated checksum parity before package API, health, audit, export, or validation-visible diagnostics can pass. |
 | `110-IDENTITY-ERROR-MAPPING-AC-001` | Generated error registry includes every `070` resolver error and rejects generic fallbacks when a specific resolver code applies. |
 | `110-TEMPORAL-LABEL-AC-001` | Temporal errors render as `error`, unauthorized negatives do not render as authorized absence, replay errors do not mutate output, duplicate no-ops render as no output change with audit evidence, and stale known states render as `source_stale`. |
 | `110-ACTIVATION-ERROR-AC-001` | Activation artifact errors expose owner, artifact class, retryability, and redaction state. |
