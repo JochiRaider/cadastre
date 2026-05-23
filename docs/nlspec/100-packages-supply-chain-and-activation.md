@@ -460,6 +460,20 @@ These rows are package type policies for confirmed `PackageType` tokens. They mu
 | `graph_backend_runtime_distribution` | runtime distribution | PostgreSQL server/container/distribution, including AGE binaries/control files when AGE is enabled | package checks, startup config, restore, upgrade, health, rollback, extension files, and version compatibility |
 | `graph_backend_deployment_profile` | `090.GraphBackendProfile` deployment refs | deployment configuration | provider, region, engine version, service tier, extension support, role model, RLS, `search_path`, backup/restore, upgrade, and health refs |
 
+#### Graph backend package activation closure
+
+Graph backend package candidates must activate as one package cohort. The existing `PackageCohesionGroup` contract is the owner row; no separate graph-specific exported contract is created.
+
+| Cohesion member | Required activation coupling |
+| --- | --- |
+| PostgreSQL runtime distribution | Activates and rolls back with provider adapter, driver, deployment profile, schema profile, query translation profile, apply profile, provider support evidence, restore/upgrade evidence, benchmark validation, and rollback refs. |
+| Provider adapter package | Activates and rolls back with the exact backend profile and query/apply/schema profile refs it implements. |
+| Driver package | Activates and rolls back with runtime distribution, adapter, timeout/cancellation behavior, transaction behavior, and serialization compatibility rows. |
+| Deployment profile package | Activates and rolls back with provider support evidence, role/RLS/search-path preflight, backup/restore support, upgrade path, health refs, and redaction refs. |
+| AGE extension package | Required only when AGE is selected; activates and rolls back with PostgreSQL runtime distribution, extension files/control scripts, AGE security preflight, AGE restore/upgrade evidence, and AGE parity validation. |
+
+Candidate graph backend package-set activation failure must preserve the current active package set. A failed candidate must emit `PackageActivationFailureEvent` and must write no graph mutation, no query-serving output, no rebuild promotion, no graph health success, no last-known-good update, and no candidate package output visible as production.
+
 ### Observability package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. Individual telemetry policies are activation-controlled artifact classes in `030`; package types represent package or release units.
@@ -1064,50 +1078,61 @@ Git commit timestamp, branch name, tag name, repository URL, or tree hash must n
 
 `PackageCompatibilityMatrix` must be evaluated as a deterministic compatibility gate. SemVer, package version strings, deployment revision labels, and dependency locks must not authorize activation by themselves.
 
-| Field | Required when output-affecting |
-| --- | --- |
-| `package_type` | Always required. |
-| `package_version` | Always required and informational unless a row declares a comparison rule. |
-| `artifact_digest` | Always required. |
-| `contract_version` | Required when the package public contract can affect output. |
-| `runtime_protocol_version` | Required for executable packages. |
-| `dependency_lock_checksum` | Required when dependencies affect output or validation. |
-| `source_schema_checksum` | Required when source schema output can change. |
-| `validation_output_checksum` | Required when validation output can change. |
-| `target_environment` | Always required. |
-| `source_stage_binding` | Required when the package can execute in a stage. |
-| `package_public_api_version` | Required when a public API boundary exists. |
-| `graph_projection_profile_version` | Required when graph output can change. |
-| `graph_read_model_schema_profile_version` | Required when graph serving schema can change. |
-| `graph_apply_profile_version` | Required when graph apply can change. |
-| `external_schema_profile_version` | Required when external schema validation can change. |
-| `coverage_domain_catalog_compatibility` | Required for `lakehouse_feed_category_closure_row_set`, `coverage_dimension_profile_row_set`, `source_authority_closure_matrix_row_set`, and `absence_derivation_policy_row_set` when coverage-sensitive effects are allowed. The compatibility decision must prove that package-supplied rows use only `060.CoverageDomainToken` values and do not define aliases or package-local mappings. |
-| `trust_policy_version` | Always required. |
-| `attestation_policy_version` | Required when attestation is required. |
-| `sbom_policy_version` | Required when SBOM is required. |
-| `decision` | Required; closed values are `pass` or `fail`. |
-| `decision_reason` | Required bounded explanation. |
-| `validation_refs` | Non-empty refs. |
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `package_type` | Yes | none | One confirmed `PackageType` token. |
+| `package_version` | Yes | none | Informational unless a row declares a comparison rule; mutable tags are forbidden. |
+| `artifact_digest` | Yes | none | Immutable digest of package bytes. |
+| `contract_version` | Required when public contract can affect output | none | Must match the owner exported contract version. |
+| `runtime_protocol_version` | Required for executable packages | `none` for declarative-only packages | Must match driver, adapter, or runtime protocol rows when executable. |
+| `dependency_lock_checksum` | Required when dependencies affect output or validation | none | Lock evidence proves reproducibility only, not trust or compatibility by itself. |
+| `source_schema_checksum` | Required when source schema output can change | none | Schema checksum mismatch fails compatibility. |
+| `validation_output_checksum` | Required when validation output can change | none | Must match canonical validation output bytes, not a summary. |
+| `target_environment` | Yes | none | Normalized through `PackageEnvironmentScopeSelectorContext`. |
+| `source_stage_binding` | Required when package can execute in a stage | none | Missing binding fails before execution. |
+| `package_public_api_version` | Required when public API boundary exists | none | Must match selected `PackageTypePolicyRow.public_api_boundary`. |
+| `graph_projection_profile_version` | Required when graph output can change | none | Required for graph projection packages and graph backend cohorts. |
+| `graph_read_model_schema_profile_version` | Required when graph serving schema can change | none | Must match selected `090.GraphReadModelSchemaProfile`. |
+| `graph_apply_profile_version` | Required when graph apply can change | none | Must match selected `090.GraphApplyProfile`. |
+| `graph_backend_runtime_distribution_ref` | Required for graph backend runtime packages | none | Must pin PostgreSQL major and patch version or explicit non-default backend runtime. |
+| `graph_backend_driver_protocol_ref` | Required for graph backend driver packages | none | Must match adapter contract, transaction behavior, timeout/cancellation, and serialization compatibility. |
+| `graph_backend_provider_support_ref` | Required when provider support affects activation | none | Must match selected `090.GraphProviderSupportEvidenceRow`. |
+| `graph_backend_schema_fingerprint_ref` | Required for graph backend cohorts | none | Must match selected `090.BackendSchemaFingerprint`. |
+| `graph_query_translation_checksum` | Required when graph query output can change | none | Must match selected `090.GraphQueryTranslationProfile` checksum. |
+| `graph_query_plan_regression_policy_ref` | Required when query plan class affects latency, full-scan rejection, or output safety | none | Missing row blocks production when performance gates are in scope. |
+| `graph_restore_compatibility_ref` | Required for graph backend production promotion | none | Must reference clean-environment restore proof. |
+| `graph_upgrade_compatibility_ref` | Required for runtime, schema, provider, or extension changes | none | Must reference upgrade rehearsal or rebuild migration proof. |
+| `role_rls_search_path_compatibility_ref` | Required for PostgreSQL-backed profiles | none | Must prove API/apply roles, RLS, and `search_path` safety. |
+| `age_extension_compatibility_ref` | Required only when AGE is selected | null when AGE is not selected | Must include exact AGE version, supported PostgreSQL major version, extension package, files/control scripts, provider support, restore, upgrade, and security refs. |
+| `package_cohesion_group_ref` | Required for graph backend package cohorts | none | Runtime, adapter, driver, deployment profile, schema, query, apply, provider support, restore/upgrade, benchmark, and rollback refs must activate and roll back together. |
+| `external_schema_profile_version` | Required when external schema validation can change | none | Required for external schema packages only. |
+| `coverage_domain_catalog_compatibility` | Required for coverage-sensitive source-authority packages | none | Package-supplied rows must use only `060.CoverageDomainToken` values and must not define aliases or package-local mappings. |
+| `trust_policy_version` | Yes | none | Trust policy is required unless owner row explicitly blocks activation. |
+| `attestation_policy_version` | Required when attestation is required | none | Missing required attestation blocks activation. |
+| `sbom_policy_version` | Required when SBOM is required | none | Missing required SBOM blocks activation. |
+| `decision` | Yes | none | Closed values are `pass` and `fail`. |
+| `decision_reason` | Yes | none | Bounded explanation; must not contain private bindings. |
+| `validation_refs` | Yes | none | Non-empty refs to compatibility fixtures. |
 
-Every output-affecting axis named by `PackageTypePolicyRow` must have a passing compatibility row. A missing, expired, mismatched, or failed compatibility row emits `PACKAGE_COMPATIBILITY_FAILED` before activation or rollback.
+Every output-affecting axis named by `PackageTypePolicyRow` must have a passing compatibility row. A missing, expired, mismatched, unmanifested, package-set-mismatched, or failed compatibility row emits `PACKAGE_COMPATIBILITY_FAILED` before activation or rollback. A compatibility row, dependency lock, package label, SBOM, provenance record, or validation run must not substitute for an immutable `ProductionPackageSetManifest`.
 
 ### Graph backend compatibility axes
 
-| Compatibility axis | Required for PostgreSQL relational default | Required when AGE is selected | Explicit non-default JanusGraph behavior |
+| Compatibility axis | Required for PostgreSQL relational default | Required when AGE is selected |
 | --- | --- | --- | --- |
-| PostgreSQL major and patch version | Pinned immutable runtime distribution or provider ref. | Same, and must be supported by selected AGE version. | Not applicable. |
-| PostgreSQL driver protocol version | Must match provider adapter contract and timeout/cancellation behavior. | Same. | Not applicable. |
-| deployment provider, region, engine version, and service tier | Required when provider support affects activation. | Required with exact AGE support status. | Required only when JanusGraph selected. |
-| AGE extension version | Not applicable. | Required exact extension version and supported PostgreSQL major. | Not applicable. |
-| extension files/control scripts availability | Not applicable unless another PostgreSQL extension is selected. | Required for restore and upgrade. | Not applicable. |
-| schema migration compatibility | Must match relational schema profile and migration plan. | Must match relational anchor schema plus AGE label/property/index migration plan. | Must match selected JanusGraph schema profile. |
-| schema fingerprint compatibility | Must match `090.BackendSchemaFingerprint`. | Must match relational fingerprint and AGE extension/version inventory. | Must match JanusGraph fingerprint. |
-| query translation profile compatibility | Must match PostgreSQL SQL `090.GraphQueryTranslationProfile` checksum. | Must match AGE SQL/Cypher translation and relational-anchor parity checksums. | Must match Gremlin translation checksum. |
-| query plan regression policy | Required when query plan class affects latency, full-scan rejection, or output safety. | Required for SQL/Cypher composition and AGE traversal. | Required when selected query classes require optimizer evidence. |
-| restore compatibility | Clean-environment restore proof required. | Restore proof must include AGE extension binaries, control files, SQL scripts, and graph namespace. | Required only when JanusGraph selected. |
-| upgrade compatibility | PostgreSQL major-version upgrade or rebuild migration proof required. | Same plus AGE upgrade rehearsal or rebuild migration proof. | Required only when JanusGraph selected. |
-| role/RLS/search-path compatibility | Required for API and apply roles. | Required plus AGE namespace security preflight. | Required for selected JanusGraph operational model. |
-| package cohort compatibility | Runtime, adapter, driver, schema profile, query profile, apply profile, deployment profile, package set, validation refs, and rollback refs must match. | Same plus AGE extension package cohort. | Same for selected JanusGraph package cohort. |
+| PostgreSQL major and patch version | Pinned immutable runtime distribution or provider ref. | Same, and must be supported by selected AGE version. |
+| PostgreSQL driver protocol version | Must match provider adapter contract and timeout/cancellation behavior. | Same. |
+| deployment provider, region, engine version, and service tier | Required when provider support affects activation. | Required with exact AGE support status. |
+| AGE extension version | Not applicable. | Required exact extension version and supported PostgreSQL major. |
+| extension files/control scripts availability | Not applicable unless another PostgreSQL extension is selected. | Required for restore and upgrade. |
+| schema migration compatibility | Must match relational schema profile and migration plan. | Must match relational anchor schema plus AGE label/property/index migration plan. |
+| schema fingerprint compatibility | Must match `090.BackendSchemaFingerprint`. | Must match relational fingerprint and AGE extension/version inventory. |
+| query translation profile compatibility | Must match PostgreSQL SQL `090.GraphQueryTranslationProfile` checksum. | Must match AGE SQL/Cypher translation and relational-anchor parity checksums. |
+| query plan regression policy | Required when query plan class affects latency, full-scan rejection, or output safety. | Required for SQL/Cypher composition and AGE traversal. |
+| restore compatibility | Clean-environment restore proof required. | Restore proof must include AGE extension binaries, control files, SQL scripts, and graph namespace. |
+| upgrade compatibility | PostgreSQL major-version upgrade or rebuild migration proof required. | Same plus AGE upgrade rehearsal or rebuild migration proof. |
+| role/RLS/search-path compatibility | Required for API and apply roles. | Required plus AGE namespace security preflight. |
+| package cohort compatibility | Runtime, adapter, driver, schema profile, query profile, apply profile, deployment profile, package set, validation refs, and rollback refs must match. | Same plus AGE extension package cohort. |
 
 ### Package type compatibility closure
 
@@ -1368,7 +1393,7 @@ The following `100` row families can affect package eligibility, release manifes
 | `PackageProvenancePolicyRow` | output_affecting | TODO: add full field precision for builder/material/product requirements, subject digest matching, and provenance validation refs. |
 | `PackageSBOMPolicyRow` | output_affecting | TODO: add full field precision for SBOM subject, component, dependency, license, vulnerability, and evidence requirements. |
 | `PackageDependencyLockPolicyRow` | output_affecting | TODO: add full field precision for dependency lock refs, checksum rules, live-resolution prohibition, and reproducibility evidence. |
-| `PackageCompatibilityMatrixRow` | output_affecting | TODO: add full field precision for public API, runtime protocol, dependency, validation, schema, graph, trust, attestation, SBOM, and deployment compatibility axes. |
+| `PackageCompatibilityMatrixRow` | output_affecting | Closed for graph backend package compatibility by `PackageCompatibilityMatrixRow schema`; production still requires concrete selected compatibility row refs, package-set refs, validation refs, and manifest inclusion. |
 | `PackageDeprecationWindowPolicyRow` | output_affecting | TODO: add full field precision for package type, status, window, expiry behavior, and activation/selection limits. |
 | `RollbackCompatibilityPolicy` | output_affecting | TODO: add full field precision for immutable rollback targets, replay refs, compatibility refs, and refusal behavior. |
 | `QuarantineScopePolicy` | output_affecting | TODO: add full field precision for quarantine target scope, dependent activation blocking, and release behavior. |

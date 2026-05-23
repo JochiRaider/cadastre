@@ -1289,6 +1289,40 @@ All owner-specific errors must appear in the generated registry before promotion
 
 Coverage-domain token failures must route to generated `060` owner-specific `ErrorRecord` rows. They must not be rendered as authorized negative facts, compliance pass/fail, graph expiry, cleanup, retraction, reachability output, or watermark advancement.
 
+#### Graph backend generated error totality
+
+`GenerateErrorCodeRegistry` must generate exactly one caller-visible row for each graph backend closure code below when the owning `090` fragment exports it. Existing rows must be reconciled by exact `error_code`; duplicate non-byte-identical rows are invalid registry input.
+
+| Error code | Required visible category | Required owner context |
+| --- | --- | --- |
+| `GRAPH_BACKEND_DEFAULT_UNRESOLVED` | `blocked` | defaulting decision ref, selected backend profile ref, unresolved blocker refs. |
+| `GRAPH_BACKEND_PROFILE_MISSING` | `blocked` | requested backend profile ref or omitted-input checksum. |
+| `GRAPH_BACKEND_CONFIG_INCOMPLETE` | `blocked` | selected profile ref, missing field paths, validation refs. |
+| `GRAPH_BACKEND_VERSION_UNPINNED` | `blocked` | provider version, runtime distribution, driver, adapter, or deployment ref class. |
+| `GRAPH_BACKEND_PACKAGE_GATE_FAILED` | `blocked` | package-set ref and failed package gate refs. |
+| `GRAPH_PROVIDER_CAPABILITY_MISSING` | `blocked` | provider capability matrix ref and affected query/apply/rebuild class. |
+| `GRAPH_PROVIDER_CAPABILITY_UNSUPPORTED` | `blocked` | provider capability row, unsupported class, deterministic unsupported behavior. |
+| `GRAPH_PROVIDER_UNSUPPORTED` | `blocked` | provider support evidence ref. |
+| `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` | `blocked` | required provider support evidence row and expiry status. |
+| `GRAPH_SCHEMA_FINGERPRINT_STALE` | `blocked` | backend schema fingerprint ref and selected schema profile ref. |
+| `GRAPH_DUPLICATE_NODE_ID` | `error` | node ref checksum and schema profile ref; backend ID values redacted. |
+| `GRAPH_DUPLICATE_EDGE_ID` | `error` | edge ref checksum and schema profile ref; backend ID values redacted. |
+| `GRAPH_ORPHAN_EDGE` | `error` | edge ref checksum and missing endpoint class. |
+| `GRAPH_QUERY_TIMEOUT` | `error` | query class, timeout policy, candidate limit row, cancellation status. |
+| `GRAPH_QUERY_PLAN_UNSUPPORTED` | `blocked` | query translation profile ref and unsupported plan class. |
+| `GRAPH_BACKEND_DIRECT_DML_FORBIDDEN` | `security_error` | attempted write class redacted, role/security preflight ref. |
+| `GRAPH_BACKEND_UNSAFE_SEARCH_PATH` | `security_error` | search-path preflight ref; raw schema names redacted when private. |
+| `GRAPH_BACKEND_RLS_BYPASS_FORBIDDEN` | `security_error` | role/RLS preflight ref. |
+| `GRAPH_AGE_EXTENSION_MISSING` | `blocked` | AGE extension package/version refs. |
+| `GRAPH_AGE_EXTENSION_VERSION_UNSUPPORTED` | `blocked` | AGE version ref and PostgreSQL runtime ref. |
+| `GRAPH_AGE_MUTATION_FORBIDDEN` | `security_error` | query checksum and mutation class; raw Cypher redacted. |
+| `GRAPH_AGE_NAMESPACE_BYPASS_FORBIDDEN` | `security_error` | namespace security preflight ref. |
+| `GRAPH_AGE_INTERNAL_ID_FORBIDDEN` | `security_error` | rejected ID class and response field path. |
+| `GRAPH_BACKEND_RESTORE_UNVERIFIED` | `blocked` | restore rehearsal ref and checksum. |
+| `GRAPH_BACKEND_UPGRADE_UNVERIFIED` | `blocked` | upgrade rehearsal or rebuild migration ref. |
+
+A generic API, package, validation, or graph code must not be selected when one of these owner-specific codes precisely covers the failure. Caller-visible contexts must not expose SQL text, Cypher text, SQL/Cypher composition text, tuple IDs, OIDs, sequence values, physical row locators, AGE IDs, private provider config, private database/schema names, credentials, raw package evidence, or raw validation evidence.
+
 ### GraphBackendOperationalHealthComponents
 
 | Graph health component | Required state refs | Caller-visible behavior | Audit-visible refs |
@@ -1311,6 +1345,9 @@ Coverage-domain token failures must route to generated `060` owner-specific `Err
 | restore rehearsal status | restore rehearsal ref and checksum | blocked when missing, stale, failed, or not run | restore ref |
 | upgrade rehearsal status | upgrade rehearsal or rebuild migration ref and checksum | blocked when missing, stale, failed, or not run | upgrade ref |
 | benchmark status | benchmark row refs when performance gates are in scope | blocked while thresholds are `TODO`, missing, failed, or stale | benchmark refs only |
+| package-set mismatch | active package-set ref, selected backend package-set ref, compatibility row refs | blocked when the selected backend cohort does not match the active package set | package-set refs only |
+| schema fingerprint mismatch | selected backend schema fingerprint, recomputed fingerprint, schema profile ref | blocked before apply, query, rebuild, health success, or API output | fingerprint refs only |
+| provider support expiry | provider support evidence ref, evidence expiry, refresh policy | blocked when expired or unsupported | provider support ref only |
 
 Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, PostgreSQL OIDs, tuple IDs, sequence values, AGE IDs, SQL/Cypher text, credentials, private provider configuration, raw package evidence, provider exception class names, database names when private, schema names when private, or AGE graph namespace names when private to callers.
 

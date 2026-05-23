@@ -277,6 +277,39 @@ Structured-input telemetry must not contain raw branch names unless redacted to 
 
 Structured-input telemetry for template validation, producer CI validation, tool invocation, publication import, candidate sync, repository group validation, package release handoff, and package-set candidate staging is diagnostic material only. It must not prove validation, activation, audit persistence, replay equivalence, package activation, source authority, graph output, or domain output.
 
+### Graph backend telemetry attribute closure
+
+Graph backend telemetry attributes are diagnostic-only and must use closed tokens, refs, or checksums. The allowlist below is exhaustive for PostgreSQL/AGE backend diagnostics until a later active `TelemetryAttributePolicy` row adds a bounded key.
+
+| Attribute key | Allowed value class | Maximum distinct values per run | Required behavior |
+| --- | --- | ---: | --- |
+| `graph_backend_profile_ref` | Ref/checksum | 64 | No provider config bytes. |
+| `graph_backend_provider_token` | Closed token | 16 | `postgresql`, `postgresql_age`, or explicit non-default provider token. |
+| `graph_backend_preflight_status` | Closed token | 16 | `pass`, `fail`, `blocked`, `not_run`, or `stale`. |
+| `backend_schema_fingerprint_ref` | Ref/checksum | 1024 | No DDL text or private schema name. |
+| `postgresql_version_ref` | Ref/checksum | 64 | No connection string. |
+| `age_extension_version_ref` | Ref/checksum | 64 | Present only when AGE is selected or in validation scope. |
+| `graph_query_class` | Closed query class | 32 | No SQL, Cypher, SQL/Cypher text, or literals. |
+| `provider_support_status` | Closed token | 16 | `supported`, `unsupported`, `preview`, `unknown`, `expired`, or `not_run`. |
+| `query_plan_class` | Closed diagnostic class | 64 | No literal-bearing plan text. |
+| `benchmark_threshold_row_ref` | Ref/checksum | 1024 | Required only when benchmark gates are in scope. |
+| `restore_rehearsal_ref` | Ref/checksum | 1024 | No raw restore log bytes. |
+| `upgrade_rehearsal_ref` | Ref/checksum | 1024 | No raw migration SQL or provider log bytes. |
+| `package_set_ref` | Ref/checksum | 1024 | No package payload bytes. |
+| `validation_row_ref` | Ref/checksum | 4096 | No raw fixture bytes. |
+
+A telemetry row that carries raw SQL, raw Cypher, SQL/Cypher text, query literals, literal-bearing query plans, connection strings, private database names, private schema names, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, prepared statement names, cursor names, AGE vertex/edge/path/graph/label IDs, agtype IDs, backend-generated graph IDs, raw graph property values, credentials, private bindings, hostnames, IP addresses, usernames, source-native IDs, or raw package evidence must fail before export with the most specific telemetry error.
+
+### TelemetryActivationControlledRowFieldClosure
+
+The row families `TelemetryAttributePolicy`, `TelemetryRedactionPolicy`, and `TelemetryHealthMappingPolicy` must be represented by `030.ActivationControlledRowField` tables using the exact `030` column order before production telemetry export or health mapping can depend on them.
+
+| Row family | Required field paths | Defaults and bounds | Manifest and checksum behavior | Missing or invalid error |
+| --- | --- | --- | --- | --- |
+| `TelemetryAttributePolicy` | `attribute_key`, `signal_token`, `value_type`, `allowed_value_class`, `max_distinct_values_per_run`, `cardinality_class`, `redaction_behavior`, `public_private_constraint`, `package_set_ref`, `validation_refs`, `activation_scope`, `lifecycle_status` | `cardinality_class` defaults are forbidden; production rows must choose `static`, `bounded_low`, or `bounded_medium`; `max_distinct_values_per_run` maximum is `4096` and may be narrowed by key; unbounded labels are forbidden | Attribute key, signal token, value type, value class, cardinality, redaction behavior, package-set ref, validation refs, and activation scope are checksum inputs and must appear in `030.VersionManifest` when health, API, audit, validation, or export visibility depends on the row | `TELEMETRY_ATTRIBUTE_FORBIDDEN`, `TELEMETRY_CARDINALITY_VIOLATION`, or `TELEMETRY_PROFILE_INVALID` |
+| `TelemetryRedactionPolicy` | `data_class`, `signal_token`, `redaction_transform`, `forbidden_value_classes`, `public_visibility`, `audit_visibility`, `package_set_ref`, `validation_refs`, `activation_scope`, `lifecycle_status` | Default transform for forbidden backend data is `reject_before_export`; omission of transform is invalid; arrays use `canonical_set` with duplicate rejection | Selected redaction row refs, checksums, package-set refs, and validation refs must appear in `030.VersionManifest` when visible diagnostics depend on redaction | `TELEMETRY_ATTRIBUTE_FORBIDDEN`, `TELEMETRY_BACKEND_ID_FORBIDDEN`, or `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` |
+| `TelemetryHealthMappingPolicy` | `telemetry_condition`, `health_scope`, `required_health_effect`, `forbidden_domain_effect`, `owner_error_refs`, `package_set_ref`, `validation_refs`, `activation_scope`, `lifecycle_status` | `required_health_effect` is one of `healthy`, `degraded`, `blocked`, or `error`; `forbidden_domain_effect` must be `no_domain_mutation`; omission is invalid | Selected health mapping row refs, telemetry runtime state refs, validation refs, generated error registry checksum, and package-set refs when supplied must appear in `030.VersionManifest` for health/API/audit/validation-visible diagnostics | `TELEMETRY_PROFILE_INVALID` or owner health error |
+
 ## Telemetry Redaction Policy
 
 `TelemetryRedactionPolicy` imports `110.RedactionPolicy` for caller-visible and audit-visible redaction classes. This spec owns telemetry pre-export rejection and redaction.
@@ -517,10 +550,10 @@ The following `140` row families can affect telemetry construction, signal expor
 | `ObservabilityInstrumentationProfile` | output_affecting for telemetry behavior | TODO: add full field precision for telemetry standard, protocol, enabled signals, delivery mode, export failure behavior, raw/private/backend ID prohibitions, validation refs, activation scope, and lifecycle status. |
 | `TelemetrySignalPolicy` | output_affecting for telemetry emission | TODO: add full field precision for signal token, stage class, export behavior, non-authority, validation-only exception, and invalid errors. |
 | `MetricInstrumentRow` | output_affecting for metrics | TODO: add typed and bounded fields for metric name, kind, unit, cardinality class, max distinct attribute sets per run, allowed attributes, aggregation, and invalid errors. |
-| `TelemetryAttributePolicy` | output_affecting for telemetry output | TODO: add key/value type, max distinct values, redaction behavior, public/private constraints, checksum inclusion, and invalid errors. |
-| `TelemetryRedactionPolicy` | output_affecting for telemetry output | TODO: add full field precision for data class, signal token, redaction transform, forbidden value classes, and validation refs. |
+| `TelemetryAttributePolicy` | output_affecting for telemetry output | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; production still requires concrete row refs, package-set refs when supplied, validation refs, and manifest inclusion. |
+| `TelemetryRedactionPolicy` | output_affecting for telemetry output | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; forbidden backend values reject before export. |
 | `TelemetryExporterProfile` | output_affecting for export and health | TODO: declare null/omit behavior for `endpoint_ref`, export-disabled state, production-required export, retry policy, backpressure, queue bounds, and invalid errors. |
-| `TelemetryHealthMappingPolicy` | health_affecting | TODO: add full field precision for telemetry condition, health scope, required health effect, forbidden domain effect, and manifest refs. |
+| `TelemetryHealthMappingPolicy` | health_affecting | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; health effects are limited to `healthy`, `degraded`, `blocked`, or `error` and have no domain mutation effect. |
 | `TelemetryReplayExclusionPolicy` | replay_affecting | Closed by `TelemetryReplayExclusionPolicy row schema`; activation remains blocked when validation refs, package-set refs, or manifest refs are missing or TODO-bearing. |
 
 `telemetry_signals`, `allowed_attribute_keys`, enabled signal sets, and validation refs must use `canonical_set` semantics with duplicate rejection unless an owner row declares `ordered_sequence`. `retry_policy` must be a typed nested object or named owner union with bounds for maximum attempts, backoff, queue behavior, and retryable exporter errors. Telemetry rows must remain diagnostic and must not grant source, identity, graph, package, audit, replay, or watermark authority.
