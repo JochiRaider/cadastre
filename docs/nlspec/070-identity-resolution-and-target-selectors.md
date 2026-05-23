@@ -263,6 +263,30 @@ The MVP resolver activation catalog is not a separate runtime authority. It is t
 
 The catalog closure check must execute after profile row selection and before candidate generation. A catalog member must not be inferred from package type labels, owner prose, research reports, implementation defaults, or another artifact with a similar name.
 
+### MVPResolverCatalogClosurePack
+
+`MVPResolverCatalogClosurePack` is a promotion-time and resolver-preflight proof object. It is not runtime identity authority and must not substitute for any selected `ResolverProfileRow`, row-set artifact, policy artifact, validation row, package-set ref, or `030.VersionManifest` entry.
+
+For each selected production resolver scope, the pack must contain active, checksum-valid, validation-backed, scope-valid, package-set-consistent when package-supplied, and manifest-included refs for every member below. Public resolver catalog bytes must be vendor-neutral. A catalog row, row-set envelope, validation output, activation report, package report, API output, audit output, or telemetry export that exposes private tenant inventories, directory tenant names, scanner sites, host lists, raw private fixture bytes, credentials, or private source binding values must fail before promotion and before identity output.
+
+| Required catalog member | Required active catalog closure |
+| --- | --- |
+| `ResolverProfileRowSet` | Provide one active row for every supported `entity_type × run_mode` tuple: `host`, `user`, `service_account`, `group`, and `unsupported_entity_type`; `production`, `shadow`, `canary`, and `validation`. Wildcard run modes are forbidden. |
+| `IdentifierEvidenceClassRowSet` | Provide exactly one active row for every evidence class named by `Evidence Roles`, `IdentifierEvidenceClass registry`, `Candidate Generation`, target selector safety, and `120` identity closure rows. The MVP registry includes durable, weak, selector, learned, graph-key, mapped-target, source-native-merge-history, semantic-overlay, group-membership, and telemetry-forbidden classes. |
+| `IdentifierScopeRowSet` | Provide rows for cloud provider IDs, endpoint agent IDs, directory user IDs, directory group IDs, service account IDs, Kubernetes UIDs, IP addresses, DNS/PTR names, graph keys, mapped targets, learned hints, and telemetry-forbidden inputs. |
+| `CandidateGenerationProfile` | Provide deterministic blocking-key ranks, canonical key strings, scope hash inputs, pair ordering, candidate caps, and overflow behavior. |
+| `IdentityHardBlockerRowSet` | Provide exactly one most-specific active row for every hard-blocker family in the precedence table. |
+| `AssetGenerationBoundaryRowSet` | Provide active rows for reimage, clone, VDI reuse, agent reinstall, provider delete/recreate, directory reenrollment, Kubernetes recreate, source rekey, hostname reuse, IP reuse, and scanner correlation change. |
+| `ResolverDecisionMatrixRowSet` | Provide exactly one active row for each post-blocker decision condition: `canonical_created`, `source_asset_attached`, `auto_merged`, `candidate`, `rejected`, `split`, `conflicted`, and `no_decision`. |
+| `IdentityConfidenceBandRowSet` | Provide the eight MVP rule-banded confidence rows with exact six-decimal canonical scores. |
+| `IdentityReviewRoutingPolicy` | Provide review-opening, reviewer-authority, expiration, terminal-output, and illegal-transition rows. |
+| `IdentitySplitPolicy` | Provide deterministic partition, retained-canonical selection, new-canonical creation, affected-fact selection, ambiguous-partition behavior, and handoff requirements. |
+| `ResolverExplanationPolicy` | Provide included and excluded checksum-field rows for every externally visible `IdentityDecision`. |
+| `TargetSelectorSafetyPolicyRowSet` | Provide one active row for every selector mechanism: `mapped_target`, `opengraph_node_id_equality`, `opengraph_property_matching`, `deprecated_name_matching`, `graph_key`, `hostname`, `ip_address`, `dns_name`, `ptr_name`, and `weak_endpoint_selector`. |
+| `ResolverActivationReportPolicy` | Provide scenario gates for creation, attachment, durable merge, weak rejection, blocker precedence, overflow, review totality, split handoff, selector safety, explanation replay, and shadow/canary determinism. |
+
+A selected resolver catalog member whose supporting artifact bytes, fixture checksum, expected-output checksum, package-set ref when package-supplied, or `VersionManifest` entry is missing must emit the most specific resolver artifact, package, manifest, validation, or activation-report error before candidate generation. Prose closure, registry labels, package type tokens, row-set checksums without selected row refs, validation summaries, and research reports are not substitutes for concrete selected refs and checksums.
+
 The total resolver artifact coverage states are closed:
 
 | Result state | Required meaning |
@@ -272,19 +296,25 @@ The total resolver artifact coverage states are closed:
 | `validation_only` | The artifact may be used only in validation, shadow, or canary output and must not produce production identity mutations. |
 | `not_in_scope_blocked` | The artifact is outside the selected resolver scope and must not be selected as fallback. |
 
-Weak evidence defaults are total for MVP. Each row below must produce `no_decision` and no `CanonicalEntity`, `SourceAsset`, `Identifier`, `IdentityDecision` mutation, graph endpoint, gold reference, create, attach, merge, or split unless durable evidence and an active decision matrix row explicitly permit stronger behavior.
+Weak evidence defaults are total for MVP. Weak-only, selector-only, learned-only, source-native-merge-history-only, graph-key-only, mapped-target-only, OpenGraph property-match-only, deprecated-name-match-only, and telemetry-only inputs may emit only the active row behavior in the table below. They must not create `CanonicalEntity`, mutate `SourceAsset`, mutate `Identifier`, attach a source asset, merge canonical entities, split canonical entities, create a graph endpoint, or become gold-reference eligible by themselves. A non-mutating `IdentityDecision` with decision class `candidate`, `rejected`, or `no_decision` is allowed only when the active decision matrix row permits that class.
 
-| Weak evidence input | Default resolver output |
-| --- | --- |
-| IP-only | `no_decision` |
-| hostname-only | `no_decision` |
-| DNS-only | `no_decision` |
-| PTR-only | `no_decision` |
-| scanner-name-only | `no_decision` |
-| graph-key-only | `no_decision` |
-| mapped-target-only | `no_decision` |
-| learned-only | `no_decision` |
-| selector-only | `no_decision` |
+| Weak or non-authoritative input | Required active behavior | Forbidden production effect |
+| --- | --- | --- |
+| IP-only | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| Hostname-only | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| DNS-only or PTR-only | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| Scanner-name-only | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| Weak management name | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| Weak user name, mail, or UPN | `no_decision` or non-mutating `candidate`. | No identity mutation. |
+| Weak group name | `no_decision` or non-mutating `candidate`. | No identity mutation and no membership fact by itself. |
+| Group-membership hint | Correlation or review context only. | No identity mutation and no `identity_membership_fact.member_of` output by itself. |
+| Graph-key-only | Selector only. | No identity mutation and no graph endpoint identity. |
+| Mapped-target-only | `UnresolvedTargetReference` only. | No identity mutation. |
+| OpenGraph property match | `UnresolvedTargetReference` only. | No identity mutation. |
+| Deprecated name matching | Forbidden in production. | Fail with `DEPRECATED_NAME_MATCHING_FORBIDDEN`. |
+| Source-native merge history | `lineage_only`; may block or route to review. | Never merge by itself. |
+| Learned-only | `candidate_hint` only. | No identity mutation. |
+| Telemetry-only | Forbidden as durable identity evidence. | Fail with `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` when used as identity evidence or scoring authority. |
 
 ### ResolverArtifactLifecycleGuardRows
 
@@ -349,6 +379,7 @@ Candidate generation must materialize blocking keys before candidate pairs. A bl
 | 10 | `durable_provider_id` | `provider_id:<provider>:<normalized_value>` | provider, account/project/subscription, region when applicable | append `generation:<asset_generation_key>` when present; missing generation remains eligible only if no generation blocker fires | may create, attach, or merge only through decision matrix |
 | 20 | `endpoint_agent_id` | `endpoint_agent_id:<namespace>:<normalized_value>` | enrollment tenant, deployment, agent namespace | append generation when present; reinstall blocker wins before confidence | may create or attach; merge requires same enrollment scope or provider durable bundle |
 | 30 | `directory_user_id` | `directory_user_id:<directory_namespace>:<normalized_value>` | directory tenant/domain/source | delete/recreate or reenrollment blocker wins | may create, attach, or merge only for `user` |
+| 35 | `directory_group_id` | `directory_group_id:<directory_namespace>:<normalized_value>` | directory tenant/domain/source plus immutable group ID | delete/recreate or reenrollment blocker wins | may create, attach, or merge only for `group` through the decision matrix |
 | 40 | `service_account_durable_id` | `service_account_id:<namespace>:<normalized_value>` | provider/account/tenant or directory tenant | rekey/delete blocker wins | may create, attach, or merge only for `service_account` |
 | 50 | `kubernetes_uid` | `k8s_uid:<normalized_uid>` | cluster, namespace, resource kind | UID plus generation identifies source object only by default | source-object identity only; no canonical merge by default |
 | 60 | weak hostname | `hostname:<nfc_lowercase_hostname>` | source scope and observed interval | hostname reuse blocker wins | candidate or no_decision only |
@@ -357,6 +388,7 @@ Candidate generation must materialize blocking keys before candidate pairs. A bl
 | 82 | weak scanner name | `scanner_name:<nfc_lowercase_name>` | scanner scope and scan interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; no cross-scanner block merge | candidate or no_decision only |
 | 84 | weak management name | `management_name:<nfc_lowercase_name>` | management-plane source scope and observation interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; management names are weak hints only | candidate or no_decision only |
 | 86 | weak user name/mail/UPN | `weak_user:<kind>:<nfc_lowercase_value>` where `kind` is `name`, `mail`, or `upn` | directory tenant/domain/source and observation interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; name/mail/UPN evidence must not create, attach, or merge by itself | candidate or no_decision only |
+| 87 | `weak_group_name` | `weak_group:<nfc_lowercase_name>` | directory tenant/domain/source and observation interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; weak group names must not create, attach, merge, split, or become gold-reference eligible by themselves | candidate or no_decision only |
 | 88 | group membership hint | `group_membership:<nfc_group_ref>:<nfc_member_hint>` | directory tenant/domain/source, group scope, and observation interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; group membership supplies review context only | correlation context only |
 | 89 | weak service-account display name | `service_account_display_name:<nfc_lowercase_name>` | provider/account/tenant or directory tenant plus observation interval | scope omission emits `IDENTITY_EVIDENCE_UNDER_SCOPED`; display names are weak hints only | candidate or no_decision only |
 | 90 | selector-only | `selector:<mechanism>:<normalized_value>` | selector source scope | no generation authority | unresolved target or no_decision only |
@@ -584,12 +616,12 @@ MVP confidence is rule-banded, not probabilistic. Scores must be persisted as `0
 | --- | ---: | --- | --- |
 | `blocked` | `0.000000` | Any non-overridable hard blocker fired. | `rejected`, `no_decision`, `conflicted` |
 | `selector_only` | `0.000000` | Only selector evidence exists. | `no_decision` |
-| `weak_hint_only` | `0.250000` | Only weak hostname/IP/DNS/PTR/scanner hint exists. | `candidate`, `rejected`, `no_decision` |
+| `weak_hint_only` | `0.250000` | Only weak hostname, IP, DNS, PTR, scanner, management name, user name/mail/UPN, group name, service-account display name, group-membership hint, or equivalent weak evidence exists. | `candidate`, `rejected`, `no_decision` |
 | `learned_hint_only` | `0.300000` | Only learned or model-generated hint exists. | `candidate`, `rejected`, `no_decision` |
+| `conflicting_durable` | `0.500000` | Durable evidence conflicts or equally specific rows disagree. | `conflicted`, `candidate`, `rejected` |
 | `single_durable_creation` | `0.900000` | One exact durable evidence bundle under exact scope and no existing canonical candidate. | `canonical_created` |
 | `exact_durable_attach` | `0.950000` | One exact durable evidence bundle attaches to exactly one existing canonical entity and no blocker fires. | `source_asset_attached` |
 | `exact_durable_merge` | `1.000000` | Exact compatible durable evidence proves the same object across existing canonical entities and no blocker fires. | `auto_merged` |
-| `conflicting_durable` | `0.500000` | Durable evidence conflicts or equally specific rows disagree. | `conflicted`, `candidate`, `rejected` |
 
 If more than one band condition matches, the selected band must be the first row in this table whose selection condition is true.
 
@@ -718,6 +750,7 @@ Resolver and target-selector outcomes that surface through asset detail, graph q
 | `RESOLVER_PROFILE_MISSING` | No active resolver profile covers run mode, entity type, source scopes, evidence classes, and lifecycle boundaries. |
 | `RESOLVER_PROFILE_ROW_MISSING` | No active `ResolverProfileRow` covers the resolver run tuple. |
 | `RESOLVER_PROFILE_ROW_AMBIGUOUS` | More than one equally specific active `ResolverProfileRow` covers the resolver run tuple. |
+| `RESOLVER_SCOPE_SUBSET_MUTATION_FORBIDDEN` | A subset scope match attempts creation, attachment, merge, split, or another mutating decision. |
 | `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | Entity type maps to the unsupported row. |
 | `IDENTITY_EVIDENCE_UNDER_SCOPED` | Required scope keys are absent or non-canonical. |
 | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | Evidence class lacks a covering resolver profile row. |
@@ -832,15 +865,20 @@ If a required field, scenario row, checksum, validation ref, or artifact ref is 
 
 ### Selector safety matrix
 
-| Selector mechanism | Maximum resolution state | Evidence required | Auto-merge allowed | Graph projection effect | Error/no-op behavior |
-| --- | --- | --- | ---: | --- | --- |
-| `mapped_target` | `UnresolvedTargetReference` | selector source and scope | No | hint only | no identity mutation |
-| `opengraph_node_id_equality` | `UnresolvedTargetReference` | active selector policy and source scope | No | no identity mutation | no identity mutation |
-| `opengraph_property_matching` | `UnresolvedTargetReference` | active selector policy | No | no projection unless owner permits | no identity mutation |
-| `deprecated_name_matching` | forbidden | none | No | no projection | `DEPRECATED_NAME_MATCHING_FORBIDDEN` |
-| `graph_key` | selector only | graph profile and owner row | No | no identity influence | no-op |
-| weak endpoint selectors | candidate hint only | temporal source scope | No | no graph edge by itself | candidate or no_decision |
-| `hostname`/`ip_address`/`dns_name`/`ptr_name` selector | candidate hint only | temporal source scope | No | no graph edge by itself | candidate or no_decision |
+`TargetSelectorSafetyPolicyRowSet` must be total over every selector mechanism in the closed selector mechanism enum. Missing, inactive, ambiguous, checksum-mismatched, package-set-mismatched, or unmanifested selector rows fail before unresolved-target output, identity mutation, graph endpoint output, graph edge output, review routing, or validation acceptance.
+
+| Selector mechanism | Maximum resolution state | Production mutation | Error or no-op behavior |
+| --- | --- | --- | --- |
+| `mapped_target` | `UnresolvedTargetReference` | No identity mutation. | Emit unresolved target or no-op according to active policy. |
+| `opengraph_node_id_equality` | `UnresolvedTargetReference` | No identity mutation. | Emit unresolved target or no-op according to active policy. |
+| `opengraph_property_matching` | `UnresolvedTargetReference` | No identity mutation. | Emit unresolved target or no-op according to active policy. |
+| `deprecated_name_matching` | forbidden | No identity mutation. | Fail with `DEPRECATED_NAME_MATCHING_FORBIDDEN`. |
+| `graph_key` | selector only | No identity influence. | No-op unless a non-mutating selector diagnostic is permitted. |
+| `hostname` | candidate hint only | No graph edge or identity mutation by itself. | `candidate`, `rejected`, or `no_decision` only. |
+| `ip_address` | candidate hint only | No graph edge or identity mutation by itself. | `candidate`, `rejected`, or `no_decision` only. |
+| `dns_name` | candidate hint only | No graph edge or identity mutation by itself. | `candidate`, `rejected`, or `no_decision` only. |
+| `ptr_name` | candidate hint only | No graph edge or identity mutation by itself. | `candidate`, `rejected`, or `no_decision` only. |
+| `weak_endpoint_selector` | candidate hint only | No graph edge or identity mutation by itself. | `candidate`, `rejected`, or `no_decision` only. |
 
 ### GraphEndpointIdentityHandoff validation rows
 
@@ -864,6 +902,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `RESOLVER_PROFILE_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-missing` |
 | `RESOLVER_PROFILE_ROW_MISSING` | `070` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-row-missing` |
 | `RESOLVER_PROFILE_ROW_AMBIGUOUS` | `070` | `error` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-profile-row-ambiguous` |
+| `RESOLVER_SCOPE_SUBSET_MUTATION_FORBIDDEN` | `070` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `070.IdentityErrorContext` | `error-registry-070-resolver-scope-subset-mutation-forbidden` |
 | `RESOLVER_ENTITY_TYPE_UNSUPPORTED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-resolver-entity-type-unsupported` |
 | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-evidence-under-scoped` |
 | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `070` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `070.IdentityErrorContext` | `error-registry-070-identity-evidence-class-unsupported` |
@@ -889,26 +928,245 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 ### ActivationControlledRowSchemaPrecisionHandoff
 
-The following `070` row families can affect candidate generation, blocker evaluation, confidence selection, review routing, identity mutation, split behavior, target selector safety, resolver explanations, or graph correction handoff. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+The following field tables close the stable row-schema precision for every `070` output-affecting resolver row family. Concrete row bytes remain activation-controlled artifacts; this section defines the executable row interfaces that those artifacts must satisfy. The selected row ref, selected row checksum, containing row-set checksum, validation refs, package-set ref when package-supplied, and resolver runtime refs that consume the row must appear in `030.VersionManifest` before any identity output, review output, resolver explanation, or split handoff becomes externally visible.
 
-| row_family | production classification | required precision status |
-| --- | --- | --- |
-| `ResolverProfileRow` | output_affecting | TODO: convert existing schema to full `030.ActivationControlledRowField` columns, including all artifact refs, allowed decision sets, creation/merge policy, learned artifact policy, validation refs, activation scope, and lifecycle status. |
-| `IdentityHardBlockerRow` | output_affecting | TODO: add type, null/omit, canonical trigger representation, precedence bounds, duplicate coverage, checksum input, and error columns. |
-| `ResolverDecisionMatrix` | output_affecting | TODO: add full field precision for decision class, evidence requirements, blockers, confidence band refs, review route refs, and deterministic tie behavior. |
-| `IdentityConfidenceBand` | output_affecting | TODO: add field precision using `040.DecimalPrecisionPolicy.confidence_0_1`, explicit bounds, duplicate policy, and invalid errors. |
-| `IdentityReviewRoutingPolicy` | output_affecting | TODO: add full field precision for trigger class sets, expiration behavior, reviewer authority, terminal behavior, and validation refs. |
-| `SplitPolicy` | output_affecting | TODO: add full field precision for split partition refs, affected fact selection, retained/new canonical refs, checksum inputs, and handoff requirements. |
-| `GraphCorrectionHandoff` | runtime_state_record affecting graph projection | TODO: declare `040` core-like runtime-state field precision or a new runtime-state field table, including canonical ref sort keys and checksum inputs. |
-| `IdentifierEvidenceClass` | output_affecting | TODO: add full field precision for evidence role, durability, reuse risk, required scope keys, auto-merge authority, and defaults. |
-| `IdentifierScope` | output_affecting | TODO: add full field precision for scope keys, value kinds, hash canonicalization, coverage matching, and uncovered-scope behavior. |
-| `CandidateGenerationProfile` | output_affecting | TODO: add full field precision for blocking keys, candidate caps, overflow behavior, learned-artifact policy, and deterministic pair ordering. |
-| `AssetGenerationBoundary` | output_affecting | TODO: add full field precision for lifecycle boundary types, evidence requirements, generation reset behavior, and invalid errors. |
-| `TargetSelectorSafetyPolicy` | output_affecting | TODO: add full field precision for selector mechanism, maximum resolution state, permitted decision classes, forbidden roles, and safety errors. |
+Rows in these tables use `040.CanonicalJSON` and `030.ActivationControlledRowRef` mechanics. Unknown fields are forbidden. Bare string refs are forbidden. Arrays marked `canonical_set` reject duplicates after canonicalization and sort by the declared canonical sort key before checksum computation. A selected row with any missing required field, invalid enum value, out-of-bounds scalar, non-canonical array, checksum mismatch, package-set mismatch, private-binding leak, or manifest omission must fail before candidate generation or mutation with the most specific `070`, `030`, `100`, or manifest error.
 
-`identifier_scope_row_refs` and all `*_row_set_ref` or `*_policy_ref` fields must use `030.ActivationControlledRowRef` or `030.ActivationControlledArtifactRef`, not strings. `allowed_decision_classes`, `blocked_decision_classes`, `forbidden_evidence_roles`, `permitted_decision_classes`, and trigger class sets must use `canonical_set` semantics with duplicate rejection. Candidate caps must use bounded `uint64` values and overflow errors.
+#### ResolverProfileRow field table
 
-A resolver run must fail before mutation when any selected `070` row family remains `TODO:`, uses a bare string ref, omits row checksum inputs, or omits selected row refs from `030.VersionManifest`.
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable ID scoped to row set | n/a | reject | n/a | ordered:1 | yes | closed | `110` | selected row ref/checksum | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `resolver_profile_id` | `040.ScalarType.identifier` | yes | none | no | no | stable profile ID | n/a | reject | n/a | ordered:2 | yes | closed | `110` | profile ref/checksum | `RESOLVER_PROFILE_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `profile_version` | `040.ScalarType.version_token` | yes | none | no | no | immutable owner version | n/a | reject | n/a | ordered:3 | yes | closed | `110` | profile version included | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `run_mode` | owner enum `ResolverRunMode` | yes | none | no | no | `production`, `shadow`, `canary`, `validation` | n/a | reject | n/a | ordered:4 | yes | closed | `110` | selected row run mode | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `entity_type` | owner enum `ResolverEntityType` | yes | none | no | no | `host`, `user`, `service_account`, `group`, `unsupported_entity_type` | n/a | reject | n/a | ordered:5 | yes | closed | `110` | selected row entity type | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ENTITY_TYPE_UNSUPPORTED` |
+| `source_scope_selector` | `030.ScopeSelector` | yes | none | no | no | context `070.IdentifierScopeSelectorContext`; private values forbidden | n/a | reject | n/a | ordered:6 | yes | closed | `110` | selector context ref and checksum | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `source_scope_match_policy` | owner enum `SourceScopeMatchPolicy` | no | `exact_scope_required` | no | yes | `exact_scope_required`, `scope_subset_allowed_for_review_only` | n/a | reject | n/a | no | yes | closed | `110` | selected row checksum | none | `RESOLVER_SCOPE_SUBSET_MUTATION_FORBIDDEN` |
+| `evidence_class_set_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identifier_evidence_class_row_set` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum and package-set ref when package-supplied | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `identifier_scope_row_refs` | array of `030.ActivationControlledRowRef` | yes | none | no | no | length `1..128`; row family `IdentifierScope` | canonical_set | reject | `row_id` | no | yes | closed | `110` | every selected scope row ref/checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `candidate_generation_profile_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `candidate_generation_profile` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `identity_hard_blocker_row_set_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identity_hard_blocker_row_set` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `asset_generation_boundary_row_set_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `asset_generation_boundary_row_set` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `decision_matrix_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `resolver_decision_matrix_row_set` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_DECISION_ROW_AMBIGUOUS` |
+| `confidence_band_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identity_confidence_band_row_set` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `review_routing_policy_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identity_review_routing_policy` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `split_policy_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identity_split_policy` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `explanation_policy_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `resolver_explanation_policy` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `target_selector_policy_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `target_selector_safety_policy` | n/a | reject | n/a | no | yes | closed | `110` | artifact ref/checksum | `TARGET_SELECTOR_UNSAFE` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `allowed_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | non-empty subset of closed identity decision states | canonical_set | reject | enum token | no | yes | closed | `110` | selected row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `creation_policy` | owner enum `CreationPolicy` | no | derived:`entity_type` | no | yes | `durable_evidence_creation_allowed`, `creation_forbidden` | n/a | reject | n/a | no | yes | closed | `110` | selected row checksum | none | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `merge_policy` | owner enum `MergePolicy` | no | `durable_evidence_merge_allowed` | no | yes | `durable_evidence_merge_allowed`, `merge_forbidden` | n/a | reject | n/a | no | yes | closed | `110` | selected row checksum | none | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `learned_artifact_policy` | owner enum `LearnedArtifactPolicy` | no | `disabled` | no | yes | `disabled`, `candidate_hint_only` | n/a | reject | n/a | no | yes | closed | `110` | selected row checksum | none | `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` when telemetry-only learned inputs are used |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | length `1..256`; passing `120-IDENTITY-CLOSURE-*` refs | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs included | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral scope only | n/a | reject | n/a | no | yes | closed | `110` | activation scope checksum | `RESOLVER_PROFILE_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle evidence ref | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### IdentifierEvidenceClass field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` |
+| `evidence_class` | owner enum `IdentifierEvidenceClassToken` | yes | none | no | no | exactly one MVP evidence class token; duplicates forbidden across row set | n/a | reject | n/a | ordered:2 | yes | closed | `110` | selected evidence class ref/checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` |
+| `durability` | owner enum `EvidenceDurability` | yes | none | no | no | `high`, `medium`, `low`, `model_artifact_scoped`, `telemetry_forbidden` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` when telemetry is durable |
+| `default_role` | owner enum `EvidenceRole` | yes | none | no | no | closed evidence roles plus `telemetry_forbidden` for telemetry-only rows | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `required_scope_keys` | array of `040.ScalarType.identifier` | yes | none | no | no | length `1..32` unless class is explicitly selector-only with selector scope | canonical_set | reject | key token | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `creation_authority` | owner enum `EvidenceMutationAuthority` | yes | none | no | no | `never`, `durable_exact_scope_only` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `attachment_authority` | owner enum `EvidenceMutationAuthority` | yes | none | no | no | `never`, `durable_exact_scope_only`, `source_object_identity_only` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `merge_authority` | owner enum `EvidenceMutationAuthority` | yes | none | no | no | `never`, `durable_exact_scope_only` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_CLASS_UNSUPPORTED` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `gold_reference_eligible_by_itself` | `040.ScalarType.boolean` | no | `false` | no | yes | `true` only for durable classes when profile and `080` predicate permit | n/a | reject | n/a | no | yes | closed | `110` | row checksum | none | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `review_routing_default` | owner enum `ReviewRoutingDefault` | yes | none | no | no | `no_decision`, `candidate_review_allowed`, `conflict_review_required`, `lineage_only`, `forbidden` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | non-empty totality and weak-default validation refs | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### IdentifierScope field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `source_class` | owner enum `IdentifierSourceClass` | yes | none | no | no | `cloud provider`, `endpoint agent`, `directory`, `Kubernetes`, `network`, `DNS`, `graph`, `selector`, `learned`, `telemetry` | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `identifier_class` | owner enum `IdentifierClass` | yes | none | no | no | closed identifier classes from `IdentifierScope canonicalization` plus mapped target and learned hint | n/a | reject | n/a | ordered:3 | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `required_scope_keys` | array of `040.ScalarType.identifier` | yes | none | no | no | length `1..32` | canonical_set | reject | key token | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `optional_scope_keys` | array of `040.ScalarType.identifier` | no | `[]` | no | yes | length `0..32` | canonical_set | reject | key token | no | yes | closed | `110` | row checksum | none | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `normalization_rule` | owner enum `IdentifierNormalizationRule` | yes | none | no | no | exact owner rule token; prose-only normalization forbidden | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `scope_hash_inputs` | array of `040.ScalarType.identifier` | yes | none | no | no | non-empty subset of required plus optional scope keys | ordered_sequence | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `uncovered_scope_behavior` | owner enum `UncoveredScopeBehavior` | yes | none | no | no | `under_scoped_no_candidates`, `weak_evidence_only`, `selector_only_no_identity`, `source_object_identity_only`, `telemetry_forbidden` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `IDENTITY_EVIDENCE_UNDER_SCOPED` | `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` when telemetry is used |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | non-empty scope coverage and under-scoped fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### CandidateGenerationProfile field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `candidate_generation_profile_id` | `040.ScalarType.identifier` | yes | none | no | no | stable profile ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | profile ref/checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `blocking_key_rows` | array of owner object `BlockingKeyRow` | yes | none | no | no | length `1..64`; ranks unique; required MVP ranks must be present | canonical_set | reject | `block_kind_rank` | no | yes | closed | `110` | profile checksum and validation refs | `RESOLVER_ARTIFACT_MISSING` | `IDENTITY_EVIDENCE_UNDER_SCOPED` |
+| `max_members_per_blocking_key` | `040.ScalarType.uint64` | no | `256` | no | yes | `1..1024` | n/a | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_CANDIDATE_BLOCK_OVERFLOW` |
+| `max_candidate_pairs_per_source_asset` | `040.ScalarType.uint64` | no | `128` | no | yes | `1..512` | n/a | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` |
+| `max_candidate_pairs_per_resolver_partition` | `040.ScalarType.uint64` | no | `1000000` | no | yes | `1..5000000` | n/a | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` |
+| `pair_ordering` | ordered array of owner enum `CandidatePairSortKey` | no | block kind rank, blocking-key UTF-8 bytes, lexical left source asset ID, lexical right source asset ID, evidence item set checksum | no | yes | exactly five sort keys in the declared order | ordered_sequence | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `overflow_behavior` | owner enum `CandidateOverflowBehavior` | no | `emit_error_no_mutation` | no | yes | `emit_error_no_mutation`; no weaker value allowed for MVP | n/a | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_CANDIDATE_PARTITION_OVERFLOW` |
+| `learned_artifact_policy` | owner enum `LearnedArtifactPolicy` | no | `disabled` | no | yes | `disabled`, `candidate_hint_only` | n/a | reject | n/a | no | yes | closed | `110` | profile checksum | none | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | non-empty pair-order, overflow, learned-disabled, and group-key fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `profile_checksum` | `040.ScalarType.sha256` | yes | derived:`profile_body_excluding_profile_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | profile checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### IdentityHardBlockerRow field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` |
+| `blocker_family` | owner enum `HardBlockerFamily` | yes | none | no | no | seven families from hard blocker precedence table | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` |
+| `precedence` | `040.ScalarType.uint64` | yes | none | no | no | exact `1..7` matching blocker family | n/a | reject | n/a | ordered:3 | yes | closed | `110` | row checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` |
+| `trigger_condition` | owner object `BooleanCondition` | yes | none | no | no | canonical condition over evidence roles, scopes, candidate state, prior decisions, and profile policy | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_HARD_BLOCKER_ROW_AMBIGUOUS` |
+| `blocked_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | non-empty subset of decision states | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `RESOLVER_HARD_BLOCKER_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `override_policy` | owner enum `HardBlockerOverridePolicy` | no | `never` | no | yes | `never`, `split_aware_attach_only`, `diagnostic_review_only` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | none | `IDENTITY_HARD_BLOCKER_TRIGGERED` |
+| `explanation_field_key` | `040.ScalarType.identifier` | yes | none | no | no | must match `ResolverExplanationPolicy.included_field_rows` | n/a | reject | n/a | no | yes | closed | `110` | explanation policy ref/checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_EXPLANATION_INCOMPLETE` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | fired and not-fired fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### AssetGenerationBoundary field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `boundary_type` | owner enum `AssetGenerationBoundaryType` | yes | none | no | no | reimage, clone, VDI reuse, agent reinstall, provider delete/recreate, directory reenrollment, Kubernetes recreate, source rekey, hostname reuse, IP reuse, scanner correlation change | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row checksum | `RESOLVER_ARTIFACT_MISSING` | `IDENTITY_HARD_BLOCKER_TRIGGERED` |
+| `trigger_condition` | owner object `BooleanCondition` | yes | none | no | no | canonical condition over lifecycle evidence and durable/weak evidence | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_ARTIFACT_MISSING` | `IDENTITY_HARD_BLOCKER_TRIGGERED` |
+| `generation_reset_behavior` | owner enum `GenerationResetBehavior` | yes | none | no | no | `block_auto_merge`, `source_object_identity_only`, `split_aware_attach_only`, `review_only` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_ARTIFACT_MISSING` | `IDENTITY_HARD_BLOCKER_TRIGGERED` |
+| `blocked_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | non-empty subset | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `RESOLVER_ARTIFACT_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | boundary fired and not-fired fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### ResolverDecisionMatrix field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `decision_row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_DECISION_ROW_AMBIGUOUS` |
+| `decision_class` | owner enum `IdentityDecisionState` | yes | none | no | no | one closed identity decision state | n/a | reject | n/a | ordered:2 | yes | closed | `110` | selected row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_DECISION_ROW_AMBIGUOUS` |
+| `decision_priority` | `040.ScalarType.uint64` | yes | none | no | no | `0..1000000`; lower wins only after non-equal specificity | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_DECISION_ROW_AMBIGUOUS` |
+| `required_condition` | owner object `BooleanCondition` | yes | none | no | no | exact canonical condition; prose-only invalid | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_DECISION_ROW_AMBIGUOUS` |
+| `required_confidence_band_ref` | `030.ActivationControlledRowRef` | yes | none | no | no | row family `IdentityConfidenceBand` | n/a | reject | n/a | no | yes | closed | `110` | confidence band row ref/checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `terminality` | owner enum `DecisionTerminality` | yes | none | no | no | `terminal_mutating`, `terminal_non_mutating`, `non_terminal_reviewable` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `mutation_limit` | array of owner enum `MutationClass` | yes | none | no | no | subset of `none`, `create_canonical_entity`, `attach_source_asset`, `merge_canonical_entities`, `emit_split_handoff` | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `forbidden_evidence_roles` | array of owner enum `EvidenceRole` | yes | none | no | no | weak, selector, lineage-only, correlation-only, source-object-only, telemetry-forbidden, and learned-only roles must appear for mutating rows | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `RESOLVER_DECISION_ROW_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | positive, rejection, replay, and mutation-prohibition fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### IdentityConfidenceBand field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `band_id` | owner enum `IdentityConfidenceBandToken` | yes | none | no | no | eight MVP band tokens exactly once per row set | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_CONFIDENCE_BAND_MISSING` |
+| `score` | `040.DecimalPrecisionPolicy.confidence_0_1` | yes | none | no | no | canonical string `0.000000..1.000000`; no binary float | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `selection_condition` | owner object `BooleanCondition` | yes | none | no | no | exact canonical condition | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_CONFIDENCE_BAND_MISSING` |
+| `permitted_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | non-empty subset | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `selection_order` | `040.ScalarType.uint64` | yes | none | no | no | exact `1..8`; first matching row wins | n/a | reject | n/a | ordered:3 | yes | closed | `110` | row checksum | `RESOLVER_CONFIDENCE_BAND_MISSING` | `RESOLVER_CONFIDENCE_BAND_MISSING` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | selection, non-selection, decimal, replay fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### IdentityReviewRoutingPolicy field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `policy_id` | `040.ScalarType.identifier` | yes | none | no | no | stable policy ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | policy ref/checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `case_expiration_seconds` | `040.ScalarType.uint64` | no | `1209600` | no | yes | `86400..7776000` | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | none | `IDENTITY_REVIEW_TRANSITION_INVALID` |
+| `expiration_effect` | owner enum `ReviewExpirationEffect` | no | `expired_no_mutation` | no | yes | `expired_no_mutation` only for MVP | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | none | `IDENTITY_REVIEW_TRANSITION_INVALID` |
+| `weak_only_review_behavior` | owner enum `WeakOnlyReviewBehavior` | yes | none | no | no | `review_allowed_no_merge_without_new_durable_evidence`, `no_review` | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `IDENTITY_REVIEW_AUTHORITY_MISSING` |
+| `hard_blocker_review_behavior` | owner enum `HardBlockerReviewBehavior` | yes | none | no | no | `document_only_no_override`, `no_review` | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `IDENTITY_HARD_BLOCKER_TRIGGERED` |
+| `terminal_decision_requirement` | owner enum `TerminalDecisionRequirement` | yes | `identity_mutation_only_through_terminal_decision` | no | no | exact MVP token | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_REVIEW_ROUTING_MISSING` | `IDENTITY_REVIEW_TRANSITION_INVALID` |
+| `state_event_transition_rows` | array of owner object `ReviewTransitionRow` | yes | none | no | no | total over every review state/event pair | canonical_set | reject | `current_state,event` | no | yes | closed | `110` | transition row refs/checksums | `RESOLVER_REVIEW_ROUTING_MISSING` | `IDENTITY_REVIEW_TRANSITION_INVALID` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | review-opening, weak-only, hard-blocker, expiration, terminal, illegal-transition fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `policy_checksum` | `040.ScalarType.sha256` | yes | derived:`policy_body_excluding_policy_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | policy checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### SplitPolicy field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `split_policy_id` | `040.ScalarType.identifier` | yes | none | no | no | stable policy ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | split policy ref/checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `trigger_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | non-empty subset containing `split` | canonical_set | reject | enum token | no | yes | closed | `110` | policy checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `partition_key_rule` | owner object `PartitionKeyRule` | yes | none | no | no | canonical rule over durable evidence scope, generation boundary, known time, and source asset refs | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `retained_canonical_partition_rule` | owner enum `RetainedPartitionRule` | yes | `oldest_active_durable_evidence_then_lexical_canonical_entity_id` | no | no | exact default or stricter deterministic rule | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `new_canonical_partition_rule` | owner enum `NewCanonicalPartitionRule` | yes | none | no | no | `one_canonical_entity_per_non_retained_partition` | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `ambiguous_partition_behavior` | owner enum `AmbiguousSplitPartitionBehavior` | no | `emit_conflicted_no_split` | no | yes | `emit_conflicted_no_split`, `open_review`, `reject_split` | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | none | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `affected_fact_selection` | owner union `AffectedFactSelection` | yes | none | no | no | exact fact refs or deterministic affected-fact selection checksum | n/a | reject | n/a | no | yes | closed | `110` | affected fact refs or checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `graph_correction_handoff_required` | `040.ScalarType.boolean` | yes | `true` | no | no | must be true when gold or graph output may be affected | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | partition, ambiguous partition, handoff, replay, and no-graph-mutation fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `policy_checksum` | `040.ScalarType.sha256` | yes | derived:`policy_body_excluding_policy_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | policy checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### ResolverExplanationPolicy field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `policy_id` | `040.ScalarType.identifier` | yes | none | no | no | stable policy ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | policy ref/checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_EXPLANATION_INCOMPLETE` |
+| `included_checksum_fields` | array of `040.ScalarType.identifier` | yes | none | no | no | exact fields listed in `ResolverExplanation required fields`; wildcards forbidden | canonical_set | reject | field path | no | yes | closed | `110` | policy checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_EXPLANATION_INCOMPLETE` |
+| `excluded_volatile_fields` | array of `040.ScalarType.identifier` | yes | none | no | no | exact volatile fields listed in `ResolverExplanation required fields`; wildcards forbidden | canonical_set | reject | field path | no | yes | closed | `110` | policy checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_EXPLANATION_INCOMPLETE` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | explanation checksum and volatile-field exclusion fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `policy_checksum` | `040.ScalarType.sha256` | yes | derived:`policy_body_excluding_policy_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | policy checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### TargetSelectorSafetyPolicy field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.identifier` | yes | none | no | no | stable row ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | row ref/checksum | `TARGET_SELECTOR_UNSAFE` | `TARGET_SELECTOR_UNSAFE` |
+| `selector_mechanism` | owner enum `SelectorMechanism` | yes | none | no | no | one closed selector mechanism; every mechanism exactly once per active set | n/a | reject | n/a | ordered:2 | yes | closed | `110` | row checksum | `TARGET_SELECTOR_UNSAFE` | `DEPRECATED_NAME_MATCHING_FORBIDDEN` for deprecated name matching in production |
+| `maximum_resolution_state` | owner enum `SelectorMaximumResolutionState` | yes | none | no | no | `UnresolvedTargetReference`, `selector_only`, `candidate_hint_only`, or `forbidden` | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `TARGET_SELECTOR_UNSAFE` | `TARGET_SELECTOR_UNSAFE` |
+| `permitted_decision_classes` | array of owner enum `IdentityDecisionState` | yes | none | no | no | subset of `candidate`, `rejected`, `no_decision`; empty allowed only when forbidden | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `TARGET_SELECTOR_UNSAFE` | `TARGET_SELECTOR_UNSAFE` |
+| `forbidden_identity_roles` | array of owner enum `EvidenceRole` | yes | none | no | no | must include mutating and durable roles for selector-only mechanisms | canonical_set | reject | enum token | no | yes | closed | `110` | row checksum | `TARGET_SELECTOR_UNSAFE` | `TARGET_SELECTOR_UNSAFE` |
+| `production_mutation_effect` | owner enum `SelectorProductionMutationEffect` | yes | `none` | no | no | `none` for all MVP rows | n/a | reject | n/a | no | yes | closed | `110` | row checksum | `TARGET_SELECTOR_UNSAFE` | `TARGET_SELECTOR_UNSAFE` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | selector totality, deprecated-name rejection, OpenGraph no-identity, and graph endpoint no-op fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `row_checksum` | `040.ScalarType.sha256` | yes | derived:`row_body_excluding_row_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | row checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### ResolverActivationReportPolicy field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `policy_id` | `040.ScalarType.identifier` | yes | none | no | no | stable policy ID | n/a | reject | n/a | ordered:1 | yes | closed | `110` | policy ref/checksum | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `required_scenario_gates` | array of owner enum `ResolverActivationScenarioGate` | yes | none | no | no | creation, attachment, durable merge, weak rejection, blocker precedence, overflow, review totality, split handoff, selector safety, explanation replay, shadow/canary determinism | canonical_set | reject | enum token | no | yes | closed | `110` | policy checksum | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `promotion_eligibility_rule` | owner enum `ResolverPromotionEligibilityRule` | yes | `all_required_scenarios_pass_no_todo_manifest_included_package_consistent` | no | no | exact MVP token | n/a | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `failure_precedence` | ordered array of owner enum `ActivationReportResult` | yes | `fail`, `blocked`, `not_run`, `pass` | no | no | exactly four tokens in declared order | ordered_sequence | reject | n/a | no | yes | closed | `110` | policy checksum | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | scenario gate validation refs | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+| `activation_scope` | `030.ActivationScope` | yes | none | no | no | public, vendor-neutral | n/a | reject | n/a | no | yes | closed | `110` | scope checksum | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` | `RESOLVER_ARTIFACT_SCOPE_MISMATCH` |
+| `lifecycle_status` | `030.LifecycleStatus` | yes | none | no | no | production requires `active` | n/a | reject | n/a | no | yes | closed | `110` | lifecycle refs | `RESOLVER_ARTIFACT_INACTIVE` | `RESOLVER_ARTIFACT_INACTIVE` |
+| `policy_checksum` | `040.ScalarType.sha256` | yes | derived:`policy_body_excluding_policy_checksum` | no | no | SHA-256 lowercase hex | n/a | reject | n/a | derived | no | closed | `110` | policy checksum | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+
+#### GraphCorrectionHandoff runtime-state field table
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `graph_correction_handoff_id` | `040.ScalarType.identifier` | yes | derived:`split_decision_policy_partitions_affected_facts_explanation_manifest` | no | no | deterministic ID; backend IDs forbidden | n/a | reject | n/a | derived | yes | closed | `110` | handoff ref/checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `split_identity_decision_ref` | `030.ActivationControlledRowRef` or owner runtime ref | yes | none | no | no | terminal `split` decision only | n/a | reject | n/a | ordered:1 | yes | closed | `110` | decision ref/checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `split_policy_ref` | `030.ActivationControlledArtifactRef` | yes | none | no | no | artifact class `identity_split_policy` | n/a | reject | n/a | ordered:2 | yes | closed | `110` | split policy ref/checksum | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_ARTIFACT_CHECKSUM_MISMATCH` |
+| `retained_canonical_entity_ref` | owner runtime ref `CanonicalEntity` | yes | none | no | no | one valid `040.CanonicalEntity` ref | n/a | reject | n/a | ordered:3 | yes | closed | `110` | retained canonical ref | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `new_canonical_entity_refs` | array of owner runtime ref `CanonicalEntity` | yes | `[]` | no | yes | required non-empty when split creates new canonicals | canonical_set | reject | canonical entity ref | ordered:4 | yes | closed | `110` | new canonical refs sorted | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `split_partition_refs` | array of owner runtime ref `SplitPartition` | yes | none | no | no | length `1..1024`; refs or checksums sorted canonically | canonical_set | reject | partition ref or checksum | ordered:5 | yes | closed | `110` | partition refs/checksums | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `affected_fact_refs` | array of owner runtime ref `GoldFact` | conditional:`affected_fact_selection_checksum absent` | none | yes | yes | null allowed only when `affected_fact_selection_checksum` is present | canonical_set | reject | fact ref | ordered:6 | yes | closed | `110` | affected fact refs when enumerated | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `affected_fact_selection_checksum` | `040.ScalarType.sha256` | conditional:`affected_fact_refs null or omitted` | none | yes | yes | SHA-256 lowercase hex; null allowed only when exact refs are enumerated | n/a | reject | n/a | ordered:7 | yes | closed | `110` | selection checksum when refs omitted | `RESOLVER_SPLIT_POLICY_MISSING` | `RESOLVER_SPLIT_POLICY_MISSING` |
+| `resolver_explanation_checksum` | `040.ScalarType.sha256` | yes | none | no | no | checksum of split decision explanation | n/a | reject | n/a | ordered:8 | yes | closed | `110` | explanation checksum | `RESOLVER_EXPLANATION_INCOMPLETE` | `RESOLVER_EXPLANATION_INCOMPLETE` |
+| `version_manifest_ref` | owner runtime ref `030.VersionManifest` | yes | none | no | no | producing manifest ref | n/a | reject | n/a | ordered:9 | yes | closed | `110` | manifest ref | `VERSION_MANIFEST_INCOMPLETE` | `VERSION_MANIFEST_INCOMPLETE` |
+| `validation_refs` | array of `030.ActivationControlledArtifactRef` | yes | none | no | no | split handoff fixtures | canonical_set | reject | artifact ref | no | yes | closed | `110` | validation refs | `RESOLVER_ACTIVATION_REPORT_INCOMPLETE` | `RESOLVER_ACTIVATION_REPORT_FAILED` |
+
+`GraphCorrectionHandoff` must not contain graph backend IDs, graph backend labels, backend-generated vertex or edge IDs, private source binding values, raw payload bytes, reviewer display names, UI labels, or request correlation IDs. `new_canonical_entity_refs`, `split_partition_refs`, and `affected_fact_refs` when present must be canonically sorted before ID and checksum computation.
 
 ### Acceptance Criteria
 
@@ -922,7 +1180,7 @@ A resolver run must fail before mutation when any selected `070` row family rema
 | `070-SCHEMA-PATCH-AC-002` | `070` does not restate core record fields except by exact schema name reference. |
 | `070-SCHEMA-PATCH-AC-003` | Weak evidence cannot produce a canonical entity, source asset attachment, or identifier merge by bypassing the `040` and `070` validation sequence. |
 | `070-RESOLVER-ROW-AC-001` | Exactly one active `ResolverProfileRow` is selected before candidate generation, and missing, ambiguous, inactive, checksum-mismatched, or out-of-scope rows fail before mutation. |
-| `070-MVP-MATRIX-AC-001` | `host`, `user`, `service_account`, and `unsupported_entity_type` are covered by the MVP coverage matrix with closed decision outputs. |
+| `070-MVP-MATRIX-AC-001` | `host`, `user`, `service_account`, `group`, and `unsupported_entity_type` are covered by the MVP coverage matrix with closed decision outputs. |
 | `070-DURABLE-MERGE-AC-001` | Exact durable evidence under exact scope can create, attach, or merge only through the matching decision row and confidence band. |
 | `070-WEAK-REJECTION-AC-001` | Weak-only, selector-only, learned-only, source-native-merge-history-only, and graph-key-only evidence never create, attach, or merge. |
 | `070-PAIR-ORDER-AC-001` | Candidate pair ordering is byte-identical across implementations for the same blocking keys and evidence item checksums. |
@@ -945,7 +1203,7 @@ A resolver run must fail before mutation when any selected `070` row family rema
 | `070-GOLD-REF-ELIGIBILITY-AC-003` | `Identifier` refs require typed scope and validated `IdentifierScope`; `SourceAsset` refs require sufficient source scope, native identity, and asset type. |
 | `070-GOLD-REF-ELIGIBILITY-AC-004` | Package-supplied resolver artifacts cannot weaken gold reference eligibility defaults. |
 | `070-EVIDENCE-REGISTRY-TOTALITY-AC-001` | Every evidence class named by `ResolverProfileCoverageMatrix`, `Evidence Roles`, `IdentifierEvidenceClass registry`, `Candidate Generation`, selector policy, and validation rows appears exactly once in the active evidence class row set. |
-| `070-EVIDENCE-WEAK-ROW-MISSING-AC-001` | Missing rows for `scanner_name`, `weak_management_name`, `weak_user_name_mail_upn`, `group_membership_hint`, or `weak_service_account_display_name` block resolver artifact activation. |
+| `070-EVIDENCE-WEAK-ROW-MISSING-AC-001` | Missing rows for `scanner_name`, `weak_management_name`, `weak_user_name_mail_upn`, `weak_group_name`, `group_membership_hint`, or `weak_service_account_display_name` block resolver artifact activation. |
 | `070-HARD-BLOCKER-ROWSET-TOTALITY-AC-001` | Every hard blocker family has exactly one active most-specific `IdentityHardBlockerRow`; missing or ambiguous rows fail before confidence, review, or decision selection. |
 | `070-DECISION-ROW-AMBIGUITY-AC-001` | Equally specific active decision rows emit `RESOLVER_DECISION_ROW_AMBIGUOUS` and no identity mutation. |
 | `070-REVIEW-EXPIRATION-AC-001` | Review expiration uses `case_expiration_seconds` default `1209600`, respects bounds `86400..7776000`, emits transition evidence, and performs no identity mutation. |

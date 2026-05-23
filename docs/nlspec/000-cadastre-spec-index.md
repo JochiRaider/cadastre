@@ -297,7 +297,7 @@ When gold derivation is in implementation scope, `SpecSetVersion.activation_arti
 
 ### Identity resolver spec-set registry refs
 
-When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, `SpecSetVersion.activation_artifact_registry_refs` must include active registry refs for the following identity resolver artifacts, or an owner `TODO:` blocker that explicitly keeps identity output out of implementation scope:
+When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `CanonicalEntity` output is in implementation scope, `SpecSetVersion.activation_artifact_registry_refs` must include active, checksum-valid, validation-backed, manifest-included registry refs for the following identity resolver artifacts, plus package-set refs when any artifact is package-supplied. If any required supporting artifact bytes, fixture checksums, expected-output checksums, package-set refs, or manifest refs are unavailable, the registry row must carry an owner `TODO:` blocker that explicitly keeps identity output out of implementation scope:
 
 | Required registry ref | Owner |
 | --- | --- |
@@ -313,8 +313,9 @@ When `IdentityDecision`, `ResolverProfile`, `SourceAsset`, `Identifier`, or `Can
 | `IdentitySplitPolicy` | `070` |
 | `ResolverExplanationPolicy` | `070` |
 | `TargetSelectorSafetyPolicy` | `070` |
+| `ResolverActivationReportPolicy` | `070` |
 
-Missing refs block promotion before authoritative handoff. Registry refs must match the artifact names and classes used by `030`, `070`, `100`, and `120`.
+Missing refs, missing selected row refs, checksum mismatches, stale validation rows, package-set mismatches, `TODO:` checksums, or omitted `030.VersionManifest` entries block promotion before authoritative handoff. Registry refs must match the artifact names and classes used by `030`, `070`, `100`, and `120`; package type tokens, validation summaries, artifact labels, and research prose are not substitutes.
 
 ### Package activation spec-set registry refs
 
