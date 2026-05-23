@@ -394,6 +394,30 @@ Every confirmed `PackageType` token must have exactly one active policy row in t
 
 `ValidateSpecSet` and `RunValidationMatrix` must fail when any confirmed token is absent from the matrix, duplicated in the matrix, assigned to more than one policy family, or lacks exactly one active `PackageTypePolicyRow` for the target environment when package activation is in implementation scope. A successful package type policy resolution must record the selected row ref and checksum in `030.VersionManifest.included_refs`.
 
+### AnalysisRegistryPackageTypePolicyClosure
+
+Package-supplied `130` row catalogs and artifacts are eligible only through exact package type policy resolution. Package membership, package label, repository path, artifact filename, version string, SBOM, provenance, dependency lock, validation report, or package-set summary must not substitute for selected owner row refs, selected row checksums, owner artifact checksums, validation refs, lifecycle refs, redaction refs, generated error-registry refs when visible, or `030.VersionManifest` inclusion.
+
+For each package type below, package activation must resolve exactly one active `PackageTypePolicyRow`, validate an immutable `PackageReleaseManifest`, validate an active `ProductionPackageSetManifest`, validate compatibility rows, validate validation matrix refs, validate lifecycle transition evidence, validate trust and provenance evidence according to package type policy, validate owner artifact refs/checksums, validate selected row refs/checksums for row-set packages, validate generated error-registry refs for package-visible diagnostics, and include all selected refs in `030.VersionManifest` before the package-supplied artifact can affect output.
+
+| Package type | Owner row or artifact family | Required policy gates |
+| --- | --- | --- |
+| `analysis_rule_bundle` | `130.AnalysisRuleBundle` | package type policy, release manifest, package set, compatibility matrix, rule refs/checksums, graph compatibility refs, mutation-prohibition proof, validation refs, lifecycle refs, trust/provenance/SBOM refs, generated error-registry refs when visible, and manifest refs. |
+| `analysis_rule_row_set` | `130.AnalysisRule` rows | same as parent bundle plus selected row refs/checksums and row-set checksum. |
+| `rule_graph_compatibility_matrix` | `130.RuleGraphCompatibilityMatrix` | graph profile refs, query translation refs, expected query/result checksums, mutation-prohibition proof, validation refs, package-set refs, and manifest refs. |
+| `derivation_rule_bundle` | `130.DerivationRuleBundle` | `080` handoff refs, predicate refs, source-authority refs, validation refs, package-set refs, and manifest refs. |
+| `derived_graph_edge_rule_set` | `130.DerivedGraphEdgeRule` rows | supporting fact refs, `080` or `090` handoff refs, validation refs, package-set refs, lifecycle refs, and manifest refs. |
+| `threat_intel_enrichment_profile` | `130.ThreatIntelEnrichmentProfile` | profile row refs/checksums, artifact refs/checksums, distribution policy refs, redaction refs, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+| `threat_intel_distribution_mapping_policy` | `130.ThreatIntelDistributionMappingPolicy` | selected mapping row refs/checksums, row-set checksum, redaction refs, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+| `threat_intel_artifact_package` | `130.ThreatIntelArtifactRef` | immutable artifact bytes checksum, schema refs, redaction refs, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+| `lineage_facet_mapping_policy` | `130.LineageFacetMappingRow` | schema URL immutability, schema bytes checksum, facet checksum policy, collision policy, raw-facet storage policy, redaction refs, validation refs, package-set refs, and manifest refs. |
+| `artifact_class_policy_row_set` | `130.ArtifactClassPolicy` rows | selected row refs/checksums, evidence artifact registry checksum, substitution validation refs, mutation-prohibition refs, package-set refs, and manifest refs. |
+| `registry_governance_artifact` | `130.RegistryArtifactGovernance` | owner refs, artifact ref/checksum, governance refs, approval refs, authority-grant handoff refs when non-null, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+| `registry_custom_property_schema` | `130.RegistryCustomPropertySchema` | namespace/path/type/bounds/cardinality refs, attachment target refs, redaction refs, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+| `registry_classification_policy` | `130.RegistryClassificationPolicy` | label namespace refs, allowed label refs, attachment target refs, conflict behavior refs, redaction refs, validation refs, lifecycle refs, package-set refs, and manifest refs. |
+
+`policy_bundle` must not substitute for the selected package type of a bundled `130` artifact. A bundled artifact must still resolve through its own package type policy row when its row family can affect output, visibility, validation acceptance, package-visible diagnostics, replay, redaction, or manifest state.
+
 ### Lakehouse table-state package-supplied catalog types
 
 Package-supplied `020` row catalogs must activate only through explicit package types and active package type policies. `policy_bundle` remains a broad label and must not substitute for row-specific package types.
@@ -1596,6 +1620,7 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-PACKAGE-TYPE-COVERAGE-AC-001` | Every confirmed token appears exactly once in `PackageTypePolicyRowCoverageMatrix`, and absent, duplicate, or multi-family assignments fail validation. |
 | `100-MAPPING-CATALOG-PACKAGE-TYPE-AC-001` | Mapping and external-schema row-catalog packages resolve exactly one active package type policy row; broad-label substitution, missing policy, incompatible compiled artifact, missing package-set ref, and mismatched rollback artifact checksum fail before activation or silver output. |
 | `100-POLICY-BUNDLE-SUBSTITUTION-AC-001` | `policy_bundle` cannot substitute for row-specific package types and fails with `PACKAGE_ACTIVATION_ARTIFACT_OWNER_MISMATCH` before candidate output. |
+| `100-ANALYSIS-REGISTRY-PACKAGE-TYPE-AC-001` | Every package-supplied `130` package type resolves exactly one active package type policy row; missing, unknown, ambiguous, untrusted, incompatible, unmanifested, package-set-mismatched, validation-missing, lifecycle-missing, redaction-missing, generated-error-registry-missing, or `TODO`-bearing packages fail before activation. |
 | `100-REPOSITORY-FORM-AC-001` | `git_tree_snapshot` is inactive for MVP production activation and fails with `PACKAGE_REPOSITORY_FORM_UNSUPPORTED`. |
 | `100-COVERAGE-DOMAIN-PACKAGE-AC-001` | Package activation fails for package-supplied coverage row catalogs containing `DNS`, `DHCP/IPAM`, `cloud inventory`, `source history`, `deferred reachability`, or unknown lower-snake-case coverage-domain tokens. |
 | `100-COVERAGE-DOMAIN-PACKAGE-AC-002` | The current active package set remains active when candidate activation fails because of coverage-domain token validation. |

@@ -599,6 +599,26 @@ An implementation must materialize candidate errors only from generated `ErrorCo
 | 7 | `owner_specific_diagnostic` | Owner execution emits diagnostic-only failure state that is visible for the endpoint. | Primary error is emitted only when endpoint outcome policy permits diagnostic visibility; otherwise it is audit-only. |
 | 8 | `shared_generic_fallback` | No generated owner-specific row covers the failure class and a shared `110` row is explicitly permitted. | Primary error may use the shared row. This row must not hide missing owner registry coverage. |
 
+### AnalysisRegistryGeneratedErrorClosure
+
+`110` must not manually copy `130` owner error rows into a separate final registry. `GenerateErrorCodeRegistry(owner_fragments, shared_110_rows)` must expand `130.AnalysisErrorRegistryFragment` into exactly one generated `ErrorCodeRegistryRow` per owner error code before API, health, export, audit, validation, telemetry-visible, package-visible, or acceptance-visible diagnostics may expose the error.
+
+Generated-registry validation must include the following `130` error families: analysis mutation, lineage facet policy and checksum errors, threat-intel profile/distribution/artifact errors, registry artifact and authority errors, registry custom-property errors, registry classification errors, derived-edge errors, and artifact-class-policy errors.
+
+| Validation scenario | Required result |
+| --- | --- |
+| missing `130` owner error row | `GenerateErrorCodeRegistry` rejects registry generation before visible diagnostics. |
+| duplicate `130` error code | Duplicate non-byte-identical rows reject before registry checksum computation. |
+| generic substitute for `130` owner-specific code | Generic substitute rejects; owner-specific code wins. |
+| owner-specific top-level caller field | Reject; owner-specific detail must remain in `owner_error_context`. |
+| raw threat-intel value leakage | Reject before API, health, audit, export, telemetry, package report, or validation output. |
+| raw facet byte leakage | Reject before visibility. |
+| registry payload byte leakage | Reject before visibility. |
+| backend/query text leakage | Reject before visibility unless translated, redacted, and authorized by owner profiles. |
+| missing generated registry checksum | Visible diagnostics fail with `VERSION_MANIFEST_INCOMPLETE` or the most specific owner error. |
+
+`SelectObservableError` must select `ARTIFACT_SUBSTITUTION_FORBIDDEN`, `REGISTRY_CLASSIFICATION_AUTHORITY_FORBIDDEN`, and `THREAT_INTEL_IDENTITY_FORBIDDEN` before generic API, registry, validation, or activation errors when those owner-specific failures apply.
+
 ### SelectObservableError
 
 ```text
@@ -1684,7 +1704,7 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-ERROR-RECORD-SCHEMA-AC-002` | Every emitted `ErrorRecord` conforms to `ErrorRecordSchema`, uses `error_code` rather than legacy `code`, computes deterministic `error_correlation_id`, nests owner-specific detail in `owner_error_context`, and rejects forbidden sensitive values before visibility. |
 | `110-OBSERVABLE-ERROR-SELECTION-AC-001` | `SelectObservableError` deterministically selects owner-specific rows before generic rows, request/page-token errors before owner execution, authorization denial before existence-revealing owner detail, and sets `partial_result = true` when visible errors exceed 128 rows. |
 | `110-OWNER-ERROR-FRAGMENT-AC-001` | Every owner error fragment that exports error codes satisfies `OwnerErrorFragmentCompletionRequirement`; any `TODO`, blank required field, duplicate code, or generic substitute fails with `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
-| `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, audit-visible owner context, redaction rules, fixture refs, and `030.VersionManifest` checksum inclusion. |
+| `110-ANALYSIS-REGISTRY-ERROR-AC-001` | Every expanded `130` analysis, lineage, artifact-class-policy, threat-intel, registry, custom-property, classification, and derived-edge error row renders through `GenerateErrorCodeRegistry` with standard caller-visible fields, standard audit fields, nested owner context, redaction rules, fixture refs, generated registry checksum, owner-specific precedence, and `030.VersionManifest` checksum inclusion. |
 | `110-LAKEHOUSE-TABLESTATE-ERROR-AC-001` | Every new `020`, `030`, and `100` lakehouse table-state error appears in the generated registry with exact fixture refs, owner context schema, redaction rule, severity, retry class, and no generic substitute. |
 | `110-AUTHORIZATION-MATRIX-AC-001` | Every endpoint outcome uses `AuthorizationPermissionMatrix` and emits `AuthorizationDecision` plus audit evidence for allow, deny, and redact-only decisions. |
 | `110-REDACTION-MATRIX-AC-001` | Every data class in `RedactionDataClassMatrix` has caller-visible, audit-visible, and forbidden-output fixture coverage. |

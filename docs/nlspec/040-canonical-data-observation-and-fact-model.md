@@ -389,6 +389,36 @@ Tool logs, CI logs, repository URLs, raw branch names, raw file paths, raw gener
 
 Branch names, tags, repository URLs, pull request numbers, hook logs, merge event labels, and commit timestamps must not be `artifact_checksum` inputs unless they are serialized as owner-declared canonical metadata bytes and are not used as production authority. Raw repository file bytes and raw structured input payload bytes must not be inlined in `EvidenceRef`.
 
+### AnalysisRegistryEvidenceArtifactClassHandoff
+
+`130.ArtifactClassPolicy` may constrain artifact classes and substitution eligibility, but it must not create new `EvidenceRef.artifact_id.kind` values. New artifact ID kinds require a new `040` schema version.
+
+Any `EvidenceRef` involving analysis, lineage, registry, validation, freshness, graph-rebuild, package, or table-state artifacts must validate both of the following before `evidence_ref_id` computation:
+
+1. the selected `130.ArtifactClassPolicy` row when substitution or class eligibility is evaluated;
+2. the selected `040.EvidenceArtifactClassRegistry` row for the final `artifact_class` and `artifact_id.kind` pair.
+
+If `130` permits a substitution but `040.EvidenceArtifactClassRegistry` rejects the class/kind pair, `EVIDENCE_ARTIFACT_CLASS_KIND_MISMATCH` must win before evidence-ref ID computation. If `040` permits a class/kind pair but `130.ArtifactClassPolicy` forbids substitution, `ARTIFACT_SUBSTITUTION_FORBIDDEN` must win before evidence-ref creation.
+
+The artifact-class families below must have active `040` class rows before any evidence ref can be emitted. This table does not add new `artifact_id.kind` values. The allowed kinds remain only `cadastre_record_ref`, `activation_artifact_ref`, `lakehouse_artifact_ref`, and `external_artifact_ref`.
+
+| Artifact-class family | Allowed `artifact_id.kind` values | Required owner handoff |
+| --- | --- | --- |
+| analysis output record | `cadastre_record_ref`, `activation_artifact_ref` | `130.AnalysisFinding`, `130.AnalysisMetric`, or `130.RiskAcceptanceRecord` checksum plus `130.ArtifactClassPolicy` when substituted. |
+| threat-intel artifact | `activation_artifact_ref`, `external_artifact_ref` | `130.ThreatIntelArtifactRef` checksum and redaction refs. |
+| lineage facet artifact | `activation_artifact_ref`, `external_artifact_ref`, `cadastre_record_ref` | `130.LineageFacetMappingRow` refs, schema bytes checksum, and facet checksum policy. |
+| registry governance artifact | `activation_artifact_ref`, `cadastre_record_ref` | `130.RegistryArtifactGovernance` refs and artifact checksum. |
+| registry classification artifact | `activation_artifact_ref`, `cadastre_record_ref` | `130.RegistryClassificationPolicy` refs and checksum. |
+| registry custom-property schema artifact | `activation_artifact_ref`, `cadastre_record_ref` | `130.RegistryCustomPropertySchema` refs and checksum. |
+| artifact-class policy artifact | `activation_artifact_ref` | `130.ArtifactClassPolicy` row-set ref and checksum. |
+| validation artifact | `cadastre_record_ref`, `external_artifact_ref` | `120.ValidationMatrix` or validation output checksum for the exact fixture. |
+| freshness artifact | `cadastre_record_ref`, `external_artifact_ref` | Owner freshness artifact checksum and non-authority handoff. |
+| graph rebuild artifact | `cadastre_record_ref`, `lakehouse_artifact_ref` | `090.GraphRebuildManifest` and graph index consistency refs. |
+| table snapshot artifact | `lakehouse_artifact_ref` | `020.LakehouseSnapshotRef` checksum. |
+| package release or package-set artifact | `activation_artifact_ref`, `cadastre_record_ref`, `external_artifact_ref` | `100.PackageReleaseManifest` or `100.ProductionPackageSetManifest` checksum. |
+
+A validation report, lineage facet, registry label, freshness artifact, graph rebuild artifact, package manifest, or table-state artifact must not substitute for source evidence, fact authority, source authority, source completeness, graph truth, package activation, production approval, or validation acceptance unless the owner spec exports an exact named interface and both `040` and `130` validation pass.
+
 ### CommonRecordHeader
 
 `CommonRecordHeader` applies to every persisted core record in this registry. Per-record field tables define additional fields. When a per-record table includes a record-specific ID field such as `raw_record_id`, that field must equal `CommonRecordHeader.record_id`; a mismatch fails with `CORE_RECORD_ID_MISMATCH`.
@@ -1040,6 +1070,7 @@ Unknown fields are rejected unless the owning record declares an extension map. 
 | `040-ERROR-FRAGMENT-CORE-AC-001` | `040.CoreRecordErrorRegistryFragment` has no `TODO:` cells and generates deterministic `110.ErrorCodeRegistryRow` values for every `040.CoreRecordErrorCodeSet` code. |
 | `040-EXPORT-ALIAS-AC-001` | Every downstream import of a `040.*Schema`, one-of registry, evidence artifact registry, or `ComputeEvidenceRefId` resolves to exactly one exported name in this file. |
 | `040-EXPORT-ALIAS-AC-002` | Schema aliases validate as aliases to `CoreRecordSchema` row families and do not create duplicate field definitions. |
+| `040-EVIDENCE-ARTIFACT-130-HANDOFF-AC-001` | Class/kind mismatch, forbidden substitution, and successful non-authoritative evidence ref cases validate both `040.EvidenceArtifactClassRegistry` and `130.ArtifactClassPolicy`, produce deterministic owner errors or output checksums, and include manifest refs. |
 | `040-COMPUTE-EVIDENCE-REF-ID-AC-001` | `ComputeEvidenceRefId` is callable by exact contract name and rejects raw payload bytes before ID computation. |
 
 ### Structured input evidence acceptance criteria
