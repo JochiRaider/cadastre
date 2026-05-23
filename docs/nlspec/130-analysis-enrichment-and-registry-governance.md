@@ -106,6 +106,25 @@ PostgreSQL and AGE compatibility rows must name `provider = postgresql` or `prov
 
 Changed output-affecting inputs reject production replay before output. Shadow-only comparison is allowed only when an active owner row permits shadow output and the result is not production-visible. Analysis replay must not mutate raw, silver, identity, gold, graph-delta, graph-serving, completeness, watermark, package, or source-authority state.
 
+#### AnalysisReplayFieldSelectionRow
+
+`AnalysisReplayFieldSelectionRow` is the exact owner-local row family imported by `080.ReplayEquivalencePolicyOutputClassRow` for `output_class = analysis_output`. A prose table is not sufficient for replay field selection.
+
+| Field | Required behavior |
+| --- | --- |
+| `row_id` | Stable row ID scoped to the analysis replay field-selection row set. |
+| `output_subset` | One of `analysis_finding`, `analysis_metric`, `risk_acceptance_record`, or `analysis_rule_execution_summary`. |
+| `included_replay_fields` | Ordered sequence or canonical set of exact fields that affect analysis output. Wildcards are forbidden. |
+| `excluded_volatile_fields` | Canonical set of volatile fields such as request correlation ID, UI display label, runtime duration, and non-output diagnostic ordering artifacts. |
+| `required_validation_refs` | Non-empty refs for exact replay, rule-bundle mismatch, graph compatibility mismatch, authorization mismatch, volatile-only difference, and mutation prohibition. |
+| `row_checksum` | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. |
+| `row_set_checksum` | SHA-256 over sorted row checksums and row-set metadata. |
+| `activation_scope` | `030.ActivationScope`. |
+| `lifecycle_status` | Production use requires `active`. |
+| `version_manifest_requirements` | `030.VersionManifest` must include selected row ref, row checksum, row-set checksum, rule bundle refs, graph refs, authorization/redaction refs, validation refs, package-set refs when package-supplied, and output checksum refs. |
+
+The `080.analysis_output` replay row must reference `AnalysisReplayFieldSelectionRow` by structured row ref and checksum. Missing, inactive, checksum-mismatched, package-set-mismatched, unmanifested, or TODO-bearing field-selection rows fail replay before analysis output.
+
 ## Derivation Rule Boundary
 
 `DerivationRuleBundle` may emit `GoldFact` records only through the gold derivation interface owned by `080`. A derived graph edge rule may emit graph deltas only through the graph projection interface owned by `090`. Direct graph mutation is forbidden.

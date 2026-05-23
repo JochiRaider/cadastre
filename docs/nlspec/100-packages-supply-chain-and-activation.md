@@ -507,6 +507,8 @@ These rows are package type policies for declarative gold predicate row-catalog 
 
 For both package types, `allowed_stage_classes = []`, `allowed_output_record_classes = []`, and direct production record output is forbidden. Package activation must fail with the most specific `080` or `100` error when a package-supplied predicate row catalog arrives under `policy_bundle`, `mapping_bundle`, `source_authority_row_set`, a package name, a module name, an artifact filename, a repository path, a version string, or any other broad label.
 
+For `gold_fact_predicate_contract_row_set` and `gold_fact_structured_value_schema_row_set`, the selected `PackageTypePolicyRow` must require immutable `PackageReleaseManifest`, active `ProductionPackageSetManifest`, artifact digest, row-set artifact ref, selected row refs/checksums, compatibility rows, rollback compatibility, validation refs, lifecycle transition evidence, package-set checksum, and `030.VersionManifest` refs. These package types are declarative catalogs with no direct production execution. A row-set checksum alone, validation report alone, dependency lock, SBOM, provenance record, package label, package name, module name, artifact filename, repository path, mutable ref, or version string must fail as a substitute for selected row refs and package-set activation.
+
 ### Analysis, enrichment, lineage, and registry package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. They make package-supplied `130` artifacts eligible only through package type policy, package-set membership, compatibility rows, validation refs, trust evidence, and `030.VersionManifest` inclusion.

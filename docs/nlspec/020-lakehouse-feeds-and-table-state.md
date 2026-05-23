@@ -236,6 +236,8 @@ The active MVP public source-dataset rows must support only the exact `080` pred
 
 `network_flow` may support `gfp-mvp-flow-observed-connection-v1` only for positive observed traffic. `network_flow` must not support flow absence, no-change proof, observed-connection absence edges, theoretical reachability, service access, or identity-conditioned access in MVP.
 
+A `supported_fact_predicate_refs` entry references the finalized `080.GoldFactPredicateContractRow` only. Structured schema support is inherited through the selected predicate contract and must not be inferred from source-native field names, OCSF object names, source-extension paths, coverage-domain tokens, or package labels. A dataset row that needs a structured schema must carry the predicate row ref and let `080` select the exact structured schema row and `060` select the exact authority row.
+
 Rows with `TODO:` in selected row refs, checksums, validation refs, expected outputs, mutation-prohibition proofs, or package-set refs are not active for gold output. They may remain as planning blockers only. `ValidateSpecSet` must classify them as `blocked_todo` and promotion must fail if their dataset is in selected gold-derivation scope.
 
 ### MVPSourceDatasetCatalogClosureInventory

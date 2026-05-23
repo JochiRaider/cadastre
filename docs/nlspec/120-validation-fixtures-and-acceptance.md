@@ -391,7 +391,7 @@ A gold predicate-catalog validation row may pass only when fixture checksum, inp
 
 | validation_row_id | owner_spec | scenario | expected output or error | required fixture coverage |
 | --- | --- | --- | --- | --- |
-| `val-080-gold-predicate-rowset-total-mvp` | `080` | Active MVP predicate row set is evaluated for required active rows and deterministic block rows. | `closed_active` or `blocked_todo` when any required row/schema is TODO-bearing. | 18 active rows, four block rows, row-set checksum, row checksums. |
+| `val-080-gold-predicate-rowset-total-mvp` | `080` | Active MVP predicate row set is evaluated for required active rows and deterministic block rows. | `closed_active` or `blocked_todo` when any required row/schema is TODO-bearing. | 18 active rows, six deterministic block rows, row-set checksum, row checksums, and explicit coverage for `gfp-block-modeled-reachability-v1`, `gfp-block-exposure-theoretical-reachability-v1`, `gfp-block-flow-theoretical-reachability-v1`, `gfp-block-host-ownership-v1`, `gfp-block-directory-inventory-gold-output-v1`, and `gfp-block-source-history-no-change-v1`. |
 | `val-080-gold-predicate-row-missing` | `080` | Candidate fact type/predicate has no active row. | `GOLD_FACT_PREDICATE_CONTRACT_MISSING`; no fact. | missing row and no mutation. |
 | `val-080-gold-predicate-row-ambiguous` | `080` | Two equally specific active rows cover the same candidate. | `GOLD_FACT_PREDICATE_CONTRACT_AMBIGUOUS`; no fact. | ambiguity diagnostics and no row-order tiebreak. |
 | `val-080-gold-predicate-subject-kind-boundary` | `080`, `040` | Candidate subject kind is outside selected row. | `GOLD_FACT_PREDICATE_SUBJECT_KIND_FORBIDDEN`; no ID computation. | every active subject-kind boundary. |
@@ -430,6 +430,32 @@ This matrix verifies activation-controlled row schema precision for every produc
 | `120-ACTIVATION-ROW-SCHEMA-AC-013` | `000`, `030`, `120` | Missing row schema precision blocks authoritative promotion. | promotion failure | spec-set inventory and blocked promotion fixture. |
 
 `AcceptanceReport.result = pass` is forbidden when any selected production row family lacks non-`TODO` fixtures and expected checksums for these cases. `ValidateSpecSet` must fail before acceptance aggregation when any owner row family is output-affecting and lacks either full row-field precision or an explicit non-production, inactive, validation-only, deferred, or deterministic-block classification.
+
+### StructuredGoldObjectSchemaValidationMatrix
+
+This matrix is the executable validation closure for `080.StructuredValueSchemaRow` and the seven MVP structured schema refs. A row with a `TODO:` fixture checksum, expected output checksum, expected error checksum, package-set ref, mutation-prohibition proof, or manifest ref must report `blocking_status = blocked` and must not contribute to `AcceptanceReport.result = pass`.
+
+| validation_row_id | schema_ref | scenario | fixture_checksum | expected output or error | expected_output_checksum | required proof |
+| --- | --- | --- | --- | --- | --- | --- |
+| `val-080-structured-os-descriptor-minimal` | `080.struct.os_descriptor.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | manifest and schema row refs. |
+| `val-080-structured-os-descriptor-maximal` | `080.struct.os_descriptor.v1` | Valid maximal bounded value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | bounds proof. |
+| `val-080-structured-host-lifecycle-minimal` | `080.struct.host_lifecycle_state.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | exact `060` lifecycle authority refs. |
+| `val-080-structured-host-management-minimal` | `080.struct.host_management_state.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | management authority refs. |
+| `val-080-structured-vulnerability-key-minimal` | `080.struct.vulnerability_instance_key.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | scanner authority and coverage refs. |
+| `val-080-structured-software-key-minimal` | `080.struct.software_instance_key.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | inventory authority refs. |
+| `val-080-structured-control-key-minimal` | `080.struct.control_evaluation_key.v1` | Valid minimal value. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | control mapping refs. |
+| `val-080-structured-exposure-key-minimal` | `080.struct.observed_exposure_key.v1` | Valid minimal value with `claim_scope = observed_only`. | `TODO: product governance must supply fixture checksum` | structured value accepted. | `TODO: expected canonical value checksum` | observed-only authority refs. |
+| `val-080-structured-schema-missing-required` | all seven schema refs | Missing required field. | `TODO: one fixture per schema ref` | `GOLD_FACT_STRUCTURED_SCHEMA_MISSING_REQUIRED_FIELD`; no fact. | `TODO: expected error checksum` | no `GoldFact`, no `GoldFactChangeSet`, no graph delta, no export output. |
+| `val-080-structured-schema-null-forbidden` | all seven schema refs | Null supplied for non-null field. | `TODO: one fixture per schema ref` | `GOLD_FACT_STRUCTURED_SCHEMA_FIELD_INVALID`; no fact. | `TODO: expected error checksum` | no mutation. |
+| `val-080-structured-schema-unknown-field` | all seven schema refs | Unknown field appears. | `TODO: one fixture per schema ref` | `GOLD_FACT_STRUCTURED_SCHEMA_UNKNOWN_FIELD`; no fact. | `TODO: expected error checksum` | no mutation. |
+| `val-080-structured-schema-unknown-enum` | all enum fields | Unknown enum value. | `TODO: one fixture per enum field` | reject, map to unknown, or map to other only as declared by field row. | `TODO: expected checksum` | enum policy proof. |
+| `val-080-structured-schema-string-bounds` | string and URI fields | Min, max, and overflow. | `TODO: one fixture per bounded field` | accept in-range and reject out-of-range. | `TODO: expected checksums` | bounds proof. |
+| `val-080-structured-schema-invalid-uri-sha` | URI and SHA-256 fields | Invalid URI or SHA-256. | `TODO: product governance must supply fixture checksum` | owner invalid-field error; no fact. | `TODO: expected error checksum` | no mutation. |
+| `val-080-structured-schema-checksum-drift` | all seven schema refs | Schema row or field row checksum drifts. | `TODO: product governance must supply fixture checksum` | `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH`; no replay output. | `TODO: expected error checksum` | replay no-output proof. |
+| `val-080-structured-schema-manifest-omission` | all seven schema refs | Schema row omitted from `030.VersionManifest`. | `TODO: product governance must supply fixture checksum` | `VERSION_MANIFEST_INCOMPLETE` or owner manifest error. | `TODO: expected error checksum` | no visible output. |
+| `val-080-structured-schema-package-set-omission` | package-supplied schemas | Package-set ref omitted. | `TODO: product governance must supply fixture checksum` | package-set owner error; no activation. | `TODO: expected error checksum` | current active package set preserved. |
+| `val-080-structured-schema-private-binding-leak` | all seven schema refs | Private binding appears in schema row or value. | `TODO: product governance must supply fixture checksum` | private-binding owner error; no fact. | `TODO: expected error checksum` | redaction and no mutation. |
+| `val-080-structured-schema-raw-secret-leak` | all seven schema refs | Raw payload bytes or secret-like values appear in structured value. | `TODO: product governance must supply fixture checksum` | raw/secret leak owner error; no fact. | `TODO: expected error checksum` | no API/export/audit exposure. |
 
 ### DefineOnceClosureValidationMatrix
 
@@ -935,7 +961,7 @@ Rows in this matrix are required when `080` behavior is in implementation scope.
 | `assertion-transition-*` | Every default assertion-state and correction-event pair defined by `080`. |
 | `correction-snapshot-ref-*` | old snapshot missing, new snapshot missing, table-set checksum missing, retention ineligible, mutable ref rejected. |
 | `gold-correction-no-op-error-*` | missing temporal resolution, missing authority, ambiguous authority, missing correction policy, missing transition row, unauthorized negative, unauthorized CDC tombstone, replay output-class missing. |
-| `replay-equivalence-*` | output-class rows for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance; checksum match and mismatch. |
+| `replay-equivalence-*` | output-class rows for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, validation acceptance, telemetry health diagnostic, and run-lock operation; checksum match and mismatch. |
 | `graph-handoff-*` | `none`, `reproject_fact_key`, authorized expiry, authorized cleanup, denied expiry, conflict visibility default, identity split handoff. |
 | `temporal-version-manifest-*` | missing temporal resolution ref, missing correction snapshot refs, missing replay sufficiency check, missing graph handoff refs, checksum mismatch. |
 
@@ -950,6 +976,19 @@ Rows in this matrix are required when `080` behavior is in implementation scope.
 | `120-PROJECTION-REPLAY-COVERAGE` | `050`, `080` | Projection replay exact match, profile mismatch, loss-manifest mismatch, redaction mismatch, and volatile-field-only difference are validated. |
 | `120-ANALYSIS-REPLAY-COVERAGE` | `130`, `080` | Analysis replay exact match, rule mismatch, graph compatibility mismatch, derived-view mismatch, authorization mismatch, shadow-only result, and mutation attempt are validated. |
 | `120-API-TEMPORAL-ERROR-COVERAGE` | `110`, `080` | Every new `080` error is registered and label behavior is non-collapsing. |
+
+Required `080` event-sequence rows must use the interface below. The uploaded public spec set does not include concrete fixture bytes for these rows; therefore each row starts as `blocked` until product governance supplies non-`TODO` checksums.
+
+| validation_row_id | family | required cases | fixture_checksum | expected_output_or_error_checksum | mutation_prohibition |
+| --- | --- | --- | --- | --- | --- |
+| `val-080-event-temporal-total` | temporal | Missing policy, absent time, malformed time, ambiguous time, forbidden current-time fallback, forbidden table/commit/CDC/graph/replay time, authorized unknown valid time. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no `GoldFact`, no graph delta, no watermark on failures. |
+| `val-080-event-known-time-total` | known time | Current import success, historical valid-time-only import, reconstructed known-time success, missing evidence rejection, monotonicity failure. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no reconstructed known time on failures. |
+| `val-080-event-late-arrival-total` | late arrival | Authoritative before cutoff, authoritative after cutoff as correction, non-authoritative quarantine, discard forbidden, watermark no-op. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no discard and no watermark advancement unless `060` permits. |
+| `val-080-event-correction-total` | correction | Insert, replacement, interval split, duplicate no-op, stale transition, conflict mark, conflict resolve, authorized retraction, unauthorized retraction, CDC tombstone unauthorized, source-history no-change blocked. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no unauthorized retraction, graph expiry, cleanup, or watermark. |
+| `val-080-event-assertion-transition-total` | assertion transition | Every default assertion-state and correction-event pair. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | one output operation or deterministic owner error per pair. |
+| `val-080-event-replay-total` | replay | Missing output-class row, mutable ref, retention failure, authority mismatch, temporal mismatch, side-effect mismatch, checksum mismatch, volatile-only difference. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no replay output on blocking failures. |
+| `val-080-event-graph-handoff-total` | graph handoff | `none`, `reproject_fact_key`, denied expiry, authorized expiry, authorized cleanup, conflict visibility, identity split valid, identity split invalid. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no graph delta or backend mutation when denied or invalid. |
+| `val-080-event-manifest-closure-total` | manifest closure | Missing row ref, missing schema ref, missing authority ref, missing event-sequence corpus ref, row-set checksum-only substitution. | `TODO: product governance must supply fixture checksum` | `TODO: product governance must supply expected checksum` | no visible output and no validation pass. |
 
 ### RunLockLeaseRecoveryValidationMatrix
 
@@ -1499,8 +1538,12 @@ replay_same_event
 
 | Prohibition token | Required proof |
 | --- | --- |
-| no production output | Output manifest contains no production-visible record refs. |
-| no graph mutation | Graph apply result absent or no-op; derived-view state unchanged. |
+| no `GoldFact` | Output manifest contains no `GoldFact` refs for the scenario. |
+| no `GoldFactChangeSet` | Output manifest contains no `GoldFactChangeSet` refs except explicit no-op evidence when the owner row allows it. |
+| no graph delta | Output manifest contains no `GraphDeltaSet` refs. |
+| no graph apply | Graph apply result absent or no-op; derived-view state unchanged. |
+| no export output | Export output manifest contains no production-visible export refs. |
+| no compliance pass/fail | Compliance export contains no pass or fail row derived from the blocked scenario. |
 | no watermark advancement | No `WatermarkCommitRecord` with advanced value. |
 | no package activation | Current active package set checksum unchanged. |
 | no identity mutation | No new terminal `IdentityDecision` that mutates canonical identity. |
@@ -1789,6 +1832,7 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-OCSF-DIRECTION-AC-001` | Active network activity mapping fixtures prove OCSF endpoint order cannot determine graph direction and emits no edge, no graph property, no pathfinding input, and no backend mutation without qualifying `FlowRoleEvidence`. |
 | `120-OCSF-DIRECTION-AC-002` | Active DNS and DHCP mapping fixtures prove endpoint-like fields cannot determine graph direction and remain graph no-op without qualifying Cadastre-owned flow-role evidence. |
 | `120-GOLD-PREDICATE-CATALOG-TOTAL-AC-001` | `GoldFactPredicateCatalogValidationMatrix` contains every row required by `080.MVPGoldFactPredicateContractRowSetClosure`, and aggregate acceptance fails for any missing, blocked, TODO-bearing, checksum-mismatched, package-set-mismatched, or manifest-incomplete predicate-catalog row. |
+| `120-STRUCTURED-GOLD-SCHEMA-TOTAL-AC-001` | `StructuredGoldObjectSchemaValidationMatrix` contains valid, invalid, checksum, manifest, package-set, private-binding, raw-leak, and secret-leak rows for every MVP structured schema ref, and aggregate acceptance fails while any fixture checksum, expected output checksum, expected error checksum, mutation-prohibition proof, package-set ref, or manifest ref is `TODO:`. |
 | `120-COVERAGE-DOMAIN-TOKEN-AC-001` | Every canonical token validates and every legacy/display value rejects with the expected owner-specific error. |
 | `120-COVERAGE-DOMAIN-TOKEN-AC-002` | Token arrays reject duplicates and produce byte-identical canonical checksums after lexical sorting. |
 | `120-COVERAGE-DOMAIN-FEED-MAP-AC-001` | Every feed category in `020` has exactly one mapping row or deterministic block row. |

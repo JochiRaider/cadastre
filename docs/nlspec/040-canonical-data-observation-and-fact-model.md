@@ -325,6 +325,14 @@ The MVP predicate catalog owned by `080` must not add subject or object shapes b
 
 `040` validates core shape and canonical serialization. `080` may narrow the permitted combinations for MVP fact semantics. `080` must not widen `040` registries, redefine the one-of shape, or define a second key serialization.
 
+### StructuredValueSchemaHandoff
+
+`040` validates only the `GoldFact.object_value` one-of envelope, object-kind equality, canonical serialization, and ID input shape for `structured_value`. `080.StructuredValueSchemaRow` owns schema row selection, field validation, field defaults, enum behavior, schema checksum, value checksum, predicate-specific permission, and structured object no-output triggers.
+
+`structured_value.value` must be canonicalized through `040.CanonicalJSON` only after `080` materializes field defaults. `structured_value.schema_ref` and the complete canonical `value` object are part of the `GoldFact.object_value` object hashed by `ComputeGoldFactKeyId`; serializing only the inner fields is forbidden.
+
+OCSF objects, observables, raw data, unmapped fields, lineage facets, graph backend objects, external taxonomy labels, source-native status labels, severity labels, and confidence labels are invalid object authority unless `080` derives a bounded structured value through active schema rows and the required `050` and `060` handoffs validate. This handoff adds no new `GoldFact.object_value.kind` values.
+
 ### EvidenceArtifactIdKindRegistry
 
 `EvidenceRef.artifact_id.kind` is a closed token set owned by `040`. Artifact-class eligibility is governed by `EvidenceArtifactClassRegistry` and owner handoffs from `020`, `030`, `100`, and `130`.

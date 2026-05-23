@@ -251,6 +251,22 @@ Mapping output may preserve inputs used later by `080.DeriveFacts`, but it must 
 
 If a structured object value requires a source path not expressible in active OCSF artifacts, the mapping bundle must use an exact `cadastre_only` mapping row or an active `SourceExtensionFieldRule`. The mapping row still emits observation metadata only. Gold object construction remains a later `080` responsibility after source authority and predicate validation.
 
+#### Structured schema source-path validation handoff
+
+Every mapping row that preserves metadata later consumed by an `080` structured schema must declare permitted source metadata paths without constructing `GoldFact.object_value`. Missing path declarations, undeclared source-extension paths, and OCSF-only shortcuts must fail mapping validation before silver output can be used for gold derivation.
+
+| Structured schema ref | Required permitted source-path evidence | Required mapping refs | Required downstream refs | Forbidden shortcut validation |
+| --- | --- | --- | --- | --- |
+| `080.struct.os_descriptor.v1` | OCSF-derived OS/device metadata paths or exact `SourceExtensionFieldRule` paths. | `ObservationToOCSFMappingRow` or `cadastre_only` row plus `ExternalSchemaProfile` and `ProfileResolutionManifest` when OCSF-derived. | `020.SourceDatasetCatalogRow`, `060.SourceAuthorityProfileRow`, `080.StructuredValueSchemaRow`. | OCSF object preserved as metadata but not gold value; `raw_data` and `unmapped` rejected. |
+| `080.struct.host_lifecycle_state.v1` | Lifecycle-relevant source-state metadata paths. | Exact mapping row and staleness/source-state mapping refs. | Exact `060` lifecycle authority, staleness, absence, and correction refs. | Status/activity/severity/confidence non-authority. |
+| `080.struct.host_management_state.v1` | Management-plane metadata paths and declared extension paths. | Exact mapping row and source-extension refs when needed. | Exact `060` management authority refs. | Management label alone cannot emit gold output. |
+| `080.struct.vulnerability_instance_key.v1` | Vulnerability identifier and affected package/protocol/port metadata paths. | Exact mapping row and coverage-sensitive field refs. | Exact `060` scanner authority, coverage, staleness, and absence refs. | Scanner fixed/missing/severity/confidence non-authority. |
+| `080.struct.software_instance_key.v1` | Software identity, vendor, version, install-scope, and architecture metadata paths. | Exact mapping row and source-extension refs when source paths are outside OCSF. | Exact `060` inventory authority refs. | Arbitrary package string cannot become structured value. |
+| `080.struct.control_evaluation_key.v1` | Control namespace, ID, target scope, polarity, and benchmark metadata paths. | Exact mapping row plus `060.ControlResultMappingRow` refs. | Exact control-result, coverage, and source-authority refs. | External pass/fail/unknown cannot default to Cadastre pass/fail. |
+| `080.struct.observed_exposure_key.v1` | Observed exposure metadata paths only. | Exact mapping row and observed-only claim wording refs. | Exact observed-exposure authority refs and reachability block refs. | Theoretical reachability, service access, and identity-conditioned access implications are forbidden. |
+
+`ObservationTypeExternalMappingValidationMatrix` must contain rows for OCSF object preservation as metadata, OCSF `raw_data` and `unmapped` rejection, observables/enrichments/status/severity/confidence non-authority, unknown enum preservation or rejection according to the mapping row, missing required normalized path, undeclared source-extension path, structured schema source path missing, and attempted direct `GoldFact.object_value` construction. `050-TODO-MVP-OCSF-MAPPING-ROW-CATALOG` remains blocked unless concrete mapping rows and checksums are supplied.
+
 ### FlowRoleEvidenceMappingHandoff
 
 `FlowRoleEvidence` is Cadastre-owned evidence outside OCSF `normalized_fields`. Mapping bundles may preserve OCSF endpoint fields as normalized observation metadata, but they must not synthesize `FlowRoleEvidence` from endpoint field order.

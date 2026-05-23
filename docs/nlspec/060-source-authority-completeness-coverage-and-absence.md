@@ -197,6 +197,22 @@ A `SourceAuthorityProfileRow` may authorize only a `GoldFact` candidate whose `f
 
 External schema field presence, external schema field absence, OCSF object metadata, progress signals, freshness signals, and source-history metadata must not satisfy object authority without an exact `060` row and a matching `080` predicate contract row. Missing, inactive, checksum-mismatched, out-of-scope, or stale predicate contract refs block authority before gold output.
 
+### StructuredGoldObjectAuthorityClosure
+
+Structured values are authorized only by exact `080.StructuredValueSchemaRow` refs, exact predicate refs, exact source-dataset refs, and exact source-authority closure rows. A parseable structured value is not sufficient authority.
+
+| Structured schema | Required `060` closure |
+| --- | --- |
+| `080.struct.os_descriptor.v1` | Exact positive authority and staleness policy for OS descriptor output. |
+| `080.struct.host_lifecycle_state.v1` | Exact lifecycle-state authority; source delete and decommission states require absence/correction refs before any retraction, cleanup, graph expiry, or lifecycle boundary output. |
+| `080.struct.host_management_state.v1` | Exact management-plane authority; labels alone are non-authoritative. |
+| `080.struct.vulnerability_instance_key.v1` | Exact scanner authority, coverage, staleness, and absence/fixed-state closure. |
+| `080.struct.software_instance_key.v1` | Exact inventory authority and staleness policy. |
+| `080.struct.control_evaluation_key.v1` | Exact `ControlResultMappingRow` and coverage closure. |
+| `080.struct.observed_exposure_key.v1` | Exact positive observed-exposure authority; no reachability, service-access, or identity-conditioned access negative inference. |
+
+`SourceAuthorityProfileRow.structured_object_authority_refs` must contain exact structured schema refs from `080`; schema-family strings, external schema object names, OCSF class names, package labels, and private binding names are not substitutes. Progress signals remain diagnostic-only by default. `ControlResultMappingRow` must map every external control state to exactly one of pass, fail, unknown, not_checked, not_applicable, error, or deterministic block; no default pass or fail mapping is permitted.
+
 ### SourceAuthorityScopeSelectorContextSet
 
 `SourceAuthorityScopeSelectorContextSet` is the owner context family for scoped rows in `060`. Each context instantiates `030.ScopeSelectorContext`; no row in this section defines selector schema, equality, coverage, subset matching, specificity, or ambiguity behavior.

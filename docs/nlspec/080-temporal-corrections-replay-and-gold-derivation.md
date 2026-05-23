@@ -311,19 +311,107 @@ A deterministic block row is selected only for its exact blocked family. It must
 
 ### MVPGoldFactStructuredValueSchemaCatalog
 
-`MVPGoldFactStructuredValueSchemaCatalog` is the MVP structured object schema catalog referenced by active predicate rows. It is an activation-controlled schema catalog. This section defines schema identity and required closure status only; concrete field tables and row checksums must be supplied by activation-controlled material before promotion.
+`MVPGoldFactStructuredValueSchemaCatalog` is the MVP structured object schema catalog referenced by active predicate rows. It is an activation-controlled schema catalog. A structured schema row may affect `GoldFact.object_value.kind = structured_value` only when the selected schema row, every field row, validation refs, package-set refs when package-supplied, lifecycle evidence, and `030.VersionManifest` refs validate before `gold_fact_key_id` computation.
 
-| Schema ref | Used by predicate rows | Required closure status |
-| --- | --- | --- |
-| `080.struct.os_descriptor.v1` | `gfp-mvp-host-attr-has-os-v1` | TODO: add complete field table, field bounds, enum behavior, unknown-field policy, checksum inputs, and validation fixture refs. |
-| `080.struct.host_lifecycle_state.v1` | `gfp-mvp-host-attr-lifecycle-v1` | TODO: add complete field table, lifecycle-state enum behavior, source-state mapping, checksum inputs, and validation fixture refs. |
-| `080.struct.host_management_state.v1` | `gfp-mvp-host-attr-management-v1` | TODO: add complete field table, management-state enum behavior, source-state mapping, checksum inputs, and validation fixture refs. |
-| `080.struct.vulnerability_instance_key.v1` | `gfp-mvp-host-vuln-has-vulnerability-v1` | TODO: add complete field table for scanner-neutral vulnerability instance identity, coverage refs, checksum inputs, and validation fixture refs. |
-| `080.struct.software_instance_key.v1` | `gfp-mvp-host-software-runs-software-v1` | TODO: add complete field table for software identity, version/package fields, checksum inputs, and validation fixture refs. |
-| `080.struct.control_evaluation_key.v1` | `gfp-mvp-control-failed-v1`, `gfp-mvp-control-passed-v1`, `gfp-mvp-control-unknown-v1` | TODO: add complete field table for control identity, target scope, evaluation source, external control-result mapping refs, checksum inputs, and validation fixture refs. |
-| `080.struct.observed_exposure_key.v1` | `gfp-mvp-exposure-observed-v1` | TODO: add complete field table for observed-exposure identity, observation scope, non-reachability wording, checksum inputs, and validation fixture refs. |
+#### StructuredValueSchemaRow schema
 
-`DeriveFacts` must reject `structured_value` before ID computation when the selected schema ref is absent, inactive, checksum-mismatched, package-set-mismatched, unmanifested, or `TODO:`-bearing. The required error is `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` when no active schema ref exists and `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` when the selected schema checksum differs from the active manifest entry.
+`StructuredValueSchemaRow` is the stable row schema for a structured gold object value. Concrete rows are activation-controlled artifacts. The public spec defines required fields and the MVP row inventory; concrete production row bytes, exact enum vocabularies, scalar string bounds, validation fixture bytes, and expected checksums remain activation-controlled material.
+
+| Field | Required | Default or omission behavior | Required behavior |
+| --- | ---: | --- | --- |
+| `schema_ref` | Yes | none | Stable schema ref unique inside `080`; it is the value used in `structured_value.schema_ref`. |
+| `schema_version` | Yes | none | Immutable version token included in schema checksum and value checksum inputs. |
+| `schema_owner` | Yes | `080` | MVP structured gold object schemas must use `080`; other owners require a new handoff. |
+| `field_rows` | Yes | none | Non-empty array of `StructuredValueFieldRow`; duplicate `field_path` values fail before activation. |
+| `unknown_field_policy` | No | `reject` | Unknown fields in `structured_value.value` fail before ID computation unless a future explicit extension map is active. |
+| `extension_policy` | No | `forbidden` | Future extension requires a new schema ref or an explicit owner extension map. |
+| `enum_unknown_policy` | Yes | none | Per enum field: `reject`, `map_to_unknown`, or `map_to_other_when_declared`. Omission blocks activation. |
+| `source_raw_value_policy` | No | `evidence_only` | Raw source values may remain evidence only and must not become structured value bytes. |
+| `private_binding_policy` | No | `forbidden` | Public schema rows and values must not contain private source bindings. |
+| `secret_value_policy` | No | `reject_before_output` | Secret-like values fail before structured value output. |
+| `value_canonicalization` | Yes | `040.CanonicalJSON` | Values canonicalize only through `040.CanonicalJSON` after defaults materialize. |
+| `value_checksum_inputs` | Yes | none | Must include `schema_ref`, canonical `value`, and every materialized default. |
+| `schema_checksum_inputs` | Yes | none | Must include every schema row field after defaults materialize except `row_checksum`. |
+| `validation_refs` | Yes | none | Must include positive, missing-required, null, unknown-field, unknown-enum, checksum, manifest, package-set, private-binding, raw-payload, and secret-leak cases. |
+| `activation_scope` | Yes | none | `030.ActivationScope`; selected through the owner row-catalog validator. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults materialize, excluding only `row_checksum`. |
+
+#### StructuredValueFieldRow schema
+
+| Field | Required | Default or omission behavior | Required behavior |
+| --- | ---: | --- | --- |
+| `field_path` | Yes | none | Dot path within `structured_value.value`; duplicate paths fail before activation. |
+| `type` | Yes | none | One of `enum`, `string`, `uint16`, `uint64`, `timestamp_utc`, `sha256_hex`, `uri`, `boolean`, or `decimal_string`. |
+| `required` | Yes | none | Boolean. |
+| `default` | No | omitted | When declared, materializes before value checksum computation. |
+| `null_allowed` | No | `false` | Null is rejected unless this field is `true`. |
+| `omit_allowed` | No | `false` for required fields, `true` for optional fields | Omission and null remain distinct. |
+| `bounds` | Yes | none | Required for every scalar. Missing or `TODO:` bounds block activation. |
+| `enum_values` | Required for enum fields | none | Closed enum set. Missing or `TODO:` enum values block activation. |
+| `normalization` | Required for string fields | none | Required string canonicalization rule. Missing or `TODO:` normalization blocks activation. |
+| `canonical_sort_key` | Required only for arrays | omitted | MVP schemas must not use arrays unless this key is defined. |
+| `checksum_input` | No | `true` | Fields excluded from value checksum require explicit owner rationale and validation refs. |
+| `redaction_owner` | No | `110` | Redaction behavior remains owned by `110`. |
+| `missing_error` | Yes | none | Owner-specific missing-field error. |
+| `invalid_error` | Yes | none | Owner-specific invalid-field error. |
+
+#### MVP structured schema rows
+
+The schema refs below are the only MVP structured schema refs permitted by active MVP predicate rows. They are row identities and field-path contracts. Production activation remains blocked until exact enum values, scalar bounds, field-row checksums, schema row checksums, fixture checksums, expected output/error checksums, and package-set refs when package-supplied are supplied by activation-controlled material.
+
+| Schema ref | Required fields | Optional fields | Required no-output triggers | Required validation and manifest refs |
+| --- | --- | --- | --- | --- |
+| `080.struct.os_descriptor.v1` | `os_family`, `os_name` | `os_version`, `os_build`, `architecture` | Missing required fields; identity-like string used as host identity; raw OCSF object used directly. | Structured schema validation refs, selected predicate row refs, exact `060` positive authority refs, package-set refs when package-supplied, and `030.VersionManifest` refs. |
+| `080.struct.host_lifecycle_state.v1` | `lifecycle_state`, `state_basis` | `generation_event` | Source deletion, stale state, or lifecycle boundary used without exact `060` absence, staleness, source-history, and correction refs. | Lifecycle source-state fixtures, source-authority refs, correction refs when state changes, package-set refs when package-supplied, and manifest refs. |
+| `080.struct.host_management_state.v1` | `management_state`, `management_domain` | `management_capability` | Management-plane label treated as truth without exact authority row. | Positive authority refs, mapping handoff refs, package-set refs when package-supplied, and manifest refs. |
+| `080.struct.vulnerability_instance_key.v1` | `vulnerability_id_kind`, `vulnerability_id` | `affected_package_purl`, `protocol`, `port`, `instance_discriminator_hash` | Scanner fixed, missing, severity, or confidence used as truth without exact `060` authority, coverage, staleness, and absence refs. | Vulnerability coverage fixtures, absence/fixed-state refs, package-set refs when package-supplied, and manifest refs. |
+| `080.struct.software_instance_key.v1` | `software_identity_kind`, `software_identity_value` | `software_name_normalized`, `vendor_normalized`, `version`, `install_scope`, `architecture` | Arbitrary package string emitted without identity kind, normalization, source authority, and selected predicate row. | Inventory authority refs, normalization fixtures, package-set refs when package-supplied, and manifest refs. |
+| `080.struct.control_evaluation_key.v1` | `control_namespace`, `control_id`, `target_scope_kind`, `control_polarity` | `benchmark_id`, `benchmark_version` | Pass, fail, or unknown output without exact `060.ControlResultMappingRow` and source-coverage refs. | Control-result mapping refs, coverage refs, package-set refs when package-supplied, and manifest refs. |
+| `080.struct.observed_exposure_key.v1` | `exposure_kind`, `observation_basis`, `claim_scope` with default `observed_only` | `protocol`, `port`, `service_name` | Any theoretical reachability, service access, or identity-conditioned access implication. | Observed-only authority refs, theoretical-reachability block refs, package-set refs when package-supplied, and manifest refs. |
+
+#### MVP structured field-row inventory
+
+| Schema ref | Field path | Type | Required | Default | Bounds or enum closure | Normalization and checksum behavior |
+| --- | --- | --- | ---: | --- | --- | --- |
+| `080.struct.os_descriptor.v1` | `os_family` | `enum` | true | none | TODO: product governance must supply closed enum values. | checksum input; unknown enum rejected unless row declares mapped unknown. |
+| `080.struct.os_descriptor.v1` | `os_name` | `string` | true | none | TODO: product governance must supply min/max and allowed character rules. | TODO: normalization rule required before activation. |
+| `080.struct.os_descriptor.v1` | `os_version` | `string` | false | omitted | TODO: bounds required. | checksum input when present. |
+| `080.struct.os_descriptor.v1` | `os_build` | `string` | false | omitted | TODO: bounds required. | checksum input when present. |
+| `080.struct.os_descriptor.v1` | `architecture` | `enum` | false | omitted | TODO: enum values required. | checksum input when present. |
+| `080.struct.host_lifecycle_state.v1` | `lifecycle_state` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.host_lifecycle_state.v1` | `state_basis` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.host_lifecycle_state.v1` | `generation_event` | `enum` | false | omitted | TODO: enum values required. | checksum input when present. |
+| `080.struct.host_management_state.v1` | `management_state` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.host_management_state.v1` | `management_domain` | `string` | true | none | TODO: bounds required. | TODO: normalization rule required before activation. |
+| `080.struct.host_management_state.v1` | `management_capability` | `enum` | false | omitted | TODO: enum values required. | checksum input when present. |
+| `080.struct.vulnerability_instance_key.v1` | `vulnerability_id_kind` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.vulnerability_instance_key.v1` | `vulnerability_id` | `string` | true | none | TODO: bounds and normalization required. | checksum input. |
+| `080.struct.vulnerability_instance_key.v1` | `affected_package_purl` | `uri` | false | omitted | TODO: URI bounds required. | checksum input when present. |
+| `080.struct.vulnerability_instance_key.v1` | `protocol` | `string` | false | omitted | TODO: bounds and normalization required. | checksum input when present. |
+| `080.struct.vulnerability_instance_key.v1` | `port` | `uint16` | false | omitted | `0..65535`. | checksum input when present. |
+| `080.struct.vulnerability_instance_key.v1` | `instance_discriminator_hash` | `sha256_hex` | false | omitted | 64 lowercase hex characters. | checksum input when present. |
+| `080.struct.software_instance_key.v1` | `software_identity_kind` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.software_instance_key.v1` | `software_identity_value` | `string` | true | none | TODO: bounds and normalization required. | checksum input. |
+| `080.struct.software_instance_key.v1` | `software_name_normalized` | `string` | false | omitted | TODO: bounds required. | TODO: normalization rule required before activation. |
+| `080.struct.software_instance_key.v1` | `vendor_normalized` | `string` | false | omitted | TODO: bounds required. | TODO: normalization rule required before activation. |
+| `080.struct.software_instance_key.v1` | `version` | `string` | false | omitted | TODO: bounds required. | checksum input when present. |
+| `080.struct.software_instance_key.v1` | `install_scope` | `enum` | false | omitted | TODO: enum values required. | checksum input when present. |
+| `080.struct.software_instance_key.v1` | `architecture` | `enum` | false | omitted | TODO: enum values required. | checksum input when present. |
+| `080.struct.control_evaluation_key.v1` | `control_namespace` | `string` | true | none | TODO: bounds and namespace normalization required. | checksum input. |
+| `080.struct.control_evaluation_key.v1` | `control_id` | `string` | true | none | TODO: bounds required. | checksum input. |
+| `080.struct.control_evaluation_key.v1` | `target_scope_kind` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.control_evaluation_key.v1` | `control_polarity` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.control_evaluation_key.v1` | `benchmark_id` | `string` | false | omitted | TODO: bounds required. | checksum input when present. |
+| `080.struct.control_evaluation_key.v1` | `benchmark_version` | `string` | false | omitted | TODO: bounds required. | checksum input when present. |
+| `080.struct.observed_exposure_key.v1` | `exposure_kind` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.observed_exposure_key.v1` | `observation_basis` | `enum` | true | none | TODO: enum values required. | checksum input. |
+| `080.struct.observed_exposure_key.v1` | `claim_scope` | `enum` | true | `observed_only` | Must include `observed_only`; TODO: full enum closure required. | checksum input after default materializes. |
+| `080.struct.observed_exposure_key.v1` | `protocol` | `string` | false | omitted | TODO: bounds and normalization required. | checksum input when present. |
+| `080.struct.observed_exposure_key.v1` | `port` | `uint16` | false | omitted | `0..65535`. | checksum input when present. |
+| `080.struct.observed_exposure_key.v1` | `service_name` | `string` | false | omitted | TODO: bounds and normalization required. | checksum input when present. |
+
+`DeriveFacts` must reject `structured_value` before ID computation when the selected schema ref is absent, inactive, checksum-mismatched, package-set-mismatched, unmanifested, or `TODO:`-bearing. The required error is `GOLD_FACT_STRUCTURED_SCHEMA_MISSING` when no active schema ref exists, `GOLD_FACT_STRUCTURED_SCHEMA_CHECKSUM_MISMATCH` when the selected schema checksum differs from the active manifest entry, and `GOLD_FACT_STRUCTURED_SCHEMA_FIELD_INVALID` when any selected field row is missing, invalid, unbounded, or TODO-bearing.
 
 ### GoldFactPredicateBlockRowSemantics
 
@@ -461,6 +549,34 @@ Runtime randomness, wall-clock reads, generated IDs, unordered iteration, extern
 | `validation_refs` | Yes | none | Non-empty refs covering present, absent, malformed, ambiguous, unauthorized, fallback, replay, and manifest cases. |
 | `lifecycle_status` | Yes | none | Production use requires `active`. |
 
+#### TemporalSemanticsPolicy ActivationControlledRowField precision
+
+The row fields below instantiate `030.ActivationControlledRowField`. A temporal row missing any required field must fail before fact-time resolution with the most specific temporal or activation-row error. No field may use current platform time as a fallback.
+
+| Field | Type | Required | Default | Bounds or enum | Checksum behavior |
+| --- | --- | ---: | --- | --- | --- |
+| `policy_row_id` | `string` | true | none | Stable row ID scoped to row set. | included |
+| `source_dataset` | `string` | true | none | Exact public dataset token; wildcards forbidden. | included |
+| `observation_type` | `string` | true | none | Exact observation type. | included |
+| `fact_type` | `string` | true | none | Exact fact type. | included |
+| `predicate` | `string` | true | none | Exact predicate. | included |
+| `source_scope_selector` | `030.ScopeSelector` | true | none | Must be valid under `TemporalPolicyScopeSelectorContext`. | included after normalization |
+| `temporal_mode` | `enum` | true | none | `state_assertion`, `source_interval`, `activity_interval`, `instant_observation`, `identity_decision_time`, or `explicit_policy_block`. | included |
+| `valid_interval_model` | `enum` | true | none | `instant`, `half_open_interval`, `closed_source_interval_imported_as_half_open`, or `open_until_replaced`. | included |
+| `valid_time_input_precedence` | `ordered_sequence` | true | none | Non-empty sequence of authorized field paths unless the row is an explicit policy block; duplicate paths fail. | order-sensitive included |
+| `time_quality_requirements` | `object` | true | none | Must name timezone, parser quality, ambiguity, and missing-source quality rules. | included |
+| `absent_time_behavior` | `enum` | true | `deterministic_error` | `deterministic_error` or `emit_unknown_valid_time` only when validation refs prove permitted unknown time. | included |
+| `malformed_time_behavior` | `enum` | true | `deterministic_error` | `deterministic_error` or `emit_unknown_valid_time` only when row permits. | included |
+| `ambiguous_time_behavior` | `enum` | true | `deterministic_error` | `deterministic_error` or named deterministic disambiguation rule with validation refs. | included |
+| `fallback_behavior` | `enum` | true | `deterministic_error` | `deterministic_error`, `use_authorized_alternate_source_time`, or `emit_unknown_valid_time`. | included |
+| `valid_to_rule` | `enum` | true | none | `source_end_time`, `duration_seconds`, `open_interval`, `close_on_replacement`, or `deterministic_error`. | included |
+| `knowledge_time_policy_ref` | `030.ActivationControlledRowRef` | true | none | Must reference selected `KnowledgeTimeImportPolicy`. | included |
+| `late_arrival_policy_ref` | `030.ActivationControlledRowRef` | true | none | Must reference selected `LateArrivalPolicy` when observations may be late. | included |
+| `validation_refs` | `canonical_set` | true | none | Non-empty refs for positive, absent, malformed, ambiguous, unauthorized, fallback, replay, and manifest cases. | sorted included |
+| `activation_scope` | `030.ActivationScope` | true | none | Must cover request scope through `030.ScopeSelectorCovers`. | included after normalization |
+| `lifecycle_status` | `030.LifecycleStatus` | true | none | Production use requires `active`. | included |
+| `row_checksum` | `sha256_hex` | true | none | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. | excluded from own checksum |
+
 Default temporal decision table:
 
 | Candidate time input | Default fact-time eligibility | Required behavior |
@@ -482,23 +598,26 @@ Default temporal decision table:
 
 `KnowledgeTimeImportPolicy` is the activation-controlled row interface for selecting `known_from`. Production default is `current_import`.
 
-| Field | Required | Default or omission behavior | Rule |
-| --- | ---: | --- | --- |
-| `policy_row_id` | Yes | none | Stable row ID scoped to the active row set. |
-| `mode` | Yes | `current_import` | One of `current_import`, `historical_import_valid_time_only`, `reconstructed_source_known_time`, or `rejected_reconstruction`. |
-| `as_known_then_allowed` | No | `false` | `true` is valid only for `reconstructed_source_known_time`. |
-| `source_known_time_evidence_refs` | Required when reconstruction allowed | `[]` | Persisted evidence refs, not live source calls. |
-| `current_import_time_source` | Yes for `current_import` | persisted import evidence | Must be persisted before derivation and included in `VersionManifest`. |
-| `malformed_known_time_behavior` | Yes | `rejected_reconstruction` | Deterministic error or rejected reconstruction. |
-| `validation_refs` | Yes | none | Non-empty refs for current import, historical valid-time import, reconstruction success, and reconstruction rejection. |
-| `lifecycle_status` | Yes | none | Production use requires `active`. |
+The `mode` field is closed to `current_import` and `reconstructed_source_known_time`. Validation rows that use the phrase `historical valid-time-only import` exercise historical valid-time import under `mode = current_import`; they do not introduce a third mode token.
+
+| Field | Type | Required | Default or omission behavior | Required behavior |
+| --- | --- | ---: | --- | --- |
+| `policy_row_id` | `string` | true | none | Stable row ID scoped to the active row set. |
+| `mode` | `enum` | true | `current_import` | `current_import` or `reconstructed_source_known_time`. Unknown values fail before resolution. |
+| `as_known_then_allowed` | `boolean` | false | `false` | `true` is valid only when `mode = reconstructed_source_known_time`. |
+| `known_from_source` | `enum` | true | `persisted_cadastre_import_knowledge_time` | Default `known_from` source is the persisted Cadastre import knowledge time, not a live wall-clock read. |
+| `required_source_known_time_evidence_refs` | `canonical_set` | Required when reconstruction is allowed | `[]` | Required for `reconstructed_source_known_time`; every ref must be persisted and manifest-included. |
+| `missing_evidence_behavior` | `enum` | true | `rejected_reconstruction` | Missing, stale, ambiguous, malformed, or untrusted evidence rejects reconstruction. |
+| `monotonicity_check_required` | `boolean` | false | `true` for reconstruction; `false` for current import | Reconstruction must prove source-known-time monotonicity unless a future owner row explicitly blocks reconstruction. |
+| `validation_refs` | `canonical_set` | true | none | Non-empty refs for current import, historical valid-time-only import, reconstruction success, missing evidence rejection, and monotonicity failure. |
+| `activation_scope` | `030.ActivationScope` | true | none | Required before production selection. |
+| `lifecycle_status` | `030.LifecycleStatus` | true | none | Production use requires `active`. |
+| `row_checksum` | `sha256_hex` | true | none | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. |
 
 | Mode | Required behavior |
 | --- | --- |
-| `current_import` | `known_from` is Cadastre import knowledge time from persisted evidence. |
-| `historical_import_valid_time_only` | Historical valid time may be imported; historical known time is not reconstructed. |
-| `reconstructed_source_known_time` | Allowed only when `as_known_then_allowed = true`, source-known-time evidence refs validate, and validation rows pass. |
-| `rejected_reconstruction` | Default when source-known-time evidence is missing, stale, ambiguous, malformed, or untrusted. |
+| `current_import` | `known_from` is Cadastre import knowledge time from persisted evidence. Historical valid intervals may be imported, but historical known time is not reconstructed. |
+| `reconstructed_source_known_time` | Allowed only when `as_known_then_allowed = true`, source-known-time evidence refs validate, monotonicity checks pass, and validation rows pass. |
 
 ### TemporalObservationTimeResolution schema
 
@@ -616,6 +735,29 @@ reject_mutable_branch_tag_latest
 
 ### LateArrivalPolicy
 
+`LateArrivalPolicy` is the activation-controlled row interface for late evidence routing. The default route table remains authoritative when an active row resolves and does not override a default. Silently discarding late authoritative evidence in production is forbidden.
+
+| Field | Type | Required | Default or omission behavior | Required behavior |
+| --- | --- | ---: | --- | --- |
+| `policy_row_id` | `string` | true | none | Stable row ID scoped to the active late-arrival policy row set. |
+| `source_dataset_catalog_row_ref` | `030.ActivationControlledRowRef` | true | none | Exact selected `020.SourceDatasetCatalogRow` or deterministic block row. |
+| `fact_type` | `string` | true | none | Exact fact type; wildcards forbidden. |
+| `predicate` | `string` | true | none | Exact predicate; wildcards forbidden. |
+| `scope_selector` | `030.ScopeSelector` | true | none | Must cover the requested source/fact scope. |
+| `cutoff_basis` | `enum` | true | none | Named watermark, temporal-resolution, or source-authority cutoff basis. Runtime current time is not a cutoff basis unless captured in persisted evidence and permitted by row. |
+| `allowed_lateness_seconds` | `uint64` | false | `0` | Non-negative; `0` means no allowed lateness grace. |
+| `authoritative_before_cutoff_route` | `enum` | true | `normal_gold_derivation` | Must route to normal derivation or explicit owner no-op. |
+| `authoritative_after_cutoff_route` | `enum` | false | `accept_as_correction` | Late authoritative evidence after cutoff is correction input by default. |
+| `non_authoritative_route` | `enum` | false | `quarantine_or_evidence_only` | Non-authoritative evidence must not create correction or absence output. |
+| `discard_behavior` | `enum` | false | `forbidden` | Any route that discards production evidence fails with `LATE_ARRIVAL_DISCARD_FORBIDDEN`. |
+| `required_060_refs` | `canonical_set` | true | none | Exact authority, completeness, coverage, staleness, absence, progress-signal, source-history, and supplier-visibility refs required by the row. |
+| `watermark_policy_ref` | `030.ActivationControlledRowRef` | Required when watermark state is consulted | null otherwise | Watermark advancement remains owned by `060.ProjectionWatermarkPolicy`. |
+| `quarantine_output_ref` | `string` | Required when quarantine route is possible | none | Names the deterministic quarantine or evidence-only diagnostic output class. |
+| `validation_refs` | `canonical_set` | true | none | Non-empty refs covering before cutoff, after cutoff correction, non-authoritative quarantine, discard forbidden, watermark no-op, manifest omission, and checksum drift. |
+| `activation_scope` | `030.ActivationScope` | true | none | Required before production selection. |
+| `lifecycle_status` | `030.LifecycleStatus` | true | none | Production use requires `active`. |
+| `row_checksum` | `sha256_hex` | true | none | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. |
+
 Default route table:
 
 | Evidence class | Arrival relative to cutoff | Authority result | Default route | Correction behavior | Quarantine behavior | Watermark effect |
@@ -644,6 +786,27 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 8. If selected route would discard production evidence, emit `LATE_ARRIVAL_DISCARD_FORBIDDEN` and preserve evidence as quarantine or diagnostic output.
 9. Emit late-arrival route state and include route, policy, temporal, authority, completeness, coverage, staleness, absence, and watermark refs in `VersionManifest`.
 ```
+
+### ReplayEquivalencePolicyOutputClassRow
+
+`ReplayEquivalencePolicyOutputClassRow` is the activation-controlled row interface for replay checksum field selection. `ReplayEquivalencePolicy` owns checksum computation and failure precedence; owner specs provide imported field selections where noted. Wildcards in field selectors are forbidden.
+
+| Field | Type | Required | Default or omission behavior | Required behavior |
+| --- | --- | ---: | --- | --- |
+| `output_class` | `enum` | true | none | One of the active output classes listed in `ReplayEquivalencePolicy`. |
+| `included_field_selectors` | `ordered_sequence` or `canonical_set` | true | none | Exact field selectors. Wildcards, prose summaries, and row-set-only substitutions are forbidden. |
+| `excluded_volatile_field_selectors` | `canonical_set` | false | `[]` | Must not hide policy, schema, authority, package, manifest, or lifecycle changes. |
+| `imported_owner_field_selection_ref` | `030.ActivationControlledRowRef` | Required for `graph_delta`, `graph_apply`, `graph_rebuild`, `api_response`, `export_projection`, and `analysis_output` | null otherwise | Exact owner row ref and checksum for imported field selection. |
+| `hash_algorithm` | `enum` | true | `sha256` | Only `sha256` is valid for MVP. |
+| `canonical_ordering` | `string` | true | none | Deterministic record order for the output class. |
+| `failure_precedence_ref` | `string` | true | none | Ref to the global replay failure precedence row or owner-specific narrowed row. |
+| `shadow_output_behavior` | `enum` | false | `compare_only_no_production_write` | Shadow output must not become production-visible unless another active owner row permits it. |
+| `manifest_requirements` | `canonical_set` | true | none | Required `030.VersionManifest` refs, package-set refs when package-supplied, lifecycle refs, and owner validation refs. |
+| `volatile_difference_behavior` | `enum` | false | `equivalent_with_diagnostic` | Volatile-only differences are equivalent only when the excluded fields are declared by this row. |
+| `validation_refs` | `canonical_set` | true | none | Non-empty refs for checksum match, checksum mismatch, volatile-only difference, missing row, mutable ref, retention failure, authority mismatch, temporal mismatch, and side-effect mismatch. |
+| `activation_scope` | `030.ActivationScope` | true | none | Required before production selection. |
+| `lifecycle_status` | `030.LifecycleStatus` | true | none | Production use requires `active`. |
+| `row_checksum` | `sha256_hex` | true | none | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. |
 
 ### ReplayEquivalencePolicy
 
@@ -677,6 +840,43 @@ Global replay failure precedence:
 9. Output checksum mismatch.
 10. Excluded volatile-field difference.
 
+### GraphRebuildEquivalencePolicy
+
+`GraphRebuildEquivalencePolicy` defines the `080` replay preflight and checksum handoff for graph rebuild. It must not restate graph projection or backend behavior owned by `090`.
+
+| Field | Required behavior |
+| --- | --- |
+| `policy_row_id` | Stable row ID for graph rebuild replay equivalence. |
+| `graph_output_checksum_inputs` | Must include rebuild manifest ref, graph delta input set refs, projection profile refs, graph handoff refs, schema fingerprint refs, index consistency refs, derived-view state refs, and output checksum refs. |
+| `imported_090_included_field_selection_ref` | Required ref to the active `090` rebuild included-field selection row. |
+| `imported_090_excluded_field_selection_ref` | Required ref to the active `090` volatile-field exclusion row when exclusions exist; otherwise explicit empty set. |
+| `graph_delta_input_set_refs` | Canonically sorted refs to persisted graph delta inputs. |
+| `projection_profile_refs` | Exact active projection, edge semantics, output eligibility, taxonomy mapping, query translation, apply, and schema profile refs required by `090`. |
+| `preflight_order` | `replay_input_sufficiency`, `retention`, `schema_compatibility`, `authority_temporal_match`, `graph_schema_fingerprint`, `index_consistency`, `checksum_compare`. |
+| `validation_refs` | Non-empty refs for exact rebuild, checksum drift, stale schema fingerprint, missing imported field selection, retention failure, manifest omission, and unsupported profile. |
+| `activation_scope`, `lifecycle_status`, `row_checksum` | Required with `030` semantics. |
+
+### EventSequenceValidationCorpus schema
+
+`EventSequenceValidationCorpus` is the activation-controlled validation artifact for temporal, known-time, late-arrival, correction, replay, graph handoff, no-op, manifest, lifecycle, and error sequences.
+
+| Field | Required behavior |
+| --- | --- |
+| `sequence_id` | Stable corpus sequence ID. |
+| `sequence_family` | Closed family token: `temporal`, `known_time`, `late_arrival`, `correction`, `assertion_transition`, `replay`, `graph_handoff`, `manifest_closure`, `no_op`, or `owner_error`. |
+| `ordered_event_rows` | Non-empty ordered sequence; event order affects fixture checksum. |
+| `input_fixture_refs` | Non-empty refs to concrete input fixtures. |
+| `expected_output_refs` | Required when the sequence expects output. |
+| `expected_error_refs` | Required when the sequence expects an error. |
+| `expected_no_op_refs` | Required when the sequence expects no mutation. |
+| `mutation_prohibition_refs` | Required for deterministic block, no-op, unsafe negative, unauthorized retraction, replay failure, manifest omission, and TODO-blocked cases. |
+| `required_manifest_refs` | Exact `030.VersionManifest` refs required for sequence acceptance. |
+| `package_set_refs` | Required when any event row, fixture, or expected artifact is package-supplied. |
+| `fixture_checksum` | Concrete SHA-256 over input event sequence bytes; `TODO:` blocks acceptance. |
+| `expected_output_or_error_checksum` | Concrete SHA-256 over expected output or expected error bytes; `TODO:` blocks acceptance. |
+| `lifecycle_status` | Production validation use requires `active`. |
+| `row_checksum` | SHA-256 over canonical corpus row bytes after defaults, excluding only `row_checksum`. |
+
 ### DeterministicSideEffectPolicy
 
 | Side-effect kind | Default |
@@ -692,6 +892,26 @@ Global replay failure precedence:
 | telemetry Collector state | operational health input only when represented by `TelemetryRuntimeState` and manifest refs |
 | backend-discovered value | replay from recorded value only when owner permits |
 | lock-store time read | allowed only inside `030.RunLockOperationEvidence`; runner-local wall-clock time remains rejected for lock stale decisions. |
+
+### AssertionStateTransitionRow schema
+
+`AssertionStateTransitionRow` is the activation-controlled row interface for correction state transitions. The row set must be total over every default assertion state from `040` and every correction event used by `ApplyGoldCorrection`. Every state/event pair must resolve to exactly one transition row.
+
+| Field | Required behavior |
+| --- | --- |
+| `transition_row_id` | Stable row ID scoped to the transition row set. |
+| `prior_assertion_state` | One closed `040` assertion state or an explicit owner grouping row whose expansion is listed in validation refs. |
+| `correction_event` | One of `duplicate`, `authoritative_replace`, `authorized_retraction`, `staleness_expiry`, `authoritative_refresh`, `conflict_detected`, `conflict_resolved`, `unsafe_negative`, `interval_split`, or `explicit_no_op`. |
+| `required_output_operation` | Exactly one of `insert_fact`, `close_known_interval`, `split_valid_interval`, `mark_retracted`, `mark_stale`, `mark_conflicted`, `resolve_conflict`, `no_op_duplicate`, `explicit_no_op_diagnostic`, or deterministic owner error. |
+| `graph_handoff_effect` | One `Graph handoff effects` token. Unsafe negative and source-authority-blocked rows must use `none`. |
+| `mutation_prohibition_refs` | Required when the row emits no mutation, deterministic block, unsafe negative, unauthorized retraction, or explicit no-op. |
+| `required_source_authority_refs` | Required when the event consumes positive, negative, stale, cleanup, source-history, fixed-state, or tombstone evidence. |
+| `required_absence_refs` | Required when the event requests absence, retraction, cleanup, graph expiry, or watermark effects. |
+| `required_snapshot_refs` | Required for any row that inserts, closes, splits, retracts, stales, conflicts, or resolves a fact. |
+| `validation_refs` | Non-empty refs proving totality, no row-order tiebreak, no unsafe negative mutation, manifest inclusion, and checksum drift behavior. |
+| `activation_scope`, `lifecycle_status`, `row_checksum` | Required with `030` semantics. |
+
+Unsafe negative evidence must always emit no mutation unless `060.DeriveAbsenceOrUnknown` authorizes the exact requested effect. A row set that omits a state/event pair fails with `GOLD_CORRECTION_TRANSITION_UNDEFINED` and emits no `GoldFact`, no `GoldFactChangeSet` except explicit no-op evidence where permitted, no graph handoff effect except `none`, and no watermark advancement.
 
 ### Assertion-state transition matrix
 
@@ -917,20 +1137,21 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 
 ### ActivationControlledRowSchemaPrecisionHandoff
 
-The following `080` row families can affect fact-time resolution, known-time import, late-arrival routing, correction behavior, snapshot refs, replay equivalence, graph rebuild equivalence, predicate contracts, assertion-state transitions, or event-sequence validation. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. Until the required table is present and non-`TODO`, `ValidateSpecSet` must classify the family as `blocked_validation`.
+The following `080` row families can affect fact-time resolution, known-time import, late-arrival routing, correction behavior, snapshot refs, replay equivalence, graph rebuild equivalence, predicate contracts, assertion-state transitions, structured object values, or event-sequence validation. Each output-affecting family must use a complete `030.ActivationControlledRowField` table before production selection. A selected row family with `TODO:` field bounds, enum values, fixture checksums, expected output checksums, expected error checksums, package-set refs, or manifest refs remains `blocked_validation` and must not contribute to `AcceptanceReport.result = pass`.
 
 | row_family | production classification | required precision status |
 | --- | --- | --- |
-| `TemporalSemanticsPolicy` | output_affecting | TODO: add full field precision for valid interval model, valid time input precedence, time quality, fallback behavior, absent/malformed/ambiguous behavior, valid-to rule, validation refs, activation scope, and lifecycle status. |
-| `KnowledgeTimeImportPolicy` | output_affecting | TODO: add full field precision for current import, reconstructed known-time permission, required evidence refs, and missing evidence behavior. |
-| `LateArrivalPolicy` | output_affecting | TODO: add full field precision for route states, authority/completeness/coverage/staleness refs, quarantine refs, watermark refs, and errors. |
-| `GoldFactCorrectionPolicy` | output_affecting | Source-effect correction candidates must carry selected `020.SourceDatasetCatalogRow`, `060.SourceAuthorityClosureMatrixRow`, and `AbsenceDerivationResult` refs before correction. Remaining non-source-effect correction event and assertion-transition precision remains blocked until separately closed. |
-| `CorrectionSnapshotRefPolicy` | output_affecting | Closed for lakehouse correction closure by `CorrectionSnapshotRefPolicy` row precision above: old/new snapshot roles, table-set checksum, commit refs, retention protection, schema compatibility, mutable-ref rejection, validation refs, activation scope, lifecycle status, and row checksum are explicit. |
-| `ReplayEquivalencePolicyOutputClassRow` | output_affecting | TODO: add full field precision for included fields, excluded volatile fields, checksum inclusion, failure precedence, and manifest requirements. |
-| `GraphRebuildEquivalencePolicy` | output_affecting when graph rebuild is in scope | TODO: add full field precision for graph-specific included/excluded refs in the `080`/`090` handoff. |
-| `GoldFactPredicateContractRow` | output_affecting | Closed for source-effect handoff by the existing field table for fact type, predicate, subject/object kind sets, null object policy, structured schema refs, source authority refs, checksum inputs, validation refs, activation scope, lifecycle status, and owner errors. Remaining non-source-effect predicate precision work remains blocked until separately closed. |
-| `AssertionStateTransitionRow` | output_affecting | TODO: add total transition table precision over prior assertion state and correction event. |
-| `EventSequenceValidationCorpus` | validation_affecting | TODO: add full field precision for sequence ID, ordered events, expected output/error/no-op, mutation prohibition, and fixture checksums. |
+| `TemporalSemanticsPolicy` | output_affecting | Row-field precision is closed by `TemporalSemanticsPolicy ActivationControlledRowField precision`; activation remains blocked for rows whose validation refs or fixture checksums are `TODO:`. |
+| `KnowledgeTimeImportPolicy` | output_affecting | Row-field precision is closed by `KnowledgeTimeImportPolicy`; activation remains blocked for rows whose evidence refs, monotonicity fixtures, or expected checksums are `TODO:`. |
+| `LateArrivalPolicy` | output_affecting | Row-field precision is closed by `LateArrivalPolicy`; activation remains blocked for rows whose `060` refs, quarantine refs, watermark refs, or validation checksums are `TODO:`. |
+| `GoldFactCorrectionPolicy` | output_affecting | Correction policy row precision is closed for comparable-key, prior selection, overlap behavior, operation, authority, snapshot, validation, activation, lifecycle, and checksum fields. Transition totality remains enforced by `AssertionStateTransitionRow`. |
+| `CorrectionSnapshotRefPolicy` | output_affecting | Closed for lakehouse correction closure by `CorrectionSnapshotRefPolicy` row precision: old/new snapshot roles, table-set checksum, commit refs, retention protection, schema compatibility, mutable-ref rejection, validation refs, activation scope, lifecycle status, and row checksum are explicit. |
+| `ReplayEquivalencePolicyOutputClassRow` | output_affecting | Row-field precision is closed by `ReplayEquivalencePolicyOutputClassRow`; activation remains blocked for output classes with missing imported owner field-selection refs or `TODO:` checksums. |
+| `GraphRebuildEquivalencePolicy` | output_affecting when graph rebuild is in scope | `080` replay checksum and preflight fields are closed; graph-specific field selection must be imported by exact `090` row refs and checksums. |
+| `GoldFactPredicateContractRow` | output_affecting | Closed for source-effect handoff by the existing field table for fact type, predicate, subject/object kind sets, null object policy, structured schema refs, source authority refs, checksum inputs, validation refs, activation scope, lifecycle status, and owner errors. |
+| `StructuredValueSchemaRow` | output_affecting | Stable row and field schema are defined. Concrete MVP rows remain `blocked_validation` while enum vocabularies, scalar bounds, fixture checksums, expected checksums, and concrete row checksums contain `TODO:`. |
+| `AssertionStateTransitionRow` | output_affecting | Row schema and totality requirements are closed; row sets remain blocked until every state/event fixture has concrete expected output/error checksums. |
+| `EventSequenceValidationCorpus` | validation_affecting | Row schema is closed; concrete event-sequence corpora remain blocked while fixture or expected output/error checksums are `TODO:`. |
 
 `valid_time_input_precedence` must use `ordered_sequence`. Fallback behavior must be a closed enum or owner union; omitted fallback must map to a deterministic temporal error. Replay included and excluded fields must use declared `ordered_sequence` or `canonical_set` semantics. Correction transition rows must be total over prior assertion state and correction event.
 
@@ -963,7 +1184,7 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | `080-SOURCE-DATASET-CATALOG-AC-001` | Absence-sensitive gold candidates reject before `GoldFact` or `GoldFactChangeSet` creation when selected source-dataset catalog refs are missing, blocked, ambiguous, inactive, checksum-mismatched, unvalidated, or unmanifested. |
 | `080-SOURCE-DATASET-CATALOG-AC-002` | Every row in `AbsenceSensitiveGoldCandidateMatrix` includes selected `020.SourceDatasetCatalogRow` or deterministic source-dataset block refs in `VersionManifest`. |
 | `080-CORRECTION-SNAPSHOT-AC-001` | Every correction class requires old snapshot ref, new snapshot ref, table-set checksum, retention protection, and mutable-ref rejection. |
-| `080-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, and validation acceptance. |
+| `080-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, validation acceptance, telemetry health diagnostic, and run-lock operation. |
 | `080-TELEMETRY-REPLAY-AC-001` | Trace IDs, span IDs, sampling decisions, exporter state, Collector state, backend telemetry IDs, runtime duration, and dropped telemetry counts are excluded from authoritative domain replay checksums unless explicitly included for telemetry health diagnostics by `140` and manifest refs. |
 | `080-RUNLOCK-REPLAY-AC-001` | Replay missing `030.RunLockOperationEvidence`, stale recovery evidence, or commit guard refs for a lock-governed output fails with `REPLAY_INPUT_INSUFFICIENT` before output. |
 | `080-REPLAY-PRECEDENCE-AC-001` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, temporal-mismatched, side-effect-mismatched, or checksum-mismatched inputs according to global precedence before output. |
@@ -1021,4 +1242,12 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 
 ## Open Questions
 
-No owner-local temporal, correction, late-arrival, replay, correction-snapshot, no-op/error, or graph-handoff question remains open in this document. Concrete production fact catalogs, source datasets, predicates, private source bindings, and source-specific active row instances remain activation-controlled artifacts and validation-blocked when selected for production scope. Concrete production fact-type and predicate row catalogs are activation-controlled artifacts. Their absence blocks only the selected production scope and must not re-open the stable `080.CorrectionSnapshotRefPolicy` or `080.ReplayEquivalencePolicy` owner-local closure state.
+Owner-local stable algorithms in this document are specified, but authoritative promotion remains blocked while selected activation-controlled rows or validation corpora contain unresolved material.
+
+| ID | Blocking scope | Required closure | Default until resolved |
+| --- | --- | --- | --- |
+| `080-TODO-STRUCTURED-SCHEMA-ENUMS-BOUNDS` | All seven MVP structured schema refs in `MVPGoldFactStructuredValueSchemaCatalog`. | Product governance must supply closed enum values, string/URI bounds, normalization rules, concrete row checksums, validation fixture checksums, and expected output/error checksums. | Structured value candidates using TODO-bearing schema rows fail before `gold_fact_key_id` computation with `GOLD_FACT_STRUCTURED_SCHEMA_FIELD_INVALID` or the more specific owner error. |
+| `080-TODO-EVENT-SEQUENCE-CHECKSUMS` | `EventSequenceValidationCorpus`. | `120` must supply concrete fixture and expected output/error checksums for temporal, known-time, late-arrival, correction, assertion transition, replay, graph handoff, no-op, manifest, and owner-error cases. | Validation rows with `TODO:` checksums report `blocked` and cannot contribute to acceptance pass. |
+| `080-TODO-REPLAY-IMPORTED-FIELD-SELECTION-REFS` | Replay output classes importing field selections from `050`, `090`, `110`, `130`, and `140`. | Imported owner field-selection rows must be materialized with row refs, row checksums, validation refs, package-set refs when package-supplied, and manifest refs. | Replay for the affected output class fails with `REPLAY_POLICY_ARTIFACT_MISSING` or `REPLAY_INPUT_INSUFFICIENT`. |
+
+`DOM-RESOLVED-006` and `DOM-RESOLVED-007` must not be interpreted as validation pass while any row in this table remains unresolved. Domain routing may remain owner-resolved; production promotion remains blocked by `120` and `000` until the required rows, refs, and checksums are concrete and non-`TODO`.

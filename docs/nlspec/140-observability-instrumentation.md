@@ -383,6 +383,22 @@ This handoff defines no source authority, identity authority, graph authority, p
 
 A replay checksum that includes a trace ID, span ID, sampled flag, backend telemetry ID, exporter queue state, or Collector state outside an allowed telemetry health diagnostic row must fail with `TELEMETRY_REPLAY_FIELD_FORBIDDEN`.
 
+### TelemetryReplayExclusionPolicy row schema
+
+`TelemetryReplayExclusionPolicy` is an activation-controlled row family. The default rows below must exist when `080.ReplayEquivalencePolicyOutputClassRow.output_class = telemetry_health_diagnostic` is active. A row affects telemetry replay only; it must not grant domain authority.
+
+| Field | Required | Default or omission behavior | Rule |
+| --- | ---: | --- | --- |
+| `field_class` | Yes | none | One of `trace_id`, `span_id`, `sampled_flag`, `runtime_duration`, `runtime_start_time`, `exporter_queue_state`, `exporter_delivery_result`, `collector_state`, `dropped_telemetry_count`, or `backend_telemetry_id`. |
+| `default_replay_effect` | Yes | `excluded_from_domain_replay` | Domain replay must not include the field. |
+| `allowed_inclusion_condition` | Yes | `telemetry_health_diagnostic_only` | Inclusion is allowed only for health-visible telemetry diagnostics with `TelemetryRuntimeState` refs and manifest refs. |
+| `health_visible_condition` | Yes | `requires_telemetry_runtime_state_ref` | Health-visible fields require a persisted runtime state ref. |
+| `forbidden_domain_output_condition` | Yes | `always_for_domain_outputs` | Inclusion in raw, silver, identity, gold, correction, graph, API, export, analysis, validation, or run-lock domain checksums fails. |
+| `validation_refs` | Yes | none | Non-empty refs proving trace/span changes do not alter domain replay and forbidden inclusion fails. |
+| `activation_scope` | Yes | none | `030.ActivationScope`. |
+| `lifecycle_status` | Yes | none | Production use requires `active`. |
+| `row_checksum` | Yes | none | SHA-256 over canonical row bytes after defaults, excluding only `row_checksum`. |
+
 ## EmitTelemetry Algorithm
 
 ```text
@@ -505,7 +521,7 @@ The following `140` row families can affect telemetry construction, signal expor
 | `TelemetryRedactionPolicy` | output_affecting for telemetry output | TODO: add full field precision for data class, signal token, redaction transform, forbidden value classes, and validation refs. |
 | `TelemetryExporterProfile` | output_affecting for export and health | TODO: declare null/omit behavior for `endpoint_ref`, export-disabled state, production-required export, retry policy, backpressure, queue bounds, and invalid errors. |
 | `TelemetryHealthMappingPolicy` | health_affecting | TODO: add full field precision for telemetry condition, health scope, required health effect, forbidden domain effect, and manifest refs. |
-| `TelemetryReplayExclusionPolicy` | replay_affecting | TODO: define exactly which telemetry fields are excluded from domain replay checksums and which validation refs prove exclusion. |
+| `TelemetryReplayExclusionPolicy` | replay_affecting | Closed by `TelemetryReplayExclusionPolicy row schema`; activation remains blocked when validation refs, package-set refs, or manifest refs are missing or TODO-bearing. |
 
 `telemetry_signals`, `allowed_attribute_keys`, enabled signal sets, and validation refs must use `canonical_set` semantics with duplicate rejection unless an owner row declares `ordered_sequence`. `retry_policy` must be a typed nested object or named owner union with bounds for maximum attempts, backoff, queue behavior, and retryable exporter errors. Telemetry rows must remain diagnostic and must not grant source, identity, graph, package, audit, replay, or watermark authority.
 

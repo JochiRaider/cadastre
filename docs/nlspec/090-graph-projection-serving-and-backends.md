@@ -189,6 +189,21 @@ Identity split handoff input validation must fail before delta persistence accor
 
 `090` must not re-evaluate `070` evidence classes, candidate pairs, review cases, blockers, confidence bands, split partitions, or decision rows. Graph projection consumes resolver outputs only through persisted identity decisions, resolver explanations, and `GraphCorrectionHandoff` records.
 
+#### Assertion transition graph validation cross-reference
+
+`090` must validate the graph side of every `080.AssertionStateTransitionRow` output. This table is exhaustive for `080` transition output classes that can affect graph projection.
+
+| `080` transition output | Required `090` validation |
+| --- | --- |
+| `insert_fact` or `reproject_fact_key` | Recompute projected objects through the active graph profile only. |
+| `mark_retracted` with graph expiry allowed | Require `060.AbsenceDerivationResult.allowed_effects` containing `graph_expiry`. |
+| cleanup handoff | Require `060.AbsenceDerivationResult.allowed_effects` containing `cleanup`. |
+| conflict visibility update | Require active `GraphEdgeSemantics` and `GraphObjectOutputEligibilityRow`. |
+| unsafe negative, no-op, or source-authority-blocked | Emit no graph delta, no backend mutation, and a mutation-prohibition proof. |
+| identity split handoff | Validate `070.GraphCorrectionHandoff` refs exactly and do not re-evaluate resolver evidence. |
+
+`GraphRebuildEquivalencePolicy` imports `080.ReplayEquivalencePolicyOutputClassRow` and must use exact imported field-selection refs for `graph_delta`, `graph_apply`, and `graph_rebuild`. This document does not add new MVP edge types; `observed_connection` remains the only active MVP edge, and theoretical reachability remains prohibited.
+
 ### DerivedGraphEdgeRule graph handoff
 
 `090` owns the only graph projection path for `130.DerivedGraphEdgeRule.allowed_output_effect = graph_delta_via_090`. `130` owns the rule schema and rule activation. `090` owns graph projection validation, graph delta identity, graph edge semantics, output eligibility, apply profile, backend preflight, and derived-view lag behavior.
