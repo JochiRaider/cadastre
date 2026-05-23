@@ -102,6 +102,41 @@ A PostgreSQL-compatible analysis rule must use `provider = postgresql`. An AGE-c
 
 Raw SQL text, raw Cypher text, SQL/Cypher composition, query-plan text, and prepared statement text must remain validation-only diagnostics unless translated, checksummed, mutation-proven, redacted, authorized, accepted by `RuleGraphCompatibilityMatrix`, and included in `030.VersionManifest`.
 
+#### RuleGraphCompatibilityMatrixPostgresClosure
+
+PostgreSQL and AGE analysis-query compatibility is closed only through `RuleGraphCompatibilityMatrix` rows that import `090.GraphQueryTranslationProfile` by exact ref and checksum. PostgreSQL provider token must be exactly `postgresql`. AGE provider token must be exactly `postgresql_age`. Raw SQL, raw Cypher, SQL/Cypher composition, prepared statement text, and query-plan text remain validation-only unless mapped into a translated row.
+
+| Field | Required behavior |
+| --- | --- |
+| `provider` | Exactly `postgresql` or `postgresql_age`. |
+| `query_class` | One of the `090` query classes allowed for analysis read-only execution. |
+| `graph_projection_profile_ref` | Active graph projection profile ref and checksum. |
+| `graph_query_translation_profile_ref` | Active translation profile ref and checksum. |
+| `expected_translated_query_checksum` | Required; raw SQL or Cypher bytes are not output identity. |
+| `expected_result_checksum` | Required for deterministic parity. |
+| `derived_view_state_ref` | Required when graph read model state affects analysis output. |
+| `authorization_refs` | Required before execution. |
+| `redaction_refs` | Required before execution and before telemetry. |
+| `mutation_prohibition_proof` | Required for every SQL and AGE row. |
+| `validation_refs` | Non-empty `120-GRAPH-POSTGRES-QUERY-*` or `120-GRAPH-AGE-*` refs. |
+| `package_set_refs` | Required when the rule, query profile, or backend profile is package-supplied. |
+| `version_manifest_refs` | Must include all selected rule, graph, query, authorization, redaction, validation, package, and expected checksum refs. |
+
+Explicit rejection rows:
+
+| Rejected input | Required result |
+| --- | --- |
+| SQL DML or DDL | Reject before execution with no mutation. |
+| Transaction-control statements | Reject before execution with no mutation. |
+| Unsafe `search_path` | Reject before execution. |
+| Provider-native query handles | Reject before execution and before page-token creation. |
+| Prepared statement text | Reject unless translated and checksummed through `090`. |
+| Literal-bearing query plans | Reject or redact before validation, audit, and telemetry output. |
+| AGE mutating Cypher clauses | Reject with no mutation. |
+| AGE namespace DML or DDL | Reject with no mutation. |
+| Graph drop | Reject with no mutation. |
+| AGE internal ID leakage | Reject before API, audit, telemetry, evidence, page-token, or replay output. |
+
 `AnalysisFinding`, `AnalysisMetric`, and `RiskAcceptanceRecord` are workflow outputs. They must not represent remediation, risk reduction, fact retraction, graph edge removal, or source completeness change.
 
 ### AnalysisReplayEquivalenceHandoff

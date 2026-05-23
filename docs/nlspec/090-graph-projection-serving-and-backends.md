@@ -269,34 +269,40 @@ The MVP active graph profile must close graph semantic selection before projecti
 
 `mvp-postgresql-relational-graph.v1` is the default selection decision only when graph serving is enabled and no backend profile is supplied. Default selection emits `GraphBackendSelectionDefaultDecision` and must not mutate, query, rebuild, promote, drift-check, or serve graph state. `mvp-postgresql-age.v1` may be selected only by explicit input or explicit validation scope; it is not the omitted default.
 
-`GraphBackendActivationBlockerSet` must contain one row, resolved or deterministically blocked, for each blocker below before backend mutation, query serving, rebuild promotion, or graph-serving output:
+#### PostgreSQLRelationalDefaultBackendProfileClosure
 
-| Blocker family | Required row |
-| --- | --- |
-| provider package refs | Required. |
-| adapter package refs | Required. |
-| driver package refs | Required. |
-| storage backend refs | Required or exact deterministic block. |
-| index backend refs | Required or unsupported query-class declaration. |
-| runtime distribution refs | Required. |
-| deployment profile refs | Required. |
-| storage backend selection or block | Required. |
-| index backend selection or unsupported query-class declaration | Required. |
-| schema/index/apply fixtures | Required. |
-| stale mixed-index fixture | Required when mixed indexes are enabled. |
-| raw-write bypass fixture | Required. |
-| partial-apply fixture | Required. |
-| rebuild fixture | Required. |
-| package gate | Required through `100.ProductionPackageSetManifest`. |
-| provider support evidence | Required when managed-provider support, region, engine version, service tier, extension availability, or support status can affect activation. |
-| relational anchor schema fingerprint | Required for the PostgreSQL relational default and for any AGE profile. |
-| PostgreSQL role, RLS, and `search_path` preflight | Required before query serving, apply, rebuild promotion, or health output for PostgreSQL-backed profiles. |
-| restore rehearsal evidence | Required before production promotion for PostgreSQL-backed profiles. |
-| upgrade rehearsal or rebuild migration evidence | Required before production promotion when runtime, schema, provider, or extension version changes can affect output. |
-| AGE extension package/version refs | Required when `mvp-postgresql-age.v1` is selected. |
-| AGE namespace and mutating-Cypher negative fixtures | Required when `mvp-postgresql-age.v1` is selected. |
-| benchmark threshold rows | Required when performance gates are in promotion scope; `TODO:` thresholds block production promotion. |
+Omitted backend selection materializes only `mvp-postgresql-relational-graph.v1`. The selection result is a `GraphBackendSelectionDefaultDecision`; it is not a preflight result, package activation result, schema proof, query proof, apply proof, rebuild proof, health success, drift check, or promotion proof.
 
+Selection alone must not run backend preflight, open a backend connection, execute a graph query, apply a graph delta, rebuild graph state, perform a drift check, mark health healthy, advance `DerivedViewState`, or promote graph serving. Any unresolved default blocker emits `GRAPH_BACKEND_DEFAULT_UNRESOLVED` unless a more specific owner error applies.
+
+`GraphBackendActivationBlockerSet` must contain one row, resolved or deterministically blocked, for each blocker below before backend mutation, query serving, rebuild promotion, drift check, health success, or graph-serving output:
+
+| Blocker family | Required row | Default when missing, expired, mismatched, or `TODO:` |
+| --- | --- | --- |
+| `postgresql_runtime_distribution_ref` | Exact `100.PackageReleaseManifest` and package-set refs for the PostgreSQL runtime distribution. | `GRAPH_BACKEND_DEFAULT_UNRESOLVED` or `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `postgresql_provider_version_ref` | Exact provider engine version ref and compatibility row. | `GRAPH_BACKEND_VERSION_UNPINNED`. |
+| `postgresql_provider_adapter_package_ref` | Exact `graph_provider_adapter_package` release ref and checksum. | `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `postgresql_driver_package_ref` | Exact `graph_backend_driver_package` release ref, driver protocol compatibility row, and checksum. | `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `postgresql_deployment_profile_ref` | Exact `graph_backend_deployment_profile` package ref for provider, region or redacted region ref, service tier, role model, backup/restore, and upgrade scope. | `GRAPH_BACKEND_CONFIG_INCOMPLETE`. |
+| `provider_support_evidence_ref` | Active `GraphProviderSupportEvidenceRow`; expired evidence behaves as missing. | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` or `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED`. |
+| `graph_backend_activation_blocker_set_ref` | Selected blocker set ref and checksum. | `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
+| `graph_provider_capability_matrix_ref` | Selected `GraphProviderCapabilityMatrix` row-set ref and checksum. | `GRAPH_PROVIDER_CAPABILITY_MISSING`. |
+| `graph_read_model_schema_profile_ref` | Selected relational schema profile ref for `mvp-postgresql-relational-schema.v1`. | `GRAPH_BACKEND_CONFIG_INCOMPLETE`. |
+| `backend_schema_fingerprint_ref` | Current `BackendSchemaFingerprint` for the selected profile and deployment scope. | `GRAPH_SCHEMA_FINGERPRINT_STALE`. |
+| `role_rls_search_path_preflight_ref` | Selected `RoleRlsSearchPathPreflightRow` ref and checksum. | `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE`. |
+| `graph_backend_taxonomy_mapping_profile_ref` | Selected backend taxonomy mapping ref and checksum. | `GRAPH_BACKEND_CONFIG_INCOMPLETE`. |
+| `graph_query_translation_profile_ref` | Selected query translation row-set ref and checksum. | `GRAPH_QUERY_TRANSLATION_ERROR`. |
+| `graph_apply_profile_ref` | Selected apply profile ref and checksum. | `GRAPH_BACKEND_CONFIG_INCOMPLETE`. |
+| `restore_rehearsal_evidence_ref` | Passing `GraphRestoreRehearsalEvidenceRow`. | `GRAPH_BACKEND_RESTORE_UNVERIFIED`. |
+| `upgrade_rehearsal_evidence_ref` | Passing `GraphUpgradeRehearsalEvidenceRow` or rebuild migration proof. | `GRAPH_BACKEND_UPGRADE_UNVERIFIED`. |
+| `benchmark_threshold_profile_refs` | `GraphBenchmarkThresholdProfile` rows for every benchmark tier in promotion scope. | `GRAPH_BENCHMARK_THRESHOLD_MISSING`. |
+| `error_registry_fragment_refs` | Generated `110.ErrorCodeRegistryRow` refs for every backend-visible owner error. | `ERROR_REGISTRY_OWNER_FRAGMENT_INCOMPLETE`. |
+| `telemetry_redaction_validation_refs` | `140` telemetry redaction and cardinality validation refs for backend diagnostics. | `TELEMETRY_ATTRIBUTE_FORBIDDEN` or `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
+| `validation_refs` | Concrete `120` rows with fixture checksums, expected output or error checksums, mutation-prohibition proofs, and acceptance criterion IDs. | blocked validation result; no production effect. |
+| `package_set_manifest_ref` | Active `100.ProductionPackageSetManifest` ref and checksum containing every selected backend package release. | `GRAPH_BACKEND_PACKAGE_COHORT_MISMATCH` or `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
+| `version_manifest_requirement` | `030.VersionManifest` refs include every selected row, checksum, package ref, evidence ref, validation ref, generated error registry checksum, and telemetry ref. | `VERSION_MANIFEST_INCOMPLETE`. |
+
+PostgreSQL relational rows are the current omitted-backend default candidate. AGE rows are optional and validation-only unless every AGE production gate passes.
 PostgreSQL relational rows are the current omitted-backend default candidate. AGE rows are optional and validation-only unless every AGE production gate passes.
 
 ### GraphScopeSelectorContextSet
@@ -405,6 +411,40 @@ The row-family field inventory below is exhaustive for backend selection and Pos
 
 A package release manifest, provider label, benchmark summary, validation report summary, defaulting decision, or research report must not substitute for any selected row ref or row checksum named in this closure table.
 
+#### RoleRlsSearchPathPreflightRow
+
+`RoleRlsSearchPathPreflightRow` is required for every PostgreSQL-backed profile before query serving, graph apply, rebuild promotion, health success, drift checks, or validation acceptance.
+
+| Field | Required behavior |
+| --- | --- |
+| `backend_profile_ref` | Structured ref and checksum for the selected backend profile. |
+| `runtime_ref` | Exact PostgreSQL runtime distribution ref and checksum. |
+| `role_model_ref` | Exact role model ref covering read-only query role and apply writer role. |
+| `rls_policy_refs` | Non-empty refs for every RLS policy relied on by graph serving or apply. |
+| `search_path_policy_ref` | Exact policy ref; implicit, provider-default, or session-inherited `search_path` is forbidden. |
+| `read_only_query_role_ref` | Required for every query-serving path; write privileges fail preflight. |
+| `apply_writer_role_ref` | Required for graph apply; must not be reused for read-only query serving. |
+| `raw_write_bypass_control_ref` | Required proof that console, admin, import, raw SQL, AGE namespace, or provider-native write bypasses are blocked, detected, or excluded from production. |
+| `validation_refs` | Non-empty refs proving safe role, unsafe role, unsafe `search_path`, RLS bypass, and raw-write bypass cases. |
+| `package_set_ref` | Required when runtime, role policy, or deployment profile is package-supplied. |
+| `activation_scope` | Must cover selected graph serving and apply scope. |
+| `lifecycle_status` | Production use requires `active`. |
+| `row_checksum` | SHA-256 over canonical row bytes after defaults materialize. |
+
+There are no implicit role, RLS, or `search_path` defaults. Missing or invalid preflight rows emit `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` or the more specific row error.
+
+#### GraphProviderSupportEvidenceRow expansion
+
+`GraphProviderSupportEvidenceRow` must include `provider`, region or redacted region ref, exact engine version ref, service tier, backup/restore support, upgrade support, evidence date, evidence expiry, support status, package-set ref, validation refs, and redaction classes. Expired evidence must behave as missing for preflight, health success, package activation, and promotion.
+
+| Support status | Required behavior |
+| --- | --- |
+| `supported` | May satisfy provider support only until `evidence_expiry` and only for the exact provider, region or redacted region ref, engine version, service tier, and package set. |
+| `preview` | Blocks production unless an explicit production-approval row and validation refs are present. |
+| `unsupported` | Blocks activation with `GRAPH_PROVIDER_UNSUPPORTED`. |
+| `unknown` | Blocks activation with `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING`. |
+| expired evidence | Treated as missing and emits `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED`. |
+
 ### GraphBackendActivationChecklist
 
 Production use of a graph backend requires every checklist row below to resolve before mutation, query, rebuild promotion, drift check, or graph-serving output.
@@ -469,6 +509,20 @@ The default profile row is a selection default, not a domain decision. It must n
 
 `BackendSchemaFingerprint` for PostgreSQL-backed profiles must include tables, columns, constraints, indexes, triggers, RLS policies, functions, extension versions when present, package refs, schema profile refs, and checksums. The fingerprint must be computed before graph apply, graph query serving, rebuild promotion, restore acceptance, upgrade acceptance, and replay. Duplicate node IDs, duplicate edge IDs, orphan edges, invalid edge types, invalid traversal classes, invalid intervals, stale fingerprints, and undeclared JSONB paths must fail before backend mutation or caller-visible graph output.
 
+#### PostgreSQLRelationalAnchorSchemaProfile
+
+`PostgreSQLRelationalAnchorSchemaProfile` is the contract-visible schema object set for PostgreSQL-backed graph serving. The profile must define `graph_node`, `graph_edge`, `graph_edge_evidence_ref`, `graph_apply_state`, `graph_schema_fingerprint_state`, and either declared JSONB property paths or a declared bounded property table. Application-owned graph IDs are the only graph IDs that may appear in responses, selectors, cursors, page tokens, drillback refs, replay refs, evidence refs, audit output, telemetry, or validation output.
+
+| Schema object | Required closure |
+| --- | --- |
+| `graph_node` | Stores one row per application-owned graph node ID. Backend-generated IDs, row IDs, OIDs, tuple IDs, and sequence values are forbidden as graph identity. |
+| `graph_edge` | Stores one row per application-owned graph edge ID. `edge_type` must be exactly `observed_connection` for MVP. Endpoint refs must target `graph_node.graph_node_id`. |
+| `graph_edge_evidence_ref` | Stores a bounded evidence bridge. It must use evidence refs, not backend row locators. |
+| `graph_apply_state` | Stores batch, idempotency, partial-apply, resume, lock-loss, and derived-view advancement evidence. |
+| `graph_schema_fingerprint_state` | Stores current and prior schema fingerprint refs for restore, upgrade, replay, query, apply, and rebuild gates. |
+| declared JSONB paths | Optional. Every JSONB path must be declared, typed, bounded, indexed when queried, and covered by validation. Undeclared paths fail before persistence or query. |
+| declared property table | Optional alternative to JSONB. It must have bounded property names, typed values, and duplicate rejection. |
+
 ### PostgreSQL SQL query translation matrix
 
 PostgreSQL SQL translation is allowed only as backend candidate materialization. Cadastre ordering, authorization, redaction, page-token identity, stale-read handling, and error selection occur after candidate materialization. SQL row order, SQL cursor names, prepared statement names, physical row locators, tuple IDs, OIDs, sequence values, and provider-native query handles must not become response order, response identity, drillback identity, replay identity, or page-token identity.
@@ -482,6 +536,34 @@ PostgreSQL SQL translation is allowed only as backend candidate materialization.
 | `analysis_read_only` | Execute only validated read-only SQL templates mapped through `GraphQueryTranslationProfile` and `130.RuleGraphCompatibilityMatrix`. | Same as query class. | Per rule profile; `TODO:` concrete analysis caps block production promotion when performance gates are in scope. | Statement timeout plus application cancellation. | Expected query checksum, expected result checksum, authorization, redaction, mutation proof. | Raw SQL text and provider-native query handles are forbidden unless validation import maps them into an active profile. |
 
 Bounded path validation must cover depth `1..6`, cycles, self-loops, empty traversal classes, high-degree candidate overflow, timeout, cancellation, page-token mismatch, and proof that SQL natural order is never response order.
+
+#### GraphQueryTranslationProfileRow closure
+
+Each PostgreSQL translation row must include query class, selected backend profile ref, expected translated query checksum, expected result checksum, authorization refs, redaction refs, timeout policy ref, ordering policy ref, page-token policy ref, mutation-prohibition proof, validation refs, package-set refs when package-supplied, and manifest refs. Translation rows must cover exactly `node_detail`, `neighbor_expansion`, `bounded_path`, `evidence_drillback`, and `analysis_read_only`.
+
+| Forbidden backend output identity | Required behavior |
+| --- | --- |
+| Raw SQL text | Must not appear in API, audit, telemetry, page tokens, validation output, or evidence refs. |
+| Prepared statement names | Rejected as response identity and page-token identity. |
+| SQL cursor names | Rejected as page-token identity and query handles. |
+| PostgreSQL OIDs | Rejected before caller-visible output. |
+| Tuple IDs | Rejected before caller-visible output. |
+| Sequence values | Rejected before caller-visible output. |
+| Physical row locators | Rejected before drillback or replay identity. |
+| Literal-bearing query plans | Rejected or redacted before telemetry, audit, and validation output. |
+| Backend query handles | Rejected before API, page-token, audit, telemetry, evidence, and replay output. |
+
+#### GraphQueryCandidateLimitTable handoff
+
+`GraphQueryCandidateLimitTable` owns backend candidate caps only. API bounds, page-size bounds, and timeout bounds remain imported from `110` by exact contract name and must not be restated by limit rows.
+
+| Query class | Candidate cap source | Overflow error | Post-processing owner | Timeout and cancellation behavior |
+| --- | --- | --- | --- | --- |
+| `node_detail` | cap fixed at `1` candidate per application-owned graph node ID. | `GRAPH_POSTGRES_DUPLICATE_NODE_ID` for more than one candidate. | `090.QueryGraph` plus `110` response rendering. | Statement timeout plus application cancellation; no partial object. |
+| `neighbor_expansion` | selected candidate-limit row. | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`. | `090` ordering, authorization, redaction, and pagination. | Statement timeout plus application cancellation before Cadastre page token creation. |
+| `bounded_path` | selected candidate-limit row, depth `1..6`. | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED`. | `090` path ordering and cycle/self-loop handling. | Timeout or cancellation emits no partial mutation and no backend cursor. |
+| `evidence_drillback` | `110` page-size plus one and selected drillback cap. | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` when cap exceeded. | `110` evidence drillback rendering and redaction. | Timeout emits owner error before raw payload lookup. |
+| `analysis_read_only` | selected rule compatibility row. | `GRAPH_QUERY_CANDIDATE_LIMIT_REACHED` or analysis owner error. | `130.RuleGraphCompatibilityMatrix` and `090` translation. | Timeout emits owner error and no analysis output. |
 
 ### PostgreSQL relational apply, rebuild, restore, and migration contract
 
@@ -500,6 +582,25 @@ Bounded path validation must cover depth `1..6`, cycles, self-loops, empty trave
 | `duplicate_collision_behavior` | Duplicate graph node or edge IDs fail with PostgreSQL-specific owner errors before derived-view advancement. |
 
 `RebuildGraph` must rebuild from authoritative Cadastre graph deltas and owner records, not from PostgreSQL graph state alone. Restore acceptance requires a clean-environment restore proof, schema fingerprint recomputation, graph index consistency check, graph query parity, and derived-view state validation. Schema migration requires fingerprint diff evidence, rollback or rebuild migration plan, and PostgreSQL major-version rehearsal evidence before promotion. Exact PostgreSQL version, patch version, driver package, deployment provider/scope, benchmark thresholds, migration/rollback strategy, provider support evidence, restore evidence, and upgrade evidence remain production blockers until supplied by selected activation-controlled rows and `120` validation artifacts.
+
+#### GraphRestoreRehearsalEvidenceRow schema
+
+`GraphRestoreRehearsalEvidenceRow` must require `backend_profile_ref`, `clean_environment_restore_ref`, `restored_fingerprint_ref`, `index_consistency_check_ref`, `query_parity_ref`, `derived_view_validation_ref`, `package_set_ref`, and `result`. `result` must be `pass` before production promotion. Missing, stale, failed, checksum-mismatched, package-set-mismatched, or unmanifested rows emit `GRAPH_BACKEND_RESTORE_UNVERIFIED` and block production graph serving promotion.
+
+#### GraphUpgradeRehearsalEvidenceRow schema
+
+`GraphUpgradeRehearsalEvidenceRow` must require `backend_profile_ref`, `from_runtime_ref`, `to_runtime_ref`, `schema_migration_diff_ref`, `rollback_or_rebuild_plan_ref`, `major_version_rehearsal_ref`, `package_compatibility_refs`, `package_set_ref`, and `result`. `result` must be `pass` before production promotion. Missing, stale, failed, checksum-mismatched, package-set-mismatched, or unmanifested rows emit `GRAPH_BACKEND_UPGRADE_UNVERIFIED`.
+
+#### GraphBenchmarkThresholdProfile closure
+
+At least `medium_mvp` and `large_stress` benchmark threshold rows are required when backend performance gates are in promotion scope. Each row must include graph size tier, degree distribution ref, run count, warmup rule, p50, p95, and p99 threshold refs, timeout expectation, overflow expectation, WAL, index-build, and bloat metric refs when in scope, metric checksum refs, validation refs, package-set ref when supplied, and manifest refs.
+
+| Benchmark row | Required behavior |
+| --- | --- |
+| `medium_mvp` | Must cover MVP query classes, normal degree distribution, expected timeout behavior, expected overflow behavior, and metric checksum refs. |
+| `large_stress` | Must cover high-degree overflow, bounded path depth `1..6`, restore and upgrade stress when in scope, index build metrics, WAL and bloat refs when in scope, and cancellation behavior. |
+
+TODO: Product governance must supply concrete benchmark thresholds, workload fixture checksums, expected metric checksums, package-set refs when package-supplied, and validation refs. Until supplied, benchmark closure returns `blocked`, not `pass`, and production promotion fails with `GRAPH_BENCHMARK_THRESHOLD_MISSING`.
 
 ### Apache AGE optional graph extension profile
 
@@ -521,6 +622,8 @@ Bounded path validation must cover depth `1..6`, cycles, self-loops, empty trave
 | production status | `validation_only` or `blocked_until_gates_pass` until all AGE gates pass. |
 
 AGE validation fixtures must prove extension missing/wrong version blocks activation, unsupported provider blocks activation, read-only Cypher mutation fails, namespace DML/DDL fails, AGE internal IDs do not escape, query parity passes, and restore/upgrade rehearsals pass or block production.
+
+AGE production eligibility also requires exact PostgreSQL version refs, exact AGE extension version and package refs, extension files and control script refs, provider support evidence, namespace and security preflight refs, mutating-Cypher rejection proofs, AGE internal-ID rejection proofs, query parity refs, restore refs, upgrade refs, benchmark refs, telemetry redaction refs, package refs, validation refs, and manifest refs. A missing row blocks AGE production with the most specific AGE, provider, package, restore, upgrade, telemetry, or manifest error. Documentation, release notes, provider marketing pages, or research reports must not substitute for these rows.
 
 #### AGE production-eligibility row precision
 
@@ -1112,6 +1215,12 @@ MVP graph serving covers current-state and recent-history graph queries. Full hi
 | `GRAPH_POSTGRES_RLS_BYPASS_FORBIDDEN` | PostgreSQL role or RLS configuration permits unauthorized bypass for API or apply roles. |
 | `GRAPH_PROVIDER_UNSUPPORTED` | Selected provider, region, engine version, service tier, extension support status, or support scope is unsupported for activation. |
 | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` | Provider support evidence required by the selected backend profile is missing, stale, or checksum-mismatched. |
+| `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED` | Provider support evidence is past `evidence_expiry`; expired evidence behaves as missing. |
+| `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` | PostgreSQL role, RLS, raw-write bypass, or `search_path` preflight is missing, unsafe, stale, checksum-mismatched, package-set-mismatched, or unmanifested. |
+| `GRAPH_BENCHMARK_THRESHOLD_MISSING` | Required benchmark threshold profile, workload fixture checksum, expected metric checksum, or validation ref is missing or `TODO:`. |
+| `GRAPH_BENCHMARK_THRESHOLD_FAILED` | A selected benchmark run fails the active threshold profile or expected metric checksum. |
+| `GRAPH_BACKEND_PACKAGE_COHORT_MISMATCH` | Selected backend runtime, adapter, driver, deployment profile, schema, query, apply, provider support, restore, upgrade, benchmark, or rollback package refs do not belong to the same active package set. |
+| `GRAPH_QUERY_PARITY_FAILED` | PostgreSQL relational or AGE query parity fixture fails expected query checksum, expected result checksum, authorization, redaction, ordering, or mutation-prohibition proof. |
 | `GRAPH_AGE_EXTENSION_MISSING` | AGE profile is selected but the required AGE extension package, control file, SQL script, or extension presence proof is missing. |
 | `GRAPH_AGE_EXTENSION_VERSION_UNSUPPORTED` | AGE extension version or supported PostgreSQL major version does not match selected profile refs. |
 | `GRAPH_AGE_MUTATION_FORBIDDEN` | Read-only AGE path attempts mutating Cypher, graph creation, graph drop, or AGE write behavior. |
@@ -1176,6 +1285,12 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `GRAPH_POSTGRES_RLS_BYPASS_FORBIDDEN` | `090` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `090.GraphErrorContext` | `error-registry-090-graph-postgres-rls-bypass-forbidden` |
 | `GRAPH_PROVIDER_UNSUPPORTED` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-provider-unsupported` |
 | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-provider-support-evidence-missing` |
+| `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED` | `090` | `blocked` | `retry_after_refresh` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-provider-support-evidence-expired` |
+| `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` | `090` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `090.GraphErrorContext` | `error-registry-090-graph-postgres-security-preflight-unsafe` |
+| `GRAPH_BENCHMARK_THRESHOLD_MISSING` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-benchmark-threshold-missing` |
+| `GRAPH_BENCHMARK_THRESHOLD_FAILED` | `090` | `blocked` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-benchmark-threshold-failed` |
+| `GRAPH_BACKEND_PACKAGE_COHORT_MISMATCH` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-backend-package-cohort-mismatch` |
+| `GRAPH_QUERY_PARITY_FAILED` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-query-parity-failed` |
 | `GRAPH_AGE_EXTENSION_MISSING` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-age-extension-missing` |
 | `GRAPH_AGE_EXTENSION_VERSION_UNSUPPORTED` | `090` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `090.GraphErrorContext` | `error-registry-090-graph-age-extension-version-unsupported` |
 | `GRAPH_AGE_MUTATION_FORBIDDEN` | `090` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `090.GraphErrorContext` | `error-registry-090-graph-age-mutation-forbidden` |
@@ -1314,6 +1429,8 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-GRAPH-POSTGRES-QUERY-AC-001` | PostgreSQL SQL query translation fixtures prove provider-neutral `QueryGraph` outputs for node detail, neighbor expansion, bounded path depths `1..6`, evidence drillback, and analysis read-only; reject full scans, unsupported predicates, timeout, cancellation, SQL natural-order output, backend IDs, SQL cursor names, prepared statement names, OIDs, tuple IDs, and sequence values. |
 | `090-GRAPH-POSTGRES-APPLY-AC-001` | PostgreSQL apply fixtures prove deterministic batch membership, idempotent reapply, idempotency conflict, duplicate collision handling, partial apply resume, lock loss no advancement, stale fingerprint rejection, and read-after-write proof. |
 | `090-GRAPH-POSTGRES-RESTORE-UPGRADE-AC-001` | PostgreSQL restore, clean-environment rebuild, schema migration, rollback, and major-version upgrade fixtures pass or block production promotion with owner errors. |
+| `090-GRAPH-POSTGRES-BENCHMARK-AC-001` | PostgreSQL benchmark closure blocks production until `medium_mvp` and `large_stress` threshold rows have concrete workload, threshold, metric checksum, package-set, manifest, and validation refs. |
+| `090-GRAPH-POSTGRES-SECURITY-PREFLIGHT-AC-001` | PostgreSQL role, RLS, raw-write bypass, and `search_path` preflight rows fail closed with `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` and never inherit provider defaults. |
 | `090-GRAPH-AGE-PREFLIGHT-AC-001` | AGE extension missing, unsupported version, unsupported provider, unsafe `search_path`, missing extension files/control scripts, or missing provider support evidence blocks AGE activation. |
 | `090-GRAPH-AGE-SECURITY-AC-001` | AGE read-only Cypher mutation attempts, AGE graph namespace DML/DDL, graph drop, and namespace bypass attempts fail with no mutation. |
 | `090-GRAPH-AGE-ID-LEAK-AC-001` | AGE internal vertex, edge, path, graph, label, and agtype object IDs never appear in API output, page tokens, audit output, telemetry, validation reports, evidence refs, or replay keys. |

@@ -474,6 +474,20 @@ Graph backend package candidates must activate as one package cohort. The existi
 
 Candidate graph backend package-set activation failure must preserve the current active package set. A failed candidate must emit `PackageActivationFailureEvent` and must write no graph mutation, no query-serving output, no rebuild promotion, no graph health success, no last-known-good update, and no candidate package output visible as production.
 
+#### GraphBackendPackageCohortClosure
+
+PostgreSQL runtime distribution, provider adapter, driver, deployment profile, schema profile artifacts, query translation profile artifacts, apply profile artifacts, provider support evidence, restore evidence, upgrade or rebuild migration evidence, benchmark evidence, and rollback refs must activate, roll back, quarantine, and retire as one package cohort. A package-set candidate that contains only a subset of those refs must fail activation before backend preflight can pass.
+
+| Cohort dependency | Required package behavior |
+| --- | --- |
+| Runtime, provider adapter, and driver | Must share one active package-set ref and compatible protocol rows. |
+| Deployment profile and provider support evidence | Must share the same target environment selector, provider, region or redacted region ref, engine version, and service tier. |
+| Schema, query, and apply profile artifacts | Must match the selected `090.GraphBackendProfile`, schema fingerprint, translation checksums, and apply profile checksum. |
+| Restore, upgrade, benchmark, and rollback refs | Must match the candidate package releases and the active package-set checksum. |
+| AGE extension package when selected | Must activate with PostgreSQL runtime distribution, extension files/control scripts, provider support, namespace security, restore, upgrade, and query parity refs. |
+
+Connection-pool and migration tooling do not require new `PackageType` tokens unless they are independently released, rolled back, quarantined, or activated outside the graph backend cohort. Connection-pool compatibility belongs under `graph_backend_driver_package`. Schema migration tooling compatibility belongs under `graph_provider_adapter_package` or `graph_backend_deployment_profile`. Migration evidence belongs under `090.GraphUpgradeRehearsalEvidenceRow`.
+
 ### Observability package type policy rows
 
 These rows are package type policies for confirmed `PackageType` tokens. Individual telemetry policies are activation-controlled artifact classes in `030`; package types represent package or release units.
@@ -582,6 +596,8 @@ The `PackageType` enum is closed. Activation remains blocked only when the activ
 | `producer_ci_validation_refs` | Required when producer CI evidence is accepted | `[]` otherwise | Refs must be exact-snapshot-bound and match imported publication/materialization refs. |
 | `maintenance_tool_invocation_refs` | Required when tool output affected package bytes, validation, materialization input, or publication manifest | `[]` otherwise | Invocation refs must match tool contract, input checksum, output checksum, and generated artifact manifest checksum. |
 | `candidate_sync_record_refs` | Required when manifest sync staged the release candidate | `[]` otherwise | Sync refs are discovery and audit evidence only; they must not activate the release. |
+
+A graph backend `PackageReleaseManifest` row is production-eligible only when release checksum, package type, immutable artifact refs, activation artifact refs, trust refs, provenance refs, SBOM refs, dependency refs, compatibility refs, validation refs, activation scope, lifecycle status, and package-set eligibility are concrete and checksum-valid. Bare strings, mutable refs, scalar signature summaries, package labels, dependency lock alone, SBOM existence alone, provenance existence alone, or validation-run existence alone must reject before candidate activation.
 
 | `validation_refs` | Yes | none | Non-empty refs to passing validation rows for the release and its package type. |
 | `release_checksum` | Yes | none | SHA-256 over canonical release manifest bytes excluding `release_checksum`. |
@@ -1119,7 +1135,7 @@ Every output-affecting axis named by `PackageTypePolicyRow` must have a passing 
 ### Graph backend compatibility axes
 
 | Compatibility axis | Required for PostgreSQL relational default | Required when AGE is selected |
-| --- | --- | --- | --- |
+| --- | --- | --- |
 | PostgreSQL major and patch version | Pinned immutable runtime distribution or provider ref. | Same, and must be supported by selected AGE version. |
 | PostgreSQL driver protocol version | Must match provider adapter contract and timeout/cancellation behavior. | Same. |
 | deployment provider, region, engine version, and service tier | Required when provider support affects activation. | Required with exact AGE support status. |
@@ -1133,6 +1149,19 @@ Every output-affecting axis named by `PackageTypePolicyRow` must have a passing 
 | upgrade compatibility | PostgreSQL major-version upgrade or rebuild migration proof required. | Same plus AGE upgrade rehearsal or rebuild migration proof. |
 | role/RLS/search-path compatibility | Required for API and apply roles. | Required plus AGE namespace security preflight. |
 | package cohort compatibility | Runtime, adapter, driver, schema profile, query profile, apply profile, deployment profile, package set, validation refs, and rollback refs must match. | Same plus AGE extension package cohort. |
+
+Graph backend package compatibility rows must include the exact rows below. A missing row blocks candidate activation and rollback with `PACKAGE_COMPATIBILITY_FAILED` or a more specific graph backend package error.
+
+| Compatibility row | Required refs |
+| --- | --- |
+| PostgreSQL runtime distribution to provider version | Runtime package ref, provider engine version ref, target environment selector, provider support evidence ref, package-set ref. |
+| Driver protocol to runtime version | Driver package ref, driver protocol ref, PostgreSQL runtime ref, timeout/cancellation behavior ref, transaction behavior ref. |
+| Adapter query/apply schema to `090` profile refs | Adapter package ref, `090.GraphReadModelSchemaProfile`, `090.GraphQueryTranslationProfile`, `090.GraphApplyProfile`, and expected query checksum refs. |
+| Deployment profile to provider support evidence | Deployment package ref, provider support evidence ref, role/RLS/search-path preflight ref, backup/restore support ref, upgrade support ref. |
+| Schema profile to backend schema fingerprint | Schema profile artifact ref, DDL or schema artifact ref, `090.BackendSchemaFingerprint` ref, restore and upgrade refs. |
+| Query translation to expected query checksum rows | Query translation artifact ref, expected translated query checksum, expected result checksum, mutation-prohibition proof, redaction and authorization refs. |
+| Restore/upgrade evidence to package release and package set | Restore rehearsal ref, upgrade rehearsal or rebuild migration ref, package release refs, package-set checksum, rollback refs. |
+| AGE extension when selected | PostgreSQL major version, AGE extension package, extension files/control scripts, provider support evidence, namespace security preflight, query parity, restore, upgrade, package-set ref. |
 
 ### Package type compatibility closure
 
@@ -1194,6 +1223,7 @@ Caller-visible outputs must not leak private artifact payloads, private reposito
 | `PACKAGE_ACTIVATION_ARTIFACT_VALIDATION_MISSING` | Required artifact validation refs are missing or not passing. |
 | `PACKAGE_ACTIVATION_ARTIFACT_CORE_CONFLICT` | Package-supplied activation artifact conflicts with an owner stable core contract; maps to `010.ACTIVATION_ARTIFACT_CORE_CONFLICT` for shared boundary handling. |
 | `PACKAGE_SET_CHECKSUM_MISMATCH` | Candidate package set checksum or release manifest checksum mismatches. |
+| `PACKAGE_SET_DUPLICATE_REF` | Package-set manifest contains duplicate package release refs, checksums, policy refs, compatibility refs, validation refs, rollback refs, quarantine refs, lifecycle evidence refs, or approval refs after canonicalization. |
 | `PACKAGE_COHESION_INCOMPLETE` | A cohesion group is incomplete. |
 | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | Repository form is inactive or unsupported for MVP production activation. |
 | `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | Repository metadata regresses under anti-rollback state. |
@@ -1250,6 +1280,7 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `PACKAGE_ACTIVATION_ARTIFACT_VALIDATION_MISSING` | `100` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-activation-artifact-validation-missing` |
 | `PACKAGE_ACTIVATION_ARTIFACT_CORE_CONFLICT` | `100` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `100.PackageErrorContext` | `error-registry-100-package-activation-artifact-core-conflict` |
 | `PACKAGE_SET_CHECKSUM_MISMATCH` | `100` | `error` | `retry_after_owner_repair` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-set-checksum-mismatch` |
+| `PACKAGE_SET_DUPLICATE_REF` | `100` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-set-duplicate-ref` |
 | `PACKAGE_COHESION_INCOMPLETE` | `100` | `blocked` | `policy_change_required` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-cohesion-incomplete` |
 | `PACKAGE_REPOSITORY_FORM_UNSUPPORTED` | `100` | `error` | `caller_correctable` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.owner_context` | `100.PackageErrorContext` | `error-registry-100-package-repository-form-unsupported` |
 | `PACKAGE_REPOSITORY_ROLLBACK_DETECTED` | `100` | `security_error` | `none` | `110.StandardErrorCallerFields` | `110.StandardErrorAuditFields` | `110.StandardErrorRedactionRule.security_boundary` | `100.PackageErrorContext` | `error-registry-100-package-repository-rollback-detected` |
@@ -1323,6 +1354,8 @@ This owner fragment feeds `110.GenerateErrorCodeRegistry`. `110` owns the genera
 | `package_set_checksum` | Yes | none | SHA-256 over canonical manifest bytes excluding this field. |
 
 Missing, null-forbidden, checksum-mismatched, inactive, out-of-scope, failed, ambiguous, or TODO-bearing required package-set fields reject before active state changes. Candidate output visibility remains `none` until the package set validates and the resulting refs appear in `030.VersionManifest.included_refs`.
+
+A production graph backend package set must use canonical-set semantics for package release refs, release checksums, policy refs, compatibility refs, validation refs, rollback refs, quarantine refs, lifecycle transition evidence refs, and approval refs. Duplicate refs after canonicalization reject with `PACKAGE_SET_DUPLICATE_REF`. A package-set manifest must include package-set ID, target environment selector, package release refs, release checksums, selected package type policy refs, deprecation refs, compatibility refs, trust/provenance/SBOM refs, validation refs, activation artifact refs, rollback refs, quarantine refs, health refs, lifecycle transition evidence refs, approval refs, and package-set checksum.
 
 Source-closure row catalogs included in a production package set must appear in `package_release_refs`, `package_type_policy_refs`, `supply_chain_policy_refs`, `compatibility_refs`, and `validation_refs`, and their package-supplied `activation_artifact_refs` must appear in `030.VersionManifest` whenever they can affect output.
 
@@ -1440,6 +1473,8 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-001` | Missing PostgreSQL runtime/distribution, PostgreSQL adapter, PostgreSQL driver, deployment profile, compatibility row, SBOM/provenance where required, provider support evidence, restore/upgrade evidence, package-set membership, or AGE extension package refs when AGE is selected fails graph backend preflight with `GRAPH_BACKEND_PACKAGE_GATE_FAILED`. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-002` | PostgreSQL driver protocol mismatch, AGE extension version mismatch, provider support mismatch, schema fingerprint incompatibility, query translation incompatibility, query-plan regression policy failure, restore incompatibility, upgrade incompatibility, role/RLS/search-path incompatibility, or package cohort mismatch fails candidate activation and preserves the current active package set. |
 | `100-GRAPH-BACKEND-PACKAGE-GATE-AC-003` | Rollback to an incompatible graph backend package set fails before active state changes, graph serving promotion, graph apply, or query serving. |
+| `100-GRAPH-BACKEND-PACKAGE-GATE-AC-004` | Backend preflight fails when required PostgreSQL runtime, adapter, driver, deployment profile, package compatibility row, provider support row, restore/upgrade row, benchmark row, SBOM/provenance/trust row, or package-set ref is missing, failed, or outside the active graph backend package cohort. |
+| `100-GRAPH-BACKEND-PACKAGE-TOKEN-AC-001` | Broad labels such as `deployment_profile`, package names, module names, repository paths, artifact filenames, and developer labels fail with `PACKAGE_TYPE_UNKNOWN` and cannot substitute for exact graph backend package type tokens. |
 | `100-OBSERVABILITY-PACKAGE-TYPE-AC-001` | Observability policy bundle, telemetry runtime distribution, and telemetry collector deployment package types resolve exactly one active `PackageTypePolicyRow`; unknown, missing, ambiguous, unsafe, untrusted, or incompatible telemetry packages fail before activation. |
 | `100-OBSERVABILITY-PACKAGE-NONAUTH-AC-001` | Telemetry packages cannot emit domain production records or bypass `140` non-authority, redaction, metric cardinality, health mapping, replay exclusion, or exporter bounds. |
 | `100-COMPATIBILITY-AC-001` | Missing or failed compatibility on any required output-affecting axis fails activation or rollback with `PACKAGE_COMPATIBILITY_FAILED`. |

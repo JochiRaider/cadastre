@@ -674,6 +674,20 @@ Graph-domain boundary rules:
 | Structural global node | Bounded future graph node concept for global structural objects. | Implicit `Internet`, `Everyone`, wildcard identity, complete exposure, or universal reachability. | `090` | Default MVP emits none. |
 | Theoretical reachability edge | Deferred future graph edge or fact candidate. | Active MVP graph output. | `200`, `090` | Forbidden in MVP. |
 
+### 13.1 PostgreSQL and AGE backend vocabulary routing
+
+PostgreSQL and AGE terms are vocabulary and owner-routing terms only in `domain.md`. They do not define graph backend behavior, package activation behavior, query behavior, health behavior, telemetry behavior, validation behavior, or production selection.
+
+| Term | Domain meaning | Not this | Primary owner |
+| --- | --- | --- | --- |
+| PostgreSQL relational graph projection | Cadastre graph read model materialized through PostgreSQL relational anchor schema under `090`. | Graph truth, fact authority, identity authority, source completeness, or package activation proof. | `090`; package activation in `100`; validation in `120`. |
+| Relational anchor table | Contract-visible PostgreSQL table used by `090.GraphReadModelSchemaProfile`. | Cadastre domain truth by table existence. | `090`. |
+| Application-owned graph ID | Cadastre-owned graph node or edge identity used in responses, replay, evidence, selectors, drillback, and page-token identity. | PostgreSQL OID, tuple ID, sequence value, AGE ID, or backend-generated ID. | `040`, `090`, `110`. |
+| Backend-generated graph ID | Provider-native internal ID. Required interpretation: forbidden as Cadastre identity, selector, page-token identity, drillback identity, replay key, or evidence ref. | Application-owned graph ID. | `090`, `110`, `140`. |
+| PostgreSQL schema fingerprint | Backend schema inventory checksum required by `090`. | Source truth or graph truth by itself. | `090`; manifest inclusion in `030`. |
+| AGE graph namespace | AGE extension namespace detail. | Cadastre graph profile, identity, source scope, package scope, or public route. | `090`; redaction in `110` and `140`. |
+| AGE internal graph object ID | AGE-native vertex, edge, path, graph, label, or agtype object identity. Required interpretation: forbidden from public output, page tokens, telemetry, evidence refs, and replay keys. | Cadastre graph node ID, graph edge ID, evidence ref, or replay key. | `090`, `110`, `140`. |
+
 ## 14. Lifecycle concepts and state vocabulary
 
 Lifecycle concepts in root `domain.md` identify the domain meaning and owner of state vocabularies. Full transition tables remain owner-specific.
@@ -1047,6 +1061,7 @@ Root-domain-owned requirements only:
 | `DOM-REQ-014` | Context-map edges must default to `no_implicit_effect` when crossing artifacts are missing, inactive, stale, ambiguous, checksum-invalid, out of scope, or not covered by the owner contract. | `domain.md`, named owner spec | Negative validation rows prove no fallback effect. |
 | `DOM-REQ-015` | `domain.md` must include `140` as a bounded context and must route telemetry through `telemetry_handoff` or `prohibited_dependency` edges only. | `domain.md`, `140`, `110`, `010` | Section 9 coverage and observability negative validation rows. |
 | `DOM-REQ-016` | `domain.md` must keep graph backend product selection owner-routed and must not make a backend product a domain concept, default authority, graph semantics source, activation source, or future-provider exclusion. | `domain.md`, `090`, `100`, `120` | Section 5, Section 7, Section 20, and Section 25 wording review. |
+| `DOM-REQ-017` | `domain.md` must route PostgreSQL and AGE backend vocabulary without defining backend runtime algorithms, package activation behavior, query behavior, health behavior, telemetry behavior, validation harness behavior, or production selection decisions. | `domain.md`, `090`, `100`, `110`, `120`, `140` | Section 13.1 contains vocabulary routing only. |
 
 ## 22. Intentional implementation latitude
 

@@ -182,6 +182,15 @@ Default metric rows:
 | `cadastre.stage.duration` | histogram | `ms` | `stage_class`, `owner_error_code` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*` |
 | `cadastre.api.request.duration` | histogram | `ms` | `endpoint_class`, `health_scope`, `owner_error_code` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*` |
 | `cadastre.graph.apply.duration` | histogram | `ms` | `graph_operation`, `owner_error_code` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*` |
+| `cadastre.graph.backend.preflight.count` | counter | `{preflight}` | `graph_backend_profile_ref`, `graph_backend_provider_token`, `graph_backend_preflight_status`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-BACKEND-*` |
+| `cadastre.graph.query.duration_ms` | histogram | `ms` | `graph_backend_profile_ref`, `graph_backend_provider_token`, `graph_query_class`, `query_plan_class`, `package_set_ref`, `validation_row_ref` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-QUERY-*` |
+| `cadastre.graph.apply.batch.size` | histogram | `{delta}` | `graph_backend_profile_ref`, `graph_backend_provider_token`, `package_set_ref`, `validation_row_ref` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-APPLY-*` |
+| `cadastre.graph.apply.duration_ms` | histogram | `ms` | `graph_backend_profile_ref`, `graph_backend_provider_token`, `package_set_ref`, `validation_row_ref` | `bounded_low` | explicit bucket histogram | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-APPLY-*` |
+| `cadastre.graph.restore.rehearsal.status` | counter | `{rehearsal}` | `graph_backend_profile_ref`, `restore_rehearsal_ref`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-RESTORE-UPGRADE-*` |
+| `cadastre.graph.upgrade.rehearsal.status` | counter | `{rehearsal}` | `graph_backend_profile_ref`, `upgrade_rehearsal_ref`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-RESTORE-UPGRADE-*` |
+| `cadastre.graph.benchmark.status` | counter | `{benchmark}` | `graph_backend_profile_ref`, `benchmark_threshold_row_ref`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-BENCHMARK-*` |
+| `cadastre.graph.provider.support.status` | counter | `{support}` | `graph_backend_profile_ref`, `graph_backend_provider_token`, `provider_support_status`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-BACKEND-*` |
+| `cadastre.graph.schema_fingerprint.status` | counter | `{fingerprint}` | `graph_backend_profile_ref`, `backend_schema_fingerprint_ref`, `package_set_ref`, `validation_row_ref` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-CARDINALITY-*`, `120-GRAPH-POSTGRES-SCHEMA-*` |
 | `cadastre.telemetry.exporter.failures` | counter | `{failure}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.exporter.queue_depth` | gauge | `{item}` | `telemetry_profile_ref`, `exporter_profile_ref` | `bounded_low` | last value | `120-OBSERVABILITY-EXPORTER-*` |
 | `cadastre.telemetry.dropped_spans` | counter | `{span}` | `telemetry_profile_ref`, `exporter_profile_ref`, `owner_error_code` | `bounded_low` | monotonic sum | `120-OBSERVABILITY-EXPORTER-*` |
@@ -299,6 +308,16 @@ Graph backend telemetry attributes are diagnostic-only and must use closed token
 | `validation_row_ref` | Ref/checksum | 4096 | No raw fixture bytes. |
 
 A telemetry row that carries raw SQL, raw Cypher, SQL/Cypher text, query literals, literal-bearing query plans, connection strings, private database names, private schema names, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, prepared statement names, cursor names, AGE vertex/edge/path/graph/label IDs, agtype IDs, backend-generated graph IDs, raw graph property values, credentials, private bindings, hostnames, IP addresses, usernames, source-native IDs, or raw package evidence must fail before export with the most specific telemetry error.
+
+Graph backend telemetry health mapping rows must preserve non-authority boundaries:
+
+| Telemetry condition | Required health behavior | Forbidden substitution |
+| --- | --- | --- |
+| Exporter failure during backend diagnostics | May affect observability health only. | Must not mark graph backend unhealthy by itself. |
+| Backend preflight telemetry says `pass` | Diagnostic only. | Must not mark backend healthy without `090` preflight and validation rows. |
+| Benchmark telemetry present | Diagnostic only. | Must not substitute for benchmark threshold validation rows. |
+| Restore or upgrade telemetry present | Diagnostic only. | Must not substitute for `090.GraphRestoreRehearsalEvidenceRow` or `090.GraphUpgradeRehearsalEvidenceRow`. |
+| Provider support telemetry present | Diagnostic only. | Must not substitute for `090.GraphProviderSupportEvidenceRow`. |
 
 ### TelemetryActivationControlledRowFieldClosure
 

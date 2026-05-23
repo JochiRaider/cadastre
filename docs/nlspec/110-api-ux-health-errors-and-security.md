@@ -297,6 +297,12 @@ Every graph response must include or reference the profile and state context tha
 | `output_eligibility_context_ref` | Required row-set checksum or refs proving search, neighbor, pathfinding, analysis, metrics, and identity-influence eligibility. |
 | `redaction_context_ref` | Required authorization/redaction checksum. |
 | `page_token` | Cadastre token only; token identity must include profile refs, derived-view state, ordering keys, page boundary, authorization context, and expiry. |
+| `selected_backend_profile_ref` | Required when backend materialization affected response candidates; caller-visible value is a ref or checksum only. |
+| `backend_schema_fingerprint_ref` | Required when backend schema state affected candidate materialization, ordering, evidence lookup, or derived-view state. |
+| `provider_support_evidence_ref` | Required when provider support evidence affected serving eligibility; caller-visible value is redacted ref only. |
+| `package_set_ref` | Required when backend packages affected serving, query translation, schema, or apply state. |
+| `query_translation_profile_ref` | Required and must match request and manifest refs; raw SQL, Cypher, SQL/Cypher text, or backend handles are forbidden. |
+| `redaction_context_ref` | Required and must include backend-ID and provider-native-query redaction classes when graph read model state is used. |
 
 `observed_connection` detail text must state that the edge represents observed traffic only. It must not imply theoretical reachability, service access, policy allow, compromise, exploitability, lateral movement, or identity access.
 
@@ -1304,6 +1310,12 @@ Coverage-domain token failures must route to generated `060` owner-specific `Err
 | `GRAPH_PROVIDER_CAPABILITY_UNSUPPORTED` | `blocked` | provider capability row, unsupported class, deterministic unsupported behavior. |
 | `GRAPH_PROVIDER_UNSUPPORTED` | `blocked` | provider support evidence ref. |
 | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING` | `blocked` | required provider support evidence row and expiry status. |
+| `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED` | `blocked` | provider support evidence ref and expiry state. |
+| `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` | `security_error` | role/RLS/search-path preflight ref and redacted unsafe class. |
+| `GRAPH_BENCHMARK_THRESHOLD_MISSING` | `blocked` | benchmark threshold profile ref, workload fixture ref, and missing checksum class. |
+| `GRAPH_BENCHMARK_THRESHOLD_FAILED` | `blocked` | benchmark run ref and failed threshold class. |
+| `GRAPH_BACKEND_PACKAGE_COHORT_MISMATCH` | `blocked` | active package-set ref and mismatched cohort member refs. |
+| `GRAPH_QUERY_PARITY_FAILED` | `blocked` | query parity validation ref, translated query checksum ref, and expected result checksum ref. |
 | `GRAPH_SCHEMA_FINGERPRINT_STALE` | `blocked` | backend schema fingerprint ref and selected schema profile ref. |
 | `GRAPH_DUPLICATE_NODE_ID` | `error` | node ref checksum and schema profile ref; backend ID values redacted. |
 | `GRAPH_DUPLICATE_EDGE_ID` | `error` | edge ref checksum and schema profile ref; backend ID values redacted. |
@@ -1350,6 +1362,24 @@ A generic API, package, validation, or graph code must not be selected when one 
 | provider support expiry | provider support evidence ref, evidence expiry, refresh policy | blocked when expired or unsupported | provider support ref only |
 
 Graph health output must normalize provider-specific details into Cadastre health states. It must not expose backend-native IDs, PostgreSQL OIDs, tuple IDs, sequence values, AGE IDs, SQL/Cypher text, credentials, private provider configuration, raw package evidence, provider exception class names, database names when private, schema names when private, or AGE graph namespace names when private to callers.
+
+Caller-visible graph backend health mapping is closed as follows.
+
+| Backend condition | Caller-visible component status | Required error behavior |
+| --- | --- | --- |
+| Missing provider support | `blocked` | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_MISSING`. |
+| Expired provider support | `blocked` | `GRAPH_PROVIDER_SUPPORT_EVIDENCE_EXPIRED`. |
+| Benchmark threshold `TODO:` or stale | `blocked` | `GRAPH_BENCHMARK_THRESHOLD_MISSING`. |
+| Benchmark threshold failed | `blocked` | `GRAPH_BENCHMARK_THRESHOLD_FAILED`. |
+| Restore not run, stale, or failed | `blocked` | `GRAPH_BACKEND_RESTORE_UNVERIFIED`. |
+| Upgrade not run, stale, or failed | `blocked` | `GRAPH_BACKEND_UPGRADE_UNVERIFIED`. |
+| Unsafe role, RLS, raw-write bypass, or `search_path` | `blocked` | `GRAPH_POSTGRES_SECURITY_PREFLIGHT_UNSAFE` or more specific security error. |
+| Query parity failure | `blocked` unless owner row maps to `error` | `GRAPH_QUERY_PARITY_FAILED`. |
+| Package cohort mismatch | `blocked` | `GRAPH_BACKEND_PACKAGE_COHORT_MISMATCH` or package owner error. |
+| AGE extension state when AGE is not selected | omitted | No AGE component is emitted. |
+| AGE extension state when AGE is selected | `healthy`, `blocked`, or `error` by AGE preflight row | AGE owner error when blocked or unsafe. |
+
+Backend preflight telemetry, benchmark telemetry, restore telemetry, and upgrade telemetry are diagnostics only. They must not mark the backend healthy and must not substitute for `090` evidence rows or `120` validation rows.
 
 ### ActivationCatalogClosureHealthComponents
 
@@ -1606,9 +1636,9 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-IDENTITY-ERROR-AC-002` | Resolver errors must use the specific `070` code when applicable and must not collapse to generic validation, unknown, pass, or fail states. |
 | `110-IDENTITY-REDACTION-AC-001` | Resolver error responses redact private source bindings, concrete tenant inventories, credentials, raw payload values, and environment-specific source target lists. |
 | `110-IDENTITY-NO-MUTATION-AC-001` | Resolver error rendering does not mutate identity, graph, package, completeness, watermark, or source-authority state. |
-| `110-GRAPH-RESPONSE-CONTEXT-AC-001` | Every graph response includes derived-view state, graph profile, query translation, backend taxonomy mapping, output eligibility, and redaction context refs. |
+| `110-GRAPH-RESPONSE-CONTEXT-AC-001` | Every graph response using backend materialization includes derived-view state, graph projection profile, selected backend profile, backend schema fingerprint, provider support evidence when it affected serving, package-set ref, query translation profile, backend taxonomy mapping, output eligibility, and redaction context refs. |
 | `110-GRAPH-TRAVERSAL-AC-001` | Path query traversal omission rejects with `GRAPH_TRAVERSAL_CLASS_REQUIRED`; empty traversal classes return no paths. |
-| `110-GRAPH-PAGE-TOKEN-AC-001` | Expired and invalid graph page tokens reject before backend query execution. |
+| `110-GRAPH-PAGE-TOKEN-AC-001` | Expired and invalid graph page tokens reject before backend query execution, including SQL cursor names, prepared statement names, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, provider-native query handles, AGE object IDs, and backend-generated graph IDs. |
 | `110-GRAPH-WORDING-AC-001` | MVP graph output cannot render unqualified reachability, service accessibility, allowed path, lateral movement, or equivalent claims. |
 | `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
 | `110-RUNLOCK-STATE-AC-001` | A graph query, health response, API response, export, or audit output affected by `RUN_LOCK_LOST`, `RUN_LOCK_CONFLICT`, `RUN_LOCK_HEARTBEAT_UNCERTAIN`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_IDEMPOTENCY_CONFLICT` renders a blocked, degraded, or error operational state with owner context and no authorized negative interpretation. |
