@@ -141,9 +141,11 @@ Directory inventory admissibility is total over the states below.
 
 ### TelemetryIdentityNonAuthorityHandoff
 
-Runtime telemetry resource attributes, trace attributes, span attributes, metric attributes, structured-log attributes, service names, process names, host names, container IDs, pod names, runtime instance IDs, exporter IDs, Collector IDs, backend internal IDs, trace IDs, and span IDs must not create, attach, merge, split, reject, or score canonical identity by themselves.
+Runtime telemetry resource attributes, trace attributes, span attributes, metric attributes, structured-log attributes, service names, process names, host names, container IDs, pod names, runtime instance IDs, exporter IDs, Collector IDs, telemetry backend IDs, backend internal IDs, trace IDs, span IDs, `diagnostic_correlation_ref`, `server_correlation_nonce`, telemetry runtime state IDs, exporter profile runtime IDs, and Collector runtime IDs must not create, attach, merge, split, reject, or score canonical identity by themselves.
 
 Telemetry attributes may appear only as diagnostic context unless a future active `ResolverProfileRow` explicitly consumes a non-telemetry `IdentityEvidenceItem` derived from authoritative Cadastre evidence. The telemetry attribute itself must not be the evidence ref.
+
+A `diagnostic_correlation_ref` must not be materialized as an `IdentityEvidenceItem`. A resolver artifact that maps `diagnostic_correlation_ref` or `server_correlation_nonce` to any durable evidence class fails activation. A resolver run that attempts to consume either value fails before candidate generation with `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN` and emits no identity mutation.
 
 A resolver run that attempts to use telemetry-only attributes as durable identity evidence must fail before candidate generation with `TELEMETRY_IDENTITY_EVIDENCE_FORBIDDEN`.
 

@@ -108,6 +108,10 @@ Graph projection, graph apply, graph query, graph rebuild, graph backend preflig
 
 Graph telemetry must not expose backend-generated node IDs, edge IDs, relationship IDs, vertex IDs, document IDs, element IDs, provider-native query text, raw graph property values, raw payload bytes, private source bindings, or graph backend credentials.
 
+`diagnostic_correlation_ref`, trace ID, span ID, `server_correlation_nonce`, exporter runtime ID, Collector runtime ID, telemetry runtime state ID, telemetry backend IDs, and exporter profile runtime ID must not appear in graph node IDs, graph edge IDs, graph properties, graph selectors, page tokens, path queries, drift checks, apply idempotency keys, rebuild manifests, derived-view-state identifiers, graph evidence output, graph profile context, or backend schema fingerprints.
+
+`diagnostic_correlation_ref` may appear only in `110.CommonApiResponseEnvelope` when `110` and `140` permit it. It must never appear in `GraphQueryResponse.nodes`, `GraphQueryResponse.edges`, `GraphQueryResponse.paths`, `GraphQueryResponse.evidence`, `derived_view_state_ref`, or `graph_profile_context`.
+
 Graph telemetry, graph backend metrics, graph backend health, graph apply span success, graph query span success, graph rebuild span success, and graph drift-check telemetry must not create facts, infer identity, decide source completeness, authorize graph expiry or cleanup, repair drift, advance derived-view state, or satisfy graph rebuild equivalence.
 
 Provider-native telemetry attributes must be translated through `140.TelemetryAttributePolicy` and redacted through `140.TelemetryRedactionPolicy` before export.

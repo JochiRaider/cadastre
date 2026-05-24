@@ -117,7 +117,7 @@ Every public API, health, compliance export, and audit export response must wrap
 | `errors` | Yes | `[]`. | Array of `ErrorRecord`; maximum 128 records per response. | Generic code rejected when owner-specific code covers the failure. |
 | `audit_event_ref` | Yes | None. | Ref to `AuditEventSchema`; caller may receive redacted ref only. | Missing audit event fails response materialization. |
 | `page_token` | No | null. | Cadastre token only; generated after authorization and redaction context are fixed. | Backend cursor or mismatched context fails before owner execution. |
-| `diagnostic_correlation_ref` | No | null. | Opaque Cadastre correlation ref. Raw trace IDs and span IDs are forbidden unless both `140.TelemetryCorrelationPolicy` and `110.RedactionPolicy` permit the exact data class. | Excluded from domain output checksums and replay equivalence by default; included in audit when emitted. |
+| `diagnostic_correlation_ref` | No | null. Callers must not supply it as authority; endpoint request schemas must ignore or reject caller-supplied values before owner execution. | Non-null value must be the exact output of `140.diagnostic_correlation_ref_v1` and match `^dcr1-[0-9a-v]{26}$`. It must never be accepted as a selector, evidence ref, audit ref, graph ref, identity ref, page-token input, replay key, or package proof. Raw trace IDs and span IDs are forbidden unless both `140.TelemetryCorrelationPolicy` and `110.RedactionPolicy` permit the exact data class. | Excluded from domain output checksums and replay equivalence by default; included in audit when emitted; missing required telemetry refs fail response materialization with `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE`. |
 | `partial_result` | Yes | `false`. | Boolean. | `true` is permitted only when `EndpointOutcomeMatrix.partial_behavior` allows partial output for the endpoint and state class. |
 | `redaction_summary` | Yes | Counts default to zero. | Contains data-class counts and redaction reasons only; no raw bytes or private binding values. | Missing summary fails response materialization when any field was redacted. |
 
@@ -218,13 +218,21 @@ Telemetry runtime state may affect `OperationalHealthStatus` only through `140.T
 
 Default mapping:
 
-| Telemetry condition | Required health effect | Forbidden domain effect |
-| --- | --- | --- |
-| exporter unavailable | `status = degraded` for `health_scope = observability`; system may aggregate to degraded according to `EndpointOutcomeMatrix` | No source, identity, fact, graph, package, audit, replay, or watermark mutation. |
-| exporter queue overflow | `status = degraded` unless active policy maps to `blocked` for observability diagnostics | No domain mutation. |
-| telemetry profile missing when telemetry required | `status = blocked` for observability health and health output using telemetry state | No domain mutation. |
-| Collector unreachable | `status = degraded` unless active policy maps to `blocked` | No domain mutation. |
-| telemetry disabled by active profile | Healthy only for telemetry-disabled profile; not an exporter failure | No domain mutation. |
+| Telemetry condition | Required health status for `health_scope = observability` | System aggregation may consider it | Forbidden domain effect |
+| --- | --- | --- | --- |
+| exporter unavailable | `status = degraded` unless active policy maps to `blocked` | yes | No source, identity, fact, graph, package, audit, replay, or watermark mutation. |
+| exporter queue overflow | `status = degraded` unless active policy maps to `blocked` for observability diagnostics | yes | No domain mutation. |
+| telemetry profile missing when telemetry required | `status = blocked` for observability health and health output using telemetry state | yes | No domain mutation. |
+| Collector unreachable | `status = degraded` unless active policy maps to `blocked` | yes | No domain mutation. |
+| telemetry disabled by active profile | `status = healthy` only for telemetry-disabled profile; not an exporter failure | yes | No domain mutation. |
+| exporter attempt timeout | `status = degraded` | yes | No domain mutation. |
+| retry max elapsed exhausted | `status = degraded` | yes | No domain mutation. |
+| permanent rejection | `status = degraded` unless active policy maps to `blocked` | yes | No domain mutation. |
+| redaction rejection | `status = degraded` when runtime state can be recorded without recursion; otherwise `status = blocked` for observability diagnostics | yes | No domain mutation. |
+| invalid required exporter profile | `status = blocked` | yes | No domain mutation. |
+| shutdown flush timeout | `status = degraded` | yes | No domain mutation. |
+| export disabled by active profile | `status = healthy` when export is not required; `status = blocked` when export is required | yes | No domain mutation. |
+| OTel environment variable attempted egress and was contained | `status = degraded` when recorded; startup validation may instead block telemetry profile before export | yes | No domain mutation. |
 
 #### ComplianceExportRequest schema
 
@@ -576,6 +584,18 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure. PostgreSQL and AGE graph backend failures must use the owner-specific `090` rows for schema fingerprint, duplicate IDs, orphan edges, query timeout, unsupported query plan, direct DML, unsafe `search_path`, RLS bypass, provider support, AGE extension, AGE mutation, AGE namespace bypass, AGE internal ID, restore, and upgrade errors; generic graph or API errors are forbidden when those rows cover the failure.
 
+The generated registry must include exactly one row for each telemetry-visible owner error below before API, health, audit, export, validation, package report, or acceptance output can expose the code.
+
+| Error code | Owner | Required use |
+| --- | --- | --- |
+| `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `140` | A requested diagnostic correlation ref cannot be emitted because policy, scope, permission, secret, checksum, or lifecycle validation failed. |
+| `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `140` | Telemetry contains raw trace/span IDs, exemplars, raw payloads, private bindings, credentials, backend IDs, provider-native query text, or another forbidden attribute before export or visible rendering. |
+| `TELEMETRY_AUTHORITY_VIOLATION` | `140` | Telemetry attempts to act as source, identity, fact, graph, audit, replay, package, watermark, or validation authority. |
+| `TELEMETRY_PROFILE_INVALID` | `140` | Required telemetry profile, row-field precision, exporter default, OTel environment containment, exemplar prohibition, lifecycle, checksum, package-set, validation, or scope validation fails. |
+| `TELEMETRY_EXPORTER_QUEUE_OVERFLOW` | `140` | Exporter queue overflow drops telemetry through nonblocking drop-newest behavior. |
+| `TELEMETRY_REPLAY_FIELD_FORBIDDEN` | `080` and `140` | Replay checksum or authoritative output includes forbidden telemetry fields such as trace IDs, span IDs, diagnostic refs, nonce, retry jitter, exporter timing, queue state, or SDK instance IDs. |
+| `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` | `030` and `140` | Telemetry-visible output omits required telemetry policy refs, runtime-state refs, package-set refs, validation refs, owner error refs, or checksums. |
+
 Owner error fragments for activation-controlled row families must include every owner-specific missing-field, invalid-field, duplicate, checksum, manifest, package-set, and extension error used by that owner. Missing owner row-schema error fragments must fail generated registry validation before API, export, health, audit, or validation output.
 
 Mapping closure errors must select owner-specific `050`, `060`, or `090` registry rows when one covers the failure class. Generic API, validation, activation, health, graph, or unknown-state errors are forbidden for the same failure class. The generated registry must reject alias-only `OCSF_MAPPING_ROW_MISSING`, `OCSF_MAPPING_ROW_AMBIGUOUS`, and `OCSF_COMPILED_ARTIFACT_CHECKSUM_MISMATCH` fragments unless they are byte-identical deprecated aliases mapped to the canonical `050` rows and not emitted as final errors.
@@ -786,7 +806,8 @@ Authorization defaults to deny. Every endpoint must evaluate authorization befor
 | `private_activation_scope` | Hidden. | No public display permission. | Redacted ref/checksum only unless private implementation audit permits. | Public artifacts and API responses must not expose concrete activation scopes or private bindings. |
 | `artifact_payload_bytes` | Hidden. | Secure artifact-admin permission and owner policy. | Hash, byte count, artifact class, and package-set ref. | Never inline registry payload bytes, package payload bytes, schema payload bytes, or threat-intel artifact bytes in caller-visible output. |
 | `backend_query_text` | Hidden. | Owner-admin validation context only. | Query checksum, translation profile ref, and redacted text ref. | Hide provider-native query text unless the caller has owner-admin permission and the query is validation-only or translated. |
-| `telemetry_trace_context` | Hidden; expose only opaque `diagnostic_correlation_ref`. | `140.TelemetryCorrelationPolicy` plus caller permission. | Trace/span refs may be audit-visible only in redacted/hashed form when policy permits. | Never expose raw trace/span IDs by default. |
+| `telemetry_trace_context` | Hidden by default. | Exact `140.TelemetryCorrelationPolicy` row and secure diagnostics permission for redacted or hashed trace context. | Trace/span refs may be audit-visible only in redacted or hashed form when policy permits. | Raw trace/span IDs are forbidden by default and must never appear in public API envelopes, graph responses, evidence refs, page tokens, package reports, validation reports, or telemetry export. |
+| `diagnostic_correlation_ref` | Visible only when endpoint policy and `140.TelemetryCorrelationPolicy` allow it. | Non-null value must be produced by `140.diagnostic_correlation_ref_v1` and match the envelope value. | Audit-linked when emitted in the response envelope. | Opaque `dcr1-*` support reference only; never raw trace/span, never selector, never evidence ref, never page-token input, never replay key, never package proof. |
 | `telemetry_attribute` | Hidden unless allowlisted. | `140.TelemetryAttributePolicy` and endpoint permission. | Attribute key, redaction class, checksum. | Reject or redact raw payloads, private bindings, credentials, backend IDs, source-native IDs, canonical IDs, hostnames, IPs, usernames, and provider-native query text by default. |
 | `telemetry_runtime_state` | Summary only. | `health.read` plus operator/admin diagnostics for detail. | Runtime state refs, checksums, counts, and policy refs. | Do not expose private endpoints, exporter credentials, Collector routes, or raw queue payloads. |
 | `inaccessible_asset_existence` | Hidden. | None through normal caller-visible responses. | Audit may record denied ref. | Use no-existence-leak denial and omit counts. |
@@ -1667,7 +1688,7 @@ API page tokens must be generated from `040.CanonicalJSON` over query checksum, 
 | `output_object_classes` | Yes | Classes emitted or redacted. |
 | `redaction_summary` | Yes | Counts and classes only, no private bytes. |
 | `error_correlation_id` | Required when error emitted | Links to `ErrorRecord`. |
-| `diagnostic_correlation_ref` | Required when emitted in response envelope | Opaque Cadastre correlation ref; raw trace/span IDs are forbidden unless permitted by `140` and redacted by `110`. |
+| `diagnostic_correlation_ref` | Required when emitted in response envelope | Must equal the `CommonApiResponseEnvelope.diagnostic_correlation_ref` value byte-for-byte; must match `^dcr1-[0-9a-v]{26}$`; must not be a raw trace ID, raw span ID, audit event ID, error correlation ID, evidence ref, graph ref, identity ref, package proof, page-token input, or replay key. |
 | `version_manifest_ref` | Required when production output relies on manifest | Manifest ref. |
 
 ### Observable API outcome matrix
@@ -1755,6 +1776,9 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-PACKAGE-HEALTH-AC-001` | Active-but-not-last-known-good, rollback-blocked, quarantine-blocked, and emergency-bypass-forbidden states render distinctly. |
 | `110-OCSF-MAP-ERROR-AC-002` | Mapping-blocked observations render as `error`, source-extension redaction failures render as security errors, and OCSF non-authority blocks never render as authorized negative facts or compliance pass/fail states. |
 | `110-IDENTITY-ERROR-AC-001` | Every new `070` resolver error appears in `ErrorCodeRegistry` with owner, severity, retryability, redaction, caller-visible behavior, audit-visible refs, and fixture ID. |
+| `110-TELEMETRY-CORRELATION-AC-001` | API response and audit event diagnostic refs match byte-for-byte, caller-supplied refs cannot select or mutate anything, and raw trace/span IDs are rejected. |
+| `110-TELEMETRY-HEALTH-AC-001` | Exporter timeout, retry exhaustion, permanent rejection, queue overflow, redaction rejection, invalid profile, shutdown flush timeout, disabled export, and OTel environment containment render through the total telemetry health mapping with no domain mutation. |
+| `110-TELEMETRY-ERROR-REGISTRY-AC-001` | Every telemetry-visible error code generated by `030`, `080`, or `140` has exactly one generated `ErrorCodeRegistryRow` and no generic substitute. |
 | `110-IDENTITY-ERROR-AC-002` | Resolver errors must use the specific `070` code when applicable and must not collapse to generic validation, unknown, pass, or fail states. |
 | `110-IDENTITY-REDACTION-AC-001` | Resolver error responses redact private source bindings, concrete tenant inventories, credentials, raw payload values, and environment-specific source target lists. |
 | `110-IDENTITY-NO-MUTATION-AC-001` | Resolver error rendering does not mutate identity, graph, package, completeness, watermark, or source-authority state. |

@@ -80,7 +80,7 @@ Every active domain spec must include at least one negative validation case for 
 | Mapping | Missing mapping row, ambiguous mapping row, missing activity discriminator, unknown enum, forbidden OCSF field, IPAM/DHCP split, and undeclared source extension field fail before silver output. |
 | Temporal | Missing temporal policy attempts current-time fallback and fails. |
 | Analysis | Analysis finding, metric, risk acceptance, threat-intel enrichment, lineage facet, registry governance, registry custom property, registry classification, or derived-edge rule attempts forbidden authority or mutation and fails before the forbidden effect. |
-| Observability | Telemetry span, metric, structured log, baggage, exporter success, exporter failure, Collector state, sampling decision, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
+| Observability | Telemetry span, metric, structured log, baggage, diagnostic correlation ref, server correlation nonce, exporter success, exporter failure, retry jitter, queue state, Collector state, sampling decision, exemplar, OTel environment variable, dropped telemetry count, or dashboard state attempts to affect facts, identity, source authority, source completeness, coverage, graph deltas, graph apply, package activation, replay checksum, watermark, audit persistence, or domain output and fails or no-ops with no forbidden mutation. |
 | Structured input repository | Branch, tag, pull request, repository URL, hook success, SDK/CLI success, template conformance, producer CI success, publication manifest existence, candidate sync success, repository group partial validation, stale branch-tip validation, exact tree mismatch, invalid path, private binding leak, unmaterialized Git snapshot activation, package release missing materialization refs, missing `VersionManifest` refs, rollback to branch or tag, and hook success as activation evidence fail before forbidden mutation. |
 | Reachability | MVP graph profile attempts `has_theoretical_reachability` and fails. |
 | Scope selector closure | Selector normalization, exact match, subset allowed, subset disallowed, duplicate dimension, duplicate value, unknown field, unsupported dimension, under-scoped request, private leak, ambiguity, no row-order tiebreak, owner error mapping, redaction, and manifest inclusion are covered for every active scoped owner family. |
@@ -109,6 +109,8 @@ Validation must prove that volatile material cannot redefine stable behavior and
 | telemetry runtime-state substitution | `TelemetryRuntimeState`, exporter success, Collector state, or dashboard state is used as source truth, identity evidence, graph truth, audit persistence, package activation, or replay input. | Fails before authority effect. |
 | telemetry artifact activation | Missing, inactive, checksum-mismatched, out-of-scope, or package-set-mismatched telemetry profile is referenced by health/API/audit/validation output. | Fails before telemetry-visible output or emits owner health error. |
 | telemetry metric cardinality | Metric catalog uses unbounded labels such as source-native IDs, canonical IDs, hostnames, IPs, usernames, backend IDs, or private route names. | Fails before telemetry profile activation or export. |
+| telemetry OTel environment containment | OTel SDK environment variables attempt to set endpoint, headers, sampler, processor, reader, resource detector, exemplar filter, plugin, or config file. | Ignored or startup validation failure according to profile; never enables egress. |
+| telemetry exemplar rejection | Metric point contains exemplar trace/span ID or filtered exemplar attributes. | Rejected before export with no domain mutation. |
 
 ## Acceptance Aggregation
 
@@ -851,6 +853,38 @@ Required aggregation rows:
 | `120-OBSERVABILITY-AUDIT-001` | Audit event exists but telemetry export fails. | Audit remains persisted or deterministically refused independent of telemetry. |
 | `120-OBSERVABILITY-VERSION-MANIFEST-001` | Health/API output depends on telemetry policy but `VersionManifest` lacks required telemetry refs. | `TELEMETRY_VERSION_MANIFEST_INCOMPLETE` or `VERSION_MANIFEST_INCOMPLETE`. |
 | `120-OBSERVABILITY-PACKAGE-001` | Package-supplied telemetry policy missing trust or compatibility evidence. | Package-set activation fails; current active set remains. |
+| `120-OBSERVABILITY-CORRELATION-001` | Active policy, fixed validation nonce, fixed secret, and fixed activation scope. | Exact `dcr1-*` checksum matches expected output. |
+| `120-OBSERVABILITY-CORRELATION-002` | Missing or inactive secret. | Response emits `diagnostic_correlation_ref = null`; no raw trace/span fallback. |
+| `120-OBSERVABILITY-CORRELATION-003` | Caller-visible raw trace/span requested. | `TELEMETRY_ATTRIBUTE_FORBIDDEN`; no raw ID. |
+| `120-OBSERVABILITY-CORRELATION-004` | Diagnostic ref emitted in API response. | Matching audit event contains the same opaque ref byte-for-byte. |
+| `120-OBSERVABILITY-CORRELATION-005` | Diagnostic ref submitted as evidence, identity selector, graph selector, package proof, replay key, or audit authority. | `TELEMETRY_AUTHORITY_VIOLATION`; no mutation. |
+| `120-OBSERVABILITY-EXPORTER-DEFAULTS-001` | Export enabled with omitted numeric fields. | Defaults materialize before checksum. |
+| `120-OBSERVABILITY-EXPORTER-DEFAULTS-002` | Export required but exporter profile omitted. | `TELEMETRY_PROFILE_INVALID` or owner health blocked; no network export. |
+| `120-OBSERVABILITY-EXPORTER-QUEUE-001` | Queue full. | Drop newest telemetry item; increment dropped count when non-recursive; domain output checksum unchanged. |
+| `120-OBSERVABILITY-EXPORTER-RETRY-001` | Transient failure with fixed jitter samples. | Retry schedule follows formula and bounds; no domain blocking. |
+| `120-OBSERVABILITY-EXPORTER-RETRY-002` | Permanent rejection. | No retry; terminal exporter state recorded. |
+| `120-OBSERVABILITY-EXPORTER-SHUTDOWN-001` | Shutdown begins during retry. | No new retry loop; shutdown continues after flush timeout. |
+| `120-OBSERVABILITY-OTEL-ENV-001` | OTel SDK environment variables define endpoint, headers, sampler, processor, reader, resource detector, exemplar filter, plugin, or config file. | Ignored or startup validation failure according to profile; never enables egress. |
+| `120-OBSERVABILITY-EXEMPLAR-001` | Metric point contains exemplar trace/span ID or filtered exemplar attributes. | Rejected before export. |
+| `120-OBSERVABILITY-CARDINALITY-002` | Runtime metric exceeds row cap. | Telemetry item dropped or rejected before export; no domain mutation. |
+| `120-OBSERVABILITY-ROW-FIELD-001` | Output-affecting telemetry row family lacks exact `030.ActivationControlledRowField` precision. | Validation blocked. |
+| `120-OBSERVABILITY-REDACTION-004` | Redaction cannot prove telemetry item safe. | Item dropped before exporter queue; redaction failure state recorded when non-recursive. |
+| `120-OBSERVABILITY-VERSION-MANIFEST-002` | Telemetry-visible output omits correlation, exporter, redaction, health, replay, runtime state, package-set, or validation refs. | Manifest error. |
+| `120-OBSERVABILITY-ENABLED-DISABLED-PARITY-001` | Same authoritative inputs with export disabled, exporter unavailable, timeout, queue overflow, redaction rejection, and retry backoff. | Authoritative domain outputs are byte-identical. |
+
+Every observability closure row above must carry the fields below. Because concrete fixture bytes are not supplied in this upload, new fixture and expected-output checksums are explicit blockers until the repository owner supplies repository-relative fixture paths and checksum-backed artifacts.
+
+| validation_row_id | fixture_checksum | input_checksum | expected_output_checksum | expected_error_checksum | mutation_prohibition | package_set_requirement | version_manifest_requirement | blocking_status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `120-OBSERVABILITY-CORRELATION-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply expected dcr1 output checksum` | `n/a` | no domain mutation | required when package-supplied | correlation policy, secret validation ref, activation scope checksum, validation ref | `blocked` |
+| `120-OBSERVABILITY-CORRELATION-002` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply expected null-output checksum` | `TODO: repository owner must supply expected diagnostic checksum when emitted` | no raw trace/span fallback | required when package-supplied | correlation policy and validation refs | `blocked` |
+| `120-OBSERVABILITY-EXPORTER-DEFAULTS-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply materialized profile checksum` | `n/a` | no domain mutation | required when package-supplied | exporter profile refs and checksum | `blocked` |
+| `120-OBSERVABILITY-EXPORTER-RETRY-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply retry schedule checksum` | `n/a` | no domain blocking | required when package-supplied | exporter profile, runtime state, validation refs | `blocked` |
+| `120-OBSERVABILITY-QUEUE-OVERFLOW-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply dropped-item/runtime-state checksum` | `n/a` | domain output checksum unchanged | required when package-supplied | runtime state and exporter refs | `blocked` |
+| `120-OBSERVABILITY-OTEL-ENV-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply containment checksum` | `TODO: repository owner must supply startup-validation error checksum when profile rejects` | no environment-driven egress | required when package-supplied | profile and validation refs | `blocked` |
+| `120-OBSERVABILITY-EXEMPLAR-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply rejection checksum` | `TODO: repository owner must supply TELEMETRY_ATTRIBUTE_FORBIDDEN checksum` | no export and no domain mutation | required when package-supplied | metric row, exporter profile, validation refs | `blocked` |
+| `120-OBSERVABILITY-ROW-FIELD-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply blocked validation checksum` | `TODO: repository owner must supply row-schema error checksum` | no profile activation | required when package-supplied | row-family refs and validation refs | `blocked` |
+| `120-OBSERVABILITY-DOMAIN-PARITY-001` | `TODO: repository owner must supply repository-relative fixture path and checksum` | `TODO: repository owner must supply input checksum` | `TODO: repository owner must supply byte-identical domain output checksum` | `n/a` | no domain mutation across telemetry states | required when package-supplied | runtime state, replay exclusion, validation refs | `blocked` |
 
 ### Observability fixture families
 
@@ -866,6 +900,15 @@ observability-replay-different-trace-id-*
 observability-audit-export-failure-*
 observability-version-manifest-missing-*
 observability-package-policy-invalid-*
+observability-correlation-fixed-nonce-*
+observability-correlation-null-secret-*
+observability-exporter-default-materialization-*
+observability-retry-fixed-jitter-*
+observability-queue-overflow-*
+observability-otel-env-containment-*
+observability-exemplar-rejection-*
+observability-row-field-precision-*
+observability-domain-parity-*
 ```
 
 ### ObservationTypeExternalMappingValidationMatrix
@@ -2073,7 +2116,7 @@ A report is promotion-eligible only when every required scenario row is `pass`, 
 | `120-DERIVED-GRAPH-EDGE-COVERAGE-AC-001` | Validation rows prove derived-edge supporting-fact rejection, `090` routing, direct mutation rejection, `080` routing, exact replay, replay mismatch, and explicit no-op behavior. |
 | `120-SOURCE-DATASET-CATALOG-AC-004` | Source-dataset catalog fixtures cover valid resolution, missing, ambiguous, deterministic block, private leak, unsupported category, manifest omission, and package-set omission. |
 | `120-SOURCE-EFFECT-CLOSURE-AC-004` | Acceptance fails when any source-dataset catalog row, category/effect closure row, source-authority chain row, package-set ref, fixture checksum, expected output checksum, error row, mutation-prohibition proof, or `VersionManifest` ref is missing, stale, failed, blocked, checksum-mismatched, or `TODO`-bearing. |
-| `120-OBSERVABILITY-COVERAGE-AC-001` | Observability validation rows prove telemetry non-authority, redaction, cardinality, exporter failure, health mapping, replay exclusion, audit independence, version-manifest completeness, and package activation gating. |
+| `120-OBSERVABILITY-COVERAGE-AC-001` | Observability validation may pass only when correlation, exporter defaults, retry, queue overflow, redaction failure, cardinality, exemplar rejection, OTel environment containment, row-field precision, health mapping, replay exclusion, audit linkage, package gating, version-manifest completeness, and enabled/disabled domain parity rows are concrete, non-`TODO`, non-blocked, checksum-backed, mutation-prohibition-backed, manifest-included, and package-set-checked where applicable. |
 | `120-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-postgresql-relational-graph.v1`; graph serving disabled materializes no backend; omitted profile does not select AGE; explicit required mode rejects omission. |
 | `120-GRAPH-BACKEND-PREFLIGHT-AC-001` | Backend preflight rejects missing profile, inactive profile, checksum mismatch, omitted required profile fields, unpinned provider version, unsafe storage mode, and missing package gates before mutation or query. |
 | `120-GRAPH-PROVIDER-CAPABILITY-AC-001` | Every active graph provider profile satisfies the required provider capability matrix or declares deterministic unsupported behavior for each query/apply/rebuild class. |

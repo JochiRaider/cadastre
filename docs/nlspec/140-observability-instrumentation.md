@@ -167,7 +167,55 @@ Trace context values are runtime volatile fields. They are excluded from domain 
 | Diagnostic ref emitted in API envelope | `110.AuditEvent` must include the same opaque ref when `110` requires it. |
 | Diagnostic ref present during replay | Exclude from domain replay equivalence by default. |
 
-TODO: Product security governance must choose the exact opaque `diagnostic_correlation_ref` derivation algorithm before production exposure. Until that TODO is resolved in an active `TelemetryCorrelationPolicy`, raw trace IDs and span IDs remain forbidden and caller-visible diagnostic refs default to null.
+### diagnostic_correlation_ref_v1
+
+`diagnostic_correlation_ref_v1(policy_row, activation_scope_checksum, policy_row_checksum, diagnostic_correlation_secret_ref, telemetry_context) -> string | null` is the only production derivation algorithm for caller-visible diagnostic correlation refs.
+
+Inputs:
+
+| Input | Required behavior |
+| --- | --- |
+| `policy_row` | Active `TelemetryCorrelationPolicy` row selected for the output context. |
+| `activation_scope_checksum` | Checksum of the selected activation scope. It must equal `policy_row.activation_scope.selector_checksum`. |
+| `policy_row_checksum` | Checksum of `policy_row` after defaults materialize. It must equal `policy_row.row_checksum`. |
+| `diagnostic_correlation_secret_ref` | Private secret reference selected from the policy row. The secret bytes are never serialized in public artifacts. |
+| `telemetry_context` | In-memory runtime telemetry context for the request or stage handoff. |
+
+The algorithm must return `null` without fallback when telemetry is disabled, the selected policy row is inactive, the selected policy row is outside the activation scope, emission is disabled for the requested output context, the secret is missing, invalid, expired, checksum-mismatched, or the caller lacks permission for the output context. Omission of `diagnostic_correlation_secret_ref` returns `null`; it must not expose a raw trace ID, raw span ID, baggage value, audit ID, graph ID, evidence ref, package proof, or replay key.
+
+When no `server_correlation_nonce` exists in `telemetry_context`, the runtime must generate exactly 128 bits from a CSPRNG and store it only in that in-memory telemetry context. The nonce may be copied only to an asynchronous in-memory runtime handoff envelope for the same request or stage execution. It must not be persisted as a `030.StageStateRecord`, `030.VersionManifest` input, metric attribute, API identifier, audit identifier, graph selector, replay key, evidence ref, package proof, or validation output outside validation-owned fixed-nonce fixtures.
+
+The HMAC preimage is the byte concatenation below. `NUL` means a single `0x00` byte.
+
+```text
+"cadastre.diagnostic_correlation_ref.v1" NUL
+policy_row.row_checksum NUL
+policy_row.activation_scope.selector_checksum NUL
+server_correlation_nonce_bytes
+```
+
+The algorithm computes `HMAC-SHA-256(secret_bytes, preimage)`, takes the first 16 bytes of the HMAC output, encodes those bytes as lowercase unpadded base32hex, and returns `"dcr1-" + encoded`.
+
+The returned value is diagnostic support material only. It must match the regular expression `^dcr1-[0-9a-v]{26}$`, must not be caller-supplied as authority, and must remain excluded from domain output IDs, domain output checksums, and authoritative replay equivalence unless an owner output-class row explicitly includes it only as a diagnostic display field.
+
+### TelemetryCorrelationPolicy field precision
+
+`TelemetryCorrelationPolicy` is an activation-controlled row family and must use the `030.ActivationControlledRowField` column order below.
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | non-empty, owner-scoped stable token | `n/a` | `reject` | `n/a` | `ordered:1` | `yes` | `closed` | `110` | selected row ref and checksum required when diagnostic refs can be emitted | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `algorithm` | `enum` | `yes` | `diagnostic_correlation_ref_v1` | `no` | `yes` | exactly `diagnostic_correlation_ref_v1` | `n/a` | `reject` | `n/a` | `ordered:2` | `yes` | `closed` | `110` | selected algorithm value and policy row checksum required | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_PROFILE_INVALID` |
+| `emit_diagnostic_correlation_ref` | `boolean` | `yes` | `false` | `no` | `yes` | `true` or `false` | `n/a` | `reject` | `n/a` | `ordered:3` | `yes` | `closed` | `110` | required when API or audit output may emit the ref | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_PROFILE_INVALID` |
+| `diagnostic_correlation_secret_ref` | `private_secret_ref` | `conditional:emit_diagnostic_correlation_ref=true` | `null` | `yes` | `yes` | opaque private ref plus secret checksum; raw secret bytes forbidden | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | private ref checksum required when non-null refs can be emitted | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` |
+| `secret_validation_policy_ref` | `030.ActivationControlledArtifactRef` | `conditional:diagnostic_correlation_secret_ref!=null` | `null` | `yes` | `yes` | active secret validation policy ref | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | required for non-null diagnostic refs | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_PROFILE_INVALID` |
+| `allowed_output_contexts` | `array<enum>` | `yes` | `[]` | `no` | `yes` | values from `api_response`, `audit_event`, `operator_diagnostic`, `validation_diagnostic`; empty means no emission | `canonical_set` | `reject` | `value` | `no` | `yes` | `closed` | `110` | selected contexts required when visible output emits ref | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_PROFILE_INVALID` |
+| `raw_trace_span_fallback` | `enum` | `yes` | `forbidden` | `no` | `yes` | exactly `forbidden` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required for visible diagnostics | `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| `nonce_persistence_policy` | `enum` | `yes` | `in_memory_only` | `no` | `yes` | exactly `in_memory_only` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected policy ref required when non-null refs can be emitted | `TELEMETRY_CORRELATION_REF_UNAVAILABLE` | `TELEMETRY_REPLAY_FIELD_FORBIDDEN` |
+| `validation_refs` | `array<030.ActivationControlledArtifactRef>` | `yes` | `none` | `no` | `no` | non-empty; must include fixed-nonce and null-secret validation rows before production emission | `canonical_set` | `reject` | `artifact_ref` | `no` | `yes` | `closed` | `110` | every validation ref and checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `activation_scope` | `030.ActivationScope` | `yes` | `none` | `no` | `no` | must cover output request through `TelemetryScopeSelectorContext` | `n/a` | `reject` | `n/a` | `ordered:99` | `yes` | `closed` | `110` | selector context ref and selector checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | `yes` | `none` | `no` | `no` | production selection requires `active` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | lifecycle transition evidence required when selection changes | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256` | `yes` | `none` | `no` | `no` | lowercase SHA-256 hex over canonical row bytes after defaults, excluding only `row_checksum` | `n/a` | `reject` | `n/a` | `no` | `no` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
 
 ## Metric Instrument Catalog
 
@@ -218,22 +266,41 @@ Run-lock metric rows must not allow attributes containing raw lock keys, source-
 
 ## Metric Instrument Row Schema
 
-`MetricInstrumentRow` is the stable row interface inside `MetricInstrumentCatalog`.
+`MetricInstrumentRow` is the stable row interface inside `MetricInstrumentCatalog`. It is an activation-controlled row family and must use the `030.ActivationControlledRowField` column order below.
 
-| Field | Required | Default or omission behavior | Rule |
-| --- | ---: | --- | --- |
-| `metric_name` | Yes | none | Stable lowercase dotted name. Unknown names fail before export. |
-| `instrument_type` | Yes | none | Closed token: `counter`, `gauge`, `histogram`. |
-| `unit` | Yes | none | UCUM-compatible unit string or bounded literal such as `{item}`. |
-| `description` | Yes | none | Maximum 512 Unicode scalar values after normalization. |
-| `allowed_attribute_keys` | Yes | `[]` only when no attributes allowed | Every key must resolve through `TelemetryAttributePolicy`. |
-| `cardinality_class` | Yes | none | Closed token: `static`, `bounded_low`, `bounded_medium`, `forbidden_unbounded`. |
-| `max_distinct_attribute_sets_per_run` | Required for bounded classes | `1` for `static` | `bounded_low` maximum is 64; `bounded_medium` maximum is 1024; `forbidden_unbounded` cannot be active. |
-| `aggregation` | Yes | none | Closed token: `monotonic_sum`, `last_value`, `explicit_bucket_histogram`. |
-| `export_temporality` | No | `cumulative` | Closed token: `cumulative` or `delta`. |
-| `validation_refs` | Yes | none | Non-empty `120-OBSERVABILITY-*` rows. |
-| `activation_scope` | Yes | none | `030.ActivationScope` in which the row may affect telemetry output. |
-| `lifecycle_status` | Yes | none | Production use requires `active`. |
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `metric_name` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | lowercase dotted token, `3..128` characters | `n/a` | `reject` | `n/a` | `ordered:1` | `yes` | `closed` | `110` | selected metric row ref and checksum required when emitted or health/API/audit/validation visible | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `instrument_type` | `enum` | `yes` | `none` | `no` | `no` | `counter`, `gauge`, or `histogram` | `n/a` | `reject` | `n/a` | `ordered:2` | `yes` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `unit` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | UCUM-compatible token or bounded literal such as `{item}` | `n/a` | `reject` | `n/a` | `ordered:3` | `yes` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `description` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | maximum 512 Unicode scalar values | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `allowed_attribute_keys` | `array<040.ScalarType.string>` | `yes` | `[]` | `no` | `yes` | each key must resolve through `TelemetryAttributePolicy`; unbounded identifiers forbidden | `canonical_set` | `reject` | `value` | `no` | `yes` | `closed` | `110` | selected attribute policy refs required for non-empty set | `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `TELEMETRY_CARDINALITY_VIOLATION` |
+| `cardinality_class` | `enum` | `yes` | `bounded_low` unless default mapping below narrows or widens | `no` | `yes` | `static`, `bounded_low`, `bounded_medium`; `forbidden_unbounded` cannot be active | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_CARDINALITY_VIOLATION` |
+| `max_distinct_attribute_sets_per_run` | `integer` | `yes` | derived from default mapping below | `no` | `yes` | `1..1024`; `static = 1`, `bounded_low <= 64`, `bounded_medium <= 1024` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized value required before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_CARDINALITY_VIOLATION` |
+| `histogram_bucket_profile` | `enum` | `conditional:instrument_type=histogram` | `duration_ms_buckets` for `unit = ms`; `count_item_buckets` for count-like units | `no` | `yes` | `duration_ms_buckets` or `count_item_buckets` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected profile included in row checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `duration_ms_buckets` | `array<integer>` | `conditional:histogram_bucket_profile=duration_ms_buckets` | `[1,5,10,25,50,100,250,500,1000,2500,5000,10000,30000]` | `no` | `yes` | ascending positive integer milliseconds, max `300000` | `ordered_sequence` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `count_item_buckets` | `array<integer>` | `conditional:histogram_bucket_profile=count_item_buckets` | `[1,2,5,10,25,50,100,250,500,1000,5000]` | `no` | `yes` | ascending positive integer counts, max `65536` | `ordered_sequence` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `aggregation` | `enum` | `yes` | `monotonic_sum` for counters, `last_value` for gauges, `explicit_bucket_histogram` for histograms | `no` | `yes` | one valid aggregation for the instrument type | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `export_temporality` | `enum` | `no` | `cumulative` | `no` | `yes` | `cumulative` or `delta` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `attribute_set_overrun_behavior` | `enum` | `yes` | `drop_telemetry_item_nonblocking` | `no` | `yes` | exactly `drop_telemetry_item_nonblocking` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | runtime overrun state visible only through telemetry runtime state refs | `TELEMETRY_CARDINALITY_VIOLATION` | `TELEMETRY_CARDINALITY_VIOLATION` |
+| `exemplar_policy` | `enum` | `yes` | `forbidden` | `no` | `yes` | exactly `forbidden` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| `validation_refs` | `array<030.ActivationControlledArtifactRef>` | `yes` | `none` | `no` | `no` | non-empty `120-OBSERVABILITY-*` refs | `canonical_set` | `reject` | `artifact_ref` | `no` | `yes` | `closed` | `110` | every validation ref and checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `activation_scope` | `030.ActivationScope` | `yes` | `none` | `no` | `no` | must cover emission scope | `n/a` | `reject` | `n/a` | `ordered:99` | `yes` | `closed` | `110` | selector context ref and selector checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | `yes` | `none` | `no` | `no` | production use requires `active` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | lifecycle evidence required when status affects selection | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256` | `yes` | `none` | `no` | `no` | lowercase SHA-256 hex over canonical row bytes after defaults, excluding only `row_checksum` | `n/a` | `reject` | `n/a` | `no` | `no` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+
+Metric cardinality defaults must materialize before metric row checksum computation.
+
+| Cardinality input | Materialized `max_distinct_attribute_sets_per_run` |
+| --- | ---: |
+| `static` | 1 |
+| `bounded_low` | 64 |
+| `bounded_medium` | 1024 |
+| `cadastre.stage.started` | 1024 |
+| `cadastre.stage.completed` | 1024 |
+| any other default metric row | 64 unless narrowed by an active row |
+
+Metric exemplars are disabled for MVP. A metric point containing exemplar trace IDs, span IDs, sampled flags, exemplar-filter attributes, or any trace-context-derived value must fail before export with `TELEMETRY_ATTRIBUTE_FORBIDDEN` and must not mutate domain output.
 
 ## Telemetry Attribute Policy
 
@@ -354,25 +421,100 @@ Redaction that changes a metric attribute value must re-run metric cardinality v
 
 ## Telemetry Exporter Profile
 
-`TelemetryExporterProfile` is an activation-controlled artifact. A production exporter profile must name endpoint refs, delivery bounds, failure behavior, health mapping refs, redaction refs, and validation refs. Omitted required fields fail profile validation.
+`TelemetryExporterProfile` is an activation-controlled artifact. A production exporter profile must name endpoint refs, delivery bounds, failure behavior, health mapping refs, redaction refs, and validation refs. Omitted fields that have defaults in this section must materialize before row checksum computation and before exporter startup. Omitted required fields with no default fail profile validation.
 
-| Field | Required | Default or omission behavior | Rule |
-| --- | ---: | --- | --- |
-| `exporter_profile_id` | Yes | none | Stable ID scoped to `140`. |
-| `protocol` | Yes | none | `otlp` for the default profile. |
-| `endpoint_ref` | Required when export enabled | Export disabled when omitted and export not required | Opaque ref only; raw URL, credential, or private route is forbidden in public artifacts. |
-| `collector_required` | No | `true` for production export | Direct exporter endpoints are validation-only unless policy permits them. |
-| `timeout_ms` | Yes when export enabled | none | Range `100..30000`. |
-| `retry_policy` | Yes when export enabled | none | Must define max attempts, backoff bounds, and retryable exporter errors. |
-| `queue_max_items` | Yes when export enabled | none | Range `1..65536`; queue overflow uses `TELEMETRY_EXPORTER_QUEUE_OVERFLOW`. |
-| `backpressure_behavior` | Yes | `drop_newest_nonblocking` | Closed token: `drop_newest_nonblocking`, `drop_oldest_nonblocking`. Blocking domain writes is forbidden. |
-| `shutdown_flush_timeout_ms` | Yes when export enabled | none | Range `0..30000`; failure does not mutate domain output. |
-| `failure_health_effect` | No | `degraded` | Closed token: `none`, `degraded`, `blocked` for observability health only. |
-| `validation_refs` | Yes | none | Non-empty `120-OBSERVABILITY-EXPORTER-*` rows. |
-| `activation_scope` | Yes | none | `030.ActivationScope` in which export may run. |
-| `lifecycle_status` | Yes | none | Production export requires `active`. |
+### Default exporter profile
 
-TODO: Product operations governance must select production default exporter numeric values before production export is active. Until that TODO is resolved by an active exporter profile, production export remains blocked when export is required.
+| Field | Default value | Bounds or required behavior |
+| --- | --- | --- |
+| `protocol` | `otlp` | Only `otlp` is active for MVP. |
+| `endpoint_ref` | `null` unless export is enabled | When export is enabled, the value must be an opaque ref. Raw URLs, credentials, headers, and private routes are forbidden in public artifacts. |
+| `collector_required` | `true` | Direct vendor export is forbidden unless a future active policy permits it. |
+| `timeout_ms` | `2000` | Integer range `100..30000`. |
+| `retry_policy.enabled` | `true` | `false` disables retries but not the first attempt. |
+| `retry_policy.max_retries` | `5` | Integer range `0..10`. |
+| `retry_policy.max_elapsed_ms` | `30000` | Integer range `0..300000`; `0` disables retries. |
+| `retry_policy.initial_backoff_ms` | `100` | Integer range `50..30000`. |
+| `retry_policy.max_backoff_ms` | `5000` | Integer range `100..60000`. |
+| `retry_policy.backoff_multiplier` | `"2.0"` | Decimal string range `1.0..5.0`. |
+| `retry_policy.jitter` | `full_jitter` | Validation fixtures may inject fixed jitter samples; runtime configuration must not inject deterministic jitter. |
+| `retry_policy.retryable_classes` | listed below | Canonical set with duplicate rejection. |
+| `queue_max_items` | `2048` | Integer range `1..65536`. |
+| `export_batch_max_items` | `512` | Integer range `1..queue_max_items`. |
+| `schedule_delay_ms.trace` | `5000` | Integer range `100..300000`. |
+| `schedule_delay_ms.metric` | `60000` | Integer range `100..300000`. |
+| `schedule_delay_ms.structured_log` | `1000` | Integer range `100..300000`. |
+| `backpressure_behavior` | `drop_newest_nonblocking` | Blocking domain writes is forbidden. |
+| `shutdown_flush_timeout_ms` | `5000` | Integer range `0..30000`. |
+| `failure_health_effect` | `degraded` | Observability health only. Domain effect is always `none`. |
+| `metric_exemplars_enabled` | `false` | Any `true` value fails profile validation. |
+| `otel_environment_passthrough` | `false` | OpenTelemetry SDK environment variables and autoconfiguration must not determine Cadastre behavior. |
+
+Retryable classes are exactly the canonical set below:
+
+```text
+transient_transport_error
+http_429
+http_502
+http_503
+http_504
+grpc_unavailable
+grpc_deadline_exceeded
+grpc_resource_exhausted
+```
+
+Permanent rejection is terminal and must not retry.
+
+### Exporter retry envelope
+
+The first export attempt has no delay. Retry attempt index starts at `1`. For each retry, compute:
+
+```text
+base_interval_ms = min(max_backoff_ms, initial_backoff_ms * backoff_multiplier^(retry_attempt_index - 1))
+retry_delay_ms = uniform_integer(0, base_interval_ms)
+```
+
+No retry may start after `max_elapsed_ms`. `max_elapsed_ms = 0` disables retries. No new retry loop may start after shutdown begins. A retry already in progress may finish only within `shutdown_flush_timeout_ms`; after that timeout the exporter must record shutdown flush timeout and continue shutdown without blocking domain output. Validation fixtures may inject fixed jitter samples by fixture-owned input only. Production runtime configuration must not supply fixed jitter samples or deterministic random seeds.
+
+### Exporter runtime condition mapping
+
+| Exporter condition | `TelemetryRuntimeState.exporter_failure_state` | Health effect | Domain effect |
+| --- | --- | --- | --- |
+| export disabled by active profile | `export_disabled` | healthy for telemetry-disabled profile; not an exporter failure | none |
+| exporter endpoint unavailable | `endpoint_unavailable` | degraded unless active health mapping narrows to blocked for observability diagnostics | none |
+| Collector unreachable | `collector_unreachable` | degraded unless active health mapping narrows to blocked for observability diagnostics | none |
+| export attempt timeout | `timeout` | degraded | none |
+| queue overflow | `queue_overflow` | degraded unless active health mapping narrows to blocked for observability diagnostics | none |
+| redaction rejection | `redaction_rejection` | degraded for observability diagnostics when non-recursive runtime state can be recorded | none |
+| invalid required exporter profile | `profile_invalid` | blocked for observability health and telemetry-visible output | none |
+| shutdown flush timeout | `shutdown_flush_timeout` | degraded | none |
+| permanent rejection | `permanent_rejection` | degraded or blocked according to active health mapping | none |
+| retry max elapsed exhausted | `retry_max_elapsed_exhausted` | degraded | none |
+
+### TelemetryExporterProfile field precision
+
+`TelemetryExporterProfile` must use the `030.ActivationControlledRowField` column order below.
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `exporter_profile_id` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | non-empty, owner-scoped stable token | `n/a` | `reject` | `n/a` | `ordered:1` | `yes` | `closed` | `110` | selected profile ref and checksum required when export is enabled, required, or health-visible | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `protocol` | `enum` | `yes` | `otlp` | `no` | `yes` | exactly `otlp` for MVP | `n/a` | `reject` | `n/a` | `ordered:2` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `endpoint_ref` | `030.ActivationControlledArtifactRef` | `conditional:export_enabled=true` | `null` | `yes` | `yes` | opaque endpoint ref only; raw URLs and credentials forbidden | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | private endpoint binding ref required when export enabled | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` |
+| `collector_required` | `boolean` | `yes` | `true` | `no` | `yes` | `true` for production export | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected value required before export | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `timeout_ms` | `integer` | `yes` | `2000` | `no` | `yes` | `100..30000` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `retry_policy` | `object` | `yes` | default object above | `no` | `yes` | nested fields bounded by default exporter profile | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized nested object required before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `queue_max_items` | `integer` | `yes` | `2048` | `no` | `yes` | `1..65536` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_EXPORTER_QUEUE_OVERFLOW` |
+| `export_batch_max_items` | `integer` | `yes` | `512` | `no` | `yes` | `1..queue_max_items` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `schedule_delay_ms` | `object` | `yes` | default object above | `no` | `yes` | each member `100..300000` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `backpressure_behavior` | `enum` | `yes` | `drop_newest_nonblocking` | `no` | `yes` | exactly `drop_newest_nonblocking` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_EXPORTER_QUEUE_OVERFLOW` | `TELEMETRY_AUTHORITY_VIOLATION` |
+| `shutdown_flush_timeout_ms` | `integer` | `yes` | `5000` | `no` | `yes` | `0..30000` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `failure_health_effect` | `enum` | `yes` | `degraded` | `no` | `yes` | `none`, `degraded`, or `blocked`; observability health only | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected mapping refs required when health-visible | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `metric_exemplars_enabled` | `boolean` | `yes` | `false` | `no` | `yes` | exactly `false` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before metric export | `TELEMETRY_ATTRIBUTE_FORBIDDEN` | `TELEMETRY_ATTRIBUTE_FORBIDDEN` |
+| `otel_environment_passthrough` | `boolean` | `yes` | `false` | `no` | `yes` | exactly `false` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before startup/export | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `validation_refs` | `array<030.ActivationControlledArtifactRef>` | `yes` | `none` | `no` | `no` | non-empty exporter validation refs | `canonical_set` | `reject` | `artifact_ref` | `no` | `yes` | `closed` | `110` | every validation ref and checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `activation_scope` | `030.ActivationScope` | `yes` | `none` | `no` | `no` | must cover deployment scope | `n/a` | `reject` | `n/a` | `ordered:99` | `yes` | `closed` | `110` | selector context ref and selector checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | `yes` | `none` | `no` | `no` | production export requires `active` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | lifecycle evidence required when status affects selection | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256` | `yes` | `none` | `no` | `no` | lowercase SHA-256 hex over canonical row bytes after defaults, excluding only `row_checksum` | `n/a` | `reject` | `n/a` | `no` | `no` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
 
 ## Telemetry Runtime State
 
@@ -387,7 +529,7 @@ TODO: Product operations governance must select production default exporter nume
 | `dropped_metric_count` | Yes | Unsigned integer. |
 | `dropped_structured_log_count` | Yes | Unsigned integer. |
 | `exporter_queue_depth` | Required when export enabled | Unsigned integer; omit only when export disabled. |
-| `exporter_failure_state` | Yes | Closed token: `none`, `unavailable`, `queue_overflow`, `timeout`, `redaction_failure`, `profile_invalid`. |
+| `exporter_failure_state` | Yes | Closed token: `none`, `export_disabled`, `endpoint_unavailable`, `collector_unreachable`, `queue_overflow`, `timeout`, `redaction_rejection`, `profile_invalid`, `shutdown_flush_timeout`, `permanent_rejection`, `retry_max_elapsed_exhausted`. |
 | `collector_reachability_state` | Yes | Closed token: `not_required`, `reachable`, `unreachable`, `unknown`. |
 | `last_successful_export_at` | No | RFC3339 UTC or null; excluded from domain replay unless health-visible output includes it through policy. |
 | `health_affecting_refs` | Yes | Refs to health mapping, exporter profile, redaction policy, and owner error rows that affected health. |
@@ -407,6 +549,22 @@ TODO: Product operations governance must select production default exporter nume
 | Dropped telemetry counts exceed active policy bound | `degraded` | No domain mutation. |
 | Run-lock telemetry missing | `degraded` for observability only | No lock, source, graph, package, audit, replay, or watermark mutation. |
 | Run-lock metric cardinality overrun | `degraded` or `blocked` for observability only by policy | No domain mutation. |
+
+The `TelemetryHealthMappingPolicy` input condition vocabulary is total over the exporter runtime condition mapping in `TelemetryExporterProfile`. A missing health mapping row for any condition that is health/API/audit/validation visible fails before rendering with `TELEMETRY_PROFILE_INVALID` or `TELEMETRY_VERSION_MANIFEST_INCOMPLETE`.
+
+| Telemetry condition | Required `health_scope = observability` status | System aggregation may consider it | Forbidden domain effect |
+| --- | --- | --- | --- |
+| `export_disabled_by_active_profile` | `healthy` when the selected profile disables export; otherwise `blocked` when export is required | yes | none |
+| `exporter_endpoint_unavailable` | `degraded` unless active policy maps to `blocked` for observability diagnostics | yes | none |
+| `collector_unreachable` | `degraded` unless active policy maps to `blocked` | yes | none |
+| `export_attempt_timeout` | `degraded` | yes | none |
+| `exporter_queue_overflow` | `degraded` unless active policy maps to `blocked` | yes | none |
+| `redaction_rejection` | `degraded` when runtime state can be recorded without recursion; otherwise `blocked` for observability diagnostics | yes | none |
+| `invalid_required_exporter_profile` | `blocked` | yes | none |
+| `shutdown_flush_timeout` | `degraded` | yes | none |
+| `permanent_rejection` | `degraded` unless active policy maps to `blocked` | yes | none |
+| `retry_max_elapsed_exhausted` | `degraded` | yes | none |
+| `otel_environment_attempted_egress_contained` | `degraded` for observability diagnostics when recorded; startup validation may instead fail the profile before export | yes | none |
 
 System health aggregation remains owned by `110.EndpointOutcomeMatrix`.
 
@@ -435,6 +593,8 @@ This handoff defines no source authority, identity authority, graph authority, p
 
 A replay checksum that includes a trace ID, span ID, sampled flag, backend telemetry ID, exporter queue state, or Collector state outside an allowed telemetry health diagnostic row must fail with `TELEMETRY_REPLAY_FIELD_FORBIDDEN`.
 
+The excluded volatile telemetry field set also includes `diagnostic_correlation_ref`, `server_correlation_nonce`, `retry_jitter_sample_ms`, `export_attempt_start_time`, `export_attempt_end_time`, `shutdown_flush_start_time`, `shutdown_flush_end_time`, exporter runtime random source state, and telemetry SDK provider runtime instance ID. These fields may appear only in telemetry diagnostic output classes when permitted by an active `TelemetryReplayExclusionPolicy`, and even then only with `TelemetryRuntimeState` refs and `030.VersionManifest` refs.
+
 ### TelemetryReplayExclusionPolicy row schema
 
 `TelemetryReplayExclusionPolicy` is an activation-controlled row family. The default rows below must exist when `080.ReplayEquivalencePolicyOutputClassRow.output_class = telemetry_health_diagnostic` is active. A row affects telemetry replay only; it must not grant domain authority.
@@ -460,15 +620,21 @@ EmitTelemetry(signal, attributes, value, context, profile, runtime_state):
 3. Normalize `signal` to one of `trace`, `metric`, `structured_log`, or `baggage`.
 4. If the normalized signal is not permitted for production, fail with `TELEMETRY_SIGNAL_FORBIDDEN` before export.
 5. Validate the active trace context. If context is missing and tracing or structured logs are enabled, create runtime diagnostic context only.
-6. Canonicalize attribute keys and values.
-7. Reject any attribute key or value not allowlisted by `TelemetryAttributePolicy`.
-8. Run `TelemetryRedactionPolicy` and `110.RedactionPolicy` preflight; reject raw payload bytes, private bindings, credentials, backend IDs, provider-native query text, raw SQL text, raw Cypher text, SQL/Cypher composed text, SQL/Cypher literals, literal-bearing query plans, connection strings, PostgreSQL internal IDs, SQL cursor or prepared statement names, AGE internal IDs, and raw graph property values before export.
-9. If `signal = metric`, resolve exactly one `MetricInstrumentRow`, validate instrument type, unit, allowed attributes, cardinality class, and per-run cardinality bound.
-10. Enforce `TelemetryNonAuthorityRule`; if telemetry attempts to create, modify, authorize, validate, replay, or persist a non-telemetry authoritative record, fail with `TELEMETRY_AUTHORITY_VIOLATION` before the forbidden effect.
-11. Submit the telemetry item through `TelemetryExporterProfile` using bounded non-blocking behavior when export is enabled.
-12. On exporter unavailable, timeout, Collector unreachable, or queue overflow, update `TelemetryRuntimeState` counters and failure state; do not change the domain result.
-13. Map telemetry runtime state to health only through `TelemetryHealthMappingPolicy` when health output is requested.
-14. Return the updated `TelemetryRuntimeState` ref when runtime state is health/API/audit/validation visible; otherwise return telemetry no-op status.
+6. When the active profile and an API, audit, operator-diagnostic, or validation output context requires an opaque support ref, call `diagnostic_correlation_ref_v1`; otherwise keep `diagnostic_correlation_ref = null`.
+7. Reject raw trace ID and raw span ID exposure before export and before API, audit, health, validation, graph, package, or evidence materialization.
+8. Ignore OpenTelemetry SDK environment variables, SDK autoconfiguration, default OTLP endpoints, default headers, sampler settings, resource detectors, processors, readers, plugin activation, and config files as behavior sources unless a future active Cadastre policy explicitly imports an exact bounded value. MVP `otel_environment_passthrough` must be `false`.
+9. Canonicalize attribute keys and values.
+10. Reject any attribute key or value not allowlisted by `TelemetryAttributePolicy`.
+11. Run `TelemetryRedactionPolicy` and `110.RedactionPolicy` preflight; reject raw payload bytes, private bindings, credentials, backend IDs, provider-native query text, raw SQL text, raw Cypher text, SQL/Cypher composed text, SQL/Cypher literals, literal-bearing query plans, connection strings, PostgreSQL internal IDs, SQL cursor or prepared statement names, AGE internal IDs, and raw graph property values before export.
+12. If `signal = metric`, resolve exactly one `MetricInstrumentRow`, validate instrument type, unit, bucket profile, allowed attributes, cardinality class, per-run cardinality bound, `attribute_set_overrun_behavior`, and `exemplar_policy`.
+13. Reject metric exemplars before export. `metric_exemplars_enabled` must be `false`; exemplar trace IDs, span IDs, sampled flags, and exemplar attributes must not be exported.
+14. Enforce `TelemetryNonAuthorityRule`; if telemetry attempts to create, modify, authorize, validate, replay, or persist a non-telemetry authoritative record, fail with `TELEMETRY_AUTHORITY_VIOLATION` before the forbidden effect.
+15. Materialize `TelemetryExporterProfile` defaults before exporter handoff when export is enabled or required.
+16. Enforce exporter queue capacity using `drop_newest_nonblocking`; a full queue must drop the newest telemetry item, update runtime state when non-recursive, and never block domain writes.
+17. Submit the telemetry item through `TelemetryExporterProfile` using bounded non-blocking behavior when export is enabled.
+18. On endpoint unavailable, timeout, Collector unreachable, queue overflow, redaction rejection, permanent rejection, retry exhaustion, invalid profile, or shutdown flush timeout, update `TelemetryRuntimeState` counters and failure state; do not change the domain result.
+19. Map telemetry runtime state to health only through `TelemetryHealthMappingPolicy` when health output is requested.
+20. Return the updated `TelemetryRuntimeState` ref when runtime state is health/API/audit/validation visible; otherwise return telemetry no-op status.
 ```
 
 Forbidden telemetry content errors are blocking for the telemetry item and must occur before export. Export delivery failures are non-blocking for domain output and health-affecting only through policy.
@@ -479,19 +645,23 @@ Forbidden telemetry content errors are blocking for the telemetry item and must 
 ValidateTelemetryProfile(profile, artifact_refs, package_set_ref, metric_catalog, exporter_profile, validation_scope):
 1. Validate `profile` through `030.ActivationControlledArtifactRef` with owner `140`.
 2. Validate profile lifecycle status, activation scope, checksum, package-set ref when package-supplied, and validation refs.
-3. Resolve exactly one active `TelemetrySignalPolicy` for each enabled signal.
-4. Validate `TraceContextPolicy` when traces or structured logs are enabled.
-5. Validate `TelemetryCorrelationPolicy` before any caller-visible correlation ref is emitted.
-6. Validate `MetricInstrumentCatalog` and every `MetricInstrumentRow` when metrics are enabled.
-7. Validate `TelemetryAttributePolicy` and `TelemetryRedactionPolicy` for every enabled signal.
-8. Validate `TelemetryExporterProfile` when export is enabled or required.
-9. Validate exporter timeout, retry, queue, backpressure, shutdown flush, drop behavior, and failure health effect bounds.
-10. Validate `TelemetryHealthMappingPolicy` when telemetry can affect `110.OperationalHealthStatus`.
-11. Validate `TelemetryReplayExclusionPolicy` when replay, API, audit, validation, or operator-visible diagnostics are in scope.
-12. Reject any policy that permits raw payload bytes, private binding leakage, backend ID export, unbounded metric labels, domain authority effects, audit substitution, graph repair, source absence, identity evidence, package activation, watermark advancement, or replay checksum inclusion of forbidden telemetry fields.
-13. Require `100.ProductionPackageSetManifest` refs when telemetry artifacts are package-supplied.
-14. Require `030.VersionManifest` telemetry policy refs when telemetry policy or runtime state affects health, API, audit, validation, or operator-visible diagnostics.
-15. Return pass only when every required `120-OBSERVABILITY-*` validation ref is present and non-blocking.
+3. Fail if any output-affecting telemetry row family lacks a complete `030.ActivationControlledRowField` table with the exact required columns.
+4. Resolve exactly one active `TelemetrySignalPolicy` for each enabled signal.
+5. Validate `TraceContextPolicy` when traces or structured logs are enabled.
+6. Validate `TelemetryCorrelationPolicy` before any caller-visible correlation ref is emitted.
+7. Fail if `otel_environment_passthrough != false`.
+8. Fail if `metric_exemplars_enabled != false`.
+9. Validate `MetricInstrumentCatalog` and every `MetricInstrumentRow` when metrics are enabled.
+10. Validate `TelemetryAttributePolicy` and `TelemetryRedactionPolicy` for every enabled signal.
+11. Validate `TelemetryExporterProfile` when export is enabled or required; fail if an exporter profile is required but absent.
+12. Materialize every defaulted exporter numeric field before exporter row checksum computation; fail when a required default cannot materialize.
+13. Validate exporter timeout, retry, queue, batch, schedule delay, backpressure, shutdown flush, drop behavior, and failure health effect bounds against this file.
+14. Validate `TelemetryHealthMappingPolicy` when telemetry can affect `110.OperationalHealthStatus`.
+15. Validate `TelemetryReplayExclusionPolicy` when replay, API, audit, validation, or operator-visible diagnostics are in scope.
+16. Reject any policy that permits raw payload bytes, private binding leakage, backend ID export, raw trace IDs, raw span IDs, unbounded metric labels, domain authority effects, audit substitution, graph repair, source absence, identity evidence, package activation, watermark advancement, or replay checksum inclusion of forbidden telemetry fields.
+17. Require `100.ProductionPackageSetManifest` refs when telemetry artifacts are package-supplied.
+18. Require `030.VersionManifest` telemetry policy refs and runtime-state refs when telemetry policy or runtime state affects health, API, audit, validation, or operator-visible diagnostics.
+19. Return pass only when every required `120-OBSERVABILITY-*` validation ref is present, non-blocking, checksum-backed, package-set checked when applicable, and manifest-included.
 ```
 
 When structured-input repository workflow telemetry is enabled, `ValidateTelemetryProfile` must validate every structured-input metric row, allowed attribute key, forbidden attribute pattern, commit-SHA diagnostic rule, branch-name redaction rule, file-path redaction rule, private-route rejection rule, and package/report/audit telemetry handoff before export.
@@ -566,18 +736,60 @@ The following `140` row families can affect telemetry construction, signal expor
 
 | row_family | production classification | required precision status |
 | --- | --- | --- |
-| `ObservabilityInstrumentationProfile` | output_affecting for telemetry behavior | TODO: add full field precision for telemetry standard, protocol, enabled signals, delivery mode, export failure behavior, raw/private/backend ID prohibitions, validation refs, activation scope, and lifecycle status. |
-| `TelemetrySignalPolicy` | output_affecting for telemetry emission | TODO: add full field precision for signal token, stage class, export behavior, non-authority, validation-only exception, and invalid errors. |
-| `MetricInstrumentRow` | output_affecting for metrics | TODO: add typed and bounded fields for metric name, kind, unit, cardinality class, max distinct attribute sets per run, allowed attributes, aggregation, and invalid errors. |
+| `ObservabilityInstrumentationProfile` | output_affecting for telemetry behavior | Closed by `ObservabilityInstrumentationProfile field precision`; production still requires concrete row refs, validation refs, package-set refs when supplied, and manifest inclusion. |
+| `TelemetrySignalPolicy` | output_affecting for telemetry emission | Closed by `TelemetrySignalPolicy field precision`; unknown signals, omitted export behavior, and validation-only exceptions are deterministic. |
+| `TelemetryCorrelationPolicy` | output_affecting for API/audit-visible diagnostics | Closed by `TelemetryCorrelationPolicy field precision`; non-null refs require `diagnostic_correlation_ref_v1`, private secret validation, and nonce non-persistence. |
+| `MetricInstrumentRow` | output_affecting for metrics | Closed by `MetricInstrumentRow` field precision; exemplars are forbidden and cardinality caps materialize before checksum computation. |
 | `TelemetryAttributePolicy` | output_affecting for telemetry output | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; production still requires concrete row refs, package-set refs when supplied, validation refs, and manifest inclusion. |
 | `TelemetryRedactionPolicy` | output_affecting for telemetry output | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; forbidden backend values reject before export. |
-| `TelemetryExporterProfile` | output_affecting for export and health | TODO: declare null/omit behavior for `endpoint_ref`, export-disabled state, production-required export, retry policy, backpressure, queue bounds, and invalid errors. |
-| `TelemetryHealthMappingPolicy` | health_affecting | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure`; health effects are limited to `healthy`, `degraded`, `blocked`, or `error` and have no domain mutation effect. |
+| `TelemetryExporterProfile` | output_affecting for export and health | Closed by `TelemetryExporterProfile field precision`; defaults, null/omit behavior, retry, queue, shutdown, OTel environment containment, and exemplar prohibition are deterministic. |
+| `TelemetryHealthMappingPolicy` | health_affecting | Closed for graph backend diagnostics by `TelemetryActivationControlledRowFieldClosure` and by the total condition mapping in this file; health effects are limited to `healthy`, `degraded`, `blocked`, or `error` and have no domain mutation effect. |
 | `TelemetryReplayExclusionPolicy` | replay_affecting | Closed by `TelemetryReplayExclusionPolicy row schema`; activation remains blocked when validation refs, package-set refs, or manifest refs are missing or TODO-bearing. |
 
 `telemetry_signals`, `allowed_attribute_keys`, enabled signal sets, and validation refs must use `canonical_set` semantics with duplicate rejection unless an owner row declares `ordered_sequence`. `retry_policy` must be a typed nested object or named owner union with bounds for maximum attempts, backoff, queue behavior, and retryable exporter errors. Telemetry rows must remain diagnostic and must not grant source, identity, graph, package, audit, replay, or watermark authority.
 
 Telemetry validation, export, health mapping, or replay exclusion must fail before telemetry-visible output when any selected `140` row family remains `TODO:`, uses an unbounded label, exposes raw/private values, uses a bare string row ref, or omits selected row refs from `030.VersionManifest`.
+
+### Telemetry activation-controlled row-family closure
+
+The tables below close the remaining output-affecting telemetry row families. They use the exact `030.ActivationControlledRowField` column order and are authoritative for defaults, null behavior, omission behavior, bounds, checksum participation, manifest requirements, and owner errors.
+
+#### ObservabilityInstrumentationProfile field precision
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `profile_id` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | non-empty, owner-scoped stable token | `n/a` | `reject` | `n/a` | `ordered:1` | `yes` | `closed` | `110` | selected profile ref and checksum required when telemetry is enabled or visible | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `telemetry_standard` | `enum` | `yes` | `opentelemetry` | `no` | `yes` | exactly `opentelemetry` for MVP | `n/a` | `reject` | `n/a` | `ordered:2` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `telemetry_protocol` | `enum` | `yes` | `otlp` | `no` | `yes` | exactly `otlp` for MVP when export is enabled | `n/a` | `reject` | `n/a` | `ordered:3` | `yes` | `closed` | `110` | materialized before checksum | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `telemetry_signals` | `array<enum>` | `yes` | `[trace, metric, structured_log]` | `no` | `yes` | members from `trace`, `metric`, `structured_log`, `baggage`; baggage export forbidden by default | `canonical_set` | `reject` | `value` | `no` | `yes` | `closed` | `110` | selected signal refs required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `telemetry_delivery_mode` | `enum` | `yes` | `bounded_best_effort_nonblocking` | `no` | `yes` | exactly `bounded_best_effort_nonblocking` for MVP | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_AUTHORITY_VIOLATION` |
+| `telemetry_export_failure_domain_effect` | `enum` | `yes` | `none` | `no` | `yes` | exactly `none` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required in manifest for visible diagnostics | `TELEMETRY_AUTHORITY_VIOLATION` | `TELEMETRY_AUTHORITY_VIOLATION` |
+| `telemetry_export_failure_health_effect` | `enum` | `yes` | `degraded` | `no` | `yes` | `none`, `degraded`, or `blocked` for observability health only | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected health mapping refs required when visible | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `telemetry_trace_id_replay_checksum_effect` | `enum` | `yes` | `excluded` | `no` | `yes` | exactly `excluded` for domain replay | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | replay exclusion refs required when replay is in scope | `TELEMETRY_REPLAY_FIELD_FORBIDDEN` | `TELEMETRY_REPLAY_FIELD_FORBIDDEN` |
+| `telemetry_span_id_replay_checksum_effect` | `enum` | `yes` | `excluded` | `no` | `yes` | exactly `excluded` for domain replay | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | replay exclusion refs required when replay is in scope | `TELEMETRY_REPLAY_FIELD_FORBIDDEN` | `TELEMETRY_REPLAY_FIELD_FORBIDDEN` |
+| `raw_payload_in_telemetry` | `enum` | `yes` | `forbidden` | `no` | `yes` | exactly `forbidden` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_RAW_PAYLOAD_FORBIDDEN` | `TELEMETRY_RAW_PAYLOAD_FORBIDDEN` |
+| `private_source_binding_in_telemetry` | `enum` | `yes` | `forbidden` | `no` | `yes` | exactly `forbidden` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` | `TELEMETRY_PRIVATE_BINDING_FORBIDDEN` |
+| `backend_internal_id_in_telemetry` | `enum` | `yes` | `forbidden` | `no` | `yes` | exactly `forbidden` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before export | `TELEMETRY_BACKEND_ID_FORBIDDEN` | `TELEMETRY_BACKEND_ID_FORBIDDEN` |
+| `validation_refs` | `array<030.ActivationControlledArtifactRef>` | `yes` | `none` | `no` | `no` | non-empty observability profile validation refs | `canonical_set` | `reject` | `artifact_ref` | `no` | `yes` | `closed` | `110` | every validation ref and checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `activation_scope` | `030.ActivationScope` | `yes` | `none` | `no` | `no` | must cover stage and execution scope | `n/a` | `reject` | `n/a` | `ordered:99` | `yes` | `closed` | `110` | selector context ref and selector checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | `yes` | `none` | `no` | `no` | production use requires `active` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | lifecycle evidence required when status affects selection | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256` | `yes` | `none` | `no` | `no` | lowercase SHA-256 hex over canonical row bytes after defaults, excluding only `row_checksum` | `n/a` | `reject` | `n/a` | `no` | `no` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+
+#### TelemetrySignalPolicy field precision
+
+| field_path | type | required | default | null_allowed | omit_allowed | bounds | array_semantics | duplicate_policy | canonical_sort_key | id_input | checksum_input | extension_policy | redaction_owner | version_manifest_requirement | missing_error | invalid_error |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `row_id` | `040.ScalarType.string` | `yes` | `none` | `no` | `no` | non-empty, owner-scoped stable token | `n/a` | `reject` | `n/a` | `ordered:1` | `yes` | `closed` | `110` | selected row ref and checksum required when signal may emit | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `signal_token` | `enum` | `yes` | `none` | `no` | `no` | `trace`, `metric`, `structured_log`, or `baggage` | `n/a` | `reject` | `n/a` | `ordered:2` | `yes` | `closed` | `110` | selected signal row checksum required | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `stage_class` | `enum` | `yes` | `none` | `no` | `no` | active `030` stage class token or `api`/`operator` diagnostic context | `n/a` | `reject` | `n/a` | `ordered:3` | `yes` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `production_status` | `enum` | `yes` | `allowed` for listed production signal rows | `no` | `yes` | `allowed`, `forbidden`, or `validation_only_non_production` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required before emission | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `default_export_behavior` | `enum` | `yes` | `export_after_redaction` for trace/metric/structured_log; `propagation_only` for baggage | `no` | `yes` | `export_after_redaction`, `local_only`, `propagation_only`, `forbidden` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | selected row checksum required | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_PROFILE_INVALID` |
+| `validation_only_non_production` | `boolean` | `yes` | `false` | `no` | `yes` | `true` permitted only outside production execution mode | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | value required when custom signal is validation-only | `TELEMETRY_SIGNAL_FORBIDDEN` | `TELEMETRY_SIGNAL_FORBIDDEN` |
+| `non_authority_rule_ref` | `string` | `yes` | `TelemetryNonAuthorityRule` | `no` | `yes` | exact exported non-authority rule name | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | non-authority refs required when signal visible | `TELEMETRY_AUTHORITY_VIOLATION` | `TELEMETRY_AUTHORITY_VIOLATION` |
+| `validation_refs` | `array<030.ActivationControlledArtifactRef>` | `yes` | `none` | `no` | `no` | non-empty signal validation refs | `canonical_set` | `reject` | `artifact_ref` | `no` | `yes` | `closed` | `110` | every validation ref and checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `activation_scope` | `030.ActivationScope` | `yes` | `none` | `no` | `no` | must cover stage and execution scope | `n/a` | `reject` | `n/a` | `ordered:99` | `yes` | `closed` | `110` | selector context ref and selector checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `lifecycle_status` | `030.LifecycleStatus` | `yes` | `none` | `no` | `no` | production use requires `active` | `n/a` | `reject` | `n/a` | `no` | `yes` | `closed` | `110` | lifecycle evidence required when status affects selection | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
+| `row_checksum` | `040.ScalarType.sha256` | `yes` | `none` | `no` | `no` | lowercase SHA-256 hex over canonical row bytes after defaults, excluding only `row_checksum` | `n/a` | `reject` | `n/a` | `no` | `no` | `closed` | `110` | selected row checksum required | `TELEMETRY_PROFILE_INVALID` | `TELEMETRY_PROFILE_INVALID` |
 
 ## Acceptance Criteria
 
@@ -598,6 +810,13 @@ Telemetry validation, export, health mapping, or replay exclusion must fail befo
 | `140-PACKAGE-AC-001` | Package-supplied telemetry profiles, metric catalogs, redaction policies, exporter profiles, health policies, and replay exclusion policies fail closed unless `100.ProductionPackageSetManifest`, package type policy, validation refs, and artifact checksums pass. |
 | `140-RUNLOCK-TELEMETRY-AC-001` | Run-lock acquisition, heartbeat, recovery, loss, and lease-remaining metrics use only bounded low-cardinality attributes and validation refs from `120-RUNLOCK-OBSERVABILITY-*`. |
 | `140-RUNLOCK-NONAUTH-AC-001` | Dropping all run-lock telemetry does not change lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, or watermark state. |
+| `140-CORRELATION-AC-001` | `diagnostic_correlation_ref_v1` fixed-nonce validation produces the exact expected `dcr1-*` output for the selected policy row checksum, activation scope checksum, secret, and nonce. |
+| `140-CORRELATION-AC-002` | Missing, inactive, invalid, expired, checksum-mismatched, unauthorized, or omitted correlation secret returns `diagnostic_correlation_ref = null` and never falls back to raw trace/span IDs. |
+| `140-EXPORTER-DEFAULTS-AC-001` | Exporter timeout, retry, queue, batch, schedule delay, shutdown, health effect, exemplar, and OTel environment defaults materialize before checksum computation and reject out-of-bounds values. |
+| `140-EXPORTER-RETRY-AC-001` | Retry attempts follow the full-jitter envelope, fixtures may inject fixed jitter samples, production configuration cannot inject deterministic jitter, and no retry begins after shutdown. |
+| `140-OTEL-ENV-AC-001` | OTel SDK environment variables and autoconfiguration cannot enable endpoint, header, sampler, resource, reader, processor, plugin, exemplar, or config-file behavior. |
+| `140-EXEMPLAR-AC-001` | Metric exemplars and exemplar trace/span data are rejected before export. |
+| `140-ROW-FIELD-PRECISION-AC-001` | Every output-affecting telemetry row family has a complete `030.ActivationControlledRowField` table and row-set validation contract. |
 
 ### Structured input telemetry acceptance criteria
 
@@ -613,14 +832,16 @@ Telemetry validation, export, health mapping, or replay exclusion must fail befo
 ## Definition of Done
 
 - Every exported telemetry contract has one owner in `000.Owner Contract Registry` and one volatility classification.
+- `diagnostic_correlation_ref_v1` is fully specified and fixed-nonce validation rows pass.
+- Exporter timeout, retry, queue, batch, schedule delay, shutdown, failure-health, exemplar, and OTel environment defaults are fully specified and materialized before checksums.
+- OTel environment passthrough is exactly disabled for MVP.
+- Metric exemplars are exactly disabled for MVP.
+- Every output-affecting telemetry row family has a complete `030.ActivationControlledRowField` table.
 - `EmitTelemetry` and `ValidateTelemetryProfile` reject forbidden telemetry before export.
 - Telemetry-enabled and telemetry-disabled runs produce byte-identical authoritative domain outputs for the same inputs.
 - Telemetry exporter failure degrades observability health only through policy and never mutates domain records.
-- `120-OBSERVABILITY-*` validation rows cover non-authority, redaction, cardinality, exporter failure, health mapping, replay, audit independence, version manifest completeness, and package activation.
+- `120-OBSERVABILITY-*` validation rows cover correlation, exporter defaults, retry, queue overflow, redaction rejection, cardinality, exemplar rejection, OTel environment containment, health mapping, replay, audit linkage, version manifest completeness, package activation, and enabled/disabled domain parity.
 
 ## Open Questions
 
-| ID | Question | Blocking scope |
-| --- | --- | --- |
-| `140-TODO-CORRELATION-REF-ALGORITHM` | Product security governance must choose the exact opaque diagnostic correlation ref derivation before caller-visible production exposure. | Blocks exposed non-null `diagnostic_correlation_ref`. |
-| `140-TODO-EXPORTER-DEFAULT-BOUNDS` | Product operations governance must choose production default exporter timeout, retry, queue, and shutdown flush values. | Blocks required production export when no active exporter profile supplies the values. |
+No production-blocking observability open questions remain in this file. Supporting-material fixture bytes, private diagnostic-correlation secret bindings, private exporter endpoint bindings, Collector route bindings, dashboards, alerts, runbooks, and any OpenTelemetry source snapshot or SDK package matrix remain outside this core file until registered by repository-relative path and accepted through `120` validation.
