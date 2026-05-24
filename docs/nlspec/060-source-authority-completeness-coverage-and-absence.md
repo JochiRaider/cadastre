@@ -368,6 +368,24 @@ Telemetry may be consulted only through `140.TelemetryHealthMappingPolicy` for o
 
 Run-lock signals owned by `030` must not satisfy `SourceAuthorityProfileRow`, `LakehouseFeedCompletenessProfileRow`, `CoverageAssertion`, `SourceStalenessPolicy`, `AbsenceDerivationPolicy`, `ProjectionWatermarkPolicy`, or `ControlResultMappingRow`. A run-lock signal used without a specific non-authoritative diagnostic policy emits `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`; it must not produce absence, cleanup, retraction, graph expiry, source watermark, projection watermark, control pass/fail, source-history no-change, or source completeness.
 
+### RunLockSignalNonAuthorityValidationHandoff
+
+`val-060-runlock-signal-nonauthority` must cover heartbeat, lease expiry, stale recovery, conflict, release, lock loss, heartbeat uncertainty, and stale fencing. For each signal, the expected effect must be diagnostic-only or `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`.
+
+The required mutation-prohibition proof must enumerate all forbidden effects below:
+
+| Forbidden effect class | Required proof |
+| --- | --- |
+| source absence | No `FactAbsenceOutcome.authorized_absent` or `authorized_not_observed` may be emitted from a run-lock signal. |
+| cleanup | No cleanup permission may be emitted. |
+| retraction | No fact retraction or correction may be emitted. |
+| graph expiry | No `graph_expiry` effect may be authorized. |
+| source completeness | No completeness decision may be satisfied. |
+| coverage assertion | No `CoverageAssertion` may be created or satisfied. |
+| control output | No control pass, fail, not-checked, or not-applicable output may be authorized. |
+| source-history no-change proof | No no-change proof may be emitted. |
+| watermark advancement | No source, projection, graph-apply, or presence-only watermark may advance. |
+
 | Signal class | Default effect |
 | --- | --- |
 | Cursor exhaustion | Candidate evidence only; no absence by itself. |
@@ -1453,7 +1471,7 @@ Missing row and ambiguous row errors must remain distinct and owner-specific. So
 | `060-OCSF-NONAUTH-AC-002` | Vulnerability Finding status does not become Cadastre `assertion_state` without a `060` or `080` owned derivation path. |
 | `060-OCSF-NONAUTH-AC-003` | DNS or DHCP field absence does not become absence without exact completeness, coverage, staleness, and authority rows. |
 | `060-TELEMETRY-PROGRESS-NONAUTH-AC-001` | Telemetry traces, metrics, structured logs, exporter state, Collector state, sampling decisions, and dropped-signal counts cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement. |
-| `060-RUNLOCK-NONAUTH-AC-001` | Run-lock heartbeat, lease expiry, stale recovery, conflict, and release signals cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement; unauthorized use emits `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY`. |
+| `060-RUNLOCK-NONAUTH-AC-001` | `val-060-runlock-signal-nonauthority` proves that run-lock heartbeat, lease expiry, stale recovery, conflict, release, lock loss, heartbeat uncertainty, and stale fencing signals cannot authorize absence, cleanup, retraction, graph expiry, source completeness, coverage, control pass/fail, source-history no-change, or watermark advancement; unauthorized use emits `WEAK_PROGRESS_SIGNAL_NO_AUTHORITY` and has concrete no-mutation proof. |
 | `060-LIFECYCLE-AC-001` | Source authority, completeness, coverage, progress, absence, and watermark artifacts can become active only through `030.LifecycleTransitionEvidence`, while `EvaluateLakehouseFeedCompleteness` and `DeriveAbsenceOrUnknown` remain pure deterministic algorithms. |
 | `060-SOURCE-CLOSURE-AC-001` | Missing exact source-authority row blocks the requested effect and emits no absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement. |
 | `060-SOURCE-CLOSURE-AC-002` | Ambiguous equally specific source-authority row blocks the requested effect with `SOURCE_AUTHORITY_ROW_AMBIGUOUS`. |

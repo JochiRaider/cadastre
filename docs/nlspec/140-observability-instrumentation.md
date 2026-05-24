@@ -86,6 +86,12 @@ Telemetry may affect caller-visible health only through `TelemetryHealthMappingP
 
 Run-lock telemetry is diagnostic material only. Metrics, traces, structured logs, dashboards, or alerts about lock acquisition, heartbeat, stale recovery, fencing, and lock loss must not become lock authority, source authority, source completeness, graph authority, package activation authority, audit evidence, replay evidence, or watermark authority. Persisted `030` lock evidence is the only run-lock evidence that may gate domain output.
 
+### RunLockTelemetryValidationHandoff
+
+`val-140-runlock-telemetry-cardinality` must prove that run-lock metric attributes are bounded low-cardinality and that raw lock keys, raw fencing tokens, raw idempotency keys, source-native IDs, canonical IDs, private bindings, and backend IDs are rejected or redacted before export. Rejected telemetry items must not mutate domain output.
+
+`val-140-runlock-telemetry-nonauthority` must prove that dropping all run-lock telemetry changes no lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, watermark state, or audit evidence substitution.
+
 ## Default Instrumentation Profile
 
 `ObservabilityInstrumentationProfile` is an activation-controlled artifact. When telemetry is enabled and no more specific active profile covers the execution scope, the implementation must materialize the following candidate defaults before validation.
@@ -254,11 +260,11 @@ Default metric rows:
 | `cadastre.structured_input.publication.import.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `publication_manifest_ref`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-PUBLICATION-*` |
 | `cadastre.structured_input.sync.candidate.discovered` | counter | `{candidate}` | `repository_profile_ref`, `structured_input_operation`, `candidate_sync_record_ref`, `artifact_class`, `owner_spec`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-SYNC-*` |
 | `cadastre.structured_input.repository_group.validation.failed` | counter | `{failure}` | `repository_profile_ref`, `structured_input_operation`, `repository_group_ref`, `artifact_class`, `owner_spec`, `owner_error_code`, `validation_status` | `bounded_low` | monotonic sum | `120-STRUCTURED-INPUT-MULTIREPO-*` |
-| `cadastre.run_lock.acquired` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
-| `cadastre.run_lock.heartbeat` | counter | `{heartbeat}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
-| `cadastre.run_lock.recovery_attempt` | counter | `{attempt}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
-| `cadastre.run_lock.lost` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `120-RUNLOCK-OBSERVABILITY-*` |
-| `cadastre.run_lock.lease_remaining` | gauge | `s` | `lock_scope_class`, `output_class` | `bounded_low` | last value | `120-RUNLOCK-OBSERVABILITY-*` |
+| `cadastre.run_lock.acquired` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `val-140-runlock-telemetry-cardinality` |
+| `cadastre.run_lock.heartbeat` | counter | `{heartbeat}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `val-140-runlock-telemetry-cardinality` |
+| `cadastre.run_lock.recovery_attempt` | counter | `{attempt}` | `lock_scope_class`, `result`, `owner_error_code` | `bounded_low` | monotonic sum | `val-140-runlock-telemetry-cardinality` |
+| `cadastre.run_lock.lost` | counter | `{lock}` | `lock_scope_class`, `output_class`, `owner_error_code` | `bounded_low` | monotonic sum | `val-140-runlock-telemetry-cardinality` |
+| `cadastre.run_lock.lease_remaining` | gauge | `s` | `lock_scope_class`, `output_class` | `bounded_low` | last value | `val-140-runlock-telemetry-cardinality` |
 
 The active metric catalog may add rows only through activation-controlled artifacts. A package-supplied catalog must pass `ValidateTelemetryProfile` and package activation before production use.
 
@@ -808,8 +814,8 @@ The tables below close the remaining output-affecting telemetry row families. Th
 | `140-NONAUTH-AC-001` | Telemetry cannot create, modify, authorize, validate, retract, expire, merge, split, project, replay, or persist non-telemetry authoritative Cadastre records. |
 | `140-VERSION-MANIFEST-AC-001` | Health, API, audit, validation, or operator-visible diagnostics that depend on telemetry policy or runtime state include required telemetry policy refs and runtime state refs in `030.VersionManifest` or fail with `TELEMETRY_VERSION_MANIFEST_INCOMPLETE`. |
 | `140-PACKAGE-AC-001` | Package-supplied telemetry profiles, metric catalogs, redaction policies, exporter profiles, health policies, and replay exclusion policies fail closed unless `100.ProductionPackageSetManifest`, package type policy, validation refs, and artifact checksums pass. |
-| `140-RUNLOCK-TELEMETRY-AC-001` | Run-lock acquisition, heartbeat, recovery, loss, and lease-remaining metrics use only bounded low-cardinality attributes and validation refs from `120-RUNLOCK-OBSERVABILITY-*`. |
-| `140-RUNLOCK-NONAUTH-AC-001` | Dropping all run-lock telemetry does not change lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, or watermark state. |
+| `140-RUNLOCK-TELEMETRY-AC-001` | `val-140-runlock-telemetry-cardinality` proves run-lock acquisition, heartbeat, recovery, loss, and lease-remaining metrics use only bounded low-cardinality attributes and reject or redact raw lock keys, raw fencing tokens, raw idempotency keys, source-native IDs, canonical IDs, private bindings, and backend IDs before export. |
+| `140-RUNLOCK-NONAUTH-AC-001` | `val-140-runlock-telemetry-nonauthority` proves dropping all run-lock telemetry does not change lock outcome, domain output, replay checksum, package activation, graph apply, table maintenance, watermark state, or audit evidence substitution. |
 | `140-CORRELATION-AC-001` | `diagnostic_correlation_ref_v1` fixed-nonce validation produces the exact expected `dcr1-*` output for the selected policy row checksum, activation scope checksum, secret, and nonce. |
 | `140-CORRELATION-AC-002` | Missing, inactive, invalid, expired, checksum-mismatched, unauthorized, or omitted correlation secret returns `diagnostic_correlation_ref = null` and never falls back to raw trace/span IDs. |
 | `140-EXPORTER-DEFAULTS-AC-001` | Exporter timeout, retry, queue, batch, schedule delay, shutdown, health effect, exemplar, and OTel environment defaults materialize before checksum computation and reject out-of-bounds values. |

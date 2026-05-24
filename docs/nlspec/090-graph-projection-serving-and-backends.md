@@ -859,6 +859,23 @@ ApplyGraphDelta(delta_set, apply_profile):
 12. Return GraphApplyResult with status, errors, input checksum, backend evidence, idempotency state, artifact refs, run-lock commit guard refs, and derived view state update eligibility.
 ```
 
+### RunLockGraphApplyValidationHandoff
+
+`val-090-runlock-graph-apply-resume` must prove all graph-apply run-lock conditions below. The row validates graph apply consequences only and must not define provider-specific implementation mechanics.
+
+| Scenario | Required observable behavior |
+| --- | --- |
+| missing guard | Reject before backend execution. |
+| stale guard | Reject before backend execution. |
+| fenced guard | Reject before backend execution. |
+| lock-lost guard | Reject before backend execution. |
+| out-of-scope guard | Reject before backend execution. |
+| partial apply under lock loss | Do not advance `DerivedViewState`. |
+| resume after partial apply | Require committed-batch proof. |
+| resume idempotency | Use the same `GraphDeltaIdempotencyKey`. |
+| resumed guard | Require a new valid `030.RunLockCommitGuard`. |
+| result evidence | `GraphApplyResult` includes guard refs and derived-view state update eligibility. |
+
 ## Graph Apply Lifecycle
 
 Machine ID: `090.GraphApplyLifecycleMachine.v1`.
@@ -1441,7 +1458,7 @@ Graph projection, graph query, graph apply, graph rebuild, derived-view serving,
 | `090-GRAPH-QUERY-CLOSURE-AC-001` | Bounded path queries with omitted traversal classes fail, and empty traversal-class arrays return no paths. |
 | `090-GRAPH-QUERY-CLOSURE-AC-002` | Candidate-limit, expired-token, and token-mismatch cases fail before backend query execution with the declared graph error codes. |
 | `090-GRAPH-APPLY-ORDER-AC-001` | Same graph delta set and apply profile produce byte-identical canonical delta ordering and batch membership. |
-| `090-RUNLOCK-GRAPH-AC-001` | `val-090-runlock-graph-apply-resume` proves that partial apply under lock loss does not advance derived view and resumes only with committed-batch proof plus a new valid `030.RunLockCommitGuard`. |
+| `090-RUNLOCK-GRAPH-AC-001` | `val-090-runlock-graph-apply-resume` proves missing, stale, fenced, lock-lost, or out-of-scope guards reject before backend execution; partial apply under lock loss does not advance derived view; resume requires committed-batch proof, the same `GraphDeltaIdempotencyKey`, a new valid `030.RunLockCommitGuard`, and `GraphApplyResult` guard refs. |
 | `090-GRAPH-REBUILD-CLOSURE-AC-001` | Rebuild equivalence includes profile, edge semantics, output eligibility, taxonomy, query translation, property policy, schema, index consistency, and canonical output checksums. |
 | `090-GRAPH-BACKEND-SELECTION-AC-001` | Graph serving enabled with omitted backend profile materializes `mvp-postgresql-relational-graph.v1`; graph serving disabled materializes no backend; explicit AGE remains validation-only unless production gates pass; unresolved default fields block production serving with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |
 | `090-GRAPH-BACKEND-DEFAULT-AC-002` | When graph serving is enabled and backend profile input is omitted, the implementation materializes `mvp-postgresql-relational-graph.v1`; if any required production profile field, package ref, provider support row, capability row, schema ref, relational anchor schema fingerprint, restore/upgrade evidence, storage/index declaration, validation ref, or performance threshold is unresolved, graph mutation, query, rebuild promotion, and drift check fail with `GRAPH_BACKEND_DEFAULT_UNRESOLVED`. |

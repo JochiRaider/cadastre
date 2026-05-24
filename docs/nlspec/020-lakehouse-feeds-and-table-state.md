@@ -538,6 +538,12 @@ Destructive or rewrite table maintenance is output-affecting and must consume th
 | Lock loss after safe no-mutation preflight | Diagnostics may be recorded only; no table mutation is implied. |
 | Maintenance failure due to lock loss | Must not advance source, projection, graph-apply, or presence-only watermarks. |
 
+#### RunLockMaintenanceValidationHandoff
+
+`020` imports `030` run-lock behavior and owns only the table-maintenance consequence. `val-020-runlock-maintenance-loss` is the required validation row for destructive or rewrite maintenance lock loss. The row must prove no destructive commit, no rewrite commit, no source watermark, no projection watermark, no graph-apply watermark, and no presence-only watermark advancement when the guard is missing, stale, fenced, lost, or otherwise fails `030.AssertRunLockHeldBeforeCommit`.
+
+This handoff must not define lock lease defaults, heartbeat behavior, stale recovery, fencing-token generation, lock-store time, or run-lock error selection. Those behaviors remain owned by `030`.
+
 ## Feed Read Algorithm
 
 ```text
@@ -1402,7 +1408,7 @@ A production feed read, raw import, completeness evaluation, absence-sensitive e
 | `020-LIFECYCLE-AC-001` | Every feed-read branch maps to exactly one `030.StageExecutionLifecycleMachine.v1` event, terminal-state expectation, and mutation-prohibition rule. |
 | `020-LIFECYCLE-AC-002` | Partial known and partial unknown gaps may commit positive raw records and receipts but must record blocked absence, cleanup, retraction, graph-expiry, and watermark effects. |
 | `020-LIFECYCLE-AC-003` | Feed lifecycle results for `succeeded`, `no_op`, and isolated receipt-emitting failures contain `feed_receipt_state_ref`. |
-| `020-RUNLOCK-MAINTENANCE-AC-001` | Destructive maintenance fails before mutation when the required `030.RunLockCommitGuard` is missing, stale, or fenced; successful maintenance includes the guard ref in `VersionManifest`. |
+| `020-RUNLOCK-MAINTENANCE-AC-001` | Destructive or rewrite maintenance fails before mutation when the required `030.RunLockCommitGuard` is missing, stale, fenced, or lost; `val-020-runlock-maintenance-loss` must pass with concrete mutation-prohibition proof, and successful maintenance includes the guard ref in `VersionManifest`. |
 | `020-LAKEHOUSE-ROW-PRECISION-AC-001` | Every selected `020` activation-controlled row family has complete field precision, row checksum behavior, validation refs, activation scope, lifecycle status, and `VersionManifest` inclusion. |
 | `020-RAW-SUPPLIER-AC-001` | Missing, inactive, unsupported, private-leaking, unredacted, or unvalidated supplier profile emits no raw output. |
 | `020-READ-POLICY-AC-001` | Read policy defaults and bounds materialize deterministically, and out-of-bound timeout, retry, payload, or checksum behavior fails before read output. |

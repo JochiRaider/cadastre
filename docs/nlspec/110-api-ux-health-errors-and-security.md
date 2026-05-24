@@ -580,6 +580,31 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 
 `GenerateErrorCodeRegistry` must generate exact rows for every `030` run-lock error. A generic registry row must not substitute for run-lock timing, conflict, heartbeat, stale recovery, fencing, idempotency, commit guard, assertion, or lock-loss failures.
 
+### RunLockObservableStateRenderingMatrix
+
+This matrix references generated `030` registry rows. It must not duplicate `030` severity, retry, or owner error semantics. Endpoint policy may derive the final caller-visible outcome class from the generated registry and endpoint context, but it must not use a generic error when a `RUN_LOCK_*` row covers the failure.
+
+| Visible `RUN_LOCK_*` code | Allowed caller-visible outcome class | Required owner context fields | Forbidden interpretation |
+| --- | --- | --- | --- |
+| `RUN_LOCK_COLLISION` | `error` or `blocked` | owner spec, lock evidence ref when available, redacted lock key ref | no source absence, graph expiry, package activation success, maintenance success, watermark advancement, or authorized negative state |
+| `RUN_LOCK_ACQUISITION_FAILED` | `blocked` or `error` | owner spec, operation evidence ref, redacted lock key refs | no partial-success interpretation and no authorized negative state |
+| `RUN_LOCK_TIMING_INVALID` | `error` | owner spec, policy ref/checksum, validation ref | no source state interpretation |
+| `RUN_LOCK_CONFLICT` | `blocked` | owner spec, conflict evidence ref, redacted lock key ref | no source absence or stale source interpretation |
+| `RUN_LOCK_STORE_TIME_UNAVAILABLE` | `blocked` or `error` | owner spec, lock-store evidence ref when available | no current-time fallback and no domain mutation |
+| `RUN_LOCK_HEARTBEAT_FAILED` | `blocked` or `error` | owner spec, heartbeat evidence ref, lock set ref | no output success interpretation |
+| `RUN_LOCK_HEARTBEAT_UNCERTAIN` | `degraded`, `blocked`, or `error` | owner spec, heartbeat evidence ref, commit assertion state | no output commit unless `030` commit assertion succeeds |
+| `RUN_LOCK_STALE_RECOVERY_NOT_ELIGIBLE` | `blocked` | owner spec, recovery attempt evidence ref | no recovery success, no output, no watermark |
+| `RUN_LOCK_STALE_RECOVERY_FAILED` | `blocked` | owner spec, recovery attempt evidence ref | no recovery success, no output, no watermark |
+| `RUN_LOCK_FENCING_TOKEN_STALE` | `blocked` or `error` | owner spec, commit guard ref, fencing token evidence ref | no output success, no derived-view advance, no active-pointer mutation |
+| `RUN_LOCK_IDEMPOTENCY_CONFLICT` | `error` | owner spec, idempotency key ref/checksum, prior evidence ref | no retry success and no mutation |
+| `RUN_LOCK_COMMIT_GUARD_MISSING` | `security_error` or `blocked` | owner spec, output commit scope checksum | no output visibility and no owner no-op success |
+| `RUN_LOCK_ASSERTION_FAILED` | `blocked` or `error` | owner spec, commit guard ref, failed proof class | no output mutation and no authorized negative state |
+| `RUN_LOCK_LOST` | `blocked` | owner spec, lock-loss evidence ref, affected output class | no source absence, graph expiry, package activation success, maintenance success, watermark advancement, or authorized negative state |
+
+### RunLockErrorRegistryValidationHandoff
+
+`val-110-runlock-error-registry` must prove exact generated rows for every `RUN_LOCK_*` error in `030.ProcessingErrorRegistryFragment`. `val-110-runlock-state-rendering` must prove API, health, export, audit, and graph-visible rendering uses generated owner-specific rows, preserves redacted owner context, rejects generic substitution, and stays within `CommonApiResponseEnvelope.errors` maximum 128 records. When more than 128 errors are relevant, `partial_result` must follow endpoint policy; owner-specific lock errors must not be silently dropped.
+
 `GenerateErrorCodeRegistry` must generate exact rows for `DOMAIN_LEDGER_OWNER_DUPLICATE`, `OWNER_CONTRACT_REF_UNEXPORTED`, and `DUPLICATE_OWNER_EXPORT`. A generic validation or registry error must not substitute for define-once closure failures.
 
 If any owner spec emits an error code that lacks exactly one generated `ErrorCodeRegistryRow`, API/export output must fail before response visibility with `VERSION_MANIFEST_INCOMPLETE` or the most specific registry generation error. Shared codes such as `AUTHORIZATION_ERROR`, `PAGE_TOKEN_INVALID`, and `API_BOUNDS_INVALID` may be selected only when no owner-specific code covers the failure. PostgreSQL and AGE graph backend failures must use the owner-specific `090` rows for schema fingerprint, duplicate IDs, orphan edges, query timeout, unsupported query plan, direct DML, unsafe `search_path`, RLS bypass, provider support, AGE extension, AGE mutation, AGE namespace bypass, AGE internal ID, restore, and upgrade errors; generic graph or API errors are forbidden when those rows cover the failure.
@@ -1787,8 +1812,8 @@ Endpoint outcomes must preserve `authorized_absent` distinctly from `unknown`, `
 | `110-GRAPH-PAGE-TOKEN-AC-001` | Expired and invalid graph page tokens reject before backend query execution, including SQL cursor names, prepared statement names, PostgreSQL OIDs, tuple IDs, sequence values, physical row locators, provider-native query handles, AGE object IDs, and backend-generated graph IDs. |
 | `110-GRAPH-WORDING-AC-001` | MVP graph output cannot render unqualified reachability, service accessibility, allowed path, lateral movement, or equivalent claims. |
 | `110-GRAPH-NON-IMPLICATION-AC-001` | `observed_connection` detail text states the non-implication contract. |
-| `110-RUNLOCK-STATE-AC-001` | A graph query, health response, API response, export, or audit output affected by `RUN_LOCK_LOST`, `RUN_LOCK_CONFLICT`, `RUN_LOCK_HEARTBEAT_UNCERTAIN`, `RUN_LOCK_FENCING_TOKEN_STALE`, or `RUN_LOCK_IDEMPOTENCY_CONFLICT` renders a blocked, degraded, or error operational state with owner context and no authorized negative interpretation. |
-| `110-RUNLOCK-ERROR-REGISTRY-AC-001` | Every new `030` run-lock error appears in the generated error registry with exact fixture refs, redaction behavior, owner context, and no generic substitute. |
+| `110-RUNLOCK-STATE-AC-001` | `val-110-runlock-state-rendering` proves API, health, export, audit, and graph-visible output affected by any visible `RUN_LOCK_*` code renders `blocked`, `degraded`, `error`, or `security_error` according to generated registry and endpoint policy, preserves required owner context, and forbids source absence, graph expiry, package activation success, maintenance success, watermark advancement, or authorized-negative interpretation. |
+| `110-RUNLOCK-ERROR-REGISTRY-AC-001` | `val-110-runlock-error-registry` proves every `RUN_LOCK_*` error in `030.ProcessingErrorRegistryFragment` appears exactly once in the generated error registry with exact fixture refs, redaction behavior, owner context, generated checksum, and no generic substitute. |
 | `110-ERROR-REGISTRY-SHARED-AC-001` | `Shared110ErrorRegistryFragment` contains only `110` shared rows, uses closed severity and retry classes, has exact fixture refs, and does not co-own owner-domain rows such as `DERIVED_VIEW_LAG_ERROR`. |
 | `110-ERROR-REGISTRY-ALIAS-AC-001` | Rejected alias codes fail before registry generation and cannot appear in API, export, health, audit, validation, telemetry, or package-visible diagnostics. |
 

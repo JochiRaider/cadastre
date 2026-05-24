@@ -829,6 +829,24 @@ EvaluateLateArrival(observation, temporal_resolution, late_arrival_policy, autho
 | `telemetry_health_diagnostic` | `140.TelemetryRuntimeState` refs when health/API/audit/validation output depends on telemetry state, telemetry policy refs, health mapping policy ref, redaction refs, output checksum, and diagnostic display fields only when owner rows include them | trace ID, span ID, sampled flag, diagnostic_correlation_ref unless explicitly included as diagnostic display, server_correlation_nonce, retry_jitter_sample_ms, exporter attempt timing, shutdown flush timing, exporter queue state unless health-visible, runtime duration, backend telemetry IDs, SDK provider runtime instance ID, display timestamp | `sha256` | telemetry runtime state ref then policy ref | compare only | active default when `140` telemetry refs are active and validation rows pass |
 | `run_lock_operation` | operation kind, idempotency key, input checksum, lock keys, prior and new lock record checksums, fencing token set, lock-store time at decision, result, error code, and version manifest ID | runner-local timestamp, diagnostic display timestamp, runtime duration, trace/span IDs, diagnostic correlation fields, server correlation nonce | `sha256` | operation evidence ID then lock key | compare only | active default when `030` run-lock refs are active and validation rows pass |
 
+#### RunLockReplayValidationHandoff
+
+`val-080-runlock-replay-missing-evidence` must prove replay fails before output with `REPLAY_INPUT_INSUFFICIENT` when any required run-lock evidence for a lock-governed output is missing, stale, checksum-mismatched, package-set-mismatched, or unmanifested.
+
+| Required run-lock replay input | Failure behavior when missing or invalid |
+| --- | --- |
+| `RunLockLeasePolicy` checksum | Replay fails before output; current policy state must not be substituted. |
+| `RunLockSet` checksum | Replay fails before output. |
+| lock operation evidence refs | Replay fails before output. |
+| recovery evidence refs when recovery occurred | Replay fails before output. |
+| commit guard refs | Replay fails before output. |
+| fencing token set | Replay fails before output. |
+| idempotency key | Replay fails before output. |
+| lock lifecycle transition evidence refs | Replay fails before output. |
+| `VersionManifest` refs | Replay fails before output. |
+
+Volatile fields remain excluded for `run_lock_operation`: diagnostic display timestamp, runtime duration, telemetry correlation fields, trace IDs, span IDs, diagnostic correlation refs, and server correlation nonce.
+
 Global replay failure precedence:
 
 1. Missing replay policy row.
@@ -1189,7 +1207,7 @@ Gold derivation, correction, late-arrival routing, replay output, or graph rebui
 | `080-CORRECTION-SNAPSHOT-AC-001` | Every correction class requires old snapshot ref, new snapshot ref, table-set checksum, retention protection, and mutable-ref rejection. |
 | `080-REPLAY-OUTPUT-CLASS-AC-001` | Replay rows exist for raw, silver, identity, gold, gold correction, graph delta, graph apply, graph rebuild, API response, export projection, analysis output, validation acceptance, telemetry health diagnostic, and run-lock operation. |
 | `080-TELEMETRY-REPLAY-AC-001` | Trace IDs, span IDs, sampling decisions, exporter state, Collector state, backend telemetry IDs, runtime duration, and dropped telemetry counts are excluded from authoritative domain replay checksums unless explicitly included for telemetry health diagnostics by `140` and manifest refs. |
-| `080-RUNLOCK-REPLAY-AC-001` | Replay missing `030.RunLockOperationEvidence`, stale recovery evidence, or commit guard refs for a lock-governed output fails with `REPLAY_INPUT_INSUFFICIENT` before output. |
+| `080-RUNLOCK-REPLAY-AC-001` | `val-080-runlock-replay-missing-evidence` proves replay of lock-governed output fails with `REPLAY_INPUT_INSUFFICIENT` before output when required `RunLockLeasePolicy`, `RunLockSet`, operation evidence, recovery evidence, commit guard, fencing token, idempotency key, lifecycle transition, or `VersionManifest` refs are missing, stale, checksum-mismatched, package-set-mismatched, or unmanifested. |
 | `080-REPLAY-PRECEDENCE-AC-001` | Replay rejects missing, mutable-only, retention-ineligible, schema-incompatible, authority-mismatched, temporal-mismatched, side-effect-mismatched, or checksum-mismatched inputs according to global precedence before output. |
 | `080-GRAPH-HANDOFF-AC-001` | Every correction graph handoff effect is emitted as metadata only, and `080` performs no graph mutation. |
 | `080-SOURCE-CLOSURE-GOLD-AC-001` | Missing `AbsenceDerivationResult` blocks absence-sensitive `GoldFact` output. |

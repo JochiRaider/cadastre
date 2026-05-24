@@ -946,6 +946,23 @@ ActivatePackageSet(candidate_set, current_active_set):
 21. Do not mark LastKnownGoodPackageSet until every required LastKnownGoodHealthGate passes.
 ```
 
+### RunLockPackageActivationValidationHandoff
+
+`val-100-runlock-package-activation-loss` must cover activation lock lost, stale guard, fenced token, lock recovered by another run, idempotency conflict, heartbeat uncertainty before active pointer write, and missing `VersionManifest` lock refs.
+
+Required expected result:
+
+| Effect class | Required behavior |
+| --- | --- |
+| current active package set | Remains active. |
+| candidate package set | Writes no production output. |
+| last-known-good marking | No LKG marking. |
+| rollback target | No rollback target mutation. |
+| package watermark | No package watermark advancement. |
+| failure evidence | `PackageActivationFailureEvent` includes imported `030` run-lock owner cause. |
+
+This handoff must not redefine `030` lease, heartbeat, stale recovery, fencing-token, idempotency, or commit-guard behavior.
+
 Telemetry packages are activation-controlled release units. `ActivatePackageSet` must verify that observability policy bundles, telemetry runtime distributions, and telemetry Collector deployment profiles cannot emit domain production records, cannot bypass `140.TelemetryNonAuthorityRule`, cannot weaken telemetry redaction, cannot permit unbounded metric attributes, cannot alter replay exclusion, cannot enable OpenTelemetry environment-driven egress, cannot enable metric exemplars, cannot expose raw trace/span IDs, cannot use `diagnostic_correlation_ref` as authority, cannot omit exporter numeric defaults before checksum computation, and cannot affect health outside `140.TelemetryRuntimeState` and `110.OperationalHealthStatus`.
 
 Version strings never authorize activation by themselves. Dependency locks never authorize activation by themselves. Emergency override records never satisfy package signature, trust, repository metadata, repository freshness, transparency, or anti-rollback verification for a new production activation.
@@ -1677,7 +1694,7 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-LIFECYCLE-AC-003` | Canary and shadow never mark last-known-good or advance watermarks. |
 | `100-LIFECYCLE-AC-004` | Rollback target must be an immutable verified manifest. |
 | `100-LIFECYCLE-AC-005` | Quarantine blocks dependent activation and cannot clear directly to active. |
-| `100-RUNLOCK-ACTIVATION-AC-001` | `val-100-runlock-package-activation-loss` proves the current active package set remains unchanged when activation lock is lost, stale, fenced, recovered by another run, or idempotency-conflicted. |
+| `100-RUNLOCK-ACTIVATION-AC-001` | `val-100-runlock-package-activation-loss` proves the current active package set remains unchanged, candidate output is not written, LKG marking is not changed, rollback target is not mutated, package watermark does not advance, and `PackageActivationFailureEvent` includes the imported `030` owner cause when activation lock is lost, stale, fenced, recovered by another run, idempotency-conflicted, heartbeat-uncertain before pointer write, or missing from `VersionManifest`. |
 
 ### Structured input materialization acceptance criteria
 
