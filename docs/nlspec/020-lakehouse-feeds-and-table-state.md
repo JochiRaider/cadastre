@@ -77,6 +77,8 @@ Define how Cadastre reads lakehouse-resident raw feeds, imports raw records, ref
 - `RawFeedManifestRuntimeStateSchema`
 - `LakehouseTableStateErrorRegistryFragment`
 - `FeedStageLifecycleEventDerivation`
+- `MVPSourceDatasetCatalogSupportingMaterialRequirement`
+- `MVPFeedCategoryClosureSupportingMaterialRequirement`
 
 ## Feed Read Contract
 
@@ -259,6 +261,32 @@ The MVP public source-dataset inventory is closed to the tokens in this table. P
 | `source_history` | Active catalog row may exist only as supporting evidence unless exact no-change closure exists. | `supporting_evidence_only`. | `[]` for gold output by default. | No no-change proof, disappearance proof, or negative output by silence or outside-window history. | `SOURCE_HISTORY_NO_CHANGE_PROOF_BLOCKED`. | Required for any future no-change proof: retention, coverage, staleness, completeness, authority, absence, validation, and manifest refs. | Required when package-supplied. | `120-SOURCE-DATASET-CATALOG-*`; `120-SOURCE-CLOSURE-*`; `120-COVERAGE-DOMAIN-*`. |
 | `future_reachability` | Exact deterministic block row required while `200` is `inactive_deferred`. | Inactive future-domain material or validation-only negative fixture input. | `[]`. | No production read target, fact, graph edge, graph property, API claim, package activation effect, or production reachability validation pass. | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN`. | None while deferred. | Required when package-supplied. | `120-SOURCE-DATASET-CATALOG-*`; reachability-prohibition rows. |
 
+### MVPSourceDatasetCatalogSupportingMaterialRequirement
+
+`MVPSourceDatasetCatalogSupportingMaterialRequirement` closes the source-dataset catalog as an active-or-blocked production input. It applies to every public dataset token in `MVPSourceDatasetCatalogClosureInventory` and to every dataset token referenced by feed profiles, mapping rows, source-authority rows, resolver handoffs, graph handoffs, analysis handoffs, API filters, validation fixtures, or package-supplied catalogs.
+
+For each in-scope dataset token, the supporting material must contain exactly one of the following:
+
+| Closure state | Required supporting material | Required production behavior |
+| --- | --- | --- |
+| `closed_active` | Selected `SourceDatasetCatalogRow` ref, selected row checksum, row-set ref, row-set checksum, lifecycle evidence, activation scope, validation refs, package refs when package-supplied, and `030.VersionManifest` refs. | Feed read/import and downstream handoffs may proceed only through the selected row. |
+| `closed_deterministically_blocked` | Selected `030.DeterministicActivationBlockRow` ref, block row checksum, block row-set checksum, mutation-prohibition refs, validation refs, package refs when package-supplied, and `030.VersionManifest` refs. | No read target, fact, correction, graph delta, cleanup, watermark, control pass/fail, no-change proof, API authorized-negative output, package activation effect, or validation acceptance may be emitted for the blocked effects. |
+| `blocked_todo` | `TODO: product governance must supply source-dataset row bytes and checksum`. | Promotion, feed read/import, mapping activation, source-authority closure, graph handoff, analysis handoff, API filtering, and validation acceptance must fail before output. |
+
+A row-set checksum, owner prose, validation summary, closure summary, package label, private binding, ADR, or research report must not substitute for selected row refs and row checksums.
+
+The closure inventory must be total over every `source_dataset` token used by `050`, `060`, `070`, `080`, `090`, `110`, `120`, `130`, and `140`. A downstream owner must import the selected `020.SourceDatasetCatalogRow` ref and checksum before it can infer source-dataset identity or source-dataset support.
+
+`future_reachability` remains deferred while `docs/deferred/200-future-reachability-analysis-domain.md` has status `inactive_deferred`. The active catalog must represent it only by an exact deterministic block row with `allowed_outputs = diagnostic_only`, no production read target, no fact output, no graph edge, no graph property, no API output, no package activation effect, and no production validation pass for reachability behavior.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `020-SOURCE-DATASET-CATALOG-AC-005` | `ValidateSpecSet` fails when any implementation-scoped `source_dataset` token lacks exactly one active source-dataset row or exactly one active deterministic block row. |
+| `020-SOURCE-DATASET-CATALOG-AC-006` | `ValidateSpecSet` fails when a selected source-dataset row or block row lacks validation refs, package refs when package-supplied, or `030.VersionManifest` requirements. |
+| `020-SOURCE-DATASET-CATALOG-AC-007` | `ValidateSpecSet` fails when `future_reachability` resolves to anything other than a deterministic block row while `200` remains `inactive_deferred`. |
+
 ### LakehouseFeedScopeSelectorContext
 
 `LakehouseFeedScopeSelectorContext` is the owner context family for `020` feed scopes. It instantiates `030.ScopeSelectorContext`; it does not define selector schema, equality, coverage, subset matching, specificity, or ambiguity behavior.
@@ -375,6 +403,37 @@ The active `LakehouseFeedCategoryClosureRowSet` must contain exactly one row for
 | Category outside MVP but known to the table | Use `category_activation_state = deterministically_blocked` or `category_activation_state = active_positive_only` with all absence-sensitive effects blocked. |
 | Missing row for any known category | Must not mean positive-only, absence, cleanup, graph expiry, retraction, or watermark permission. |
 | Deterministic block row selected | Emit no raw-import side effect beyond owner-declared diagnostics and mutation-prohibition evidence for absence-sensitive effects. |
+
+### MVPFeedCategoryClosureSupportingMaterialRequirement
+
+`MVPFeedCategoryClosureSupportingMaterialRequirement` closes the feed-category closure catalog as a total active-or-blocked map.
+
+For every row in `LakehouseFeedCategoryClosureRequirementTable`, the active feed-category closure row set must contain exactly one selected category closure row or exactly one deterministic block row. The selected row must define a total effect map for the following effects:
+
+```text
+absence
+cleanup
+retraction
+graph_expiry
+watermark
+```
+
+| Effect map cell | Required behavior |
+| --- | --- |
+| Effect is allowed | The row must name the exact `060` closure refs, required completeness/coverage/staleness/progress refs, validation refs, package refs when package-supplied, and manifest refs. |
+| Effect is unsupported | The row must name an exact deterministic block row and mutation-prohibition refs. |
+| Effect is omitted | Omission is invalid. The row fails validation before feed activation. |
+| Effect contains `TODO:` | The row resolves to `blocked_todo` and blocks promotion. |
+
+A feed-category closure row must not infer effect support from feed category name, source category name, dataset token, package type, validation summary, private binding, or owner prose.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `020-FEED-CLOSURE-AC-005` | `ValidateSpecSet` fails when any category in `LakehouseFeedCategoryClosureRequirementTable` lacks exactly one active closure row or deterministic block row. |
+| `020-FEED-CLOSURE-AC-006` | `ValidateSpecSet` fails when any selected feed-category row lacks a total map over `absence`, `cleanup`, `retraction`, `graph_expiry`, and `watermark`. |
+| `020-FEED-CLOSURE-AC-007` | `ValidateSpecSet` fails when category closure supporting material lacks exact `120` validation refs, package refs when package-supplied, or `030.VersionManifest` requirements. |
 
 ### Concrete Source Dataset and Feed Category Catalog Materialization Plan
 

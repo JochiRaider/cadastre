@@ -147,6 +147,35 @@ Consequences:
 | `RES-018-postgresql-apache-age-implementation.md` | Research report on PostgreSQL/AGE implementation refinement. | Supporting evidence for owner-spec PostgreSQL relational and AGE validation gaps. | Runtime authority, package-set authority, validation pass evidence, benchmark proof, restore proof, upgrade proof, or default backend authority by itself. |
 | Implementation repository files, when present | Code, package structure, local module names, tests, comments. | May map implementation objects to domain terms after exact inspection. | Defining Cadastre domain concepts by package/module/table/route names. |
 
+### ActivationCatalogVocabularyRouting
+
+`domain.md` routes activation-catalog vocabulary only. It must not mark a closure family behaviorally closed unless `000`, the owner spec, and `120` agree for the same selected production scope and `SpecSetVersion`.
+
+| closure_family | Domain term route | Owner spec | Non-authority rule |
+| --- | --- | --- | --- |
+| `source_dataset_catalog` | Source dataset identity and public dataset token routing. | `020` | Domain vocabulary must not imply selected row refs or dataset support. |
+| `feed_category_closure` | Feed category and effect vocabulary. | `020` | Domain vocabulary must not imply absence, cleanup, retraction, graph expiry, or watermark support. |
+| `source_authority_closure` | Source authority, coverage, staleness, completeness, and absence vocabulary. | `060` | Domain vocabulary must not authorize facts, negative output, cleanup, graph expiry, or watermark advancement. |
+| `ocsf_mapping_closure` | External schema and OCSF mapping vocabulary. | `050` | Domain vocabulary must not select OCSF classes, enum behavior, extension handling, or `cadastre_only` fallback. |
+| `source_extension_closure` | Source-extension field vocabulary. | `050` | Domain vocabulary must not permit extension fields. |
+| `resolver_catalog_closure` | Identity resolver and target-selector vocabulary. | `070` | Domain vocabulary must not create, attach, merge, split, reject, score, or review identity. |
+| `gold_fact_predicate_catalog_closure` | Gold predicate vocabulary. | `080` | Domain vocabulary must not compute fact keys or authorize predicate output. |
+| `gold_structured_value_schema_closure` | Structured object/value vocabulary. | `080` | Domain vocabulary must not define enum values, scalar bounds, normalization, or schema checksums. |
+| `temporal_policy_closure` | Temporal policy and correction vocabulary. | `080` | Domain vocabulary must not select time inputs, fallbacks, corrections, or replay behavior. |
+| `replay_output_class_closure` | Replay output-class vocabulary. | `080` | Domain vocabulary must not define replay checksum fields. |
+| `graph_active_profile_closure` | Graph edge/profile semantic vocabulary. | `090` | Domain vocabulary must not activate graph edges, properties, traversal, or pathfinding. |
+| `graph_backend_selection_closure` | Graph backend vocabulary. | `090` | Domain vocabulary must not select a backend or authorize graph mutation/query serving. |
+| `package_type_policy_closure` | Package type policy vocabulary. | `100` | Domain vocabulary must not activate packages or infer package policy defaults. |
+| `package_deprecation_policy_closure` | Package deprecation vocabulary. | `100` | Domain vocabulary must not invent deprecation windows. |
+| `package_release_manifest_closure` | Package release vocabulary. | `100` | Domain vocabulary must not treat package artifacts or versions as activation targets. |
+| `production_package_set_manifest_closure` | Package-set activation vocabulary. | `100` | Domain vocabulary must not activate package sets. |
+| `generated_error_registry_closure` | Error and visible diagnostic vocabulary. | `110` | Domain vocabulary must not define generated error registry bytes or visible error selection. |
+| `analysis_registry_closure` | Analysis, enrichment, lineage, and registry vocabulary. | `130` | Domain vocabulary must not make analysis or registry outputs authoritative. |
+| `observability_telemetry_closure` | Telemetry and observability vocabulary. | `140` | Domain vocabulary must not make telemetry domain authority or export behavior active. |
+| `validation_acceptance_closure` | Validation and acceptance vocabulary. | `120` | Domain vocabulary must not pass validation or acceptance. |
+
+Any mismatch between a domain status statement, owner closure state, and `120` validation row status must emit `DOMAIN_OWNER_STATUS_CONTRADICTION`. `domain.md` must not resolve the mismatch. The owner spec must add an owner-local `TODO:` or `120` must record a validation failure.
+
 ## 6. Domain inclusion rule
 
 A term belongs in root `domain.md` when misunderstanding it would cause an implementer, reviewer, specification author, or coding agent to build the wrong behavior, address the wrong owner contract, mutate the wrong source of truth, collapse distinct concepts, or write misleading specification text.

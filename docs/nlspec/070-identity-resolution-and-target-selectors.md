@@ -88,6 +88,7 @@ Define canonical identity behavior, resolver determinism, manual review, split b
 - `ResolverExplanationPolicy`
 - `ResolverActivationReportPolicy`
 - `TargetSelectorSafetyPolicyRowSet`
+- `MVPResolverCatalogClosureInventory`
 
 ### Exported resolver artifact aliases
 
@@ -264,6 +265,40 @@ The MVP resolver activation catalog is not a separate runtime authority. It is t
 | shadow/canary output | `ResolverShadowRun` | required only when promotion uses shadow or canary; omission blocks promotion |
 
 The catalog closure check must execute after profile row selection and before candidate generation. A catalog member must not be inferred from package type labels, owner prose, research reports, implementation defaults, or another artifact with a similar name.
+
+### MVPResolverCatalogClosureInventory
+
+`MVPResolverCatalogClosureInventory` is the materialization inventory for resolver artifact families. Each row family below must resolve to `closed_active`, `closed_deterministically_blocked`, or an owner blocking state before any production identity evidence candidate, identity mutation, review case, resolver explanation, split handoff, or target-selector effect is visible.
+
+| Resolver artifact family | Required closure material |
+| --- | --- |
+| `ResolverProfileRowSet` | Selected profile refs/checksums, row-set checksum, lifecycle refs, validation refs, package refs when package-supplied, and manifest refs. |
+| `IdentifierEvidenceClassRowSet` | Selected evidence-class refs/checksums, role authority, durability, reuse-risk, source-scope, validation, package, and manifest refs. |
+| `IdentifierScopeRowSet` | Selected scope refs/checksums, canonicalization refs, coverage refs, validation, package, and manifest refs. |
+| `CandidateGenerationProfile` | Selected candidate-generation profile ref/checksum, blocker key refs, candidate caps, overflow behavior, learned-artifact policy, validation, package, and manifest refs. |
+| `IdentityHardBlockerRowSet` | Selected hard-blocker row refs/checksums, precedence refs, validation, package, and manifest refs. |
+| `AssetGenerationBoundaryRowSet` | Selected lifecycle/generation boundary refs/checksums, validation, package, and manifest refs. |
+| `ResolverDecisionMatrixRowSet` | Selected decision rows/checksums, output state refs, review/no-decision behavior, validation, package, and manifest refs. |
+| `IdentityConfidenceBandRowSet` | Selected confidence-band refs/checksums, decimal precision, validation, package, and manifest refs. |
+| `IdentityReviewRoutingPolicy` | Selected routing policy refs/checksums, review state machine refs, validation, package, and manifest refs. |
+| `IdentitySplitPolicy` | Selected split policy refs/checksums, graph correction handoff refs, validation, package, and manifest refs. |
+| `ResolverExplanationPolicy` | Selected explanation policy refs/checksums, replay checksum refs, validation, package, and manifest refs. |
+| `ResolverActivationReportPolicy` | Selected activation report policy refs/checksums, scenario output checksums, shadow/canary refs, validation, package, and manifest refs. |
+| `TargetSelectorSafetyPolicyRowSet` | Selected target-selector policy refs/checksums, selector mechanism refs, validation, package, and manifest refs. |
+| `ResolverActivationReport` | Exact activation report ref/checksum and scenario outputs for the selected resolver scope. |
+| `ResolverShadowRun` | Exact shadow-run ref/checksum when activation, canary, or replay requires comparison. |
+
+Unsupported resolver scopes must close through deterministic block rows. A resolver deterministic block row must emit no identity evidence candidate, no canonical entity mutation, no source-asset mutation, no identifier mutation, no review case, no graph correction handoff, and no downstream graph effect.
+
+Concrete resolver row bytes, activation report bytes, shadow run bytes, expected explanation bytes, and expected output checksums are supporting material. If unavailable, the applicable inventory row must contain `TODO: product governance must supply resolver artifact bytes and checksum` and must block promotion.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `070-RESOLVER-CATALOG-CLOSURE-AC-001` | `ValidateSpecSet` fails when any resolver artifact family above is in implementation scope and lacks `closed_active`, `closed_deterministically_blocked`, or an owner blocking state. |
+| `070-RESOLVER-CATALOG-CLOSURE-AC-002` | `ValidateSpecSet` fails when a resolver artifact family lacks selected refs/checksums, validation refs, package refs when package-supplied, activation report or shadow-run refs when required, or `030.VersionManifest` refs. |
+| `070-RESOLVER-CATALOG-CLOSURE-AC-003` | A resolver block row passes only when mutation-prohibition fixtures prove no identity candidate, identity mutation, review case, graph correction handoff, or downstream graph effect. |
 
 ### MVPResolverCatalogClosurePack
 

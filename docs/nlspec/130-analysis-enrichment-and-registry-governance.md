@@ -76,6 +76,7 @@ Define non-authoritative analysis outputs, enrichment records, lineage mapping, 
 - `CreateRiskAcceptance`
 - `ValidateAnalysisQueryImport`
 - `AnalysisRegistryArtifactLifecycleGuardRows`
+- `AnalysisRegistryClosureMaterialization`
 
 ## Non-Authority Rule
 
@@ -545,6 +546,39 @@ Analysis, enrichment, lineage, and registry activation-controlled artifacts use 
 | `RegistryCustomPropertySchema` | Namespace, property path, scalar type, cardinality, explicit bounds, redaction class, allowed targets, authority effect, and validation refs pass. | Missing bounds, invalid redaction, or authority effect without owner interface. |
 | `RegistryClassificationPolicy` | Label namespace, allowed labels, attachment targets, redaction/export effects, authority effect, and validation refs pass. | Classification attempts authority without owner interface. |
 | `ThreatIntelDistributionMappingPolicy` | Distribution mapping is total for active profile values and redaction/export behavior passes. | Unmapped distribution or export of restricted values. |
+
+### AnalysisRegistryClosureMaterialization
+
+`AnalysisRegistryClosureMaterialization` closes analysis, enrichment, lineage, registry, and derived-edge row families as activation-controlled output-affecting catalogs. Each row family must resolve to exactly one active row set or exactly one deterministic block row for the selected scope before execution, output visibility, validation acceptance, telemetry-visible diagnostics, or API/export output.
+
+| Row family | Required selected material |
+| --- | --- |
+| `AnalysisRuleBundle` | Selected bundle refs/checksums, lifecycle refs, graph compatibility refs, validation refs, package refs when package-supplied, redaction refs, generated error refs when visible, and manifest refs. |
+| `AnalysisRuleRowSet` | Selected rule refs/checksums, query target refs, read-only proofs, validation refs, and manifest refs. |
+| `RuleGraphCompatibilityMatrix` | Selected graph projection, edge semantics, traversal, output eligibility, query translation, derived-view lag, authorization, redaction, expected query checksum, expected result checksum, mutation-prohibition proof, validation, package, and manifest refs. |
+| `DerivationRuleBundle` | Selected derivation-rule refs/checksums and `080` handoff refs proving gold output can occur only through `080`. |
+| `DerivedGraphEdgeRuleSet` | Selected derived-edge rule refs/checksums, supporting fact refs, graph profile refs, effect-routing refs, validation refs, package refs, and manifest refs. |
+| `ThreatIntelEnrichmentProfile` | Selected profile refs/checksums, enrichment-only refs, distribution mapping refs, validation refs, redaction refs, package refs, and manifest refs. |
+| `ThreatIntelDistributionMappingPolicy` | Selected distribution mapping refs/checksums, redaction/export behavior refs, validation refs, and manifest refs. |
+| `ThreatIntelArtifactRef` | Immutable artifact refs/checksums, redaction refs, validation refs, package refs when package-supplied, and manifest refs. |
+| `LineageFacetMappingPolicy` | Selected facet mapping refs/checksums, immutable schema URL refs, schema byte checksums, collision behavior, validation refs, redaction refs, and manifest refs. |
+| `ArtifactClassPolicyRowSet` | Selected artifact-class policy refs/checksums, substitution rejection refs, validation refs, package refs when package-supplied, and manifest refs. |
+| `RegistryArtifactGovernance` | Selected governance refs/checksums, owner/domain/classification/glossary/policy/approval/lifecycle refs, validation refs, package refs, and manifest refs. |
+| `RegistryCustomPropertySchema` | Selected schema refs/checksums, namespace/path/type/cardinality/bounds/redaction/target refs, validation refs, package refs, and manifest refs. |
+| `RegistryClassificationPolicy` | Selected policy refs/checksums, label namespace, allowed labels, redaction/export effects, validation refs, package refs, and manifest refs. |
+| `AnalysisReplayFieldSelectionRow` | Selected replay field-selection refs/checksums, included/excluded field refs, validation refs, package refs when package-supplied, and manifest refs. |
+
+Analysis and registry deterministic block rows must emit no fact, identity mutation, source authority effect, source completeness effect, graph mutation, package activation effect, watermark effect, remediation effect, or authorized-negative API label. A block row may emit only owner diagnostics when generated error registry and redaction refs are valid.
+
+Concrete row bytes, fixture bytes, expected output bytes, expected error bytes, mutation-prohibition proofs, redaction refs, generated error registry bytes, package-set refs, and manifest refs are supporting material. Missing material must be represented by `TODO: product governance must supply analysis or registry closure bytes and checksum` and must resolve to `blocked_todo`.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `130-ANALYSIS-REGISTRY-CLOSURE-AC-001` | `ValidateSpecSet` fails when any analysis, enrichment, lineage, registry, derived-edge, or replay field-selection row family in implementation scope lacks exactly one active row set or deterministic block row. |
+| `130-ANALYSIS-REGISTRY-CLOSURE-AC-002` | `ValidateSpecSet` fails when selected rows lack redaction refs, package-set refs when package-supplied, generated error refs when visible, validation refs, mutation-prohibition proofs where needed, or `030.VersionManifest` refs. |
+| `130-ANALYSIS-REGISTRY-CLOSURE-AC-003` | Validation fails when analysis, enrichment, lineage, registry, or derived-edge rows become implicit authority or backend query behavior without the exact owner handoff refs. |
 
 ## Analysis, Enrichment, and Registry Contract Details
 

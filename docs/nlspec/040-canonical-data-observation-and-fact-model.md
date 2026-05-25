@@ -72,6 +72,7 @@ Own Cadastre core record shapes, scalar rules, identifiers, omission states, evi
 - `EvidenceArtifactIdKindRegistry`
 - `EvidenceArtifactClassRegistry`
 - `ComputeEvidenceRefId`
+- `ActivationCatalogCoreRecordHandoff`
 
 ### Exported schema aliases
 
@@ -177,6 +178,27 @@ A non-null `GoldFact.absence_outcome` is schema-valid only when the producing ru
 `040` does not evaluate source authority. `040` validates only that `absence_outcome` is null or one closed `FactAbsenceOutcome` token and that producer ownership is `060` for non-null values.
 
 `authorized_absent` and `authorized_not_observed` must not be rendered, projected, exported, or audited as authorized negative output unless `060.AbsenceDerivationResult.absence_authorized = true` and the requested effect, predicate, and scope permit the output.
+
+### ActivationCatalogCoreRecordHandoff
+
+`ActivationCatalogCoreRecordHandoff` prevents core record validation from becoming a loophole for unresolved activation-controlled row catalogs. A core record that carries owner-dependent semantics is schema-valid only when the producing `030.VersionManifest` includes the owner refs required by that semantic class.
+
+| Core record or field | Required owner closure refs before persistence | Required failure behavior |
+| --- | --- | --- |
+| `GoldFact` | Selected `080.GoldFactPredicateContractRow` ref/checksum, selected structured value schema refs when applicable, selected `060` authority refs, selected `060.AbsenceDerivationResult` refs when `absence_outcome` is non-null, temporal resolution refs, validation refs, package refs when package-supplied, and manifest refs. | Reject before `gold_fact_key_id` or `gold_fact_id` persistence when refs are missing, unresolved, mismatched, blocked, or `TODO:`. |
+| `EvidenceRef` | Selected `EvidenceArtifactClassRegistry` and `EvidenceArtifactIdKindRegistry` rows, artifact class/kind closure refs, checksum refs, validation refs, and manifest refs. | Reject checksummed evidence output when artifact class/kind rows are unresolved. |
+| `GraphNodeDeltaShape` and `GraphEdgeDeltaShape` | Selected `090.GraphEdgeSemantics` refs, graph projection refs, output eligibility refs, property evidence refs, source-authority refs when expiry/cleanup is possible, validation refs, package refs when package-supplied, and manifest refs. | Reject before graph-delta ID computation and before graph delta persistence. |
+| `CoreOneOfRegistry` usage | Selected one-of registry rows and validation rows required by `000-CORE-ONEOF-CLOSURE-AC-001`. | Reject before persistence when one-of closure rows are unresolved, ambiguous, inactive, checksum-mismatched, or `TODO:`. |
+
+`040` does not evaluate source authority, identity, temporal policy, graph projection, package activation, API rendering, or validation acceptance. It validates only that the owner-dependent refs required by the core record shape are present, closed, checksum-valid, and manifest-included before the core record can be persisted or used as an input to another owner.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `040-ACTIVATION-CATALOG-CORE-HANDOFF-AC-001` | `CoreRecordValidationAlgorithm` fails a `GoldFact` whose predicate, structured schema, authority, absence, or temporal owner refs are missing from the producing `VersionManifest`. |
+| `040-ACTIVATION-CATALOG-CORE-HANDOFF-AC-002` | `CoreRecordValidationAlgorithm` fails `EvidenceRef` output when artifact class/kind closure rows are unresolved or absent. |
+| `040-ACTIVATION-CATALOG-CORE-HANDOFF-AC-003` | `CoreRecordValidationAlgorithm` fails graph delta shape records before ID computation when `090` semantic closure refs are missing. |
 
 ### CoreStateApiHandoff
 

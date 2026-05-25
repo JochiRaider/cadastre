@@ -74,6 +74,8 @@ Define temporal semantics, bitemporal facts, late arrivals, corrections, replay 
 - `MVPGoldFactPredicateContractRowSetClosure`
 - `MVPGoldFactStructuredValueSchemaCatalog`
 - `GoldFactPredicateBlockRowSemantics`
+- `MVPGoldPredicateClosureMaterializationTable`
+- `ReplayOutputClassClosureRows`
 
 ## Temporal Axes
 
@@ -308,6 +310,50 @@ The active row inventory above is total for MVP positive predicate selection. A 
 | `gfp-block-source-history-no-change-v1` | Source-history no-change, disappearance, or outside-window negative proof without exact source-history closure rows | Emit no fact, no correction, no no-change proof, no cleanup, no graph expiry, no watermark, and no compliance negative output. |
 
 A deterministic block row is selected only for its exact blocked family. It must not act as a wildcard row for unrelated predicates. Selection of a block row must produce explicit no-output evidence and mutation-prohibition evidence, and that evidence must be manifest-included before validation acceptance can pass.
+
+### MVPGoldPredicateClosureMaterializationTable
+
+`MVPGoldPredicateClosureMaterializationTable` is the materialization inventory for MVP predicate closure. It must account for the current closure claim of 18 active predicate rows and 6 deterministic predicate block rows. The exact predicate row bytes, row IDs, structured schema bytes, fixture bytes, expected output bytes, and checksums are supporting material and are not supplied by this core text.
+
+| Closure item | Required materialization |
+| --- | --- |
+| 18 active MVP predicate rows | Selected `GoldFactPredicateContractRow` refs/checksums, row-set checksum, selected structured value schema refs, source dataset refs, source-authority closure refs, temporal policy refs, validation refs, package-set refs when package-supplied, generated error refs when visible, and manifest refs. |
+| 6 deterministic predicate block rows | Exact `GoldFactPredicateBlockRowSemantics` refs/checksums, deterministic block row refs, mutation-prohibition refs, validation refs, package-set refs when package-supplied, generated error refs when visible, and manifest refs. |
+| Structured value schema rows | Concrete enum values, scalar bounds, normalization rules, fixture refs, expected output checksums, and schema row checksums. |
+| Authority handoffs | Selected `020.SourceDatasetCatalogRow` refs and selected `060` authority/absence closure refs for every predicate that can consume source authority or absence. |
+| Temporal handoffs | Selected temporal, knowledge-time, correction, late-arrival, replay, and event-sequence refs for predicates whose output can affect time, correction, replay, graph handoff, API/export, or validation acceptance. |
+
+For every structured value schema row with unresolved enum values, scalar bounds, normalization rules, fixtures, expected output checksums, or package-set refs, the owner materialization must choose exactly one state:
+
+| State | Required behavior |
+| --- | --- |
+| Concrete schema row supplied | The row must include selected schema ref, row checksum, row-set checksum, normalization rules, fixture checksum, expected output checksum, validation refs, package refs when package-supplied, and manifest refs. |
+| Deterministic predicate block row supplied | The block row must prevent `gold_fact_key_id` computation for that predicate and prove no fact, correction, graph handoff, watermark, API/export fact output, or validation acceptance is emitted. |
+
+A missing concrete row must be represented by `TODO: product governance must supply gold predicate row bytes, structured schema bytes, fixture bytes, expected output bytes, and checksum` and must resolve to `blocked_todo`.
+
+### ReplayOutputClassClosureRows
+
+`ReplayOutputClassClosureRows` closes every replay output class that can affect gold output, graph handoff, graph rebuild, analysis output, validation acceptance, API output, export output, audit reconstruction, or package-visible diagnostics.
+
+| Replay output class | Required owner row refs |
+| --- | --- |
+| `gold_fact_output` | Predicate row refs, structured schema refs, source-dataset refs, authority refs, temporal refs, correction refs, validation refs, and expected output checksum refs. |
+| `graph_handoff_output` | Predicate row refs, `GoldFactChangeSet` refs, `090` handoff refs, source-authority refs when graph expiry/cleanup is possible, validation refs, and expected output checksum refs. |
+| `graph_rebuild_output` | `090.GraphRebuildEquivalencePolicy` refs, graph profile refs, backend schema refs, derived-view refs, validation refs, and expected output checksum refs. |
+| `analysis_output` | `130.AnalysisReplayFieldSelectionRow` refs, rule bundle refs, graph compatibility refs, authorization/redaction refs, validation refs, and expected output checksum refs. |
+| `validation_acceptance_output` | `120.ValidationMatrix` refs, fixture checksums, expected output/error checksums, mutation-prohibition refs, package-set refs when applicable, and acceptance report refs. |
+| `api_export_output` | `110` endpoint, redaction, authorization, generated error registry, page token, state label, and owner refs required for visible output. |
+
+A replay output class row with missing owner field-selection rows, fixture checksums, expected output checksums, validation refs, package-set refs, manifest refs, or `TODO:` values must fail `ReplayInputSufficiencyCheck` before output.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `080-GOLD-PREDICATE-MATERIALIZATION-AC-001` | `ValidateSpecSet` fails when the MVP predicate closure claim lacks 18 active predicate rows and 6 deterministic block rows, or when any selected row lacks refs, checksums, validation, package, or manifest requirements. |
+| `080-STRUCTURED-SCHEMA-MATERIALIZATION-AC-001` | `ValidateSpecSet` fails when any structured schema row is unresolved and no deterministic predicate block row prevents fact-key computation. |
+| `080-REPLAY-OUTPUT-CLASS-CLOSURE-AC-001` | `ReplayInputSufficiencyCheck` fails before output when any replay output class row lacks exact owner field-selection refs, validation refs, package-set refs when applicable, or manifest refs. |
 
 ### MVPGoldFactStructuredValueSchemaCatalog
 

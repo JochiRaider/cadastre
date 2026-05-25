@@ -71,6 +71,7 @@ Define runtime telemetry signals, trace context propagation, telemetry correlati
 - `TelemetryNonAuthorityRule`
 - `EmitTelemetry`
 - `ValidateTelemetryProfile`
+- `ObservabilityActivationCatalogClosure`
 
 ## Telemetry Non-Authority
 
@@ -128,6 +129,37 @@ A profile that requires production export must include an active `TelemetryExpor
 | replay exclusion policy | `field_class`, `output_class` | `stage_class` | none | Determines telemetry replay exclusion only. |
 
 Telemetry selector matches determine telemetry emission, export, and health-mapping eligibility only. They must not affect domain outputs, replay checksums for non-telemetry output, watermarks, graph apply, package activation, identity, facts, completeness, source authority, or source absence.
+
+### ObservabilityActivationCatalogClosure
+
+`ObservabilityActivationCatalogClosure` closes observability row families as active, explicitly disabled, or deterministically blocked. Telemetry disabled is an explicit selected state, not omission.
+
+| Observability row family | Required selected material |
+| --- | --- |
+| `ObservabilityInstrumentationProfile` | Selected profile ref/checksum, telemetry-enabled or telemetry-disabled state, lifecycle refs, validation refs, package refs when package-supplied, and manifest refs. |
+| `TelemetrySignalPolicy` | Selected signal policy refs/checksums for every enabled signal token, validation refs, and manifest refs. |
+| `TelemetryCorrelationPolicy` | Selected correlation policy refs/checksums, diagnostic correlation algorithm refs, redaction refs, validation refs, and manifest refs. |
+| `MetricInstrumentCatalog` | Selected metric catalog ref/checksum, bounded instrument set refs, validation refs, and manifest refs. |
+| `MetricInstrumentRow` | Selected metric row refs/checksums, unit/type/attribute/cardinality refs, validation refs, and manifest refs. |
+| `TelemetryAttributePolicy` | Selected attribute policy refs/checksums, retention/rejection/redaction refs, validation refs, and manifest refs. |
+| `TelemetryRedactionPolicy` | Selected telemetry redaction refs/checksums, data-class refs, validation refs, and manifest refs. |
+| `TelemetryExporterProfile` | Selected exporter profile refs/checksums when external export is enabled or required, retry/queue/batch/shutdown refs, validation refs, package refs, and manifest refs. |
+| `TelemetryHealthMappingPolicy` | Selected health mapping refs/checksums, owner-visible condition refs, generated error refs when visible, validation refs, and manifest refs. |
+| `TelemetryReplayExclusionPolicy` | Selected replay exclusion refs/checksums for telemetry volatile fields, validation refs, and manifest refs. |
+
+An omitted exporter profile means export is disabled only when the selected `ObservabilityInstrumentationProfile` explicitly permits local validation-only diagnostics and no external export. If the selected profile requires export, exporter omission must resolve to the owner missing-ref or blocked telemetry error before health/API/audit/validation output uses telemetry state.
+
+A deterministic observability block row must emit no domain output mutation, source authority effect, identity effect, graph effect, package activation effect, replay checksum effect, watermark effect, or audit evidence substitution. It may emit only owner diagnostics when generated error registry, redaction, validation, and manifest refs are closed.
+
+Concrete telemetry row bytes, generated telemetry error registry bytes, fixture bytes, expected output/error bytes, package refs, and manifest refs are supporting material. Missing material must be represented by `TODO: product governance must supply observability closure bytes and checksum` and must block promotion.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `140-OBSERVABILITY-ACTIVATION-CATALOG-CLOSURE-AC-001` | `ValidateSpecSet` fails when telemetry-visible output is in scope and any required observability row family lacks exactly one active row, explicit disabled row, or deterministic block row. |
+| `140-OBSERVABILITY-ACTIVATION-CATALOG-CLOSURE-AC-002` | `ValidateSpecSet` fails when exporter omission is treated as disabled without an explicit selected instrumentation profile permitting local validation-only diagnostics and no external export. |
+| `140-OBSERVABILITY-ACTIVATION-CATALOG-CLOSURE-AC-003` | Validation fails when observability rows lack redaction refs, generated error refs when visible, validation refs, package refs when package-supplied, or `030.VersionManifest` refs. |
 
 ## Signal Policy
 

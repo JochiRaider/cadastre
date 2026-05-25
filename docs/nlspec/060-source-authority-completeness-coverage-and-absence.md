@@ -82,6 +82,7 @@ Define when Cadastre may treat observations, missing rows, stale states, control
 - `MVPGoldPredicateSourceAuthorityClosure`
 - `ExternalSchemaAuthoritySignalMappingRow`
 - `ExternalSchemaAuthoritySignalMappingRowSet`
+- `MVPSourceAuthorityClosureTupleInventory`
 
 ## Source Authority Contract
 
@@ -471,6 +472,53 @@ For every active `LakehouseFeedProfile` and requested absence-sensitive effect, 
 If the row chain is absent, ambiguous, inactive, checksum-mismatched, out of scope, stale, or unvalidated, the effect must not execute. The result must be `unknown`, `not_applicable`, `source_stale`, `no_op`, or the most specific deterministic error. It must not emit absence, cleanup, retraction, graph expiry, pass/fail, no-change proof, or watermark advancement.
 
 The matrix output must include the requested effect token, feed category, source dataset, selected `020.SourceDatasetCatalogRow` ref/checksum, selected row refs, row checksums, validation refs, package-set refs when package-supplied, blocking reason when blocked, and a `VersionManifest` ref. A closure validation result may be referenced by `030.VersionManifest`, but the underlying activation-controlled artifact refs and checksums remain required.
+
+### MVPSourceAuthorityClosureTupleInventory
+
+`MVPSourceAuthorityClosureTupleInventory` is the tuple-granular materialization inventory for source authority and absence-sensitive effects. `SourceAuthorityClosureMatrix` may summarize closure only after all underlying refs validate. It must not satisfy authority by itself.
+
+The tuple key is exactly:
+
+```text
+source_dataset_catalog_row_ref
+fact_type
+predicate
+source_category
+subject_scope_selector_checksum
+object_scope_selector_checksum
+subject_ref_kind
+object_value_kind
+structured_object_schema_ref_or_null
+staleness_policy_ref
+coverage_dimension_profile_refs
+requested_effect
+```
+
+For each tuple in implementation scope, the inventory must contain exactly one selected closure matrix row or exactly one deterministic block row. The selected row must name every consulted `060` row family.
+
+| Consulted row family | Required selected refs |
+| --- | --- |
+| Authority | Selected `SourceAuthorityProfileRow` ref/checksum and row-set checksum. |
+| Completeness | Selected `LakehouseFeedCompletenessProfileRow` refs/checksums and upstream evidence requirements. |
+| Coverage | Selected `CoverageDimensionProfile` refs/checksums and coverage-domain token checksum. |
+| Staleness | Selected `SourceStalenessPolicy` refs/checksums. |
+| Progress signal | Selected `ProgressSignalInterpretationPolicy` refs/checksums for every consulted progress, liveness, lineage, freshness, CDC, graph, source-history, destination-cleanup, or live-probe signal. |
+| Supplier visibility | Selected `SupplierCollectionVisibilityProfile` refs/checksums for permission-sensitive or visibility-sensitive effects. |
+| Control result | Selected `ControlResultMappingRow` refs/checksums when control output, pass/fail/not-checked, or compliance output is in scope. |
+| Source history retention | Selected `SourceHistoryRetentionProfile` refs/checksums when no-change proof or source-history outside-window behavior is consulted. |
+| Absence derivation | Selected `AbsenceDerivationPolicy` and `AbsenceDerivationResult` refs/checksums for absence-sensitive outcomes. |
+| External-schema authority signal | Selected `ExternalSchemaAuthoritySignalMappingRow` refs/checksums when normalized external-schema signals are consulted. |
+| Watermark policy | Selected `ProjectionWatermarkPolicy` refs/checksums when watermark advancement is requested. |
+
+A tuple whose concrete supporting rows are not supplied must be represented by `TODO: product governance must supply source-authority closure tuple row bytes and checksum` and must resolve to `blocked_todo`. A broad source category, source dataset token, completeness receipt, graph state, source-history label, external schema field, validation report, owner prose, or private binding must not substitute for selected tuple refs.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-001` | `ValidateSpecSet` fails when any source-authority tuple in implementation scope lacks exactly one selected closure matrix row or deterministic block row. |
+| `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-002` | `ValidateSpecSet` fails when a selected closure row omits any consulted underlying row family, selected row checksum, validation ref, package ref when package-supplied, or `030.VersionManifest` requirement. |
+| `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-003` | `ValidateSpecSet` fails when `SourceAuthorityClosureMatrix` is used as authority without validated underlying refs. |
 
 ### SourceAuthorityClosureMatrixRow schema
 

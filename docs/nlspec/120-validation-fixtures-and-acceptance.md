@@ -44,6 +44,7 @@ Define fixtures, validation matrices, golden corpus, shadow execution, replay va
 - `RunValidationMatrix`
 - `LifecycleValidationMatrix`
 - `ValidationAcceptanceLifecycleMachine`
+- `ActivationCatalogClosureValidationCoverageByFamily`
 
 ## Validation Ownership Rule
 
@@ -252,6 +253,59 @@ The rows below are required concrete validation row IDs for the source-dataset a
 | `120-GOLD-PREDICATE-CATALOG-AC-001` | Every MVP fact type and predicate resolves to exactly one active predicate row or exact deterministic block row, and all row refs, checksums, validation refs, structured schema refs, and package-set refs appear in `030.VersionManifest` when output-affecting. |
 
 `AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is `blocked`, `not_run`, `fail`, stale, checksum-mismatched, missing a required owner row, contains a `TODO` checksum, lacks package-set refs when package-supplied, lacks mutation-prohibition proof, or omits required `030.VersionManifest` refs. It is also forbidden when any activation-controlled row-schema precision row is blocked, not run, failed, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, owner-error-incomplete, or contains a required `TODO` fixture checksum, expected output checksum, expected error, row checksum, row-set checksum, or mutation-prohibition proof.
+
+#### ActivationCatalogClosureValidationCoverageByFamily
+
+`ActivationCatalogClosureValidationCoverageByFamily` is the executable validation coverage table for every closure family named by `000.ActivationCatalogClosureFamilyInventory`. A validation row may pass only when fixture checksum, expected output checksum or expected error checksum, mutation-prohibition proof, package-set refs when package-supplied, generated error refs when visible, and `030.VersionManifest` refs are concrete and non-`TODO`.
+
+Each closure family must have rows covering all required scenarios below.
+
+```text
+valid active row selection
+deterministic block row selection
+missing row
+ambiguous row
+inactive row
+checksum mismatch
+package-set omission when package-supplied
+manifest omission
+TODO-blocks-promotion
+private-binding leak when public bytes are involved
+no forbidden mutation for block, no-op, validation-failure, package-failure, and manifest-failure cases
+```
+
+| closure_family | Required validation row families | Owner specs |
+| --- | --- | --- |
+| `source_dataset_catalog` | `120-SOURCE-DATASET-CATALOG-*` | `020`, with handoffs in `050`, `060`, `070`, `080`, `090`, `110`, `120`, and `130`. |
+| `feed_category_closure` | `120-FEED-CLOSURE-*` | `020`, with effect handoffs in `060` and `090`. |
+| `source_authority_closure` | `120-SOURCE-CLOSURE-*`, `120-COVERAGE-DOMAIN-*`, `120-LAKEHOUSE-NONAUTH-*` | `060`, with shape handoffs in `040` and graph/API handoffs in `090` and `110`. |
+| `ocsf_mapping_closure` | `120-OCSF-MAP-*`, `120-OCSF-NONAUTH-*`, `120-OCSF-DIRECTION-*` | `050`, with authority/graph non-authority checks in `060` and `090`. |
+| `source_extension_closure` | `120-SOURCE-EXT-*` | `050`. |
+| `resolver_catalog_closure` | `120-IDENTITY-CLOSURE-*` | `070`. |
+| `gold_fact_predicate_catalog_closure` | `120-GOLD-PREDICATE-CATALOG-*` | `080`, with `040`, `060`, `070`, `090`, `100`, `110`, and `030` handoffs. |
+| `gold_structured_value_schema_closure` | `120-GOLD-PREDICATE-CATALOG-*` structured schema rows | `080`, with core one-of checks in `040`. |
+| `temporal_policy_closure` | `120-TEMPORAL-*`, `120-TEMPORAL-CORRECTION-LAKEHOUSE-*` | `080`, with table-state handoffs in `020`. |
+| `replay_output_class_closure` | `120-TEMPORAL-*`, `120-ANALYSIS-REPLAY-*`, `120-VERSION-MANIFEST-*` | `080`, `130`, `030`. |
+| `graph_active_profile_closure` | `120-GRAPH-PROFILE-CLOSURE-*` | `090`. |
+| `graph_backend_selection_closure` | `120-GRAPH-BACKEND-*`, `120-GRAPH-POSTGRES-*`, `120-GRAPH-AGE-*`, `120-GRAPH-BENCHMARK-*` | `090`, `100`, `110`, `140`. |
+| `package_type_policy_closure` | `120-PACKAGE-*` | `100`. |
+| `package_deprecation_policy_closure` | `120-PACKAGE-*` deprecation rows | `100`. |
+| `package_release_manifest_closure` | `120-PACKAGE-*` release manifest rows | `100`. |
+| `production_package_set_manifest_closure` | `120-PACKAGE-*` package-set manifest rows | `100`. |
+| `generated_error_registry_closure` | `120-ERROR-REGISTRY-*` | `110`, with owner fragments from all visible owner specs. |
+| `analysis_registry_closure` | `120-ANALYSIS-*`, `120-ANALYSIS-REPLAY-*`, `120-DERIVED-GRAPH-EDGE-*`, `120-LINEAGE-FACET-*`, `120-ARTIFACT-CLASS-POLICY-*`, `120-REGISTRY-*`, `120-130-MANIFEST-*` | `130`. |
+| `observability_telemetry_closure` | `120-OBSERVABILITY-*` | `140`, with visible diagnostic handoffs in `110`. |
+| `validation_acceptance_closure` | `120-VERSION-MANIFEST-*`, `val-000-activation-catalog-closure-pack-*`, owner family rows above | `120`, `000`, `030`. |
+
+Family-specific validation rows may retain `TODO:` fixture checksums, expected output checksums, expected error checksums, mutation-prohibition proofs, package-set refs, generated registry checksums, or manifest refs only as explicit blockers. A `TODO:` row must report `blocking_status = blocked` and must not contribute to `AcceptanceReport.result = pass`.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `120-ACTIVATION-CATALOG-COVERAGE-BY-FAMILY-AC-001` | `RunValidationMatrix` fails acceptance when any closure family in `000.ActivationCatalogClosureFamilyInventory` lacks rows for every required scenario listed in this section. |
+| `120-ACTIVATION-CATALOG-COVERAGE-BY-FAMILY-AC-002` | `AcceptanceReport.result = pass` is forbidden when any activation-catalog closure validation row is blocked, not run, failed, stale, checksum-mismatched, package-set-mismatched, manifest-incomplete, or `TODO:`-bearing. |
+| `120-ACTIVATION-CATALOG-COVERAGE-BY-FAMILY-AC-003` | Deterministic block, no-op, validation-failure, package-failure, and manifest-failure rows pass only when mutation-prohibition proofs cover every forbidden output class named by the owner spec. |
 
 ### ActivationControlledRowSchemaValidationMatrix
 

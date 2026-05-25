@@ -98,6 +98,7 @@ Define package artifact identity, release manifests, package-set activation, tru
 - `PackageActivationValidationMatrix`
 - `PackageErrorRegistryFragment`
 - `PackageTypePolicyResolutionResult`
+- `PackagePolicyClosureSupportingMaterialRequirement`
 
 ## Activation Unit
 
@@ -131,6 +132,42 @@ This section closes the package activation row-family interface. A package row f
 | `PackageActivationFailureEvent` | runtime failure evidence | `full_row_schema` | event ref/checksum, candidate package-set checksum, current active checksum, failed check, run-lock refs when applicable | Missing failure event blocks package-visible diagnostics and audit output when candidate activation fails. |
 
 Concrete package policy rows, trust-root rows, signer rows, deprecation rows, compatibility rows, release manifests, package-set manifests, and fixture bytes are supporting material. They must be registered artifacts before promotion. This core spec must not infer their repository paths, package namespaces, signer identities, trust roots, target environments, approval authorities, SBOM formats, provenance formats, deprecation durations, or compatibility pass/fail decisions.
+
+### PackagePolicyClosureSupportingMaterialRequirement
+
+`PackagePolicyClosureSupportingMaterialRequirement` closes package policy row families by package type and target environment. For every `PackageType` in implementation scope and every target environment in implementation scope, each required row family must resolve to exactly one selected active policy row or exactly one deterministic block row.
+
+| Required closure family | Required selected material |
+| --- | --- |
+| `PackageTypePolicyRow` | Selected policy row ref/checksum, row-set checksum, selector refs, validation refs, lifecycle refs, package-set refs when package-supplied, and manifest refs. |
+| `PackageDeprecationWindowPolicyRow` | Selected deprecation row ref/checksum by package type and target environment, validation refs, lifecycle refs, and manifest refs. |
+| `PackageRepositoryModelRow` | Selected repository model, metadata, snapshot, freshness proof, anti-rollback state, validation, and manifest refs. |
+| `PackageTrustPolicyRow` | Trust root, signer, threshold, rotation, compromise, signature verification, validation, and manifest refs. |
+| `PackageTransparencyEvidencePolicyRow` | Transparency proof, subject digest, provider support, validation, and manifest refs. |
+| `PackageProvenancePolicyRow` | Builder, material, product, attestation, subject-match, validation, and manifest refs. |
+| `PackageSBOMPolicyRow` | SBOM subject, component, dependency, license, vulnerability, validation, and manifest refs. |
+| `PackageDependencyLockPolicyRow` | Lock checksum, resolved dependency digest, live-resolution rejection, validation, and manifest refs. |
+| `PackageCompatibilityMatrixRow` | Compatibility refs for every required axis, validation refs, package-set refs, and manifest refs. |
+| `RollbackCompatibilityPolicy` | Immutable rollback target, replay, schema, graph, trust, quarantine, validation, and manifest refs. |
+| `QuarantineScopePolicy` | Quarantine scope, dependent activation blocking, quarantine record, validation, and manifest refs. |
+| `LastKnownGoodHealthGate` | Post-activation health refs, LKG marking refs, lifecycle refs, validation refs, and manifest refs. |
+| `EmergencyPackageOverrideRecord` | Bounded action, approver, expiry, audit, rollback/quarantine/retire refs, validation refs, and manifest refs. |
+| `PackageReleaseManifest` | Immutable release manifest ref/checksum and every supply-chain evidence ref required by selected package policies. |
+| `ProductionPackageSetManifest` | Active package-set ref/checksum, included release refs/checksums, selected policy refs, lifecycle refs, validation refs, rollback/quarantine/LKG refs, and manifest refs. |
+
+A package-supplied row catalog named by `020`, `050`, `060`, `070`, `080`, `090`, `110`, `120`, `130`, or `140` is unselectable unless the supplying `PackageReleaseManifest` and active `ProductionPackageSetManifest` are checksum-valid, lifecycle-valid, package-set-valid, validation-backed, and included in `030.VersionManifest`.
+
+A single artifact digest, version string, deployment label, mutable ref, scalar signature status, dependency lock, SBOM existence, provenance record, validation run, package label, owner prose, or registry summary must not act as a package activation target or a selected policy row.
+
+If concrete policy rows, release manifest bytes, package-set manifest bytes, fixture bytes, expected output bytes, package release refs, or production package-set refs are unavailable, the owner row must contain `TODO: product governance must supply package policy supporting material bytes and checksum` and must resolve to `blocked_todo`.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `100-PACKAGE-POLICY-CLOSURE-AC-001` | `ValidateSpecSet` fails when any package type and target environment in implementation scope lacks exactly one selected active policy row or deterministic block row for every required closure family above. |
+| `100-PACKAGE-SUPPLIED-CATALOG-CLOSURE-AC-001` | `ValidateSpecSet` fails when a package-supplied row catalog is selected without checksum-valid `PackageReleaseManifest`, active `ProductionPackageSetManifest`, validation refs, package-set refs, and `030.VersionManifest` refs. |
+| `100-PACKAGE-POLICY-TODO-BLOCK-AC-001` | Any required `TODO:` in policy rows, release manifests, package-set manifests, fixture checksums, expected output checksums, package refs, or manifest refs forces `blocked_todo` and blocks promotion. |
 
 ### PackageActivationDefaultFieldRule
 

@@ -112,6 +112,8 @@ Define deterministic execution order, output permissions, lifecycle machines, ru
 - `CompareScopeSpecificity`
 - `ResolveScopedRow`
 - `ScopeSelectorErrorCodeSet`
+- `ResolveActivationControlledCatalogFamily`
+- `DeterministicActivationBlockRow`
 
 ## Stage Graph Contract
 
@@ -911,6 +913,42 @@ ResolveScopedRow(candidate_rows, row_scope_field, request_scope, context, owner_
 
 Ambiguity is never resolved by lexical row ID, file order, package order, backend order, insertion order, validation report order, or implementation-local default.
 
+### ResolveActivationControlledCatalogFamily
+
+`ResolveActivationControlledCatalogFamily(row_family, request_scope, owner_predicates, requested_effect)` is the shared resolution surface for every activation-controlled row family that can affect production output, validation acceptance, package activation, API/export/health/audit visibility, telemetry-visible diagnostics, or graph/backend serving.
+
+Owner specs must supply the owner-local `ScopeSelectorContext`, owner-local non-scope predicates, owner missing-row error, owner ambiguity error, owner invalid-row errors, and owner deterministic block codes. Owner specs must not define alternate fallback logic, row-order tie breaks, private-binding behavior, checksum inputs, package-set handling, manifest omission behavior, or `TODO:` behavior.
+
+```text
+ResolveActivationControlledCatalogFamily(row_family, request_scope, owner_predicates, requested_effect):
+1. Validate row-set artifact ref, row-set checksum, lifecycle status, validation refs, package release refs, and package-set refs when package-supplied.
+2. Reject public bytes containing private binding values.
+3. Reject any output-affecting TODO field, checksum, fixture, expected output, expected error, validation ref, package ref, or manifest ref.
+4. Normalize request scope through the owner ScopeSelectorContext.
+5. Apply owner-local non-scope predicates before scope matching.
+6. Use ResolveScopedRow to select candidate active rows and deterministic block rows.
+7. If exactly one active non-block row covers the request, return closed_active.
+8. If zero active rows and exactly one deterministic block row covers the same tuple, return closed_deterministically_blocked.
+9. If zero rows and no deterministic block row, return the owner missing-row error.
+10. If more than one maximal row remains, return the owner ambiguity error.
+11. Persist selected row refs, row checksums, row-set checksum, selector checksums, validation refs, block refs, package refs, lifecycle evidence, owner errors, and runtime-state refs in VersionManifest before dependent output is visible.
+```
+
+Failure precedence is fixed across owners.
+
+| Precedence | Condition | Required result |
+| ---: | --- | --- |
+| 1 | Row-set artifact ref, checksum, lifecycle evidence, validation ref, package release ref, package-set ref, or manifest ref is invalid or missing. | Owner validation, package-set, checksum, or manifest error before row selection. |
+| 2 | Public row bytes contain a private binding value. | Owner private-binding leak error; no selected row. |
+| 3 | Any output-affecting selected row field, checksum, fixture, expected output, expected error, validation ref, package ref, or manifest ref contains `TODO:`. | `blocked_todo`; no owner output except allowed diagnostics. |
+| 4 | Owner-local non-scope predicate rejects a row. | Row is not a candidate; rejection does not become fallback authority. |
+| 5 | Exactly one active non-block row covers the request. | `closed_active`. |
+| 6 | Zero active rows and exactly one deterministic block row covers the same tuple. | `closed_deterministically_blocked`. |
+| 7 | Zero active rows and no deterministic block row covers the tuple. | Owner missing-row error. |
+| 8 | More than one maximal row remains. | Owner ambiguity error; row order must not break ties. |
+
+`VersionManifest` inclusion is a pre-output condition, not a post-output audit action. A dependent owner output that lacks the selected row refs, row checksums, row-set checksum, selector checksums, validation refs, deterministic block refs, package refs, lifecycle refs, generated error refs when visible, and runtime-state refs required by the owner must fail with `VERSION_MANIFEST_INCOMPLETE` or the more specific owner manifest code.
+
 ### Scope selector manifest requirements
 
 When a scoped row selection can affect output, `030.VersionManifest.included_refs` must include the selected row ref, selected row checksum, selected `ScopeSelectorContext.context_ref`, normalized request selector checksum, normalized selected row selector checksum, and activation artifact ref. Ambiguity diagnostics that affect a visible error, audit event, validation result, health output, package report, or replay result must include redacted selector checksums and context refs, not raw private selector values.
@@ -1238,6 +1276,29 @@ The generic activation-row error set is closed. Owner specs may define more spec
 | `ACTIVATION_ROW_UNKNOWN_FIELD` | Unknown field appears without a declared extension map. |
 | `ACTIVATION_ROW_EXTENSION_FORBIDDEN` | Extension field is present but not allowed, not typed, not bounded, not checksummed, or attempts to redefine stable behavior. |
 | `ACTIVATION_ROW_VERSION_MANIFEST_INCOMPLETE` | Required row refs, row checksums, row-set refs, selector checksums, validation refs, package-set refs, or lifecycle evidence refs are missing from `VersionManifest`. |
+
+### DeterministicActivationBlockRow
+
+`DeterministicActivationBlockRow` is the shared block-row interface for an intentionally unsupported activation-controlled row tuple. A deterministic block row proves that a requested tuple is closed as no-op, diagnostic-only, or owner error. It must not authorize mutation, absence, cleanup, graph expiry, retraction, watermark advancement, package activation, graph serving, identity mutation, fact creation, or user-facing authorized-negative output.
+
+| Field | Required behavior |
+| --- | --- |
+| `row_id` | Stable row ID scoped to the deterministic block row set. |
+| `row_version` | Immutable owner version included in row checksum. |
+| `row_family` | Exact closure-family token from `000.ActivationCatalogClosureFamilyInventory` or the owner row-family token that maps to it. |
+| `blocked_scope_selector` | `030.ScopeSelector` over the owner `ScopeSelectorContext`; private binding values are forbidden in public rows. |
+| `blocked_effects` | Canonical non-empty set of effects blocked by this row. Unknown effects fail row validation. |
+| `block_code` | Exact owner error or block token. Generic block codes are forbidden when an owner-specific code exists. |
+| `block_reason_class` | Closed owner token describing unsupported scope, deferred domain, validation-only profile, policy-disabled behavior, product-governance TODO, or package-set blocker. |
+| `allowed_outputs` | Defaults to `diagnostic_only`. Any value other than `diagnostic_only` must be explicitly allowed by the owner spec and validated by `120`. |
+| `mutation_prohibition_refs` | Non-empty refs proving no forbidden mutation for every blocked effect. |
+| `validation_refs` | Non-empty `120` refs covering deterministic block selection, no mutation, visible error/no-op behavior, package-set requirements when applicable, private-binding leak rejection, and manifest inclusion. |
+| `activation_scope` | `030.ActivationScope`; selected through the owner context before block behavior can affect output. |
+| `lifecycle_status` | Production use requires `active`. Inactive block rows do not close the tuple. |
+| `row_checksum` | SHA-256 over canonical row bytes after defaults materialize, excluding only `row_checksum`. |
+| `version_manifest_requirements` | `030.VersionManifest` must include block row ref, row checksum, row-set checksum, selector checksum, mutation-prohibition refs, validation refs, package refs when package-supplied, lifecycle refs, generated error refs when visible, and owner runtime-state refs. |
+
+A deterministic block row with missing validation refs, missing mutation-prohibition refs, missing manifest requirements, package-set mismatch, checksum mismatch, lifecycle status other than `active`, private-binding leak, or `TODO:` value must not produce `closed_deterministically_blocked`. It must resolve to the most specific owner blocker state before any dependent output.
 
 ## Structured Input Repository Contract
 

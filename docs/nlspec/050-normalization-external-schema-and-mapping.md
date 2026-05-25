@@ -70,6 +70,7 @@ Define how parsed raw records become silver observations and how external schema
 - `SourceExtensionFieldRuleSet`
 - `MVPStructuredGoldObjectMappingHandoff`
 - `MappingArtifactLifecycleGuardRows`
+- `MVPObservationOCSFMappingClosureInventory`
 
 ## Parser Contract
 
@@ -344,6 +345,42 @@ ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
 ```
 
 Missing discriminator inputs fail before output. Authentication rows must emit `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` when activity cannot be resolved to one compiled activity. Source-action or enum values not present in the compiled artifact must be preserved through declared diagnostics or declared source-extension fields; they must not create OCSF enum IDs.
+
+### MVPObservationOCSFMappingClosureInventory
+
+`MVPObservationOCSFMappingClosureInventory` is the activation-controlled closure inventory for MVP observation-to-OCSF mapping. It is total over the tuple below for every MVP observation discriminator and `source_dataset` in implementation scope.
+
+```text
+source_dataset_catalog_row_ref
+source_category
+source_dataset
+observation_type
+mapping_discriminator_state
+schema_name
+schema_version
+row_mode
+activation_scope
+```
+
+Each tuple must resolve to exactly one selected mapping row mode.
+
+| `row_mode` | Required closure | Required output behavior |
+| --- | --- | --- |
+| `ocsf_mapped` | Active `ObservationToOCSFMappingRow`, active `ExternalSchemaProfile`, compiled schema artifact ref, profile resolution refs, enum policy refs, base-event policy refs, selected `SourceExtensionFieldRuleSet`, canonical validation output checksum, validation refs, package refs when package-supplied, and manifest refs. | `NormalizeObservation` may emit OCSF-aligned `normalized_fields` only through the selected rows and active profile. |
+| `cadastre_only` | Active explicit `ObservationToOCSFMappingRow`, null external schema profile, explicit empty MVP `normalized_fields`, no authority effects, no graph effects, validation refs, package refs when package-supplied, and manifest refs. | `NormalizeObservation` emits `external_schema_profile_id = null` and `{}` normalized fields for MVP. Missing mapping rows must not infer this mode. |
+| `deterministically_blocked` | Exact `030.DeterministicActivationBlockRow` and mutation-prohibition refs, validation refs, package refs when package-supplied, and manifest refs. | No silver output, source authority signal, graph handoff, gold handoff, cleanup, retraction, watermark, API authorized-negative output, or package activation effect may be emitted. |
+
+`SourceExtensionFieldRuleSet` omission is not equivalent to an empty rule set. When no source-extension fields are allowed, the mapping closure must select an explicit empty `SourceExtensionFieldRuleSet` row set with row-set checksum, validation refs, package refs when package-supplied, and manifest refs.
+
+Concrete production mapping rows, fixture bytes, expected normalized output bytes, generated error registry bytes, and compiled OCSF artifact bytes are supporting material. If product governance has not supplied the bytes and normalized repository-relative paths, the relevant closure row must contain `TODO: product governance must supply OCSF mapping row bytes, canonical validation bytes, and checksum` and must resolve to `blocked_todo`.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `050-OCSF-MAPPING-CLOSURE-AC-001` | `ValidateSpecSet` fails when any MVP observation discriminator/source-dataset tuple lacks exactly one `ocsf_mapped`, `cadastre_only`, or `deterministically_blocked` row. |
+| `050-OCSF-MAPPING-CLOSURE-AC-002` | `ValidateSpecSet` fails when an `ocsf_mapped` row lacks compiled artifact refs, profile resolution refs, enum/base-event/source-extension refs, canonical validation checksum, validation refs, package refs when package-supplied, or manifest refs. |
+| `050-OCSF-MAPPING-CLOSURE-AC-003` | `ValidateSpecSet` fails when a `cadastre_only` row emits non-empty MVP `normalized_fields`, a non-null external schema profile, authority effects, graph effects, or inferred fallback behavior. |
 
 ### StructuredInputRepositoryMappingHandoff
 

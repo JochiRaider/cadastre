@@ -36,6 +36,7 @@ Define what Cadastre is, what it must not do, what can be authoritative, and whi
 - `SourceOfRecordRule`
 - `VolatilityBoundaryRule`
 - `ScopeSelectorPublicBindingRule`
+- `PublicActivationCatalogPublicationRule`
 
 ## Boundary Contract
 
@@ -99,6 +100,31 @@ Activation-controlled row catalogs must instantiate owner-exported row schemas t
 Git-authored activation-controlled artifacts may instantiate owner-exported behavior only after exact snapshot validation, immutable materialization, package-set membership when required, and `030.VersionManifest` inclusion. A mutable Git ref, branch, tag, pull request, repository URL, hook result, or commit timestamp must not satisfy production activation.
 
 If an activation-controlled artifact conflicts with a stable core contract, the artifact fails activation before any production output. If two stable core contracts conflict, the spec set fails validation. If a stable core spec embeds concrete volatile rows, the rows must be non-normative examples or `TODO:` blockers unless represented as an activation-controlled artifact.
+
+### PublicActivationCatalogPublicationRule
+
+`PublicActivationCatalogPublicationRule` applies to every public activation-controlled row catalog, deterministic block catalog, closure pack, validation output, generated error registry, and manifest ref that can be published outside a private implementation repository.
+
+| Public artifact content class | Required publication behavior |
+| --- | --- |
+| Vendor-neutral public tokens | Allowed when the token is defined by an owner spec or selected row catalog. |
+| Redacted refs and redacted hashes | Allowed when the redaction owner and checksum inputs are explicit. |
+| Lifecycle refs | Allowed when they do not expose private source bindings or raw fixture bytes. |
+| Validation refs | Allowed when fixture bytes, expected bytes, and private bindings are redacted or separately private. |
+| Package refs | Allowed when the package release and package-set refs do not expose private source routes, credentials, or inventories. |
+| Concrete routes, tenants, credentials, scanner sites, cloud account inventories, host lists, private schema payloads, raw private fixture bytes, or unredacted source-native identifiers | Forbidden in public row-catalog bytes, public block rows, public validation reports, public closure packs, generated error registries, telemetry output, API output, audit output, and package reports. |
+
+Private bindings may map private values to public row refs, redacted refs, or redacted hashes. A private binding must not affect row selection, row checksums, row-set checksums, lifecycle status, validation result, missing-row behavior, ambiguity behavior, block-row behavior, owner error precedence, manifest inclusion, package-set membership, or generated error selection.
+
+A supporting-material artifact path is evidence of row bytes only when all of the following are true:
+
+1. `030.ValidateActivationControlledRowSet` validates the artifact bytes, row checksum, row-set checksum, lifecycle status, validation refs, package refs when package-supplied, and private-binding exclusion.
+2. `100` validates package release and active `ProductionPackageSetManifest` membership when the artifact is package-supplied.
+3. `030.VersionManifest` includes the selected row refs, row checksums, row-set checksum, validation refs, package refs, generated error refs when visible, and runtime-state refs when output-affecting.
+
+A missing supporting-material path must be represented exactly as `TODO:` in the owner spec or validation row and must force `blocked_todo`. A `TODO:` supporting-material path must not be promoted to `closed_active`, must not be accepted as a deterministic block row, and must not be hidden by a private binding.
+
+Owner specs `020`, `050`, `060`, `070`, `080`, `090`, `100`, `110`, `120`, `130`, and `140` must import this rule for activation-controlled public row catalogs. A later owner row may narrow publication further. It must not permit any forbidden private content class in public bytes.
 
 ## Public and Private Source Binding
 

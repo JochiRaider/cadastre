@@ -93,6 +93,8 @@ Define graph read-model construction, graph apply, graph backend profiles, graph
 - `GraphActiveProfileClosure`
 - `GraphBackendSelectionDefaultDecision`
 - `GraphBackendActivationBlockerSet`
+- `GraphActiveProfileClosureMaterialization`
+- `GraphBackendClosureMaterialization`
 
 ## Projection Authority
 
@@ -269,6 +271,29 @@ The MVP active graph profile must close graph semantic selection before projecti
 | predicate contract | `observed_connection` projection requires `required_gold_fact_predicate_contract_ref = gfp-mvp-flow-observed-connection-v1`; missing, mismatched, or unmanifested refs emit no edge. |
 | predicate row manifest | The selected predicate row ref and checksum must appear in `VersionManifest` with graph projection refs before edge persistence. |
 
+### GraphActiveProfileClosureMaterialization
+
+`GraphActiveProfileClosureMaterialization` separates graph semantic closure from backend selection. It must resolve before graph delta persistence, graph apply, graph query, graph rebuild, graph evidence output, analysis pathfinding input, or graph API/export output.
+
+| Required row family | Required selected material |
+| --- | --- |
+| `GraphEdgeSemantics` | Exactly one active row for `observed_connection`; deterministic inactive or block rows for every other MVP edge type, including `has_theoretical_reachability`. |
+| `GraphObjectOutputEligibilityRowSet` | Selected node, edge, property, pathfinding, analysis, search, metric, and identity-influence eligibility refs/checksums. |
+| `GraphProjectionProfile` | Selected projection profile refs/checksums for positive MVP `observed_connection` only. |
+| `GraphPropertyEvidencePolicy` | Selected property provenance, raw-derived redaction, and secret-scan refs/checksums. |
+| Validation and manifest refs | `120-GRAPH-PROFILE-CLOSURE-*` refs and `030.VersionManifest` refs for all selected semantic rows, source-authority handoffs, validation refs, package refs when package-supplied, and generated error refs when visible. |
+
+The `observed_connection` active edge row may consume only positive `gfp-mvp-flow-observed-connection-v1` facts and qualifying `FlowRoleEvidence`, endpoint identity handoff, source-dataset refs, graph semantics refs, output eligibility refs, and manifest refs. It must not infer theoretical reachability.
+
+Any MVP edge type other than `observed_connection` must be represented by deterministic inactive or block rows. A block row for `has_theoretical_reachability` must emit no fact, edge, property, pathfinding input, analysis finding, package activation effect, or unqualified reachability wording while `200` remains `inactive_deferred`.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `090-GRAPH-ACTIVE-PROFILE-MATERIALIZATION-AC-001` | `ValidateSpecSet` fails when graph serving is in scope and no exact active `observed_connection` semantics row plus deterministic block rows for every other MVP edge type are selected. |
+| `090-GRAPH-ACTIVE-PROFILE-MATERIALIZATION-AC-002` | `ValidateSpecSet` fails when graph semantic rows lack output eligibility, property evidence, validation, package, generated error, or manifest refs. |
+
 ### MVP Graph Backend Selection Closure Requirements
 
 `mvp-postgresql-relational-graph.v1` is the default selection decision only when graph serving is enabled and no backend profile is supplied. Default selection emits `GraphBackendSelectionDefaultDecision` and must not mutate, query, rebuild, promote, drift-check, or serve graph state. `mvp-postgresql-age.v1` may be selected only by explicit input or explicit validation scope; it is not the omitted default.
@@ -325,6 +350,41 @@ Graph backend package blockers consume package eligibility only through `100`. W
 
 `090` must not independently decide package eligibility. A graph backend package gate that relies on backend defaulting, provider labels, package names, broad package labels, module names, version strings, repository refs, or validation summaries without the `100` refs above fails with `GRAPH_BACKEND_PACKAGE_GATE_FAILED` or the most specific package owner error before backend preflight succeeds.
 PostgreSQL relational rows are the current omitted-backend default candidate. AGE rows are optional and validation-only unless every AGE production gate passes.
+
+### GraphBackendClosureMaterialization
+
+`GraphBackendClosureMaterialization` is the activation-controlled materialization requirement for graph backend selection. Backend selection alone does not authorize mutation, query serving, rebuild promotion, drift repair, validation acceptance, or production package activation.
+
+The PostgreSQL relational backend profile may be selected as the MVP default only when every blocker below is closed by concrete refs and checksums. Otherwise the selected backend profile must remain `blocked_todo` or another owner blocking state.
+
+| Backend closure row | Required selected refs |
+| --- | --- |
+| Provider version | Exact PostgreSQL provider/version row ref, support evidence, and compatibility checksum. |
+| Adapter and driver | Graph provider adapter package refs, driver package refs, package release refs, package-set refs, validation refs, and manifest refs. |
+| Deployment profile | Selected deployment profile, storage mode, role, connection, topology, timeout, and environment refs without private leaks. |
+| Provider capability matrix | Selected capability refs for constraints, transactions, recursive traversal, indexing, JSONB/property support, RLS, backup/restore, extension policy, query timeouts, and unsupported features. |
+| Support evidence | Provider support, managed-service support, operational caveat, and product-governance refs. |
+| Schema profile | Relational graph schema profile refs and backend schema fingerprint refs/checksums. |
+| Role/RLS/search-path preflight | Exact preflight result refs proving read-only roles, mutation roles, RLS behavior where applicable, safe `search_path`, and raw-write bypass rejection. |
+| Query translation profile | Selected graph query translation refs/checksums, candidate limits, ordering, page-token, authorization, redaction, timeout, and query parity refs. |
+| Apply profile | Selected apply profile refs/checksums, transaction boundaries, batching, idempotency, retry, missing schema, and partial-apply refs. |
+| Restore rehearsal | Backup, restore, PITR or equivalent rehearsal refs/checksums when in scope. |
+| Upgrade or rebuild migration rehearsal | Exact migration/rebuild rehearsal refs/checksums for schema and backend changes. |
+| Benchmark threshold profile | Required when performance gates are in scope; includes threshold row refs, fixture refs, expected metrics, and validation refs. |
+| Generated errors and telemetry | Generated error registry refs, telemetry redaction refs, health component refs, validation refs, and manifest refs. |
+| Package and manifest refs | Package release refs, active `ProductionPackageSetManifest` refs, selected row refs/checksums, validation refs, generated error refs, and runtime-state refs in `030.VersionManifest`. |
+
+Apache AGE rows remain validation-only unless exact AGE version, provider support, extension lifecycle, namespace security, mutation-bypass prevention, restore, upgrade, benchmark, query parity, package-set, generated error, telemetry redaction, validation, and manifest rows are supplied. AGE validation-only rows must not become the default backend, must not authorize graph mutation, and must not expose AGE internal IDs.
+
+Concrete backend profile bytes, schema fingerprints, restore rehearsal bytes, benchmark outputs, provider support evidence, package release refs, production package-set refs, generated error registry bytes, and telemetry redaction refs are supporting material. Missing material must be represented by `TODO: product governance must supply graph backend closure bytes and checksum` and must block promotion.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `090-GRAPH-BACKEND-MATERIALIZATION-AC-001` | `ValidateSpecSet` fails when graph serving is in scope and the selected backend lacks concrete refs/checksums for every backend closure row listed above. |
+| `090-GRAPH-BACKEND-MATERIALIZATION-AC-002` | `ValidateSpecSet` fails when AGE rows are treated as default or production-active without exact AGE version, support, namespace security, mutation-bypass, restore/upgrade, benchmark, query parity, package, validation, and manifest refs. |
+| `090-GRAPH-BACKEND-MATERIALIZATION-AC-003` | `ValidateSpecSet` fails when default backend selection is used to authorize mutation, query serving, rebuild promotion, or package activation without active backend closure rows. |
 
 ### GraphScopeSelectorContextSet
 

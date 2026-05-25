@@ -79,6 +79,7 @@ Define observable API behavior, user-facing states, health, shared error records
 - `StructuredInputValidationRequest`
 - `StructuredInputRepositoryAccessPolicy`
 - `StructuredInputRepositoryRedactionPolicy`
+- `ActivationCatalogErrorRegistryClosure`
 
 ## Roles
 
@@ -579,6 +580,33 @@ GenerateErrorCodeRegistry(owner_fragments, shared_110_rows):
 ```
 
 `GenerateErrorCodeRegistry` must generate exact rows for every `030` run-lock error. A generic registry row must not substitute for run-lock timing, conflict, heartbeat, stale recovery, fencing, idempotency, commit guard, assertion, or lock-loss failures.
+
+### ActivationCatalogErrorRegistryClosure
+
+`ActivationCatalogErrorRegistryClosure` maps closure states to observable owner diagnostics. It applies before API, export, health, audit, telemetry-visible, package-visible, validation-visible, or acceptance-visible diagnostics can render.
+
+| Closure state | Required visible behavior |
+| --- | --- |
+| `closed_active` | No closure error. Owner state summary may show the active row only when the endpoint policy permits state summaries. |
+| `closed_deterministically_blocked` | Owner deterministic block error or diagnostic-only no-op. It must never render as authorized negative output, source absence, cleanup permission, graph expiry, package activation success, or validation pass for the blocked behavior. |
+| `blocked_missing_ref` | Owner missing-ref code. Generic missing errors are forbidden when an owner-specific code exists. |
+| `blocked_validation` | Owner validation code with redacted owner context and no private binding values. |
+| `blocked_todo` | Owner TODO-blocker code. The error must identify the owner family and blocked artifact class without exposing private values. |
+| `blocked_checksum` | Owner checksum code. The response may include redacted refs and checksum class but must not include raw private bytes. |
+| `blocked_package_set` | Owner package-set code or the more specific `100` package activation code. Current active package set must remain active. |
+| `blocked_manifest` | `VERSION_MANIFEST_INCOMPLETE` or the more specific owner manifest code. |
+
+Generated registry artifacts are supporting material. Missing generated registry bytes, owner fragment refs, owner context schema refs, fixture refs, generated registry checksum, package-set refs when package-supplied, or manifest refs must block API/export/health/audit/telemetry-visible/package-visible/validation-visible output when visible diagnostics are in scope.
+
+`SelectObservableError` must prefer the most specific owner row for activation-catalog closure blockers. A generic API, validation, package, telemetry, or manifest error must not substitute for an owner-specific closure error when the owner fragment contains one matching the failure.
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `110-ACTIVATION-CATALOG-ERROR-CLOSURE-AC-001` | `GenerateErrorCodeRegistry` emits exactly one visible row for every owner closure blocker that can appear in API, export, health, audit, telemetry, package, validation, or acceptance output. |
+| `110-ACTIVATION-CATALOG-ERROR-CLOSURE-AC-002` | `SelectObservableError` rejects generic-substitution output when an owner-specific closure error row exists. |
+| `110-ACTIVATION-CATALOG-ERROR-CLOSURE-AC-003` | Visible diagnostics fail before rendering when generated registry bytes, registry checksum, owner context schema refs, validation refs, package refs when package-supplied, or manifest refs are missing or `TODO:`. |
 
 ### RunLockObservableStateRenderingMatrix
 
