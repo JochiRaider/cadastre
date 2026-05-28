@@ -85,6 +85,8 @@ Telemetry must not create or modify `RawRecord`, `CadastreSilverObservation`, `C
 
 Telemetry may affect caller-visible health only through `TelemetryHealthMappingPolicy` and the `110.OperationalHealthStatus` handoff. Telemetry loss, exporter failure, Collector failure, or sampling must not invalidate already persisted authoritative Cadastre records.
 
+Telemetry may report activation-catalog closure blocker states only as operational diagnostics through `110.OperationalHealthStatus`. Telemetry must not satisfy row refs, validation refs, package refs, manifest refs, mutation-prohibition proofs, source authority, feed-category effect closure, or source-dataset catalog materialization.
+
 Run-lock telemetry is diagnostic material only. Metrics, traces, structured logs, dashboards, or alerts about lock acquisition, heartbeat, stale recovery, fencing, and lock loss must not become lock authority, source authority, source completeness, graph authority, package activation authority, audit evidence, replay evidence, or watermark authority. Persisted `030` lock evidence is the only run-lock evidence that may gate domain output.
 
 ### RunLockTelemetryValidationHandoff

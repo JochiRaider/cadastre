@@ -114,6 +114,17 @@ If an activation-controlled artifact conflicts with a stable core contract, the 
 | Package refs | Allowed when the package release and package-set refs do not expose private source routes, credentials, or inventories. |
 | Concrete routes, tenants, credentials, scanner sites, cloud account inventories, host lists, private schema payloads, raw private fixture bytes, or unredacted source-native identifiers | Forbidden in public row-catalog bytes, public block rows, public validation reports, public closure packs, generated error registries, telemetry output, API output, audit output, and package reports. |
 
+The following public activation-catalog families are in scope for this rule and must use vendor-neutral, redacted, activation-controlled bytes only.
+
+| Public activation catalog family | Required public/private boundary |
+| --- | --- |
+| `020.SourceDatasetCatalogRowSet` | Public rows may contain only vendor-neutral dataset tokens, row refs, checksums, validation refs, package refs, lifecycle refs, and public scope selectors. |
+| `020.LakehouseFeedCategoryClosureRowSet` | Public rows may contain only feed-category tokens, effect posture, selected public row refs, deterministic block refs, validation refs, and checksums. |
+| `060.SourceAuthorityClosureMatrixRowSet` | Public rows may contain only vendor-neutral tuple fields, public source-dataset refs, public feed-category refs, public `060` row refs, checksums, validation refs, and block refs. |
+| deterministic source-effect block catalogs | Public block rows may contain only expanded tuple keys, block codes, blocked effects, mutation-prohibition refs, validation refs, package refs, and manifest refs. |
+
+Public row catalogs must not contain vendor names, product routes, tenant inventories, scanner sites, account lists, host lists, private schemas, credentials, or raw private fixture bytes. Private bindings may map concrete private values to public refs or redacted hashes only and must not alter row selection, row checksum, missing-row behavior, effect defaults, validation, package-set membership, manifest inclusion, or source-authority outcome.
+
 Private bindings may map private values to public row refs, redacted refs, or redacted hashes. A private binding must not affect row selection, row checksums, row-set checksums, lifecycle status, validation result, missing-row behavior, ambiguity behavior, block-row behavior, owner error precedence, manifest inclusion, package-set membership, or generated error selection.
 
 A supporting-material artifact path is evidence of row bytes only when all of the following are true:

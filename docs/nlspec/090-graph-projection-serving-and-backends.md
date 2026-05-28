@@ -141,12 +141,14 @@ Graph expiry and cleanup deltas require all of the following:
 
 #### SourceEffectGraphOutcomeMatrix
 
+`SourceEffectGraphOutcomeMatrix` uses the closure states owned by `000`. Mixed `closed` and `deterministically_blocked` aliases are invalid unless an explicit crosswalk row maps them before graph projection.
+
 | Upstream closure state or blocker | Required `090` behavior |
 | --- | --- |
-| `closed` for `graph_expiry` | May emit expiry delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
-| `closed` for `cleanup` | May emit cleanup delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
-| `closed_active` from `000.SourceAuthorityClosureStateCrosswalk` | Same as matching `060.closure_outcome = closed`; no graph output is allowed unless the requested effect is `graph_expiry` or `cleanup`. |
-| `deterministically_blocked` or `closed_deterministically_blocked` | Emit graph no-op diagnostic only; no `GraphDeltaSet`, no backend mutation, no expiry, no cleanup, no retraction, no absence edge, and no watermark. |
+| `closed_active` for `graph_expiry` | May emit expiry delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset row, feed-category row, effect-map checksum, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
+| `closed_active` for `cleanup` | May emit cleanup delta only through an active graph profile and only when the producing `VersionManifest` includes source-dataset row, feed-category row, effect-map checksum, selected closure row, `AbsenceDerivationResult`, and all consulted underlying `060` refs. |
+| `closed_active` for any other requested effect | Emit no graph delta unless an owner graph handoff explicitly maps the effect to graph output. |
+| `closed_deterministically_blocked` | Emit graph no-op diagnostic only; no `GraphDeltaSet`, backend mutation, expiry, cleanup, retraction, absence edge, graph property, pathfinding input, or watermark. |
 | `blocked_validation` | Reject before delta persistence with owner validation error. |
 | `blocked_missing_ref` | Reject before delta persistence with missing-ref owner error. |
 | `blocked_checksum` | Reject before delta persistence with checksum error. |
@@ -161,11 +163,11 @@ Source-history no-change proof, graph read-model drift checks, missing backend o
 
 ### SourceDatasetGraphClosureHandoff
 
-Graph expiry, cleanup, and any graph delta whose source-effect dependency is absence-sensitive must include the selected `020.SourceDatasetCatalogRow` ref/checksum, the selected `060.SourceAuthorityClosureMatrixRow` ref/checksum or deterministic block row ref/checksum, every underlying consulted `060` row ref/checksum, the `060.AbsenceDerivationResult` ref/checksum when absence or effect authorization is evaluated, and the producing `030.VersionManifest` ref before delta persistence and before backend mutation.
+Graph expiry, cleanup, and any graph delta whose source-effect dependency is absence-sensitive must include the selected `020.SourceDatasetCatalogRow` ref/checksum, selected `020.LakehouseFeedCategoryClosureRow` ref/checksum, feed-category effect-map checksum, the selected `060.SourceAuthorityClosureMatrixRow` ref/checksum or deterministic source-effect block row ref/checksum, every underlying consulted `060` row ref/checksum, the `060.AbsenceDerivationResult` ref/checksum when absence or effect authorization is evaluated, validation refs, package-set refs when package-supplied, and the producing `030.VersionManifest` ref before delta persistence and before backend mutation.
 
 `network_flow` may project only positive `gfp-mvp-flow-observed-connection-v1` facts in MVP. Flow non-observation, missing flow-role evidence, ambiguous flow-role evidence, missing source-dataset catalog rows, missing source-authority closure refs, OCSF endpoint order, and unresolved endpoint identity must emit no edge, no absence edge, no expiry, no cleanup, no graph property, no pathfinding input, and no backend mutation. The allowed positive edge remains subject to `050.FlowRoleEvidence`, `070` endpoint identity handoff, active `GraphEdgeSemantics`, active `GraphObjectOutputEligibilityRow`, and graph profile closure.
 
-`future_reachability` deterministic block rows must map to inactive `has_theoretical_reachability` behavior. While `200` remains `inactive_deferred`, a graph profile, backend profile, analysis rule, package release, query profile, or validation row must not activate `has_theoretical_reachability`, modeled reachability facts, boolean reachability properties, or unqualified reachability wording.
+`future_reachability` deterministic block rows must map to inactive `has_theoretical_reachability` behavior. While `200` remains `inactive_deferred`, a graph profile, backend profile, analysis rule, package release, query profile, or validation row must not activate `has_theoretical_reachability`, modeled reachability facts, boolean reachability properties, or unqualified reachability wording. Deterministic source-dataset, feed-category, or source-effect block rows may be recorded as graph no-op diagnostics only and must not emit `GraphDeltaSet`, backend mutation, expiry, cleanup, retraction, absence edge, graph property, pathfinding input, or watermark.
 
 ### GoldFactChangeSet graph handoff matrix
 

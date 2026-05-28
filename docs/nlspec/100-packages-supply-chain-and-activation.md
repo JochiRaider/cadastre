@@ -455,6 +455,22 @@ For each package type below, package activation must resolve exactly one active 
 
 `policy_bundle` must not substitute for the selected package type of a bundled `130` artifact. A bundled artifact must still resolve through its own package type policy row when its row family can affect output, visibility, validation acceptance, package-visible diagnostics, replay, redaction, or manifest state.
 
+### Package-supplied source-effect catalog closure
+
+Package-supplied source-dataset, feed-category, source-authority, underlying `060`, deterministic source-dataset block, deterministic source-effect block, and closure validation-output artifacts are output-affecting activation artifacts even when they emit no mutation.
+
+| Package-supplied catalog family | Required activation evidence | Failure behavior |
+| --- | --- | --- |
+| `source_dataset_catalog_row_set` | Immutable `PackageReleaseManifest`, active `ProductionPackageSetManifest`, selected `020.SourceDatasetCatalogRow` refs/checksums, row-set checksum, validation refs, package-set refs, compatibility refs when required, mutation-prohibition refs for block rows, and `030.VersionManifest` refs. | Missing evidence fails before feed activation, mapping activation, source-authority closure, graph/analysis handoff, API filtering, replay, or validation acceptance. |
+| `lakehouse_feed_category_closure_row_set` | Release and package-set refs, selected feed-category row refs/checksums, total effect-map checksum, deterministic category block refs, validation refs, and manifest refs. | Missing evidence blocks production feed-category activation. |
+| `source_authority_closure_matrix_row_set` | Release and package-set refs, selected closure row refs/checksums or deterministic source-effect block refs, selected source-dataset refs, selected feed-category refs, every underlying consulted `060` row ref/checksum, validation refs, and manifest refs. | Missing evidence blocks only the requested effect and emits no mutation. |
+| underlying `060` row-set family | Release and package-set refs, selected row refs/checksums, row-set checksums, validation refs, source-dataset refs, and manifest refs for every consulted authority, completeness, coverage, staleness, progress, visibility, control-result, history, absence, watermark, and external-schema authority family. | Missing evidence blocks the requested effect; no positive downgrade or owner-local fallback is allowed. |
+| deterministic source-dataset block row set | Same release, package-set, validation, lifecycle, manifest, and mutation-prohibition refs required for active rows. | A block row cannot be accepted merely because it emits no mutation. |
+| deterministic source-effect block row set | Same release, package-set, validation, lifecycle, manifest, expanded tuple key, blocked effects, and mutation-prohibition refs required for active rows. | Omitted tuple fields or missing proof fail before the block can close the effect. |
+| closure validation-output artifacts | Release and package-set refs when package-supplied, fixture checksums, expected output/error checksums, mutation-prohibition proofs, generated error refs when visible, and manifest refs. | TODO-bearing or checksum-mismatched validation output blocks promotion and package activation. |
+
+Package activation must fail on missing row bytes, missing checksums, TODO refs, private-binding leaks, package-set mismatch, validation omission, manifest omission, or mutation-prohibition proof omission. The current active package set must remain active and candidate output must remain invisible.
+
 ### Lakehouse table-state package-supplied catalog types
 
 Package-supplied `020` row catalogs must activate only through explicit package types and active package type policies. `policy_bundle` remains a broad label and must not substitute for row-specific package types.
@@ -1659,6 +1675,8 @@ Package activation, rollback, quarantine, emergency override, package stage exec
 | `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-001` | `source_dataset_catalog_row_set` is a confirmed `PackageType` token and broad labels cannot substitute for it. |
 | `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-002` | Package activation fails when a package-supplied source-dataset catalog row set lacks an active package type policy row, package-set ref, validation refs, schema compatibility inputs, or `030.VersionManifest` inclusion. |
 | `100-PACKAGE-SOURCE-DATASET-CATALOG-AC-003` | Declarative source-dataset catalog packages cannot execute stages or emit production records directly. |
+| `100-PACKAGE-SUPPLIED-SOURCE-EFFECT-BLOCK-AC-001` | Package-supplied deterministic source-dataset and source-effect block rows require the same release, package-set, validation, lifecycle, manifest, and mutation-prohibition refs as active rows. |
+| `100-PACKAGE-SUPPLIED-FEED-CATEGORY-CLOSURE-AC-001` | Package activation fails when source-dataset or feed-category closure catalogs omit concrete row bytes, checksums, package-set refs, validation refs, mutation-prohibition proofs, or `030.VersionManifest` refs. |
 | `100-ANALYSIS-REGISTRY-PACKAGE-TYPE-AC-001` | Each candidate `130` package type has exactly one active `PackageTypePolicyRow` in validation scope, and missing-policy, unknown-type, and ambiguous-policy fixtures fail closed before package activation. |
 | `100-ANALYSIS-REGISTRY-PACKAGE-SET-AC-001` | Package-supplied `130` artifacts require immutable package-set membership, exact `030.ActivationControlledArtifactRef`, compatibility row, validation refs, and `VersionManifest` inclusion before output. |
 | `100-ANALYSIS-REGISTRY-STAGE-OUTPUT-AC-001` | Package policy permits only the stage classes and output record classes listed in the `130` package type table and fails with `FORBIDDEN_STAGE_OUTPUT` or package-policy errors for every other output. |

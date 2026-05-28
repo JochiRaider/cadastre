@@ -173,6 +173,17 @@ A row, fixture, validation report, package label, ADR, research report, branch n
 
 Scope mismatch must remain distinguishable from missing discriminator input and ambiguous discriminator input. A mapping selection that fails scope coverage must not emit silver output.
 
+#### SourceDatasetCatalogMappingDependency
+
+A mapping row, external schema profile, source-extension rule, or validation fixture that uses `source_dataset` must carry the selected `020.SourceDatasetCatalogRow` ref/checksum, the selected source-dataset row-set ref/checksum, and the selected source-dataset validation refs. A bare `source_dataset` string is an input discriminator only; it must not define or infer dataset eligibility.
+
+| Selected source-dataset state | Required `050` behavior |
+| --- | --- |
+| Active row includes `silver_observation` in `permitted_production_uses` | Mapping selection may continue only when row ref/checksum, row-set checksum, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs validate. |
+| Active row omits `silver_observation` | `NormalizeObservation` must fail before silver output unless an explicitly requested validation-only mode selects a validation row whose expected output is no-op or owner error. |
+| Active row includes only `resolver_input_only`, `supporting_evidence_only`, or `deterministically_blocked` | Mapping must emit no production silver output. Resolver and supporting-evidence handling remain owned by `070` or the downstream owner. |
+| Missing, ambiguous, inactive, checksum-mismatched, private-leaking, package-set-mismatched, unvalidated, unmanifested, or `TODO:` row | Mapping activation and production silver output fail with the most specific source-dataset or mapping owner error. |
+
 ## OCSF Mapping Requirements
 
 | Mapping element | Required behavior |
@@ -295,6 +306,9 @@ Absent or ambiguous source direction emits no qualifying `FlowRoleEvidence` item
 | `mapping_discriminator` | Yes | none | Canonical predicate over normalized parse fields, source metadata, and declared mapping-bundle inputs. It must not inspect graph, gold, identity, or API state. |
 | `source_dataset_catalog_row_ref` | Yes when row selection uses `source_dataset` | none | Structured `030.ActivationControlledRowRef` for the selected `020.SourceDatasetCatalogRow` or deterministic source-dataset block row. Bare strings fail. |
 | `source_dataset_catalog_row_checksum` | Yes when row selection uses `source_dataset` | none | SHA-256 of the selected source-dataset row after defaults materialize. |
+| `source_dataset_catalog_row_set_ref` | Yes when row selection uses `source_dataset` | none | Structured artifact ref for the selected `020.SourceDatasetCatalogRowSet`. |
+| `source_dataset_catalog_row_set_checksum` | Yes when row selection uses `source_dataset` | none | SHA-256 of the selected row-set bytes after defaults materialize. |
+| `source_dataset_catalog_validation_refs` | Yes when row selection uses `source_dataset` | none | Non-empty refs covering valid resolution, missing row, deterministic block, private-binding leak, package-set omission, and manifest omission. |
 | `external_schema_profile_ref` | Required when `row_mode = ocsf_mapped` | null only when `row_mode = cadastre_only` or `deterministically_blocked` | Must reference an active `ExternalSchemaProfile`. |
 | `external_schema_artifact_ref` | Required when `row_mode = ocsf_mapped` | null otherwise | Must reference the compiled OCSF artifact used for validation. |
 | `profile_resolution_manifest_refs` | Required when `row_mode = ocsf_mapped` | `[]` otherwise | Canonical set of `ProfileResolutionManifest` refs for emitted class and object paths. |
@@ -328,20 +342,21 @@ ResolveOCSFMapping(observation, mapping_bundle, external_schema_profile):
 1. Validate ExternalSchemaProfile, ExternalSchemaArtifactRef, ProfileResolutionManifest, ExternalEnumMappingRuleSet, OCSFBaseEventFieldPolicySet, SourceExtensionFieldRuleSet, ObservationToOCSFMappingRowSet, ObservationTypeExternalMappingValidationMatrix, CanonicalValidationOutput, package-set refs when package-supplied, lifecycle transition evidence, and 030.VersionManifest refs through 030.ActivationControlledArtifactRef and 030.ActivationControlledRowRef.
 2. Normalize the request execution scope and reject under-scoped requests before row selection.
 3. Resolve source_dataset through 020.ResolveSourceDatasetCatalogRow before scope-filtered row selection when any candidate row, profile, source-extension rule, or validation fixture filters by source_dataset.
-4. Keep only active ObservationToOCSFMappingRow and profile rows whose activation_scope covers the request through 030.ScopeSelectorCovers, then load rows whose observation_type equals observation.observation_type.
-5. Evaluate mapping_discriminator rows in ascending lexical row_id order only to produce deterministic diagnostics; row order must not break ambiguity.
-6. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
-7. If more than one row matches after discriminator evaluation, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
-8. If the selected row has row_mode = deterministically_blocked, emit the row's deterministic error or no-op, prove mutation prohibition, and emit no silver output.
-9. If the selected row has row_mode = cadastre_only, apply CadastreOnlyMappingOutputPolicy, require selected row refs/checksums in VersionManifest, and emit no OCSF metadata.
-10. If the selected row has row_mode = ocsf_mapped, validate category_uid, class_uid, activity_id, activity_name, type_uid, and type_name against the compiled OCSF artifact and active ProfileResolutionManifest refs.
-11. Reject any class_uid outside the active class_allowlist with OCSF_CLASS_NOT_ALLOWED.
-12. Validate required_normalized_paths and forbidden_normalized_paths.
-13. Apply ExternalEnumMappingRule rows; unknown enum values must not invent enum IDs, Other requires compiled support plus active permission, deprecated enum values reject by default, and ID/name sibling mismatch rejects.
-14. Apply OCSFBaseEventFieldPolicy rows; disabled base-event fields reject before output and non-authoritative metadata fields must not alter Cadastre authority, identity, temporal, graph, or absence state.
-15. Validate every source_extension_fields path against exactly one active SourceExtensionFieldRule; missing, wildcard, reserved-name, missing redaction, secret-scan, or collision failures reject before output.
-16. Reject artifact checksum mismatch, profile-set checksum mismatch, extension-set checksum mismatch, class-allowlist checksum mismatch, package-set omission, row-family TODO, validation fixture TODO, and VersionManifest omission before silver output.
-17. Emit CadastreSilverObservation only after 040.CadastreSilverObservationSchema passes.
+4. Reject production silver output when the selected source-dataset row lacks `silver_observation` in `permitted_production_uses`, unless the request is an explicit validation-only mode whose selected validation row expects no production output.
+5. Keep only active ObservationToOCSFMappingRow and profile rows whose activation_scope covers the request through 030.ScopeSelectorCovers, then load rows whose observation_type equals observation.observation_type.
+6. Evaluate mapping_discriminator rows in ascending lexical row_id order only to produce deterministic diagnostics; row order must not break ambiguity.
+7. If no row matches, emit MAP_OCSF_ROW_MISSING before normalized output.
+8. If more than one row matches after discriminator evaluation, emit MAP_OCSF_ROW_AMBIGUOUS before normalized output.
+9. If the selected row has row_mode = deterministically_blocked, emit the row's deterministic error or no-op, prove mutation prohibition, and emit no silver output.
+10. If the selected row has row_mode = cadastre_only, apply CadastreOnlyMappingOutputPolicy, require selected row refs/checksums in VersionManifest, and emit no OCSF metadata.
+11. If the selected row has row_mode = ocsf_mapped, validate category_uid, class_uid, activity_id, activity_name, type_uid, and type_name against the compiled OCSF artifact and active ProfileResolutionManifest refs.
+12. Reject any class_uid outside the active class_allowlist with OCSF_CLASS_NOT_ALLOWED.
+13. Validate required_normalized_paths and forbidden_normalized_paths.
+14. Apply ExternalEnumMappingRule rows; unknown enum values must not invent enum IDs, Other requires compiled support plus active permission, deprecated enum values reject by default, and ID/name sibling mismatch rejects.
+15. Apply OCSFBaseEventFieldPolicy rows; disabled base-event fields reject before output and non-authoritative metadata fields must not alter Cadastre authority, identity, temporal, graph, or absence state.
+16. Validate every source_extension_fields path against exactly one active SourceExtensionFieldRule; missing, wildcard, reserved-name, missing redaction, secret-scan, or collision failures reject before output.
+17. Reject artifact checksum mismatch, profile-set checksum mismatch, extension-set checksum mismatch, class-allowlist checksum mismatch, package-set omission, row-family TODO, validation fixture TODO, and VersionManifest omission before silver output.
+18. Emit CadastreSilverObservation only after 040.CadastreSilverObservationSchema passes.
 ```
 
 Missing discriminator inputs fail before output. Authentication rows must emit `OCSF_ACTIVITY_DISCRIMINATOR_MISSING` when activity cannot be resolved to one compiled activity. Source-action or enum values not present in the compiled artifact must be preserved through declared diagnostics or declared source-extension fields; they must not create OCSF enum IDs.

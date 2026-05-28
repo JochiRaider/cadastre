@@ -608,6 +608,30 @@ Acceptance criteria:
 | `110-ACTIVATION-CATALOG-ERROR-CLOSURE-AC-002` | `SelectObservableError` rejects generic-substitution output when an owner-specific closure error row exists. |
 | `110-ACTIVATION-CATALOG-ERROR-CLOSURE-AC-003` | Visible diagnostics fail before rendering when generated registry bytes, registry checksum, owner context schema refs, validation refs, package refs when package-supplied, or manifest refs are missing or `TODO:`. |
 
+#### SourceEffectClosureGeneratedErrorRows
+
+`GenerateErrorCodeRegistry` must generate exactly one `ErrorCodeRegistryRow` for every source-dataset, feed-category, and source-effect closure error that can appear in API, export, health, audit, package-visible, validation-visible, or acceptance-visible output.
+
+| Error condition | Required owner-visible row |
+| --- | --- |
+| Missing source-dataset row | Owner-specific row for `SOURCE_DATASET_CATALOG_ROW_MISSING`. |
+| Ambiguous source-dataset row | Owner-specific row for `SOURCE_DATASET_CATALOG_ROW_AMBIGUOUS`. |
+| Deterministic source-dataset block | Owner-specific row for `SOURCE_DATASET_DETERMINISTICALLY_BLOCKED` or the exact block code. |
+| Missing feed-category row | Owner-specific row for `LAKEHOUSE_FEED_CATEGORY_ROW_MISSING`. |
+| Duplicate feed-category row | Owner-specific feed-category duplicate-row code. |
+| Missing effect key | Owner-specific effect-map incomplete code. |
+| Missing `060` closure row | Owner-specific source-effect closure missing-ref code. |
+| Missing underlying `060` row family | Owner-specific missing-row-family code naming the family class without private values. |
+| Source-effect tuple mismatch | Owner-specific tuple-key parity error. |
+| Package-set omission | `100` package-set error or more specific owner package code. |
+| Manifest omission | `VERSION_MANIFEST_INCOMPLETE` or more specific owner manifest code. |
+| TODO blocker | Owner-specific TODO blocker code. |
+| Private-binding leak | `PRIVATE_BINDING_LEAK` or the more specific source-dataset, source-authority, mapping, graph, or package leak code. |
+
+Owner context for these rows must include, at minimum, `owner_spec`, `row_family`, `source_dataset_token_hash`, `feed_category`, `requested_effect`, `closure_tuple_checksum`, `selected_row_ref`, `selected_row_checksum`, `selector_checksum`, `package_set_ref`, `version_manifest_ref`, and redaction refs. Context fields may be null only when the failure occurs before that value exists; omission of the field is invalid.
+
+API, export, and health labels must not render `authorized_absent`, `fixed`, `deleted`, `not_reachable`, `not_member`, or equivalent authorized-negative wording unless `060.AbsenceDerivationResult.absence_authorized = true`, the requested effect matches, and all selected `020`, `060`, and `030` refs are manifest-included.
+
 ### RunLockObservableStateRenderingMatrix
 
 This matrix references generated `030` registry rows. It must not duplicate `030` severity, retry, or owner error semantics. Endpoint policy may derive the final caller-visible outcome class from the generated registry and endpoint context, but it must not use a generic error when a `RUN_LOCK_*` row covers the failure.

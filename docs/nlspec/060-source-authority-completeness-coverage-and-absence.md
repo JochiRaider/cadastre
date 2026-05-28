@@ -480,7 +480,9 @@ The matrix output must include the requested effect token, feed category, source
 The tuple key is exactly:
 
 ```text
+feed_category
 source_dataset_catalog_row_ref
+source_dataset_catalog_row_checksum
 fact_type
 predicate
 source_category
@@ -493,6 +495,8 @@ staleness_policy_ref
 coverage_dimension_profile_refs
 requested_effect
 ```
+
+This tuple key must be byte-parity equivalent to `000.SourceEffectClosurePackSchema.tuple_key`. `coverage_dimension_profile_refs` is a canonical set. `structured_object_schema_ref_or_null` serializes as JSON `null` only when no structured object schema participates in the selected predicate contract. Any tuple-key mismatch across `000`, `020`, `060`, and `120` fails before source-effect closure selection.
 
 For each tuple in implementation scope, the inventory must contain exactly one selected closure matrix row or exactly one deterministic block row. The selected row must name every consulted `060` row family.
 
@@ -519,6 +523,20 @@ Acceptance criteria:
 | `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-001` | `ValidateSpecSet` fails when any source-authority tuple in implementation scope lacks exactly one selected closure matrix row or deterministic block row. |
 | `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-002` | `ValidateSpecSet` fails when a selected closure row omits any consulted underlying row family, selected row checksum, validation ref, package ref when package-supplied, or `030.VersionManifest` requirement. |
 | `060-SOURCE-AUTHORITY-TUPLE-CLOSURE-AC-003` | `ValidateSpecSet` fails when `SourceAuthorityClosureMatrix` is used as authority without validated underlying refs. |
+
+#### SourceEffectClosureMaterializationWorkOrder
+
+For every `020.LakehouseFeedCategoryClosureRow.effect_closure_requirements` cell whose posture is `requires_060_closure`, the selected source-effect materialization must contain exactly one selected `SourceAuthorityClosureMatrixRow` or exactly one deterministic source-effect block row for the expanded tuple key.
+
+| Work-order member | Required behavior |
+| --- | --- |
+| Tuple key | Must contain `feed_category`, selected source-dataset row ref/checksum, fact type, predicate, source category, subject and object selector checksums, subject ref kind, object value kind, structured object schema ref or null, staleness policy ref, coverage profile refs, and requested effect. |
+| Active closure row | Must name selected row refs/checksums for every consulted row family in `MVPSourceAuthorityClosureTupleInventory`. |
+| Deterministic source-effect block row | Must carry the same tuple key, `blocked_effects`, block code, validation refs, mutation-prohibition refs, package-set refs when package-supplied, and manifest refs. |
+| Missing underlying row family ref | Blocks only the requested effect and must not downgrade to positive-only, source-history no-change proof, graph expiry, cleanup, retraction, watermark advancement, compliance pass/fail, or API authorized-negative output. |
+| TODO-bearing supporting material | Resolves to `blocked_todo` and blocks promotion. |
+
+A `SourceAuthorityClosureMatrix` validation view may summarize this work order only after the active row or block row and all underlying refs are selected, checksum-valid, validation-backed, package-set-valid when package-supplied, and manifest-included.
 
 ### SourceAuthorityClosureMatrixRow schema
 
@@ -1585,11 +1603,11 @@ Missing row and ambiguous row errors must remain distinct and owner-specific. So
 | `060-AC-006` | Gold derivation, cleanup, retraction, graph expiry, and watermark advancement persist completeness row refs and blocking reasons before producing absence-sensitive effects. |
 | `060-AC-007` | External schema metadata cannot create authority, absence, assertion state, compliance state, risk state, cleanup, graph expiry, retraction, or watermark effects without exact `060` rows. |
 
-## Open Questions
+## Supporting Material Blockers
 
-Open questions marked `TODO:` block authoritative status for the affected contract. A downstream implementation must not resolve a `TODO:` by inference.
+The blockers below replace open product questions for this file. They are owner-local source-authority blockers and must prevent promotion until concrete supporting bytes and checksums exist.
 
-| ID | Question | Blocking scope | Required owner decision | Default until resolved |
-| --- | --- | --- | --- | --- |
-| `060-TODO-SOURCE-DATASET-ROW-CATALOG` | TODO: Provide active vendor-neutral `source_dataset` row catalogs or deterministic block rows for every `source_dataset` referenced by active feed profiles. | Source-authority closure and absence-sensitive effects. | Product governance plus `020`, `060`, and `120`. | Requested effects remain blocked. |
-| `060-TODO-SOURCE-CLOSURE-ROW-SETS` | TODO: Provide active row sets or deterministic block rows for `SourceAuthorityClosureMatrixRowSet`, `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfileRowSet`, `SourceStalenessPolicyRowSet`, `ProgressSignalInterpretationPolicyRowSet`, `SupplierCollectionVisibilityProfileRowSet`, `ControlResultMappingRowSet`, `SourceHistoryRetentionProfileRowSet`, `AbsenceDerivationPolicyRowSet`, `ProjectionWatermarkPolicyRowSet`, and `ExternalSchemaAuthoritySignalMappingRowSet` when external schema signals are consulted. | Absence, cleanup, retraction, graph expiry, watermark, control pass/fail, source-history no-change, and compliance negative output. | Product governance plus `020`, `060`, `100`, and `120` validation refs. | Requested effects resolve to deterministic block, unknown, not_applicable, source_stale, no_op, or the most specific owner error; no forbidden mutation. |
+| Blocker ID | Missing artifact family | Required checksums and refs | Required validation rows | Required `030.VersionManifest` refs | Default until supplied |
+| --- | --- | --- | --- | --- | --- |
+| `060-TODO-SOURCE-DATASET-ROW-CATALOG` | Selected `020.SourceDatasetCatalogRowSet` and selected source-dataset rows or deterministic source-dataset block rows for every `source_dataset` referenced by active source-authority row families. | Source-dataset row-set checksum, selected row checksums, block-row checksums, validation refs, package refs when package-supplied, and mutation-prohibition proofs for blocks. | `120-SOURCE-DATASET-CATALOG-*`, `120-SOURCE-CLOSURE-*`, `120-VERSION-MANIFEST-*`, and package-set rows when package-supplied. | Selected row-set refs/checksums, selected row refs/checksums, block refs, selector checksums, validation refs, package refs, owner errors, and mutation-prohibition refs. | Requested effects remain blocked. No fact, cleanup, graph expiry, retraction, watermark, compliance pass/fail, no-change proof, or API authorized-negative output is emitted. |
+| `060-TODO-SOURCE-CLOSURE-ROW-SETS` | Concrete row-set bytes or deterministic source-effect block rows for `SourceAuthorityClosureMatrixRowSet`, `LakehouseFeedCompletenessProfileRowSet`, `SourceAuthorityProfileRowSet`, `CoverageDimensionProfileRowSet`, `SourceStalenessPolicyRowSet`, `ProgressSignalInterpretationPolicyRowSet`, `SupplierCollectionVisibilityProfileRowSet`, `ControlResultMappingRowSet`, `SourceHistoryRetentionProfileRowSet`, `AbsenceDerivationPolicyRowSet`, `ProjectionWatermarkPolicyRowSet`, and `ExternalSchemaAuthoritySignalMappingRowSet` when external schema signals are consulted. | Row-set checksums, selected row checksums, source-effect tuple checksum, validation refs, package refs when package-supplied, generated error refs when visible, and mutation-prohibition proofs for no-op/block rows. | `120-SOURCE-CLOSURE-*`, `120-COVERAGE-DOMAIN-*`, `120-ERROR-REGISTRY-*`, `120-VERSION-MANIFEST-*`, and package-set rows when package-supplied. | Source-effect closure row-set refs/checksums, selected closure row refs/checksums, every underlying consulted row ref/checksum, source-dataset row refs, feed-category row refs, validation refs, package refs, mutation-prohibition refs, and owner error refs. | Requested effects resolve to deterministic block, unknown, not_applicable, source_stale, no_op, or the most specific owner error; no forbidden mutation. |

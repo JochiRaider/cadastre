@@ -173,7 +173,7 @@ A source-history no-change proof may become a `GoldFact` only when an active `08
 
 ### FactAbsenceOutcomeClosureHandoff
 
-A non-null `GoldFact.absence_outcome` is schema-valid only when the producing run's `VersionManifest` contains the `060.AbsenceDerivationResult` ref and every consulted source-authority closure ref required by `030.VersionManifestCompletenessMatrix`.
+A non-null `GoldFact.absence_outcome` is schema-valid only when the producing run's `VersionManifest` contains the `060.AbsenceDerivationResult` ref and every consulted source-authority closure ref required by `030.VersionManifestCompletenessMatrix`. Required closure refs include the selected `020.SourceDatasetCatalogRow`, selected `020.LakehouseFeedCategoryClosureRow`, selected `060.SourceAuthorityClosureMatrixRow` or deterministic block row, and every underlying consulted `060` row when the producing owner requires them.
 
 `040` does not evaluate source authority. `040` validates only that `absence_outcome` is null or one closed `FactAbsenceOutcome` token and that producer ownership is `060` for non-null values.
 

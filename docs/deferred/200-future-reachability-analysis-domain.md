@@ -35,7 +35,7 @@ Future activation must update `docs/nlspec/000-cadastre-spec-index.md`, assign a
 
 ### FutureReachabilitySourceDatasetBlockHandoff
 
-Any active `020.future_reachability` source-dataset row while this document remains `inactive_deferred` must be an exact deterministic block row. It must emit no production read target, fact, graph edge, graph property, API output, package activation effect, production validation pass for reachability, or unqualified reachability wording.
+Any active `020.future_reachability` source-dataset row while this document remains `inactive_deferred` must be an exact deterministic block row. Its `020.SourceDatasetCatalogRow.permitted_production_uses` value must be exactly `[deterministically_blocked]` or `[deterministically_blocked, validation_only]`. It must emit no production read target, fact, graph edge, graph property, API output, package activation effect, production validation pass for reachability, or unqualified reachability wording.
 
 A `future_reachability` row may appear only as inactive future-domain material or validation-only negative fixture input. Repository merge, materialization, package release creation, package-set inclusion, graph profile activation, API wording, or validation report creation must not convert that row into runtime reachability behavior while this document remains deferred.
 
@@ -109,6 +109,10 @@ Expected active-spec failure codes:
 
 | Prohibited output | Required active-spec validation row ID | Expected result |
 | --- | --- | --- |
+| Missing `020.future_reachability` deterministic block row | `val-120-future-reachability-inactive-block` | Active validation fails with `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN`; no production output. |
+| Attempted active `060` closure row that authorizes reachability output | `val-120-reachability-060-authorization-forbidden` | Active validation fails; no fact, graph edge, graph property, API output, or watermark. |
+| Graph profile emits `has_theoretical_reachability` | `val-120-reachability-graph-profile-forbidden` | Active validation fails with `THEORETICAL_REACHABILITY_SCOPE_ERROR`; no graph output. |
+| API or export uses unqualified reachability claim | `val-120-reachability-unqualified-claim-forbidden` | Active validation fails with `REACHABILITY_UNQUALIFIED_CLAIM_FORBIDDEN`. |
 | `has_theoretical_reachability` edge | `val-090-theoretical-reachability-prohibited`; `fixture-090-theoretical-reachability-edge` | `THEORETICAL_REACHABILITY_SCOPE_ERROR` or no-op |
 | `modeled_reachability_fact` | `val-080-modeled-reachability-fact-prohibited`; `fixture-200-active-reachability-output` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` or no-op |
 | Boolean reachability property | `val-090-boolean-reachability-property-prohibited`; `val-110-reachability-wording-prohibited` | `REACHABILITY_DEFERRED_OUTPUT_FORBIDDEN` |

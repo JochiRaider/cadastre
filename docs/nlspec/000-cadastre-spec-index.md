@@ -102,6 +102,8 @@ Promotion must fail when any active absence-sensitive feed category or category 
 
 Promotion must fail when any active MVP OCSF mapping row set exists and the spec set lacks registered, classified, validated, and manifest-included refs for `ExternalSchemaProfile`, `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet`, `ObservationTypeExternalMappingValidationMatrix`, and `CanonicalValidationOutput`.
 
+Promotion must fail while `020-TODO-SOURCE-DATASET-CATALOG`, `020-TODO-FEED-CATEGORY-CLOSURE-ROW-SET`, `060-TODO-SOURCE-DATASET-ROW-CATALOG`, `060-TODO-SOURCE-CLOSURE-ROW-SETS`, or any concrete equivalent remains unresolved for an implementation-scoped feed, mapping row, source-effect tuple, graph handoff, analysis handoff, package-supplied catalog, API filter, or validation fixture.
+
 Promotion must fail when any active feed profile, source-authority row, mapping row, graph or analysis handoff, package-supplied row catalog, API filter, or validation fixture references a `source_dataset` token that lacks exactly one active `020.SourceDatasetCatalogRow` or exactly one deterministic source-dataset block row. A closure summary, validation report, package label, row-set checksum, owner prose, or private binding must not substitute for selected source-dataset row refs and checksums.
 
 Additional promotion gates:
@@ -152,12 +154,21 @@ The source/effect tuple key is exactly the ordered tuple below. No field may be 
 ```text
 feed_category
 source_dataset_catalog_row_ref
+source_dataset_catalog_row_checksum
 fact_type
 predicate
+source_category
 subject_scope_selector_checksum
 object_scope_selector_checksum
+subject_ref_kind
+object_value_kind
+structured_object_schema_ref_or_null
+staleness_policy_ref
+coverage_dimension_profile_refs
 requested_effect
 ```
+
+Tuple fields are ordered exactly as shown. `structured_object_schema_ref_or_null` must serialize as JSON `null` only when the selected `080.GoldFactPredicateContractRow` permits no structured object schema for the tuple. `coverage_dimension_profile_refs` is a canonical set sorted by structured row ref and checksum before tuple checksum computation.
 
 | Field | Required behavior |
 | --- | --- |
@@ -195,7 +206,8 @@ A closure summary, validation report, package label, row-set checksum, owner pro
 
 | Catalog family | Required member refs |
 | --- | --- |
-| `feed_category_closure` | `020.SourceDatasetCatalogRowSet` refs, selected `020.SourceDatasetCatalogRow` refs/checksums, deterministic source-dataset block row refs when applicable, `020.LakehouseFeedCategoryClosureRowSet` refs, selected category row refs/checksums, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs. |
+| `source_dataset_catalog` | `020.SourceDatasetCatalogRowSet` ref/checksum; selected `020.SourceDatasetCatalogRow` refs/checksums or deterministic source-dataset block row refs/checksums; row-set checksum; selector checksums; validation refs; package release refs and package-set refs when package-supplied; mutation-prohibition refs for block rows; generated owner error refs when visible; and `030.VersionManifest` refs. |
+| `feed_category_closure` | `020.LakehouseFeedCategoryClosureRowSet` refs/checksums, selected category row refs/checksums or deterministic category block row refs/checksums, total effect-map checksums, selected source-dataset allowlist refs, validation refs, package-set refs when package-supplied, and `030.VersionManifest` refs. |
 | `ocsf_mapping_closure` | Exact refs/checksums for active `050.ExternalSchemaProfile`, active or exact deterministic-block `ExternalSchemaArtifactRef`, `ProfileResolutionManifest`, `ObservationToOCSFMappingRowSet`, selected `ObservationToOCSFMappingRow` refs/checksums, `ExternalEnumMappingRuleSet`, `OCSFBaseEventFieldPolicySet`, `SourceExtensionFieldRuleSet` including explicit empty rule set when applicable, `ObservationTypeExternalMappingValidationMatrix`, `CanonicalValidationOutput`, deterministic block rows for out-of-scope observation families, lifecycle transition evidence, validation refs, package release refs, production package-set refs when package-supplied, generated error registry refs, and `030.VersionManifest` refs. |
 | `source_authority_closure` | `060.SourceAuthorityClosureMatrixRowSet`, selected `020.SourceDatasetCatalogRow` ref/checksum for every active `source_dataset` used by a source-authority closure matrix row, `060.CoverageDomainCatalog` checksum, selected `060.CoverageDomainToken` array checksum when coverage-domain selection affects output, and every underlying source authority, completeness, coverage, staleness, progress-signal, supplier-visibility, control-result, source-history, absence, external-schema-authority-signal, and watermark row set required by the selected effect. |
 | `lakehouse_table_state_and_maintenance_closure` | `020.RawSupplierProfile`, `020.LakehouseReadPolicy`, `020.LakehouseTableProfile`, `020.ReplayRetentionPolicy`, `020.TableMaintenancePolicy`, `020.CrossTableCommitProfile` when table-set consistency is required, `020.CatalogBranchPromotionPolicy` when catalog promotion controls visibility, `RawFeedManifest` runtime-state refs when output-affecting, `ReplayRetentionDecision` runtime-state refs when maintenance is evaluated, table snapshot/commit/dataset refs, schema compatibility refs, run-lock guard refs for destructive/rewrite maintenance, validation refs, package-set refs when package-supplied, generated error registry refs, and `030.VersionManifest` refs. |
@@ -256,6 +268,25 @@ For each selected production scope, every implementation-scoped `closure_family`
 | `validation_acceptance_closure` | `120` | Any promotion, package activation, validation acceptance, closure-pack membership, or acceptance report is in scope. | `120.ValidationMatrix` and `120.AcceptanceReport`. | Selected validation row refs, fixture checksums, expected output/error checksums, mutation-prohibition proofs, package-set refs, manifest refs. | Required for unsupported validation scope. | Rows from `120.ActivationCatalogClosureValidationCoverageByFamily`. | Required when package-supplied. | Validation, fixture, expected checksum, acceptance, package, and manifest refs in `030.VersionManifest`. | `blocked_validation` or `blocked_todo`. |
 
 `ValidateSpecSet` must treat this table as exhaustive for the declared closure objective. A family omitted from this table cannot affect production output until a later accepted patch adds one row with owner spec, validation refs, and manifest requirements.
+
+#### SourceEffectTupleKeyParityRule
+
+`ValidateSpecSet` must fail when the source-effect tuple key used by `000.SourceEffectClosurePackSchema`, `020.LakehouseFeedCategoryClosureRow.effect_closure_requirements`, `060.SourceAuthorityClosureMatrixRow`, and `120` source-closure validation rows differs by field name, field order, null semantics, canonical set ordering, or checksum participation.
+
+| Compared surface | Required parity |
+| --- | --- |
+| `000.SourceEffectClosurePackSchema.tuple_key` | Must use the ordered tuple declared in this section. |
+| `020.LakehouseFeedCategoryClosureRow.effect_closure_requirements` | Every `requires_060_closure` cell must identify the same tuple fields or a deterministic block row for the exact tuple. |
+| `060.SourceAuthorityClosureMatrixRow` | Must carry the same tuple fields, selected source-dataset catalog row checksum, selector checksums, subject/object kind fields, structured schema null semantics, staleness ref, coverage ref set, and requested effect. |
+| `120` source-closure validation rows | Must include fixtures proving exact tuple match, tuple mismatch rejection, manifest inclusion, and package-set inclusion. |
+
+Acceptance criteria:
+
+| ID | Requirement |
+| --- | --- |
+| `000-SOURCE-EFFECT-TUPLE-KEY-PARITY-AC-001` | `ValidateSpecSet` fails before promotion when any owner surface omits or renames a tuple field. |
+| `000-SOURCE-DATASET-FAMILY-PRESENT-AC-001` | `ActivationCatalogClosureFamilyInventory` contains a distinct `source_dataset_catalog` family and does not treat source-dataset refs as only a feed-category subcase. |
+| `000-SOURCE-EFFECT-PACK-MEMBER-MANIFESTED-AC-001` | A source-effect closure pack member fails unless every selected row, block row, selector checksum, validation ref, package ref, and underlying consulted row appears in `030.VersionManifest.included_refs`. |
 
 #### MVPProductionInputClosureDatasetDecisions
 
@@ -1081,6 +1112,8 @@ Archived documents are historical reference only and never implementation author
 | `000-SOURCE-CLOSURE-AC-002` | Promotion fails when an active absence-sensitive feed category has no active `SourceAuthorityClosureMatrixRowSet` ref or deterministic block row ref. |
 | `000-SOURCE-CLOSURE-AC-003` | Promotion fails when any source-closure row catalog is active but lacks a volatility classification, validation refs, activation scope, lifecycle status, or `VersionManifest` inclusion rule. |
 | `000-SOURCE-CLOSURE-AC-004` | Promotion fails when `000`, `domain.md`, `020`, `030`, `060`, or `120` use different names for the same source-closure row catalog family. |
+| `000-SOURCE-EFFECT-TUPLE-KEY-PARITY-AC-001` | Promotion fails when the source-effect tuple key in `000`, `020`, `060`, and `120` differs by field name, ordering, null semantics, or checksum participation. |
+| `000-SOURCE-DATASET-FAMILY-PRESENT-AC-001` | Promotion fails when `source_dataset_catalog` is absent from the closure-family inventory while any selected scope references `source_dataset`. |
 | `000-IDENTITY-CLOSURE-AC-001` | Promotion fails when identity output is in implementation scope and `SpecSetVersion.validation_matrix_refs` lacks required identity closure, replay, review, split, explanation, and package weakening validation rows. |
 | `000-IDENTITY-CLOSURE-AC-002` | Promotion fails when unresolved `070` identity TODOs exist or when `domain.md`, `040`, `070`, `110`, and `120` disagree on identity decision enum closure or review-state-machine closure. |
 | `000-IDENTITY-VOLATILITY-AC-001` | Every identity resolver row-set artifact is classified as activation-controlled and every identity runtime decision/explanation/handoff record is classified as runtime state in exactly one place. |
